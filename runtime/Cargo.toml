@@ -1,0 +1,196 @@
+[features]
+default = [
+    'std',
+    'with-rocksdb-weights',
+]
+runtime-benchmarks = [
+    'frame-benchmarking/runtime-benchmarks',
+    'frame-system-benchmarking/runtime-benchmarks',
+    'frame-system/runtime-benchmarks',
+    'pallet-balances/runtime-benchmarks',
+    'pallet-grandpa/runtime-benchmarks',
+    'pallet-timestamp/runtime-benchmarks',
+    'pallet-ethereum/runtime-benchmarks',
+    'pallet-evm/runtime-benchmarks',
+    'pallet-hotfix-sufficients/runtime-benchmarks',
+]
+std = [
+    'scale-codec/std',
+    'scale-info/std',
+    'sp-api/std',
+    'sp-block-builder/std',
+    'sp-consensus-aura/std',
+    'sp-core/std',
+    'sp-inherents/std',
+    'sp-offchain/std',
+    'sp-runtime/std',
+    'sp-session/std',
+    'sp-std/std',
+    'sp-transaction-pool/std',
+    'sp-version/std',
+    'substrate-wasm-builder',
+    'frame-benchmarking/std',
+    'frame-executive/std',
+    'frame-support/std',
+    'frame-system/std',
+    'frame-system-rpc-runtime-api/std',
+    'frame-system-benchmarking/std',
+    'pallet-aura/std',
+    'pallet-balances/std',
+    'pallet-grandpa/std',
+    'pallet-sudo/std',
+    'pallet-timestamp/std',
+    'pallet-transaction-payment/std',
+    'pallet-transaction-payment-rpc-runtime-api/std',
+    'fp-account/std',
+    'fp-evm/std',
+    'fp-rpc/std',
+    'fp-self-contained/std',
+    'pallet-base-fee/std',
+    'pallet-dynamic-fee/std',
+    'pallet-ethereum/std',
+    'pallet-evm/std',
+    'pallet-evm-chain-id/std',
+    'pallet-evm-precompile-modexp/std',
+    'pallet-evm-precompile-sha3fips/std',
+    'pallet-evm-precompile-simple/std',
+    'pallet-hotfix-sufficients/std',
+]
+with-paritydb-weights = []
+with-rocksdb-weights = []
+[build-dependencies.substrate-wasm-builder]
+optional = true
+workspace = true
+
+[package]
+name = 'vitreus-power-plant-runtime'
+publish = false
+version = '0.1.0'
+
+[package.authors]
+workspace = true
+
+[package.edition]
+workspace = true
+[package.metadata.docs.rs]
+targets = ['x86_64-unknown-linux-gnu']
+
+[dependencies.fp-account]
+workspace = true
+
+[dependencies.fp-evm]
+workspace = true
+
+[dependencies.fp-rpc]
+workspace = true
+
+[dependencies.fp-self-contained]
+workspace = true
+
+[dependencies.frame-benchmarking]
+optional = true
+workspace = true
+
+[dependencies.frame-executive]
+workspace = true
+
+[dependencies.frame-support]
+workspace = true
+
+[dependencies.frame-system]
+workspace = true
+
+[dependencies.frame-system-benchmarking]
+optional = true
+workspace = true
+
+[dependencies.frame-system-rpc-runtime-api]
+workspace = true
+
+[dependencies.pallet-aura]
+workspace = true
+
+[dependencies.pallet-balances]
+workspace = true
+
+[dependencies.pallet-base-fee]
+workspace = true
+
+[dependencies.pallet-dynamic-fee]
+workspace = true
+
+[dependencies.pallet-ethereum]
+workspace = true
+
+[dependencies.pallet-evm]
+workspace = true
+
+[dependencies.pallet-evm-chain-id]
+workspace = true
+
+[dependencies.pallet-evm-precompile-modexp]
+workspace = true
+
+[dependencies.pallet-evm-precompile-sha3fips]
+workspace = true
+
+[dependencies.pallet-evm-precompile-simple]
+workspace = true
+
+[dependencies.pallet-grandpa]
+workspace = true
+
+[dependencies.pallet-hotfix-sufficients]
+workspace = true
+
+[dependencies.pallet-sudo]
+workspace = true
+
+[dependencies.pallet-timestamp]
+workspace = true
+
+[dependencies.pallet-transaction-payment]
+workspace = true
+
+[dependencies.pallet-transaction-payment-rpc-runtime-api]
+workspace = true
+
+[dependencies.scale-codec]
+package = "parity-scale-codec"
+workspace = true
+
+[dependencies.scale-info]
+workspace = true
+
+[dependencies.sp-api]
+workspace = true
+
+[dependencies.sp-block-builder]
+workspace = true
+
+[dependencies.sp-consensus-aura]
+workspace = true
+
+[dependencies.sp-core]
+workspace = true
+
+[dependencies.sp-inherents]
+workspace = true
+
+[dependencies.sp-offchain]
+workspace = true
+
+[dependencies.sp-runtime]
+workspace = true
+
+[dependencies.sp-session]
+workspace = true
+
+[dependencies.sp-std]
+workspace = true
+
+[dependencies.sp-transaction-pool]
+workspace = true
+
+[dependencies.sp-version]
+workspace = true
