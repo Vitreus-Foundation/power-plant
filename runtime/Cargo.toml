@@ -1,63 +1,3 @@
-[features]
-default = [
-    'std',
-    'with-rocksdb-weights',
-]
-runtime-benchmarks = [
-    'frame-benchmarking/runtime-benchmarks',
-    'frame-system-benchmarking/runtime-benchmarks',
-    'frame-system/runtime-benchmarks',
-    'pallet-balances/runtime-benchmarks',
-    'pallet-grandpa/runtime-benchmarks',
-    'pallet-timestamp/runtime-benchmarks',
-    'pallet-ethereum/runtime-benchmarks',
-    'pallet-evm/runtime-benchmarks',
-    'pallet-hotfix-sufficients/runtime-benchmarks',
-]
-std = [
-    'scale-codec/std',
-    'scale-info/std',
-    'sp-api/std',
-    'sp-block-builder/std',
-    'sp-consensus-aura/std',
-    'sp-core/std',
-    'sp-inherents/std',
-    'sp-offchain/std',
-    'sp-runtime/std',
-    'sp-session/std',
-    'sp-std/std',
-    'sp-transaction-pool/std',
-    'sp-version/std',
-    'substrate-wasm-builder',
-    'frame-benchmarking/std',
-    'frame-executive/std',
-    'frame-support/std',
-    'frame-system/std',
-    'frame-system-rpc-runtime-api/std',
-    'frame-system-benchmarking/std',
-    'pallet-aura/std',
-    'pallet-balances/std',
-    'pallet-grandpa/std',
-    'pallet-sudo/std',
-    'pallet-timestamp/std',
-    'pallet-transaction-payment/std',
-    'pallet-transaction-payment-rpc-runtime-api/std',
-    'fp-account/std',
-    'fp-evm/std',
-    'fp-rpc/std',
-    'fp-self-contained/std',
-    'pallet-base-fee/std',
-    'pallet-dynamic-fee/std',
-    'pallet-ethereum/std',
-    'pallet-evm/std',
-    'pallet-evm-chain-id/std',
-    'pallet-evm-precompile-modexp/std',
-    'pallet-evm-precompile-sha3fips/std',
-    'pallet-evm-precompile-simple/std',
-    'pallet-hotfix-sufficients/std',
-]
-with-paritydb-weights = []
-with-rocksdb-weights = []
 [build-dependencies.substrate-wasm-builder]
 optional = true
 workspace = true
@@ -74,6 +14,9 @@ workspace = true
 workspace = true
 [package.metadata.docs.rs]
 targets = ['x86_64-unknown-linux-gnu']
+
+[dependencies.pallet-evm-precompile-balances-erc20]
+workspace = true
 
 [dependencies.fp-account]
 workspace = true
@@ -194,3 +137,53 @@ workspace = true
 
 [dependencies.sp-version]
 workspace = true
+
+[features]
+default = ['std', 'with-rocksdb-weights']
+runtime-benchmarks = ['frame-benchmarking/runtime-benchmarks', 'frame-system-benchmarking/runtime-benchmarks', 'frame-system/runtime-benchmarks', 'pallet-balances/runtime-benchmarks', 'pallet-grandpa/runtime-benchmarks', 'pallet-timestamp/runtime-benchmarks', 'pallet-ethereum/runtime-benchmarks', 'pallet-evm/runtime-benchmarks', 'pallet-hotfix-sufficients/runtime-benchmarks']
+std = [
+    'fp-account/std',
+    'fp-evm/std',
+    'fp-rpc/std',
+    'fp-self-contained/std',
+    'frame-benchmarking/std',
+    'frame-executive/std',
+    'frame-support/std',
+    'frame-system-benchmarking/std',
+    'frame-system-rpc-runtime-api/std',
+    'frame-system/std',
+    'pallet-aura/std',
+    'pallet-balances/std',
+    'pallet-base-fee/std',
+    'pallet-dynamic-fee/std',
+    'pallet-ethereum/std',
+    'pallet-evm-chain-id/std',
+    'pallet-evm-precompile-balances-erc20/std',
+    'pallet-evm-precompile-modexp/std',
+    'pallet-evm-precompile-sha3fips/std',
+    'pallet-evm-precompile-simple/std',
+    'pallet-evm/std',
+    'pallet-grandpa/std',
+    'pallet-hotfix-sufficients/std',
+    'pallet-sudo/std',
+    'pallet-timestamp/std',
+    'pallet-transaction-payment-rpc-runtime-api/std',
+    'pallet-transaction-payment/std',
+    'scale-codec/std',
+    'scale-info/std',
+    'sp-api/std',
+    'sp-block-builder/std',
+    'sp-consensus-aura/std',
+    'sp-core/std',
+    'sp-runtime/std',
+    'sp-inherents/std',
+    'sp-offchain/std',
+    'sp-runtime/std',
+    'sp-session/std',
+    'sp-std/std',
+    'sp-transaction-pool/std',
+    'sp-version/std',
+    'substrate-wasm-builder',
+]
+with-paritydb-weights = []
+with-rocksdb-weights = []
