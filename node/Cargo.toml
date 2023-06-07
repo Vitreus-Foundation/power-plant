@@ -1,3 +1,81 @@
+[package]
+build = 'build.rs'
+name = 'vitreus-power-plant-node'
+publish = false
+version = '0.1.0'
+authors = { workspace = true }
+edition = { workspace = true }
+
+[package.metadata.docs.rs]
+targets = ['x86_64-unknown-linux-gnu']
+
+[dependencies]
+async-trait = '0.1'
+clap = { version = '4.1', features = ['derive', 'deprecated'] }
+futures = '0.3.25'
+log = '0.4.17'
+
+fc-cli = { workspace = true }
+fc-consensus = { workspace = true }
+fc-db = { workspace = true }
+fc-mapping-sync = { workspace = true }
+fc-rpc = { workspace = true }
+fc-rpc-core = { workspace = true }
+fc-storage = { workspace = true }
+fp-account = { workspace = true }
+fp-dynamic-fee = { workspace = true, features = ['default'] }
+fp-evm = { workspace = true, features = ['default'] }
+fp-rpc = { workspace = true, features = ['default'] }
+frame-benchmarking = { workspace = true, optional = true }
+frame-benchmarking-cli = { workspace = true, optional = true }
+frame-system = { workspace = true }
+frame-system-rpc-runtime-api = { workspace = true }
+hex-literal = { workspace = true }
+jsonrpsee = { workspace = true, features = ['server', 'macros']  }
+pallet-transaction-payment = { workspace = true }
+pallet-transaction-payment-rpc = { workspace = true }
+pallet-transaction-payment-rpc-runtime-api = { workspace = true }
+parity-scale-codec = { workspace = true }
+prometheus-endpoint = { workspace = true }
+sc-basic-authorship = { workspace = true }
+sc-chain-spec = { workspace = true }
+sc-cli = { workspace = true }
+sc-client-api = { workspace = true }
+sc-consensus = { workspace = true }
+sc-consensus-aura = { workspace = true }
+sc-consensus-grandpa = { workspace = true }
+sc-consensus-manual-seal = { workspace = true }
+sc-executor = { workspace = true }
+sc-network = { workspace = true }
+sc-network-common = { workspace = true }
+sc-network-sync = { workspace = true }
+sc-rpc = { workspace = true }
+sc-rpc-api = { workspace = true }
+sc-service = { workspace = true }
+sc-telemetry = { workspace = true }
+sc-transaction-pool = { workspace = true }
+sc-transaction-pool-api = { workspace = true }
+serde = { workspace = true }
+sp-api = { workspace = true, features = ['default'] }
+sp-block-builder = { workspace = true }
+sp-blockchain = { workspace = true }
+sp-consensus-aura = { workspace = true, features = ['default'] }
+sp-consensus-grandpa = { workspace = true, features = ['default'] }
+sp-core = { workspace = true, features = ['default'] }
+sp-inherents = { workspace = true, features = ['default'] }
+sp-offchain = { workspace = true, features = ['default'] }
+sp-runtime = { workspace = true, features = ['default'] }
+sp-session = { workspace = true, features = ['default'] }
+sp-state-machine = { workspace = true, features = ['default'] }
+sp-timestamp = { workspace = true, features = ['default'] }
+sp-transaction-pool = { workspace = true, features = ['default'] }
+sp-trie = { workspace = true, features = ['default'] }
+substrate-frame-rpc-system = { workspace = true }
+vitreus-power-plant-runtime = { workspace = true, features = ['default'] }
+
+[build-dependencies]
+substrate-build-script-utils = { workspace = true }
+
 [features]
 default = ['with-rocksdb-weights']
 rpc-binary-search-estimate = ['fc-rpc/rpc-binary-search-estimate']
@@ -9,225 +87,3 @@ runtime-benchmarks = [
 ]
 with-paritydb-weights = ['vitreus-power-plant-runtime/with-paritydb-weights']
 with-rocksdb-weights = ['vitreus-power-plant-runtime/with-rocksdb-weights']
-[build-dependencies.substrate-build-script-utils]
-workspace = true
-
-[package]
-build = 'build.rs'
-name = 'vitreus-power-plant-node'
-publish = false
-version = '0.1.0'
-
-[package.authors]
-workspace = true
-
-[package.edition]
-workspace = true
-
-[package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
-
-[dependencies]
-async-trait = '0.1'
-futures = '0.3.25'
-log = '0.4.17'
-
-[dependencies.clap]
-features = [
-    'derive',
-    'deprecated',
-]
-version = '4.1'
-
-[dependencies.fc-cli]
-workspace = true
-
-[dependencies.fc-consensus]
-workspace = true
-
-[dependencies.fc-db]
-workspace = true
-
-[dependencies.fc-mapping-sync]
-workspace = true
-
-[dependencies.fc-rpc]
-workspace = true
-
-[dependencies.fc-rpc-core]
-workspace = true
-
-[dependencies.fc-storage]
-workspace = true
-
-[dependencies.fp-account]
-workspace = true
-
-[dependencies.fp-dynamic-fee]
-features = ['default']
-workspace = true
-
-[dependencies.fp-evm]
-features = ['default']
-workspace = true
-
-[dependencies.fp-rpc]
-features = ['default']
-workspace = true
-
-[dependencies.frame-benchmarking]
-optional = true
-workspace = true
-
-[dependencies.frame-benchmarking-cli]
-optional = true
-workspace = true
-
-[dependencies.frame-system]
-workspace = true
-
-[dependencies.frame-system-rpc-runtime-api]
-workspace = true
-
-[dependencies.vitreus-power-plant-runtime]
-features = ['default']
-workspace = true
-
-[dependencies.hex-literal]
-workspace = true
-
-[dependencies.jsonrpsee]
-features = [
-    'server',
-    'macros',
-]
-workspace = true
-
-[dependencies.pallet-transaction-payment]
-workspace = true
-
-[dependencies.pallet-transaction-payment-rpc]
-workspace = true
-
-[dependencies.pallet-transaction-payment-rpc-runtime-api]
-workspace = true
-
-[dependencies.prometheus-endpoint]
-workspace = true
-
-[dependencies.sc-basic-authorship]
-workspace = true
-
-[dependencies.sc-chain-spec]
-workspace = true
-
-[dependencies.sc-cli]
-workspace = true
-
-[dependencies.sc-client-api]
-workspace = true
-
-[dependencies.sc-consensus]
-workspace = true
-
-[dependencies.sc-consensus-aura]
-workspace = true
-
-[dependencies.sc-consensus-grandpa]
-workspace = true
-
-[dependencies.sc-consensus-manual-seal]
-workspace = true
-
-[dependencies.sc-executor]
-workspace = true
-
-[dependencies.sc-network]
-workspace = true
-
-[dependencies.sc-network-common]
-workspace = true
-
-[dependencies.sc-network-sync]
-workspace = true
-
-[dependencies.sc-rpc]
-workspace = true
-
-[dependencies.sc-rpc-api]
-workspace = true
-
-[dependencies.sc-service]
-workspace = true
-
-[dependencies.sc-telemetry]
-workspace = true
-
-[dependencies.sc-transaction-pool]
-workspace = true
-
-[dependencies.sc-transaction-pool-api]
-workspace = true
-
-[dependencies.scale-codec]
-workspace = true
-
-[dependencies.serde]
-workspace = true
-
-[dependencies.sp-api]
-features = ['default']
-workspace = true
-
-[dependencies.sp-block-builder]
-workspace = true
-
-[dependencies.sp-blockchain]
-workspace = true
-
-[dependencies.sp-consensus-aura]
-features = ['default']
-workspace = true
-
-[dependencies.sp-consensus-grandpa]
-features = ['default']
-workspace = true
-
-[dependencies.sp-core]
-features = ['default']
-workspace = true
-
-[dependencies.sp-inherents]
-features = ['default']
-workspace = true
-
-[dependencies.sp-offchain]
-features = ['default']
-workspace = true
-
-[dependencies.sp-runtime]
-features = ['default']
-workspace = true
-
-[dependencies.sp-session]
-features = ['default']
-workspace = true
-
-[dependencies.sp-state-machine]
-features = ['default']
-workspace = true
-
-[dependencies.sp-timestamp]
-features = ['default']
-workspace = true
-
-[dependencies.sp-transaction-pool]
-features = ['default']
-workspace = true
-
-[dependencies.sp-trie]
-features = ['default']
-workspace = true
-
-[dependencies.substrate-frame-rpc-system]
-workspace = true

@@ -21,9 +21,10 @@ jsonrpsee = "0.16.2"
 kvdb-rocksdb = "0.17.0"
 libsecp256k1 = { version = "0.7.1", default-features = false }
 log = { version = "0.4.17", default-features = false }
+num_enum = { version = "0.5.3", default-features = false }
 parity-db = "0.4.6"
+parity-scale-codec = { version = "3.2.1", default-features = false, features = ["derive"] }
 rlp = { version = "0.5", default-features = false }
-scale-codec = { package = "parity-scale-codec", version = "3.2.1", default-features = false, features = ["derive"] }
 scale-info = { version = "2.3.1", default-features = false, features = ["derive"] }
 serde = { version = "1.0", default-features = false }
 serde_json = "1.0"
@@ -151,6 +152,7 @@ fp-consensus = { git = "https://github.com/purestake/frontier", branch = "moonbe
 fp-dynamic-fee = { git = "https://github.com/purestake/frontier", branch = "moonbeam-polkadot-v0.9.40", default-features = false }
 fp-storage = { git = "https://github.com/purestake/frontier", branch = "moonbeam-polkadot-v0.9.40" }
 # Moonbeam
+precompile-utils = { git = "https://github.com/purestake/moonbeam", branch = "master", default-features = false }
 pallet-evm-precompile-balances-erc20 = { git = "https://github.com/purestake/moonbeam", branch = "master", default-features = false }
 # Arkworks
 ark-bls12-377 = { version = "0.4.0", default-features = false, features = ["curve"] }

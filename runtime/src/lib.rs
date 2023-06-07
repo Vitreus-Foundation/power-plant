@@ -10,7 +10,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
@@ -57,7 +57,7 @@ pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
 mod precompiles;
-use precompiles::FrontierPrecompiles;
+use precompiles::VitreusPrecompiles;
 
 /// Type of block number.
 pub type BlockNumber = u32;
@@ -110,8 +110,8 @@ pub mod opaque {
 }
 
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-    spec_name: create_runtime_str!("frontier-template"),
-    impl_name: create_runtime_str!("frontier-template"),
+    spec_name: create_runtime_str!("vitreus-power-plant"),
+    impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
     spec_version: 1,
     impl_version: 1,
@@ -311,7 +311,7 @@ const MAX_POV_SIZE: u64 = 5 * 1024 * 1024;
 parameter_types! {
     pub BlockGasLimit: U256 = U256::from(BLOCK_GAS_LIMIT);
     pub const GasLimitPovSizeRatio: u64 = BLOCK_GAS_LIMIT.saturating_div(MAX_POV_SIZE);
-    pub PrecompilesValue: FrontierPrecompiles<Runtime> = FrontierPrecompiles::<_>::new();
+    pub PrecompilesValue: VitreusPrecompiles<Runtime> = VitreusPrecompiles::<_>::new();
     pub WeightPerGas: Weight = Weight::from_parts(weight_per_gas(BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK), 0);
 }
 
@@ -325,7 +325,7 @@ impl pallet_evm::Config for Runtime {
     type AddressMapping = IdentityAddressMapping;
     type Currency = Balances;
     type RuntimeEvent = RuntimeEvent;
-    type PrecompilesType = FrontierPrecompiles<Self>;
+    type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
     type ChainId = EVMChainId;
     type BlockGasLimit = BlockGasLimit;

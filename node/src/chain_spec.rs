@@ -72,6 +72,7 @@ pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
 
 fn properties() -> Properties {
     let mut properties = Properties::new();
+    properties.insert("tokenSymbol".into(), "VTRS".into());
     properties.insert("tokenDecimals".into(), 18.into());
     properties.insert("ss58Format".into(), SS58Prefix::get().into());
     properties
