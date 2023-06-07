@@ -110,8 +110,8 @@ pub mod opaque {
 }
 
 pub const VERSION: RuntimeVersion = RuntimeVersion {
-    spec_name: create_runtime_str!("vitreus-power-plant"),
-    impl_name: create_runtime_str!("vitreus-power-plant"),
+    spec_name: create_runtime_str!("frontier-template"),
+    impl_name: create_runtime_str!("frontier-template"),
     authoring_version: 1,
     spec_version: 1,
     impl_version: 1,
@@ -236,7 +236,7 @@ pub struct ConsensusOnTimestampSet<T>(PhantomData<T>);
 impl<T: pallet_aura::Config> OnTimestampSet<T::Moment> for ConsensusOnTimestampSet<T> {
     fn on_timestamp_set(moment: T::Moment) {
         if EnableManualSeal::get() {
-            return
+            return;
         }
         <pallet_aura::Pallet<T> as OnTimestampSet<T::Moment>>::on_timestamp_set(moment)
     }
@@ -299,16 +299,18 @@ impl<F: FindAuthor<u32>> FindAuthor<H160> for FindAuthorTruncated<F> {
     {
         if let Some(author_index) = F::find_author(digests) {
             let authority_id = Aura::authorities()[author_index as usize].clone();
-            return Some(H160::from_slice(&authority_id.to_raw_vec()[4..24]))
+            return Some(H160::from_slice(&authority_id.to_raw_vec()[4..24]));
         }
         None
     }
 }
 
 const BLOCK_GAS_LIMIT: u64 = 75_000_000;
+const MAX_POV_SIZE: u64 = 5 * 1024 * 1024;
 
 parameter_types! {
     pub BlockGasLimit: U256 = U256::from(BLOCK_GAS_LIMIT);
+    pub const GasLimitPovSizeRatio: u64 = BLOCK_GAS_LIMIT.saturating_div(MAX_POV_SIZE);
     pub PrecompilesValue: FrontierPrecompiles<Runtime> = FrontierPrecompiles::<_>::new();
     pub WeightPerGas: Weight = Weight::from_parts(weight_per_gas(BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK), 0);
 }
@@ -331,6 +333,7 @@ impl pallet_evm::Config for Runtime {
     type OnChargeTransaction = ();
     type OnCreate = ();
     type FindAuthor = FindAuthorTruncated<Aura>;
+    type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
     type Timestamp = Timestamp;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
 }
@@ -506,8 +509,9 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         len: usize,
     ) -> Option<Result<(), TransactionValidityError>> {
         match self {
-            RuntimeCall::Ethereum(call) =>
-                call.pre_dispatch_self_contained(info, dispatch_info, len),
+            RuntimeCall::Ethereum(call) => {
+                call.pre_dispatch_self_contained(info, dispatch_info, len)
+            },
             _ => None,
         }
     }
@@ -517,10 +521,11 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         info: Self::SignedInfo,
     ) -> Option<sp_runtime::DispatchResultWithInfo<PostDispatchInfoOf<Self>>> {
         match self {
-            call @ RuntimeCall::Ethereum(pallet_ethereum::Call::transact { .. }) =>
+            call @ RuntimeCall::Ethereum(pallet_ethereum::Call::transact { .. }) => {
                 Some(call.dispatch(RuntimeOrigin::from(
                     pallet_ethereum::RawOrigin::EthereumTransaction(info),
-                ))),
+                )))
+            },
             _ => None,
         }
     }
@@ -673,6 +678,9 @@ impl_runtime_apis! {
                 access_list.unwrap_or_default(),
                 is_transactional,
                 validate,
+                // TODO we probably want to support external cost recording in non-transactional calls
+                None,
+                None,
                 evm_config,
             ).map_err(|err| err.error.into())
         }
@@ -710,6 +718,9 @@ impl_runtime_apis! {
                 access_list.unwrap_or_default(),
                 is_transactional,
                 validate,
+                // TODO we probably want to support external cost recording in non-transactional calls
+                None,
+                None,
                 evm_config,
             ).map_err(|err| err.error.into())
         }

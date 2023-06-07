@@ -1,6 +1,6 @@
 //! Service and ServiceFactory implementation. Specialized wrapper over substrate service.
 
-use std::{cell::RefCell, path::Path, sync::Arc, time::Duration};
+use std::{cell::RefCell, sync::Arc, time::Duration};
 
 use futures::{channel::mpsc, prelude::*};
 // Substrate
@@ -23,8 +23,8 @@ use crate::{
     cli::Sealing,
     client::{BaseRuntimeApiCollection, FullBackend, FullClient, RuntimeApiCollection},
     eth::{
-        new_frontier_partial, spawn_frontier_tasks, BackendType, EthCompatRuntimeApiCollection,
-        FrontierBackend, FrontierBlockImport, FrontierPartialComponents,
+        new_frontier_partial, spawn_frontier_tasks, FrontierBackend, FrontierBlockImport,
+        FrontierPartialComponents,
     },
 };
 pub use crate::{
@@ -56,8 +56,7 @@ pub fn new_partial<RuntimeApi, Executor, BIQ>(
             Option<Telemetry>,
             BoxBlockImport<FullClient<RuntimeApi, Executor>>,
             GrandpaLinkHalf<FullClient<RuntimeApi, Executor>>,
-            FrontierBackend,
-            Arc<fc_rpc::OverrideHandle<Block>>,
+            Arc<FrontierBackend>,
         ),
     >,
     ServiceError,
@@ -65,8 +64,8 @@ pub fn new_partial<RuntimeApi, Executor, BIQ>(
 where
     RuntimeApi: ConstructRuntimeApi<Block, FullClient<RuntimeApi, Executor>>,
     RuntimeApi: Send + Sync + 'static,
-    RuntimeApi::RuntimeApi: BaseRuntimeApiCollection<StateBackend = StateBackendFor<FullBackend, Block>>
-        + EthCompatRuntimeApiCollection<StateBackend = StateBackendFor<FullBackend, Block>>,
+    RuntimeApi::RuntimeApi:
+        BaseRuntimeApiCollection<StateBackend = StateBackendFor<FullBackend, Block>>,
     Executor: NativeExecutionDispatch + 'static,
     BIQ: FnOnce(
         Arc<FullClient<RuntimeApi, Executor>>,
@@ -75,6 +74,7 @@ where
         &TaskManager,
         Option<TelemetryHandle>,
         GrandpaBlockImport<FullClient<RuntimeApi, Executor>>,
+        Arc<FrontierBackend>,
     ) -> Result<
         (
             BasicImportQueue<FullClient<RuntimeApi, Executor>>,
@@ -122,36 +122,8 @@ where
         telemetry.as_ref().map(|x| x.handle()),
     )?;
 
-    let overrides = crate::rpc::overrides_handle(client.clone());
-    let frontier_backend = match eth_config.frontier_backend_type {
-        BackendType::KeyValue => FrontierBackend::KeyValue(fc_db::kv::Backend::open(
-            Arc::clone(&client),
-            &config.database,
-            &db_config_dir(config),
-        )?),
-        BackendType::Sql => {
-            let db_path = db_config_dir(config).join("sql");
-            std::fs::create_dir_all(&db_path).expect("failed creating sql db directory");
-            let backend = futures::executor::block_on(fc_db::sql::Backend::new(
-                fc_db::sql::BackendConfig::Sqlite(fc_db::sql::SqliteBackendConfig {
-                    path: Path::new("sqlite:///")
-                        .join(db_path)
-                        .join("frontier.db3")
-                        .to_str()
-                        .unwrap(),
-                    create_if_missing: true,
-                    thread_count: eth_config.frontier_sql_backend_thread_count,
-                    cache_size: eth_config.frontier_sql_backend_cache_size,
-                }),
-                eth_config.frontier_sql_backend_pool_size,
-                std::num::NonZeroU32::new(eth_config.frontier_sql_backend_num_ops_timeout),
-                overrides.clone(),
-            ))
-            .unwrap_or_else(|err| panic!("failed creating sql backend: {:?}", err));
-            FrontierBackend::Sql(backend)
-        },
-    };
-
+    let frontier_backend =
+        Arc::new(FrontierBackend::open(client.clone(), &config.database, &db_config_dir(config))?);
     let (import_queue, block_import) = build_import_queue(
         client.clone(),
         config,
@@ -159,6 +131,7 @@ where
         &task_manager,
         telemetry.as_ref().map(|x| x.handle()),
         grandpa_block_import,
+        frontier_backend.clone(),
     )?;
 
     let transaction_pool = sc_transaction_pool::BasicPool::new_full(
@@ -177,7 +150,7 @@ where
         select_chain,
         import_queue,
         transaction_pool,
-        other: (telemetry, block_import, grandpa_link, frontier_backend, overrides),
+        other: (telemetry, block_import, grandpa_link, frontier_backend),
     })
 }
 
@@ -189,6 +162,7 @@ pub fn build_aura_grandpa_import_queue<RuntimeApi, Executor>(
     task_manager: &TaskManager,
     telemetry: Option<TelemetryHandle>,
     grandpa_block_import: GrandpaBlockImport<FullClient<RuntimeApi, Executor>>,
+    frontier_backend: Arc<FrontierBackend>,
 ) -> Result<
     (
         BasicImportQueue<FullClient<RuntimeApi, Executor>>,
@@ -204,7 +178,7 @@ where
     Executor: NativeExecutionDispatch + 'static,
 {
     let frontier_block_import =
-        FrontierBlockImport::new(grandpa_block_import.clone(), client.clone());
+        FrontierBlockImport::new(grandpa_block_import.clone(), client.clone(), frontier_backend);
 
     let slot_duration = sc_consensus_aura::slot_duration(&*client)?;
     let target_gas_price = eth_config.target_gas_price;
@@ -245,6 +219,7 @@ pub fn build_manual_seal_import_queue<RuntimeApi, Executor>(
     task_manager: &TaskManager,
     _telemetry: Option<TelemetryHandle>,
     _grandpa_block_import: GrandpaBlockImport<FullClient<RuntimeApi, Executor>>,
+    frontier_backend: Arc<FrontierBackend>,
 ) -> Result<
     (
         BasicImportQueue<FullClient<RuntimeApi, Executor>>,
@@ -259,7 +234,7 @@ where
         RuntimeApiCollection<StateBackend = StateBackendFor<FullBackend, Block>>,
     Executor: NativeExecutionDispatch + 'static,
 {
-    let frontier_block_import = FrontierBlockImport::new(client.clone(), client);
+    let frontier_block_import = FrontierBlockImport::new(client.clone(), client, frontier_backend);
     Ok((
         sc_consensus_manual_seal::import_queue(
             Box::new(frontier_block_import.clone()),
@@ -271,7 +246,7 @@ where
 }
 
 /// Builds a new service for a full client.
-pub async fn new_full<RuntimeApi, Executor>(
+pub fn new_full<RuntimeApi, Executor>(
     mut config: Configuration,
     eth_config: EthConfiguration,
     sealing: Option<Sealing>,
@@ -297,7 +272,7 @@ where
         keystore_container,
         select_chain,
         transaction_pool,
-        other: (mut telemetry, block_import, grandpa_link, frontier_backend, overrides),
+        other: (mut telemetry, block_import, grandpa_link, frontier_backend),
     } = new_partial(&config, &eth_config, build_import_queue)?;
 
     let FrontierPartialComponents { filter_pool, fee_history_cache, fee_history_cache_limit } =
@@ -355,9 +330,8 @@ where
 
     // Sinks for pubsub notifications.
     // Everytime a new subscription is created, a new mpsc channel is added to the sink pool.
-    // The MappingSyncWorker sends through the channel on block import and the subscription emits a
-    // notification to the subscriber on receiving a message through this channel. This way we avoid
-    // race conditions when using native substrate block import notification stream.
+    // The MappingSyncWorker sends through the channel on block import and the subscription emits a notification to the subscriber on receiving a message through this channel.
+    // This way we avoid race conditions when using native substrate block import notification stream.
     let pubsub_notification_sinks: fc_mapping_sync::EthereumBlockNotificationSinks<
         fc_mapping_sync::EthereumBlockNotification<Block>,
     > = Default::default();
@@ -365,6 +339,7 @@ where
 
     // for ethereum-compatibility rpc.
     config.rpc_id_provider = Some(Box::new(fc_rpc::EthereumSubIdProvider));
+    let overrides = crate::rpc::overrides_handle(client.clone());
     let eth_rpc_params = crate::rpc::EthDeps {
         client: client.clone(),
         pool: transaction_pool.clone(),
@@ -374,10 +349,7 @@ where
         enable_dev_signer: eth_config.enable_dev_signer,
         network: network.clone(),
         sync: sync_service.clone(),
-        frontier_backend: match frontier_backend.clone() {
-            fc_db::Backend::KeyValue(b) => Arc::new(b),
-            fc_db::Backend::Sql(b) => Arc::new(b),
-        },
+        frontier_backend: frontier_backend.clone(),
         overrides: overrides.clone(),
         block_data_cache: Arc::new(fc_rpc::EthBlockDataCacheTask::new(
             task_manager.spawn_handle(),
@@ -443,8 +415,7 @@ where
         fee_history_cache_limit,
         sync_service.clone(),
         pubsub_notification_sinks,
-    )
-    .await;
+    );
 
     if role.is_authority() {
         // manual-seal authorship
@@ -464,7 +435,7 @@ where
 
             network_starter.start_network();
             log::info!("Manual Seal Ready");
-            return Ok(task_manager)
+            return Ok(task_manager);
         }
 
         let proposer_factory = sc_basic_authorship::ProposerFactory::new(
@@ -655,7 +626,7 @@ where
     Ok(())
 }
 
-pub async fn build_full(
+pub fn build_full(
     config: Configuration,
     eth_config: EthConfiguration,
     sealing: Option<Sealing>,
@@ -663,7 +634,6 @@ pub async fn build_full(
     new_full::<vitreus_power_plant_runtime::RuntimeApi, TemplateRuntimeExecutor>(
         config, eth_config, sealing,
     )
-    .await
 }
 
 pub fn new_chain_ops(
@@ -675,7 +645,7 @@ pub fn new_chain_ops(
         Arc<FullBackend>,
         BasicQueue<Block, PrefixedMemoryDB<BlakeTwo256>>,
         TaskManager,
-        FrontierBackend,
+        Arc<FrontierBackend>,
     ),
     ServiceError,
 > {

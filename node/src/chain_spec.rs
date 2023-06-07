@@ -25,9 +25,6 @@ pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
 /// Specialized `ChainSpec` for development.
 pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt>;
 
-/// Native token symbol.
-const NATIVE_TOKEN_SYMBOL: &str = "VTRS";
-
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
 #[derive(Serialize, Deserialize)]
 pub struct DevGenesisExt {
@@ -75,7 +72,6 @@ pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
 
 fn properties() -> Properties {
     let mut properties = Properties::new();
-    properties.insert("tokenSymbol".into(), NATIVE_TOKEN_SYMBOL.into());
     properties.insert("tokenDecimals".into(), 18.into());
     properties.insert("ss58Format".into(), SS58Prefix::get().into());
     properties
@@ -99,9 +95,9 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
                     // Pre-funded accounts
                     vec![
                         AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")), // Alith
-                        AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")), /* Baltathar */
-                        AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")), /* Charleth */
-                        AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")), /* Dorothy */
+                        AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")), // Baltathar
+                        AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")), // Charleth
+                        AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")), // Dorothy
                         AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB")), // Ethan
                         AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d")), // Faith
                     ],
@@ -219,8 +215,7 @@ fn testnet_genesis(
                     // Derived from SS58 (42 prefix) address
                     // SS58: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
                     // hex: 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
-                    // Using the full hex key, truncating to the first 20 bytes (the first 40 hex
-                    // chars)
+                    // Using the full hex key, truncating to the first 20 bytes (the first 40 hex chars)
                     H160::from_str("d43593c715fdd31c61141abd04a99fd6822c8558")
                         .expect("internal H160 is valid; qed"),
                     fp_evm::GenesisAccount {
