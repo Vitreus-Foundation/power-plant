@@ -68,7 +68,6 @@ where
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
     C: BlockchainEvents<Block> + 'static,
     C: HeaderBackend<Block>
-        + CallApiAt<Block>
         + HeaderMetadata<Block, Error = BlockChainError>
         + StorageProvider<Block, BE>,
     BE: Backend<Block> + 'static,

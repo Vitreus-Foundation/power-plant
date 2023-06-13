@@ -150,7 +150,7 @@ pub fn local_testnet_config() -> ChainSpec {
                     AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d")), // Faith
                 ],
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
-                42,
+                SS58Prefix::get() as u64,
             )
         },
         // Bootnodes

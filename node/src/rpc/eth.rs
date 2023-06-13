@@ -17,7 +17,6 @@ use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_core::H256;
 use sp_runtime::traits::Block as BlockT;
 // Frontier
-use fc_db::Backend as FrontierBackend;
 pub use fc_rpc::{EthBlockDataCacheTask, EthConfig, OverrideHandle, StorageOverride};
 pub use fc_rpc_core::types::{FeeHistoryCache, FeeHistoryCacheLimit, FilterPool};
 pub use fc_storage::overrides_handle;
@@ -42,7 +41,7 @@ pub struct EthDeps<C, P, A: ChainApi, CT, B: BlockT> {
     /// Chain syncing service
     pub sync: Arc<SyncingService<B>>,
     /// Frontier Backend.
-    pub frontier_backend: Arc<FrontierBackend<B>>,
+    pub frontier_backend: Arc<dyn fc_db::BackendReader<B> + Send + Sync>,
     /// Ethereum data access overrides.
     pub overrides: Arc<OverrideHandle<B>>,
     /// Cache for Ethereum block data.
@@ -98,14 +97,11 @@ pub fn create_eth<C, BE, P, A, CT, B, EC: EthConfig<B, C>>(
     >,
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
-    B: BlockT,
+    B: BlockT<Hash = sp_core::H256>,
     C: CallApiAt<B> + ProvideRuntimeApi<B>,
     C::Api: BlockBuilderApi<B> + EthereumRuntimeRPCApi<B> + ConvertTransactionRuntimeApi<B>,
     C: BlockchainEvents<B> + 'static,
-    C: HeaderBackend<B>
-        + CallApiAt<B>
-        + HeaderMetadata<B, Error = BlockChainError>
-        + StorageProvider<B, BE>,
+    C: HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError> + StorageProvider<B, BE>,
     BE: Backend<B> + 'static,
     P: TransactionPool<Block = B> + 'static,
     A: ChainApi<Block = B> + 'static,
@@ -148,7 +144,7 @@ where
             graph,
             converter,
             sync.clone(),
-            vec![],
+            signers,
             overrides.clone(),
             frontier_backend.clone(),
             is_authority,

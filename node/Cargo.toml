@@ -1,42 +1,29 @@
 [package]
-build = 'build.rs'
-name = 'vitreus-power-plant-node'
+name = "vitreus-power-plant-node"
+version = "0.0.0"
+license = "Unlicense"
+build = "build.rs"
+description = "A fresh FRAME-based Substrate node, ready for hacking."
 publish = false
-version = '0.1.0'
 authors = { workspace = true }
 edition = { workspace = true }
+repository = { workspace = true }
 
 [package.metadata.docs.rs]
-targets = ['x86_64-unknown-linux-gnu']
+targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-async-trait = '0.1'
-clap = { version = '4.1', features = ['derive', 'deprecated'] }
-futures = '0.3.25'
-log = '0.4.17'
-
-fc-cli = { workspace = true }
-fc-consensus = { workspace = true }
-fc-db = { workspace = true }
-fc-mapping-sync = { workspace = true }
-fc-rpc = { workspace = true }
-fc-rpc-core = { workspace = true }
-fc-storage = { workspace = true }
-fp-account = { workspace = true }
-fp-dynamic-fee = { workspace = true, features = ['default'] }
-fp-evm = { workspace = true, features = ['default'] }
-fp-rpc = { workspace = true, features = ['default'] }
-frame-benchmarking = { workspace = true, optional = true }
-frame-benchmarking-cli = { workspace = true, optional = true }
-frame-system = { workspace = true }
-frame-system-rpc-runtime-api = { workspace = true }
+async-trait = "0.1"
+clap = { version = "4.1", features = ["derive", "deprecated"] }
+futures = "0.3.25"
 hex-literal = { workspace = true }
-jsonrpsee = { workspace = true, features = ['server', 'macros']  }
-pallet-transaction-payment = { workspace = true }
-pallet-transaction-payment-rpc = { workspace = true }
-pallet-transaction-payment-rpc-runtime-api = { workspace = true }
-parity-scale-codec = { workspace = true }
-prometheus-endpoint = { workspace = true }
+jsonrpsee = { workspace = true, features = ["server", "macros"] }
+log = "0.4.17"
+scale-codec = { package = "parity-scale-codec", workspace = true }
+serde = { workspace = true }
+
+# Substrate
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", workspace = true }
 sc-basic-authorship = { workspace = true }
 sc-chain-spec = { workspace = true }
 sc-cli = { workspace = true }
@@ -55,35 +42,56 @@ sc-service = { workspace = true }
 sc-telemetry = { workspace = true }
 sc-transaction-pool = { workspace = true }
 sc-transaction-pool-api = { workspace = true }
-serde = { workspace = true }
-sp-api = { workspace = true, features = ['default'] }
+sp-api = { workspace = true, features = ["default"] }
 sp-block-builder = { workspace = true }
 sp-blockchain = { workspace = true }
-sp-consensus-aura = { workspace = true, features = ['default'] }
-sp-consensus-grandpa = { workspace = true, features = ['default'] }
-sp-core = { workspace = true, features = ['default'] }
-sp-inherents = { workspace = true, features = ['default'] }
-sp-offchain = { workspace = true, features = ['default'] }
-sp-runtime = { workspace = true, features = ['default'] }
-sp-session = { workspace = true, features = ['default'] }
-sp-state-machine = { workspace = true, features = ['default'] }
-sp-timestamp = { workspace = true, features = ['default'] }
-sp-transaction-pool = { workspace = true, features = ['default'] }
-sp-trie = { workspace = true, features = ['default'] }
+sp-consensus-aura = { workspace = true, features = ["default"] }
+sp-consensus-grandpa = { workspace = true, features = ["default"] }
+sp-core = { workspace = true, features = ["default"] }
+sp-inherents = { workspace = true, features = ["default"] }
+sp-offchain = { workspace = true, features = ["default"] }
+sp-runtime = { workspace = true, features = ["default"] }
+sp-session = { workspace = true, features = ["default"] }
+sp-state-machine = { workspace = true, features = ["default"] }
+sp-timestamp = { workspace = true, features = ["default"] }
+sp-transaction-pool = { workspace = true, features = ["default"] }
+sp-trie = { workspace = true, features = ["default"] }
+# These dependencies are used for RPC
+frame-system-rpc-runtime-api = { workspace = true }
+pallet-transaction-payment-rpc = { workspace = true }
+pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 substrate-frame-rpc-system = { workspace = true }
-vitreus-power-plant-runtime = { workspace = true, features = ['default'] }
+# These dependencies are used for runtime benchmarking
+frame-benchmarking = { workspace = true, optional = true }
+frame-benchmarking-cli = { workspace = true, optional = true }
+frame-system = { workspace = true }
+pallet-transaction-payment = { workspace = true }
+
+# Frontier
+fc-cli = { workspace = true }
+fc-consensus = { workspace = true }
+fc-db = { workspace = true }
+fc-mapping-sync = { workspace = true }
+fc-rpc = { workspace = true }
+fc-rpc-core = { workspace = true }
+fc-storage = { workspace = true }
+fp-account = { workspace = true }
+fp-dynamic-fee = { workspace = true, features = ["default"] }
+fp-evm = { workspace = true, features = ["default"] }
+fp-rpc = { workspace = true, features = ["default"] }
+vitreus-power-plant-runtime = { workspace = true, features = ["default"] }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }
 
 [features]
-default = ['with-rocksdb-weights']
-rpc-binary-search-estimate = ['fc-rpc/rpc-binary-search-estimate']
+default = ["with-rocksdb-weights"]
+with-rocksdb-weights = ["vitreus-power-plant-runtime/with-rocksdb-weights"]
+with-paritydb-weights = ["vitreus-power-plant-runtime/with-paritydb-weights"]
+rpc-binary-search-estimate = ["fc-rpc/rpc-binary-search-estimate"]
 runtime-benchmarks = [
-    'frame-benchmarking/runtime-benchmarks',
-    'frame-benchmarking-cli/runtime-benchmarks',
-    'sc-service/runtime-benchmarks',
-    'vitreus-power-plant-runtime/runtime-benchmarks',
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-benchmarking-cli/runtime-benchmarks",
+	"sc-service/runtime-benchmarks",
+	"vitreus-power-plant-runtime/runtime-benchmarks",
 ]
-with-paritydb-weights = ['vitreus-power-plant-runtime/with-paritydb-weights']
-with-rocksdb-weights = ['vitreus-power-plant-runtime/with-rocksdb-weights']

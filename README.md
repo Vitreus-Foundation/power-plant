@@ -220,9 +220,10 @@ little inherent or special meaning. Note that `None` for the nonce will
 increment the known nonce for the source account, starting from `0x0`, you may
 manually set this but will get an "evm.InvalidNonce" error if not set correctly.
 
-Once the extrinsic is in a block, navigate to the `Network` -> `Explorer` tab in the UI, or open up
-the browser console to see that the EVM pallet has fired a `Created` event with an `address` field
-that provides the address of the newly-created contract:
+Once the extrinsic is in a block, navigate to the `Network` -> `Explorer` tab in
+the UI, or open up the browser console to see that the EVM pallet has fired a
+`Created` event with an `address` field that provides the address of the
+newly-created contract:
 
 ```bash
 # console:
@@ -236,9 +237,10 @@ A contract has been created at given [address]
 
 In this case, however, it is trivial to
 [calculate this value](https://ethereum.stackexchange.com/a/46960):
-`0x8a50db1e0f9452cfd91be8dc004ceb11cb08832f`. That is because EVM contract account IDs are
-determined solely by the ID and nonce of the contract creator's account and, in this case, both of
-those values are well-known (`0xd43593c715fdd31c61141abd04a99fd6822c8558` and `0x0`, respectively).
+`0x8a50db1e0f9452cfd91be8dc004ceb11cb08832f`. That is because EVM contract
+account IDs are determined solely by the ID and nonce of the contract creator's
+account and, in this case, both of those values are well-known
+(`0xd43593c715fdd31c61141abd04a99fd6822c8558` and `0x0`, respectively).
 
 
 ### Step 2: Check Contract Storage
