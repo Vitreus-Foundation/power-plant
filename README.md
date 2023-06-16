@@ -164,22 +164,18 @@ Also, the pre-funded default account for testing purposes is:
 
 
 
-## Configuring Metamask For Development
+## Configuring Ethereum Wallet For Development
 
 The node should be ran locally in `--dev` mode.
 
-Then you need to configure the network. Under settings add a network with next
-configuration:
+Then you need to configure the network this way:
 
-- chain ID is __42__
+- chain ID is __1943__
 - chain name is __vitreus-power-plant__
-- currency name is __VTRS token__
+- currency name is __Vitreus Power Plant Token__
 - currency symbol is __VTRS__
 - currency decimals is __18__
 - RPC URL is __http://localhost:9933/__
-
-Next, you can add any of the listed previously accounts using their private
-keys.
 
 
 

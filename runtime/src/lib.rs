@@ -48,7 +48,8 @@ use fp_evm::weight_per_gas;
 use fp_rpc::TransactionStatus;
 use pallet_ethereum::{Call::transact, PostLogContent, Transaction as EthereumTransaction};
 use pallet_evm::{
-    Account as EVMAccount, EnsureAccountId20, FeeCalculator, IdentityAddressMapping, Runner,
+    Account as EVMAccount, EVMCurrencyAdapter, EnsureAccountId20, FeeCalculator,
+    IdentityAddressMapping, Runner,
 };
 
 // A few exports that help ease life for downstream crates.
@@ -149,7 +150,7 @@ parameter_types! {
         ::with_sensible_defaults(MAXIMUM_BLOCK_WEIGHT, NORMAL_DISPATCH_RATIO);
     pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
         ::max_with_normal_ratio(MAXIMUM_BLOCK_LENGTH, NORMAL_DISPATCH_RATIO);
-    pub const SS58Prefix: u8 = 42;
+    pub const SS58Prefix: u16 = 1943;
 }
 
 // Configure FRAME pallets to include in runtime.
@@ -269,6 +270,10 @@ impl pallet_balances::Config for Runtime {
     type MaxLocks = MaxLocks;
     type MaxReserves = ();
     type ReserveIdentifier = [u8; 8];
+    type FreezeIdentifier = ();
+    type MaxFreezes = ();
+    type HoldIdentifier = ();
+    type MaxHolds = ();
 }
 
 parameter_types! {
@@ -314,25 +319,25 @@ parameter_types! {
 }
 
 impl pallet_evm::Config for Runtime {
-    type FeeCalculator = BaseFee;
-    type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
-    type WeightPerGas = WeightPerGas;
+    type AddressMapping = IdentityAddressMapping;
+    type BlockGasLimit = BlockGasLimit;
     type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
     type CallOrigin = EnsureAccountId20;
-    type WithdrawOrigin = EnsureAccountId20;
-    type AddressMapping = IdentityAddressMapping;
-    type Currency = Balances;
-    type RuntimeEvent = RuntimeEvent;
-    type PrecompilesType = FrontierPrecompiles<Self>;
-    type PrecompilesValue = PrecompilesValue;
     type ChainId = EVMChainId;
-    type BlockGasLimit = BlockGasLimit;
+    type Currency = Balances;
     type Runner = pallet_evm::runner::stack::Runner<Self>;
-    type OnChargeTransaction = ();
+    type RuntimeEvent = RuntimeEvent;
+    type WeightPerGas = WeightPerGas;
+    type WithdrawOrigin = EnsureAccountId20;
     type OnCreate = ();
-    type FindAuthor = FindAuthorTruncated<Aura>;
     type Timestamp = Timestamp;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
+    type FeeCalculator = BaseFee;
+    type FindAuthor = FindAuthorTruncated<Aura>;
+    type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
+    type OnChargeTransaction = EVMCurrencyAdapter<Balances, ()>;
+    type PrecompilesType = FrontierPrecompiles<Self>;
+    type PrecompilesValue = PrecompilesValue;
 }
 
 parameter_types! {
@@ -555,6 +560,14 @@ impl_runtime_apis! {
     impl sp_api::Metadata<Block> for Runtime {
         fn metadata() -> OpaqueMetadata {
             OpaqueMetadata::new(Runtime::metadata().into())
+        }
+
+        fn metadata_at_version(version: u32) -> Option<OpaqueMetadata> {
+            Runtime::metadata_at_version(version)
+        }
+
+        fn metadata_versions() -> sp_std::vec::Vec<u32> {
+            Runtime::metadata_versions()
         }
     }
 
