@@ -19,11 +19,11 @@ futures = "0.3.25"
 hex-literal = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server", "macros"] }
 log = "0.4.17"
-scale-codec = { package = "parity-scale-codec", workspace = true }
+parity-scale-codec = { workspace = true }
 serde = { workspace = true }
 
 # Substrate
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", workspace = true }
+substrate-prometheus-endpoint = { workspace = true }
 sc-basic-authorship = { workspace = true }
 sc-chain-spec = { workspace = true }
 sc-cli = { workspace = true }
@@ -90,8 +90,8 @@ with-rocksdb-weights = ["vitreus-power-plant-runtime/with-rocksdb-weights"]
 with-paritydb-weights = ["vitreus-power-plant-runtime/with-paritydb-weights"]
 rpc-binary-search-estimate = ["fc-rpc/rpc-binary-search-estimate"]
 runtime-benchmarks = [
-	"frame-benchmarking/runtime-benchmarks",
-	"frame-benchmarking-cli/runtime-benchmarks",
-	"sc-service/runtime-benchmarks",
-	"vitreus-power-plant-runtime/runtime-benchmarks",
+    "frame-benchmarking/runtime-benchmarks",
+    "frame-benchmarking-cli/runtime-benchmarks",
+    "sc-service/runtime-benchmarks",
+    "vitreus-power-plant-runtime/runtime-benchmarks",
 ]

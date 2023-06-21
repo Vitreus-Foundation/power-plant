@@ -10,7 +10,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
@@ -58,7 +58,7 @@ pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
 mod precompiles;
-use precompiles::FrontierPrecompiles;
+use precompiles::VitreusPrecompiles;
 
 /// Type of block number.
 pub type BlockNumber = u32;
@@ -314,7 +314,7 @@ const BLOCK_GAS_LIMIT: u64 = 75_000_000;
 
 parameter_types! {
     pub BlockGasLimit: U256 = U256::from(BLOCK_GAS_LIMIT);
-    pub PrecompilesValue: FrontierPrecompiles<Runtime> = FrontierPrecompiles::<_>::new();
+    pub PrecompilesValue: VitreusPrecompiles<Runtime> = VitreusPrecompiles::<_>::new();
     pub WeightPerGas: Weight = Weight::from_parts(weight_per_gas(BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK), 0);
 }
 
@@ -336,7 +336,7 @@ impl pallet_evm::Config for Runtime {
     type FindAuthor = FindAuthorTruncated<Aura>;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
     type OnChargeTransaction = EVMCurrencyAdapter<Balances, ()>;
-    type PrecompilesType = FrontierPrecompiles<Self>;
+    type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
 }
 

@@ -1,5 +1,5 @@
 [workspace]
-members = ["node", "runtime"]
+members = ["node", "runtime", "precompiles/utils", "precompiles/balances-erc20"]
 resolver = "2"
 
 [workspace.package]
@@ -8,28 +8,38 @@ edition = "2021"
 repository = "https://bitbucket.org/innowise-group/vitreus-power-plant"
 
 [workspace.dependencies]
+affix = "0.1"
 bn = { package = "substrate-bn", version = "0.6", default-features = false }
+derive_more = "0.99"
 environmental = { version = "1.1", default-features = false }
 ethereum = { version = "0.14", default-features = false }
 ethereum-types = { version = "0.14", default-features = false }
 evm = { version = "0.39", default-features = false }
+hex = { version = "0.4", default-features = false }
 hex-literal = { version = "0.3" }
 impl-serde = { version = "0.4", default-features = false }
+impl-trait-for-tuples = "0.2"
 jsonrpsee = "0.16"
 kvdb-rocksdb = "0.17"
 libsecp256k1 = { version = "0.7", default-features = false }
 log = { version = "0.4", default-features = false }
+num_enum = { version = "0.6", default-features = false }
 parity-db = "0.4"
 rlp = { version = "0.5", default-features = false }
-scale-codec = { package = "parity-scale-codec", version = "3.2", default-features = false, features = [
+parity-scale-codec = { version = "3.2", default-features = false, features = [
     "derive",
 ] }
+paste = "1.0"
 scale-info = { version = "2.3", default-features = false, features = [
     "derive",
 ] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+sha3 = { version = "0.10", default-features = false }
+similar-asserts = "1.4"
 sqlx = "0.7.0-alpha.3"
+slices = "0.2"
+xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.42", default-features = false }
 
 sc-basic-authorship = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
 sc-block-builder = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
@@ -93,7 +103,7 @@ pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/parityt
 pallet-utility = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 # Substrate Utility
 frame-benchmarking-cli = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
+substrate-prometheus-endpoint = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
 substrate-build-script-utils = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
 substrate-frame-rpc-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
 substrate-test-runtime-client = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
@@ -126,7 +136,10 @@ pallet-evm-precompile-sha3fips = { git = "https://github.com/paritytech/frontier
 pallet-evm-precompile-simple = { git = "https://github.com/paritytech/frontier", branch = "bar/polkadot-v0.9.42", default-features = false }
 pallet-evm-test-vector-support = { git = "https://github.com/paritytech/frontier", branch = "bar/polkadot-v0.9.42" }
 pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", branch = "bar/polkadot-v0.9.42", default-features = false }
-# Frontier Template
+# Moonbeam
+precompile-utils = { path = "precompiles/utils", default-features = false }
+pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
+# Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
 # Arkworks
 ark-bls12-377 = { version = "0.4.0", default-features = false, features = [
