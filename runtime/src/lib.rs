@@ -10,7 +10,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
@@ -35,9 +35,10 @@ use frame_support::weights::constants::ParityDbWeight as RuntimeDbWeight;
 use frame_support::weights::constants::RocksDbWeight as RuntimeDbWeight;
 use frame_support::{
     construct_runtime, parameter_types,
-    traits::{ConstU32, ConstU8, FindAuthor, OnTimestampSet},
+    traits::{AsEnsureOriginWithArg, ConstU32, ConstU8, FindAuthor, OnTimestampSet},
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
 };
+use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -251,8 +252,10 @@ impl pallet_timestamp::Config for Runtime {
     type WeightInfo = ();
 }
 
+const EXISTENTIAL_DEPOSIT: u128 = 500;
+
 parameter_types! {
-    pub const ExistentialDeposit: u128 = 500;
+    pub const ExistentialDeposit: u128 = EXISTENTIAL_DEPOSIT;
     // For weight estimation, we assume that the most locks on an individual account will be 50.
     // This number may need to be adjusted in the future if this assumption no longer holds true.
     pub const MaxLocks: u32 = 50;
@@ -274,6 +277,72 @@ impl pallet_balances::Config for Runtime {
     type MaxFreezes = ();
     type HoldIdentifier = ();
     type MaxHolds = ();
+}
+
+pub type AssetId = u128;
+
+parameter_types! {
+    pub const AssetDeposit: Balance = 100; // The deposit required to create an asset
+    pub const AssetAccountDeposit: Balance = 10;
+    pub const ApprovalDeposit: Balance = EXISTENTIAL_DEPOSIT;
+    pub const AssetsStringLimit: u32 = 50;
+    pub const MetadataDepositBase: Balance = 100;
+    pub const MetadataDepositPerByte: Balance = 2;
+}
+
+impl pallet_assets::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Balance = Balance;
+    type AssetId = AssetId;
+    type AssetIdParameter = Compact<AssetId>;
+    type Currency = Balances;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type AssetDeposit = AssetDeposit;
+    type AssetAccountDeposit = AssetAccountDeposit;
+    type MetadataDepositBase = MetadataDepositBase;
+    type MetadataDepositPerByte = MetadataDepositPerByte;
+    type RemoveItemsLimit = ConstU32<500>;
+    type ApprovalDeposit = ApprovalDeposit;
+    type StringLimit = AssetsStringLimit;
+    type Freezer = ();
+    type Extra = ();
+    type CallbackHandle = ();
+    type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+    #[cfg(feature = "runtime_benchmarks")]
+    type BenchmarkHelper = ();
+}
+
+parameter_types! {
+    pub const CollectionDeposit: Balance = 100;
+    pub const ItemDeposit: Balance = 1;
+    pub const KeyLimit: u32 = 32;
+    pub const ValueLimit: u32 = 256;
+    pub const ApprovalsLimit: u32 = 20;
+    pub const ItemAttributesApprovalsLimit: u32 = 20;
+    pub const MaxTips: u32 = 10;
+    pub const MaxDeadlineDuration: BlockNumber = 12 * 30 * DAYS;
+}
+
+impl pallet_uniques::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type CollectionId = u32;
+    type ItemId = u32;
+    type Currency = Balances;
+    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+    type CollectionDeposit = CollectionDeposit;
+    type ItemDeposit = ItemDeposit;
+    type MetadataDepositBase = MetadataDepositBase;
+    type AttributeDepositBase = MetadataDepositBase;
+    type DepositPerByte = MetadataDepositPerByte;
+    type StringLimit = AssetsStringLimit;
+    type KeyLimit = KeyLimit;
+    type ValueLimit = ValueLimit;
+    type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
+    #[cfg(feature = "runtime-benchmarks")]
+    type Helper = ();
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type Locker = ();
 }
 
 parameter_types! {
@@ -396,19 +465,21 @@ construct_runtime!(
         NodeBlock = opaque::Block,
         UncheckedExtrinsic = UncheckedExtrinsic
     {
-        System: frame_system,
-        Timestamp: pallet_timestamp,
+        Assets: pallet_assets,
         Aura: pallet_aura,
-        Grandpa: pallet_grandpa,
         Balances: pallet_balances,
-        TransactionPayment: pallet_transaction_payment,
-        Sudo: pallet_sudo,
-        Ethereum: pallet_ethereum,
+        BaseFee: pallet_base_fee,
+        DynamicFee: pallet_dynamic_fee,
         EVM: pallet_evm,
         EVMChainId: pallet_evm_chain_id,
-        DynamicFee: pallet_dynamic_fee,
-        BaseFee: pallet_base_fee,
+        Ethereum: pallet_ethereum,
+        Grandpa: pallet_grandpa,
         HotfixSufficients: pallet_hotfix_sufficients,
+        Sudo: pallet_sudo,
+        System: frame_system,
+        Timestamp: pallet_timestamp,
+        TransactionPayment: pallet_transaction_payment,
+        Uniques: pallet_uniques,
     }
 );
 
