@@ -58,6 +58,8 @@ pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
+// mod xcm_config;
+mod asset_config;
 mod precompiles;
 use precompiles::VitreusPrecompiles;
 
@@ -77,6 +79,31 @@ pub type AccountIndex = u32;
 
 /// Balance of an account.
 pub type Balance = u128;
+
+/// VTRS, the native token, uses 18 decimals of precision.
+pub mod currency {
+    use super::Balance;
+
+    // Provide a common factor between runtimes based on a supply of 10_000_000 tokens.
+    pub const SUPPLY_FACTOR: Balance = 100;
+
+    pub const WEI: Balance = 1;
+    pub const KILOWEI: Balance = 1_000;
+    pub const MEGAWEI: Balance = 1_000_000;
+    pub const GIGAWEI: Balance = 1_000_000_000;
+    pub const MICROVTRS: Balance = 1_000_000_000_000;
+    pub const MILLIVTRS: Balance = 1_000_000_000_000_000;
+    pub const VTRS: Balance = 1_000_000_000_000_000_000;
+    pub const KILOVTRS: Balance = 1_000_000_000_000_000_000_000;
+
+    pub const TRANSACTION_BYTE_FEE: Balance = 1 * GIGAWEI * SUPPLY_FACTOR;
+    pub const STORAGE_BYTE_FEE: Balance = 100 * MICROVTRS * SUPPLY_FACTOR;
+    pub const WEIGHT_FEE: Balance = 50 * KILOWEI * SUPPLY_FACTOR;
+
+    pub const fn deposit(items: u32, bytes: u32) -> Balance {
+        items as Balance * 100 * MILLIVTRS * SUPPLY_FACTOR + (bytes as Balance) * STORAGE_BYTE_FEE
+    }
+}
 
 /// Index of a transaction in the chain.
 pub type Index = u32;
@@ -465,6 +492,7 @@ construct_runtime!(
         NodeBlock = opaque::Block,
         UncheckedExtrinsic = UncheckedExtrinsic
     {
+		AssetManager: pallet_asset_manager,
         Assets: pallet_assets,
         Aura: pallet_aura,
         Balances: pallet_balances,

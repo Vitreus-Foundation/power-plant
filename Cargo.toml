@@ -95,13 +95,14 @@ frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/substrate"
 pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-aura = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
+pallet-collective = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
-pallet-uniques = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-sudo = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-timestamp = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
+pallet-uniques = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-utility = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 # Substrate Utility
 frame-benchmarking-cli = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42" }
@@ -141,6 +142,8 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # Moonbeam
 precompile-utils = { path = "precompiles/utils", default-features = false }
 pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
+pallet-evm-precompileset-assets-erc20 = { path = "precompiles/assets-erc20", default-features = false }
+pallet-asset-manager = { git = "https://github.com/purestake/moonbeam", branch = "v0.32.1-allow-revert-finalized", default-features = false }
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
 # Arkworks

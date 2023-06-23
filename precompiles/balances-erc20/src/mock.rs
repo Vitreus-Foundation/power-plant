@@ -124,10 +124,6 @@ impl pallet_evm::Config for Runtime {
     type BlockHashMapping = pallet_evm::SubstrateBlockHashMapping<Self>;
     type FindAuthor = ();
     type OnCreate = ();
-
-    // type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
-    // type CallOrigin = EnsureAccountId20;
-    // type WithdrawOrigin = EnsureAccountId20;
     type Timestamp = Timestamp;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
 }

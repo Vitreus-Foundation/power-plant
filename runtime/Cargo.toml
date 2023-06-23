@@ -35,16 +35,16 @@ frame-support = { workspace = true }
 frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
 frame-system-rpc-runtime-api = { workspace = true }
-pallet-uniques = { workspace = true }
 pallet-assets = { workspace = true }
 pallet-aura = { workspace = true }
 pallet-balances = { workspace = true }
+pallet-collective = { workspace = true }
 pallet-grandpa = { workspace = true }
 pallet-sudo = { workspace = true }
 pallet-timestamp = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
-
+pallet-uniques = { workspace = true }
 # Frontier
 fp-account = { workspace = true }
 fp-evm = { workspace = true }
@@ -62,7 +62,9 @@ pallet-evm-precompile-simple = { workspace = true }
 pallet-hotfix-sufficients = { workspace = true }
 # moonbean
 precompile-utils = { workspace = true }
+pallet-evm-precompileset-assets-erc20 = { workspace = true }
 pallet-evm-precompile-balances-erc20 = { workspace = true }
+pallet-asset-manager = { workspace = true }
 
 [build-dependencies]
 substrate-wasm-builder = { workspace = true, optional = true }
@@ -73,7 +75,6 @@ with-rocksdb-weights = []
 with-paritydb-weights = []
 std = [
     "precompile-utils/std",
-    "pallet-evm-precompile-balances-erc20/std",
     "parity-scale-codec/std",
     "scale-info/std",
     # Substrate
@@ -96,9 +97,11 @@ std = [
     "frame-system/std",
     "frame-system-rpc-runtime-api/std",
     "frame-system-benchmarking/std",
+    "pallet-asset-manager/std",
     "pallet-assets/std",
     "pallet-aura/std",
     "pallet-balances/std",
+    "pallet-collective/std",
     "pallet-grandpa/std",
     "pallet-sudo/std",
     "pallet-timestamp/std",
@@ -120,6 +123,10 @@ std = [
     "pallet-evm-precompile-sha3fips/std",
     "pallet-evm-precompile-simple/std",
     "pallet-hotfix-sufficients/std",
+    # Moonbeam
+    "pallet-evm-precompile-balances-erc20/std",
+    "pallet-evm-precompileset-assets-erc20/std",
+
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
