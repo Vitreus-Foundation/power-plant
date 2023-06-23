@@ -3,7 +3,6 @@ pipelines:
     develop:
       - step:
           name: Build and Run Tests
-          deployment: dev
           image: rustlang/rust:stable
           script:
             - rustup target add wasm32-unknown-unknown
