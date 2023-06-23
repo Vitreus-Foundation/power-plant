@@ -3,7 +3,7 @@ pipelines:
     develop:
       - step:
           name: Build and Run Tests
-          image: rustlang/rust:stable
+          image: rustlang/rust:nightly
           script:
             - rustup target add wasm32-unknown-unknown
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler
