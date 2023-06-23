@@ -1,10 +1,10 @@
 pipelines:
   branches:   
-    dev:
+    develop:
       - step:
           name: Build and Run Tests
           deployment: dev
-          image: rustlang/rust:nightly
+          image: rustlang/rust:stable
           caches:
             - cargo
           script:
@@ -12,7 +12,7 @@ pipelines:
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler
 
             - cargo fmt -- --check
-            - rustup component add clippy
+            - rustup component add clippy rustfmt rust-analyzer
             - cargo clippy -- -D warnings
             - cargo build --release
             - cargo test
