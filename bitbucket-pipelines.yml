@@ -5,8 +5,6 @@ pipelines:
           name: Build and Run Tests
           deployment: dev
           image: rustlang/rust:stable
-          caches:
-            - cargo
           script:
             - rustup target add wasm32-unknown-unknown
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler
