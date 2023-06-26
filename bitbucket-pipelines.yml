@@ -1,9 +1,12 @@
+image: rust:1.70.*
+clone:
+  depth: full 
+
 pipelines:
   branches:   
     develop:
       - step:
           name: Build and Run Tests
-          image: rustlang/rust:nightly
           script:
             - rustup target add wasm32-unknown-unknown
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler
@@ -11,5 +14,5 @@ pipelines:
             - cargo fmt -- --check
             - rustup component add clippy rustfmt rust-analyzer
             - cargo clippy -- -D warnings
-            - cargo build #--release
-            - cargo test 
+            - cargo build --locked --all-targets
+            - cargo test --locked --all
