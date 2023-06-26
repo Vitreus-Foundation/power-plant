@@ -1,4 +1,4 @@
-image: rust:1.70.*
+image: rust:1.70.* !rust:1.70.*-
 clone:
   depth: full 
 
