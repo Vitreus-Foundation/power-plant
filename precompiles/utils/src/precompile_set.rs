@@ -302,7 +302,7 @@ pub fn get_address_type<R: pallet_evm::Config>(address: H160) -> AddressType {
 
     // check code matches dummy code
     let code = pallet_evm::AccountCodes::<R>::get(address);
-    if &code == &[0x60, 0x00, 0x60, 0x00, 0xfd] {
+    if code == [0x60, 0x00, 0x60, 0x00, 0xfd] {
         return AddressType::Precompile;
     }
 
@@ -310,10 +310,7 @@ pub fn get_address_type<R: pallet_evm::Config>(address: H160) -> AddressType {
 }
 
 fn is_address_eoa_or_precompile<R: pallet_evm::Config>(address: H160) -> bool {
-    match get_address_type::<R>(address) {
-        AddressType::EOA | AddressType::Precompile => true,
-        _ => false,
-    }
+    matches!(get_address_type::<R>(address), AddressType::EOA | AddressType::Precompile)
 }
 
 /// Common checks for precompile and precompile sets.
@@ -510,16 +507,14 @@ where
             match self.current_recursion_level.try_borrow_mut() {
                 Ok(mut recursion_level) => {
                     if *recursion_level > max_recursion_level {
-                        return Some(Err(
-                            revert("Precompile is called with too high nesting").into()
-                        ));
+                        return Some(Err(revert("Precompile is called with too high nesting")));
                     }
 
                     *recursion_level += 1;
                 },
                 // We don't hold the borrow and are in single-threaded code, thus we should
                 // not be able to fail borrowing in nested calls.
-                Err(_) => return Some(Err(revert("Couldn't check precompile nesting").into())),
+                Err(_) => return Some(Err(revert("Couldn't check precompile nesting"))),
             }
         }
 
@@ -537,7 +532,7 @@ where
                 },
                 // We don't hold the borrow and are in single-threaded code, thus we should
                 // not be able to fail borrowing in nested calls.
-                Err(_) => return Some(Err(revert("Couldn't check precompile nesting").into())),
+                Err(_) => return Some(Err(revert("Couldn't check precompile nesting"))),
             }
         }
 
@@ -955,6 +950,12 @@ pub struct PrecompileSetBuilder<R, P> {
     _phantom: PhantomData<R>,
 }
 
+impl<R: Default, P: Default> Default for PrecompileSetBuilder<R, P> {
+    fn default() -> Self {
+        Self { inner: Default::default(), _phantom: Default::default() }
+    }
+}
+
 impl<R: pallet_evm::Config, P: PrecompileSetFragment> PrecompileSet for PrecompileSetBuilder<R, P> {
     fn execute(&self, handle: &mut impl PrecompileHandle) -> Option<PrecompileResult> {
         self.inner.execute::<R>(handle)
@@ -986,7 +987,7 @@ impl<R: pallet_evm::Config, P: PrecompileSetFragment> PrecompileSetBuilder<R, P>
             .inner
             .used_addresses()
             .into_iter()
-            .map(|x| R::AddressMapping::into_account_id(x))
+            .map(R::AddressMapping::into_account_id)
     }
 
     pub fn summarize_checks(&self) -> Vec<PrecompileCheckSummary> {
