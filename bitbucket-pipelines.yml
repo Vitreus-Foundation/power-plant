@@ -9,9 +9,9 @@ pipelines:
           name: Build and Run Tests
           script:
             - rustup target add wasm32-unknown-unknown
-            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc gcc-multilib jq 
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
             - rustup component add clippy rustfmt rust-analyzer
             - cargo clippy -- -D warnings
-            - cargo build --locked --all-targets --release
+            - cargo build --locked --all-targets
             - cargo test --locked --all
