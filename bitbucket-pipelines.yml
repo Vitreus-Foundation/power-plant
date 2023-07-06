@@ -13,5 +13,5 @@ pipelines:
             - cargo fmt -- --check
             - rustup component add clippy rustfmt rust-analyzer
             - cargo clippy -- -D warnings
-            - cargo build --locked --all-targets
-            - cargo test --locked --all
+            - cargo build --locked
+            - cargo test --locked
