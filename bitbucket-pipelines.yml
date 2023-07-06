@@ -9,6 +9,8 @@ pipelines:
           name: Build and Run Tests
           script:
             - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - echo $RUSTFLAGS
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
             - rustup component add clippy rustfmt rust-analyzer
