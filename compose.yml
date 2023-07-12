@@ -1,0 +1,35 @@
+version: "3.3"
+
+services:
+  vitreus_power_plant:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: vitreus_power_plant
+    networks:
+      - vitreus_power_plant-network
+
+  first_node:
+    image: vitreus_power_plant
+    depends_on:
+      - vitreus_power_plant
+    command: >
+      ./target/release/vitreus-power-plant-node \
+      --base-path /tmp/alice \
+      --chain development \
+      --alice \
+      --port 30333 \
+      --ws-port 9945 \
+      --rpc-port 9933 \
+      --node-key 0000000000000000000000000000000000000000000000000000000000000001 \
+      --validator
+
+    ports:
+      - "0.0.0.0:30333:30333/tcp"
+      - "127.0.0.1:9945:9945/tcp"
+    networks:
+      - vitreus_power_plant-network
+
+networks:
+  vitreus_power_plant-network:
+    name: vitreus_power_plant
