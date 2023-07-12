@@ -19,7 +19,9 @@ pipelines:
       - step:
           name: build and deploy to innowise test network
           image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
-          deployment: develop
+          deployment: dev
           script:
+            - echo "$ENV"
+            - echo "$PRJNAME"
             - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
             - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker-compose down || true && docker-compose up -d --build"
