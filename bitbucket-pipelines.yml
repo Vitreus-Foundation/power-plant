@@ -24,4 +24,4 @@ pipelines:
             - echo "$ENV"
             - echo "$PRJNAME"
             - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-            - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker-compose down || true && docker-compose up -d --build"
+            - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose down || true && docker compose up -d --build"
