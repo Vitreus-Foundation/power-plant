@@ -1,9 +1,6 @@
-# Note: This is currently designed to simplify development
-# To get a smaller docker image, there should be 2 images generated, in 2 stages.
 # Stage 1: Build the application
 
 FROM rust:1.70 as builder
-
 
 ARG PROFILE=release
 WORKDIR /app
@@ -33,7 +30,7 @@ COPY . .
 RUN cargo build --locked "--$PROFILE"
 
 #Stage 2: Create the final image
-FROM rust:1.70
+FROM ubuntu:20.04
 
 # Set the working directory
 WORKDIR /app
