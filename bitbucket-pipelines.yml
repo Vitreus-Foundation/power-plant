@@ -24,20 +24,20 @@ pipelines:
                 deployment: dev
                 script:
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose down || true && docker compose up -d --build -f compose.yaml"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose down || true && docker compose -f compose.yml up -d --build"
             
             - step:
                 name: build and deploy to innowise test network instance2
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
-                deployment: dev
+                deployment: dev2
                 script:
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose down || true && docker compose up -d --build -f compose2.yaml"
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose down || true && docker compose -f compose2.yml up -d --build"
 
             - step:
                 name: build and deploy to innowise test network instance3
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
-                deployment: dev
+                deployment: dev3
                 script:
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose down || true && docker compose up -d --build -f compose3.yaml"
+                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose down || true && docker compose -f compose3.yml up -d --build"
