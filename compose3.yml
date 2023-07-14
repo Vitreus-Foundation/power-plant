@@ -28,6 +28,7 @@ services:
       - "0.0.0.0:30333:30333/tcp"
       - "0.0.0.0:9933:9933/tcp"
       - "0.0.0.0:9944:9944/tcp"
+      - "127.0.0.1:9615:9615/tcp"
     networks:
       - vitreus_power_plant-network
 
