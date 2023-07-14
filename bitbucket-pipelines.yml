@@ -24,7 +24,7 @@ pipelines:
                 deployment: dev
                 script:
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f compose.yml down || true && docker compose -f compose.yml up -d --build"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f compose.yml down || true && docker system prune -a -f && docker compose -f compose.yml up -d --build"
             
             - step:
                 name: build and deploy to innowise test network instance2
@@ -32,7 +32,7 @@ pipelines:
                 deployment: dev2
                 script:
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f compose2.yml down || true && docker compose -f compose2.yml up -d --build"
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f compose2.yml down || true && docker system prune -a -f && docker compose -f compose2.yml up -d --build"
 
             - step:
                 name: build and deploy to innowise test network instance3
@@ -40,4 +40,4 @@ pipelines:
                 deployment: dev3
                 script:
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f compose3.yml down || true && docker compose -f compose3.yml up -d --build"
+                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f compose3.yml down || true && docker system prune -a -f && docker compose -f compose3.yml up -d --build"

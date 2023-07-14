@@ -23,12 +23,15 @@ services:
       --rpc-port 9933
       --node-key c12b6d18942f5ee8528c8e2baf4e147b5c5c18710926ea492d09cbd9f6c9f82a
       --validator
+      --unsafe-ws-external
+      --unsafe-rpc-external
+      --rpc-cors all
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
       - "0.0.0.0:9933:9933/tcp"
       - "0.0.0.0:9944:9944/tcp"
-      - "127.0.0.1:9615:9615/tcp"
+      - 9615:9615
     networks:
       - vitreus_power_plant-network
 
