@@ -9,8 +9,9 @@ services:
     networks:
       - vitreus_power_plant-network
 
-  first_node:
+  second_node:
     image: vitreus_power_plant
+    container_name: power-plant-second-node
     depends_on:
       - vitreus_power_plant
     command: >
@@ -25,6 +26,7 @@ services:
       --validator
       --prometheus-external
       --bootnodes /ip4/140.82.46.161/tcp/30333/p2p/12D3KooWBmAwcd4PJNJvfV89HwE48nwkRmAgo8Vy3uQEyNNHBox2
+      --telemetry-url "wss://telemetry.polkadot.io/submit/ 0"
 
 
     ports:

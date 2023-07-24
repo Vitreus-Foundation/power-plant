@@ -9,8 +9,9 @@ services:
     networks:
       - vitreus_power_plant-network
 
-  first_node:
+  third_node:
     image: vitreus_power_plant
+    container_name: power-plant-third-node
     depends_on:
       - vitreus_power_plant
     command: >
