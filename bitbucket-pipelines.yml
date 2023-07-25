@@ -26,8 +26,7 @@ pipelines:
                   # - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   # - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f compose.yml down || true && docker system prune -a -f && docker compose -f compose.yml up -d --build"
                   - ssh ${USERNAME}@${HOST1} 'export GOOGLE_CHAT_WEBHOOK_TOKEN="${GOOGLE_CHAT_WEBHOOK_TOKEN}"'
-                  - ssh ${USERNAME}@${HOST1} 'echo $GOOGLE_CHAT_WEBHOOK_TOKEN'
-                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep third-node && curl -H "Content-Type:application/json" -d "{\"text\":\"Third Node is up and running\"}" "https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=$GOOGLE_CHAT_WEBHOOK_TOKEN"'
+                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep third-node && curl -H "Content-Type:application/json" -d "{\"text\":\"Third Node is up and running\"}" "https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}"'
                   - ssh ${USERNAME}@${HOST1} 'docker ps | grep third-node || curl -H "Content-Type:application/json" -d "{\"text\":\"Issues with Third Node\"}" "https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=$GOOGLE_CHAT_WEBHOOK_TOKEN"'
 
             - step:
