@@ -25,9 +25,9 @@ pipelines:
                 script:
                   # - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   # - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f compose.yml down || true && docker system prune -a -f && docker compose -f compose.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep third-node && curl -H "Content-Type: application/json" -d '{\"text\": \"Third Node is up and running\"}' $GOOGLE_CHAT_WEBHOOK_URL'
-                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep third-node || curl -H "Content-Type: application/json" -d '{\"text\": \"Issues with Third Node\"}' $GOOGLE_CHAT_WEBHOOK_URL'
-            
+                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep third-node && curl -H "Content-Type:application/json" -d "{\"text\":\"Third Node is up and running\"}" "${GOOGLE_CHAT_WEBHOOK_URL}"'
+                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep third-node || curl -H "Content-Type:application/json" -d "{\"text\":\"Issues with Third Node\"}" "${GOOGLE_CHAT_WEBHOOK_URL}"'
+
             - step:
                 name: build and deploy to innowise test network instance2
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
@@ -35,8 +35,8 @@ pipelines:
                 script:
                   # - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   # - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f compose2.yml down || true && docker system prune -a -f && docker compose -f compose2.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep second-node && curl -H "Content-Type: application/json" -d '{\"text\": \"Second Node is up and running\"}' $GOOGLE_CHAT_WEBHOOK_URL'
-                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep second-node || curl -H "Content-Type: application/json" -d '{\"text\": \"Issues with Second Node\"}' $GOOGLE_CHAT_WEBHOOK_URL'
+                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep second-node && curl -H "Content-Type:application/json" -d "{\"text\":\"Second Node is up and running\"}" "${GOOGLE_CHAT_WEBHOOK_URL}"'
+                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep second-node || curl -H "Content-Type:application/json" -d "{\"text\":\"Issues with Second Node\"}" "${GOOGLE_CHAT_WEBHOOK_URL}"'
 
             - step:
                 name: build and deploy to innowise test network instance3
@@ -45,5 +45,5 @@ pipelines:
                 script:
                   # - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   # - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f compose3.yml down || true && docker system prune -a -f && docker compose -f compose3.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep first-node && curl -H "Content-Type: application/json" -d '{\"text\": \"Boot Node is up and running\"}' $GOOGLE_CHAT_WEBHOOK_URL'
-                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep first-node || curl -H "Content-Type: application/json" -d '{\"text\": \"Issues with Boot Node\"}' $GOOGLE_CHAT_WEBHOOK_URL'
+                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep first-node && curl -H "Content-Type:application/json" -d "{\"text\":\"First Node is up and running\"}" "${GOOGLE_CHAT_WEBHOOK_URL}"'
+                  - ssh ${USERNAME}@${HOST1} 'docker ps | grep first-node || curl -H "Content-Type:application/json" -d "{\"text\":\"Issues with First Node\"}" "${GOOGLE_CHAT_WEBHOOK_URL}"'
