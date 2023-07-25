@@ -27,7 +27,6 @@ services:
       --validator
       --prometheus-external
       --unsafe-ws-external
-      --unsafe-rpc-external
       --rpc-cors all
 
     ports:
