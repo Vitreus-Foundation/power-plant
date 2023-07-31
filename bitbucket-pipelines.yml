@@ -6,21 +6,26 @@ pipelines:
   branches:   
     develop:
       - step:
-          name: Build and Run Tests
+          name: First step
           script:
-            - rustup target add wasm32-unknown-unknown
-            - export RUSTFLAGS="-C strip=debuginfo"
-            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
-            - cargo fmt -- --check
-            - cargo clippy -- -D warnings
-            - cargo build --locked
-            - cargo test --locked
+            - echo "Hello"
 
       - parallel:
           steps:
             - step:
+                name: Build and Run Tests
+                script:
+                  - rustup target add wasm32-unknown-unknown
+                  - export RUSTFLAGS="-C strip=debuginfo"
+                  - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+                  - cargo fmt -- --check
+                  - cargo clippy -- -D warnings
+                  - cargo build --locked
+                  - cargo test --locked
+            - step:
                 name: build and deploy to innowise test network instance1
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
                 deployment: dev
                 script:
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
@@ -31,6 +36,7 @@ pipelines:
             - step:
                 name: build and deploy to innowise test network instance2
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
                 deployment: dev2
                 script:
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
@@ -41,6 +47,7 @@ pipelines:
             - step:
                 name: build and deploy to innowise test network instance3
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
                 deployment: dev3
                 script:
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
