@@ -24,6 +24,7 @@ services:
       --rpc-port 9933
       --unsafe-rpc-external
       --prometheus-external
+      --telemetry-url "wss://telemetry.polkadot.io/submit/ 0"
       --bootnodes /ip4/140.82.46.161/tcp/30333/p2p/12D3KooWBmAwcd4PJNJvfV89HwE48nwkRmAgo8Vy3uQEyNNHBox2
       --unsafe-ws-external
       --rpc-cors all

@@ -26,6 +26,7 @@ services:
       --node-key c12b6d18942f5ee8528c8e2baf4e147b5c5c18710926ea492d09cbd9f6c9f82a
       --validator
       --prometheus-external
+      --telemetry-url "wss://telemetry.polkadot.io/submit/ 0"
       --unsafe-ws-external
       --rpc-cors all
 
