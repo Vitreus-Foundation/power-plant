@@ -7,7 +7,7 @@ services:
       dockerfile: Dockerfile
     image: vitreus_power_plant
     networks:
-      - vitreus_power_plant-network
+      - vitreus_power_plant_network
 
   first_node:
     image: vitreus_power_plant
@@ -16,19 +16,21 @@ services:
       - vitreus_power_plant
     command: >
       ./target/release/vitreus-power-plant-node
-      --base-path /tmp/alice
-      --chain dev
-      --alice
+      --base-path /tmp/bob
+      --chain in-testnet
+      --bob
       --port 30333
       --ws-port 9944
       --rpc-port 9933
       --unsafe-rpc-external
-      --node-key c12b6d18942f5ee8528c8e2baf4e147b5c5c18710926ea492d09cbd9f6c9f82a
+      --node-key=6ce3be907dbcabf20a9a5a60a712b4256a54196000a8ed4050d352bc113f8c58
       --validator
       --prometheus-external
-      --telemetry-url "wss://telemetry.polkadot.io/submit/ 0"
+#      --telemetry-url "wss://telemetry.polkadot.io/submit/ 0"
+      --bootnodes /ip4/149.28.56.46/tcp/30333/p2p/12D3KooWBmAwcd4PJNJvfV89HwE48nwkRmAgo8Vy3uQEyNNHBox2
       --unsafe-ws-external
       --rpc-cors all
+
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
@@ -36,8 +38,8 @@ services:
       - "0.0.0.0:9944:9944/tcp"
       - "127.0.0.1:9615:9615/tcp"
     networks:
-      - vitreus_power_plant-network
+      - vitreus_power_plant_network
 
 networks:
-  vitreus_power_plant-network:
+  vitreus_power_plant_network:
     name: vitreus_power_plant
