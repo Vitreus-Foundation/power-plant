@@ -26,7 +26,7 @@ services:
       --node-key=6ce3be907dbcabf20a9a5a60a712b4256a54196000a8ed4050d352bc113f8c58
       --validator
       --prometheus-external
-#      --telemetry-url "wss://telemetry.polkadot.io/submit/ 0"
+      # --telemetry-url "wss://telemetry.polkadot.io/submit/ 0"
       --bootnodes /ip4/149.28.56.46/tcp/30333/p2p/12D3KooWBmAwcd4PJNJvfV89HwE48nwkRmAgo8Vy3uQEyNNHBox2
       --unsafe-ws-external
       --rpc-cors all
