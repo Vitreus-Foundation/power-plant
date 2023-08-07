@@ -1,5 +1,3 @@
-//! The Substrate Node Template runtime. This can be compiled with `#[no_std]`, ready for Wasm.
-
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
@@ -18,14 +16,17 @@ use sp_core::{
     OpaqueMetadata, H160, H256, U256,
 };
 use sp_runtime::{
-    create_runtime_str, generic, impl_opaque_keys,
+    create_runtime_str,
+    curve::PiecewiseLinear,
+    generic, impl_opaque_keys,
     traits::{
         BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Get, IdentifyAccount,
-        IdentityLookup, NumberFor, PostDispatchInfoOf, UniqueSaturatedInto, Verify,
+        IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf, UniqueSaturatedInto, Verify,
     },
     transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
     ApplyExtrinsicResult, ConsensusEngineId, Perbill, Permill,
 };
+use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 // Substrate FRAME
@@ -53,6 +54,8 @@ use pallet_evm::{
     IdentityAddressMapping, Runner,
 };
 
+pub use pallet_reputation::ReputationPoint;
+
 // A few exports that help ease life for downstream crates.
 pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
@@ -77,6 +80,9 @@ pub type AccountIndex = u32;
 
 /// Balance of an account.
 pub type Balance = u128;
+
+/// Energy of an account.
+pub type Energy = Balance;
 
 /// Index of a transaction in the chain.
 pub type Index = u32;
@@ -313,6 +319,140 @@ impl pallet_assets::Config for Runtime {
     type BenchmarkHelper = ();
 }
 
+use pallet_reputation::REPUTATION_POINTS_PER_DAY;
+
+impl pallet_reputation::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
+}
+
+use pallet_energy_generation::{EnergyRateCalculator, StakeOf, StashOf};
+
+pallet_staking_reward_curve::build! {
+    const I_NPOS: PiecewiseLinear<'static> = curve!(
+        min_inflation: 0_025_000,
+        max_inflation: 0_100_000,
+        ideal_stake: 0_500_000,
+        falloff: 0_050_000,
+        max_piece_count: 40,
+        test_precision: 0_005_000,
+    );
+}
+
+// it takes a month to become a validator from 0
+pub const VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
+    ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 30);
+// it takes 2 months to become a collaborative validator from 0
+pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
+    ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 60);
+
+parameter_types! {
+    pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
+    pub const SessionsPerEra: SessionIndex = 3;
+    pub const SlashDeferDuration: EraIndex = 0;
+    pub const Period: BlockNumber = 5;
+    pub const Offset: BlockNumber = 0;
+    pub const VNRG: AssetId = 1;
+    pub const BatterySlotCapacity: Energy = 100_000_000_000;
+    pub const MaxCooperations: u32 = 16;
+    pub const HistoryDepth: u32 = 80;
+    pub const MaxUnlockingChunks: u32 = 32;
+    pub const RewardOnUnbalanceWasCalled: bool = false;
+    pub const MaxWinners: u32 = 100;
+    // it takes a month to become a validator from 0
+    pub const ValidatorReputationThreshold: ReputationPoint = VALIDATOR_REPUTATION_THRESHOLD;
+    // it takes 2 months to become a collaborative validator from 0
+    pub const CollaborativeValidatorReputationThreshold: ReputationPoint = COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD;
+    pub const RewardRemainderUnbalanced: u128 = 0;
+    pub const BondingDuration: EraIndex = 3;
+    pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
+
+}
+
+impl pallet_session::Config for Runtime {
+    type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, EnergyGeneration>;
+    type Keys = opaque::SessionKeys;
+    type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+    type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
+    type RuntimeEvent = RuntimeEvent;
+    type ValidatorId = AccountId;
+    type ValidatorIdOf = StashOf<Runtime>;
+    type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+    type WeightInfo = ();
+}
+
+impl pallet_session::historical::Config for Runtime {
+    type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
+    type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
+}
+
+impl pallet_authorship::Config for Runtime {
+    type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
+    type EventHandler = EnergyGeneration;
+}
+
+pub struct EnergyPerStakeCurrency;
+
+impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerStakeCurrency {
+    fn calculate_energy_rate(
+        _total_staked: StakeOf<Runtime>,
+        _total_issuance: Energy,
+        _core_nodes_num: u32,
+        _battery_slot_cap: Energy,
+    ) -> Energy {
+        1_000_000
+    }
+}
+
+pub struct EnergyPerReputationPoint;
+
+impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerReputationPoint {
+    fn calculate_energy_rate(
+        _total_staked: StakeOf<Runtime>,
+        _total_issuance: Energy,
+        _core_nodes_num: u32,
+        _battery_slot_cap: Energy,
+    ) -> Energy {
+        1_000
+    }
+}
+
+pub struct EnergyGenerationBenchmarkConfig;
+impl pallet_energy_generation::BenchmarkingConfig for EnergyGenerationBenchmarkConfig {
+    type MaxValidators = ConstU32<1000>;
+    type MaxCooperators = ConstU32<1000>;
+}
+
+impl pallet_energy_generation::Config for Runtime {
+    type AdminOrigin = EnsureRoot<AccountId>;
+    type BatterySlotCapacity = BatterySlotCapacity;
+    type BenchmarkingConfig = EnergyGenerationBenchmarkConfig;
+    type BondingDuration = BondingDuration;
+    type CollaborativeValidatorReputationThreshold = CollaborativeValidatorReputationThreshold;
+    type EnergyAssetId = VNRG;
+    type EnergyPerReputationPoint = EnergyPerReputationPoint;
+    type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
+    type HistoryDepth = HistoryDepth;
+    type MaxCooperations = MaxCooperations;
+    type MaxCooperatorRewardedPerValidator = ConstU32<64>;
+    type MaxUnlockingChunks = MaxUnlockingChunks;
+    type NextNewSession = Session;
+    type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
+    type OnStakerSlash = ();
+    type Reward = ();
+    type RewardRemainder = ();
+    type RuntimeEvent = RuntimeEvent;
+    type SessionInterface = ();
+    type SessionsPerEra = SessionsPerEra;
+    type Slash = ();
+    type SlashDeferDuration = SlashDeferDuration;
+    type StakeBalance = Balance;
+    type StakeCurrency = Balances;
+    type ThisWeightInfo = ();
+    type UnixTime = Timestamp;
+    type ValidatorReputationThreshold = ValidatorReputationThreshold;
+}
+
 parameter_types! {
     pub const CollectionDeposit: Balance = 100;
     pub const ItemDeposit: Balance = 1;
@@ -405,8 +545,12 @@ impl pallet_evm::Config for Runtime {
     type FindAuthor = FindAuthorTruncated<Aura>;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
     type OnChargeTransaction = EVMCurrencyAdapter<Balances, ()>;
-    type PrecompilesType = VitreusPrecompiles<Self>;
-    type PrecompilesValue = PrecompilesValue;
+    /// TODO looks like the balances precompile leads to the hanging transactions issue. Balances
+    /// works fine without it. Do we really need the precompile?
+    // type PrecompilesType = VitreusPrecompiles<Self>;
+    // type PrecompilesValue = PrecompilesValue;
+    type PrecompilesType = ();
+    type PrecompilesValue = ();
 }
 
 parameter_types! {
@@ -465,6 +609,7 @@ construct_runtime!(
         NodeBlock = opaque::Block,
         UncheckedExtrinsic = UncheckedExtrinsic
     {
+        Authorship: pallet_authorship,
         Assets: pallet_assets,
         Aura: pallet_aura,
         Balances: pallet_balances,
@@ -480,6 +625,10 @@ construct_runtime!(
         Timestamp: pallet_timestamp,
         TransactionPayment: pallet_transaction_payment,
         Uniques: pallet_uniques,
+        EnergyGeneration: pallet_energy_generation,
+        Reputation: pallet_reputation,
+        Session: pallet_session,
+        Historical: pallet_session::historical,
     }
 );
 

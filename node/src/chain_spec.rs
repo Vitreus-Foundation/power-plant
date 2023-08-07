@@ -13,7 +13,8 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    AccountId, EnableManualSeal, GenesisConfig, SS58Prefix, Signature, WASM_BINARY,
+    AccountId, EnableManualSeal, GenesisConfig, ReputationPoint, SS58Prefix, Signature,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VALIDATOR_REPUTATION_THRESHOLD, WASM_BINARY,
 };
 
 // The URL for the telemetry server.
@@ -176,8 +177,8 @@ fn testnet_genesis(
     chain_id: u64,
 ) -> GenesisConfig {
     use vitreus_power_plant_runtime::{
-        AuraConfig, BalancesConfig, EVMChainIdConfig, EVMConfig, GrandpaConfig, SudoConfig,
-        SystemConfig,
+        AuraConfig, BalancesConfig, EVMChainIdConfig, EVMConfig, GrandpaConfig, ReputationConfig,
+        SudoConfig, SystemConfig,
     };
 
     GenesisConfig {
@@ -257,5 +258,35 @@ fn testnet_genesis(
         dynamic_fee: Default::default(),
         base_fee: Default::default(),
         assets: Default::default(),
+        reputation: ReputationConfig {
+            accounts: vec![
+                (
+                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
+                    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
+                ), // Alith
+                (
+                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
+                    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
+                ), // Baltathar
+                (
+                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
+                    VALIDATOR_REPUTATION_THRESHOLD.into(),
+                ), // Charleth
+                (
+                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
+                    VALIDATOR_REPUTATION_THRESHOLD.into(),
+                ), // Dorothy
+                (
+                    AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB")),
+                    ReputationPoint::from(0).into(),
+                ), // Ethan
+                (
+                    AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d")),
+                    ReputationPoint::from(0).into(),
+                ), // Faith
+            ],
+        },
+        energy_generation: Default::default(),
+        session: Default::default(),
     }
 }

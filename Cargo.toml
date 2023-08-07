@@ -1,6 +1,8 @@
 [workspace]
 members = [
     "node",
+    "pallets/energy-generation",
+    "pallets/reputation",
     "pallets/simple-staking",
     "precompiles/balances-erc20",
     "precompiles/utils",
@@ -105,6 +107,7 @@ frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/substrate"
 pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-aura = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-authorship = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
+pallet-bags-list = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false }
 pallet-session = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v0.9.42", default-features = false, features = [
@@ -161,6 +164,8 @@ pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", de
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
 
+pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }
+pallet-reputation = { path = "pallets/reputation", default-features = false }
 pallet-simple-staking = { path = "pallets/simple-staking", default-features = false }
 
 # Arkworks

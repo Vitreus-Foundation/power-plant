@@ -81,6 +81,9 @@ fp-evm = { workspace = true, features = ["default"] }
 fp-rpc = { workspace = true, features = ["default"] }
 vitreus-power-plant-runtime = { workspace = true, features = ["default"] }
 
+pallet-energy-generation = { workspace = true }
+pallet-reputation = { workspace = true }
+
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }
 

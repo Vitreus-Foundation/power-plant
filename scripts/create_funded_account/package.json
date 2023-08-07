@@ -1,0 +1,11 @@
+{
+  "name": "create_funded_account",
+  "version": "0.1.0",
+  "main": "create_funded_account.js",
+  "type": "module",
+  "license": "Unlicense",
+  "dependencies": {
+    "@polkadot/api": "^10.9.1",
+    "ethers": "^6.6.7"
+  }
+}
