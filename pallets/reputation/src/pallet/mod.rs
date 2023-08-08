@@ -12,6 +12,7 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
     use sp_runtime::SaturatedConversion;
+    use sp_std::vec::Vec;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
@@ -138,13 +139,6 @@ pub mod pallet {
     pub struct GenesisConfig<T: Config> {
         pub accounts: Vec<(T::AccountId, ReputationRecord)>,
     }
-
-    // #[cfg(feature = "std")]
-    // impl<T: Config> Default for GenesisConfig<T> {
-    //     fn default() -> Self {
-    //         GenesisConfig { accounts: Default::default() }
-    //     }
-    // }
 
     #[pallet::genesis_build]
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {

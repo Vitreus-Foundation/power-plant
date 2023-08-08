@@ -50,14 +50,13 @@ pub const REPUTATION_POINTS_PER_DAY: ReputationPoint =
     Clone,
     Encode,
     Decode,
-    frame_support::Deserialize,
-    frame_support::Serialize,
+    serde::Deserialize,
+    serde::Serialize,
     PartialEq,
     Eq,
     MaxEncodedLen,
     TypeInfo,
 )]
-// #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(test, derive(Debug))]
 #[scale_info(skip_type_params(T))]
 // we use `T: Config`, instead of `T: UniqueSaturatedInfo`, because `UniqueSaturationInto` would
@@ -112,8 +111,8 @@ impl From<ReputationPoint> for ReputationRecord {
     Debug,
     Default,
     Copy,
-    frame_support::Deserialize,
-    frame_support::Serialize,
+    serde::Deserialize,
+    serde::Serialize,
     Encode,
     Decode,
     PartialEq,
@@ -121,7 +120,6 @@ impl From<ReputationPoint> for ReputationRecord {
     MaxEncodedLen,
     TypeInfo,
 )]
-// #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[scale_info(skip_type_params(T))]
 pub struct ReputationPoint(pub u64);
 

@@ -3,7 +3,7 @@ members = [
     "node",
     "pallets/energy-generation",
     "pallets/reputation",
-    "pallets/simple-staking",
+    # "pallets/simple-staking",
     # "precompiles/balances-erc20",
     # "precompiles/utils",
     "runtime",

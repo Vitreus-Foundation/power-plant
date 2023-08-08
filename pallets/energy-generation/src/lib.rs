@@ -354,8 +354,7 @@ pub type EnergyDebtOf<T> =
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// Representation of the status of a staker.
-#[derive(RuntimeDebug, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone))]
+#[derive(RuntimeDebug, serde::Serialize, serde::Deserialize, PartialEq, Eq, Clone, TypeInfo)]
 pub enum StakerStatus<AccountId, Stake> {
     /// Chilling.
     Idle,
@@ -833,9 +832,20 @@ impl<Stake, Energy: Default> EnergyRateCalculator<Stake, Energy> for () {
 }
 
 /// Mode of era-forcing.
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
-#[derive(Default)]
+#[derive(
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    serde::Serialize,
+    serde::Deserialize,
+    Encode,
+    Decode,
+    RuntimeDebug,
+    TypeInfo,
+    MaxEncodedLen,
+    Default,
+)]
 pub enum Forcing {
     /// Not forcing anything - just let whatever happen.
     #[default]

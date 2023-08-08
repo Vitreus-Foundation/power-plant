@@ -18,7 +18,7 @@ pallet-reputation = { workspace = true }
 pallet-session = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
-serde = { workspace = true, optional = true }
+serde = { workspace = true }
 sp-application-crypto = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
