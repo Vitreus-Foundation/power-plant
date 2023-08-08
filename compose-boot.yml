@@ -28,6 +28,7 @@ services:
       --prometheus-external
       --unsafe-ws-external
       --rpc-cors all
+      --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 9"
 
     ports:
       - "0.0.0.0:30333:30333/tcp"

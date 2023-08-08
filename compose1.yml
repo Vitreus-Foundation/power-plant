@@ -29,7 +29,7 @@ services:
       --bootnodes /ip4/149.28.56.46/tcp/30333/p2p/12D3KooWBmAwcd4PJNJvfV89HwE48nwkRmAgo8Vy3uQEyNNHBox2
       --unsafe-ws-external
       --rpc-cors all
-      --telemetry-url "ws://telemetry-power-plant-dev.compliq.io:8001/submit/ 0"
+      --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 9"
 
 
     ports:
