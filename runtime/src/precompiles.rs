@@ -1,61 +1,53 @@
-use pallet_evm_precompile_balances_erc20::{Erc20BalancesPrecompile, Erc20Metadata};
+use pallet_evm::{
+    IsPrecompileResult, Precompile, PrecompileHandle, PrecompileResult, PrecompileSet,
+};
+use sp_core::H160;
+use sp_std::marker::PhantomData;
+
 use pallet_evm_precompile_modexp::Modexp;
 use pallet_evm_precompile_sha3fips::Sha3FIPS256;
 use pallet_evm_precompile_simple::{ECRecover, ECRecoverPublicKey, Identity, Ripemd160, Sha256};
-use precompile_utils::precompile_set::*;
 
-type EthereumPrecompilesChecks = (AcceptDelegateCall, CallableByContract, CallableByPrecompile);
+pub struct VitreusPrecompiles<R>(PhantomData<R>);
 
-pub struct NativeErc20Metadata;
-
-impl Erc20Metadata for NativeErc20Metadata {
-    fn name() -> &'static str {
-        "VTRS token"
+impl<R> VitreusPrecompiles<R>
+where
+    R: pallet_evm::Config,
+{
+    pub fn new() -> Self {
+        Self(Default::default())
+    }
+    pub fn used_addresses() -> [H160; 7] {
+        [hash(1), hash(2), hash(3), hash(4), hash(5), hash(1024), hash(1025)]
+    }
+}
+impl<R> PrecompileSet for VitreusPrecompiles<R>
+where
+    R: pallet_evm::Config,
+{
+    fn execute(&self, handle: &mut impl PrecompileHandle) -> Option<PrecompileResult> {
+        match handle.code_address() {
+            // Ethereum precompiles :
+            a if a == hash(1) => Some(ECRecover::execute(handle)),
+            a if a == hash(2) => Some(Sha256::execute(handle)),
+            a if a == hash(3) => Some(Ripemd160::execute(handle)),
+            a if a == hash(4) => Some(Identity::execute(handle)),
+            a if a == hash(5) => Some(Modexp::execute(handle)),
+            // Non-Frontier specific nor Ethereum precompiles :
+            a if a == hash(1024) => Some(Sha3FIPS256::execute(handle)),
+            a if a == hash(1025) => Some(ECRecoverPublicKey::execute(handle)),
+            _ => None,
+        }
     }
 
-    fn symbol() -> &'static str {
-        "VTRS"
-    }
-
-    fn decimals() -> u8 {
-        18
-    }
-
-    fn is_native_currency() -> bool {
-        true
+    fn is_precompile(&self, address: H160, _gas: u64) -> IsPrecompileResult {
+        IsPrecompileResult::Answer {
+            is_precompile: Self::used_addresses().contains(&address),
+            extra_cost: 0,
+        }
     }
 }
 
-#[precompile_utils::precompile_name_from_address]
-type VitreusPrecompilesAt<R> = (
-    // Ethereum precompiles:
-    // We allow DELEGATECALL to stay compliant with Ethereum behavior.
-    PrecompileAt<AddressU64<1>, ECRecover, EthereumPrecompilesChecks>,
-    PrecompileAt<AddressU64<2>, Sha256, EthereumPrecompilesChecks>,
-    PrecompileAt<AddressU64<3>, Ripemd160, EthereumPrecompilesChecks>,
-    PrecompileAt<AddressU64<4>, Identity, EthereumPrecompilesChecks>,
-    PrecompileAt<AddressU64<5>, Modexp, EthereumPrecompilesChecks>,
-    // Non-Vitreus specific nor Ethereum precompiles :
-    PrecompileAt<AddressU64<1024>, Sha3FIPS256, (CallableByContract, CallableByPrecompile)>,
-    PrecompileAt<AddressU64<1025>, ECRecoverPublicKey, (CallableByContract, CallableByPrecompile)>,
-    // Vitreus specific precompiles:
-    PrecompileAt<
-        AddressU64<2050>,
-        Erc20BalancesPrecompile<R, NativeErc20Metadata>,
-        (CallableByContract, CallableByPrecompile),
-    >,
-);
-
-/// The PrecompileSet installed in the Vitreus runtime.
-/// We include the nine Istanbul precompiles
-/// (https://github.com/ethereum/go-ethereum/blob/3c46f557/core/vm/contracts.go#L69)
-/// as well as a special precompile for dispatching Substrate extrinsics
-/// The following distribution has been decided for the precompiles
-/// 0-1023: Ethereum Mainnet Precompiles
-/// 1024-2047 Precompiles that are not in Ethereum Mainnet but are neither Vitreus specific
-/// 2048-4095 Vitreus specific precompiles
-pub type VitreusPrecompiles<R> = PrecompileSetBuilder<
-    R,
-    // Skip precompiles if out of range.
-    PrecompilesInRangeInclusive<(AddressU64<1>, AddressU64<4095>), VitreusPrecompilesAt<R>>,
->;
+fn hash(a: u64) -> H160 {
+    H160::from_low_u64_be(a)
+}

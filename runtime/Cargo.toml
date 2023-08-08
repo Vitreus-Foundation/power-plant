@@ -56,12 +56,13 @@ pallet-timestamp = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 pallet-uniques = { workspace = true }
+pallet-utility = { workspace = true }
 
 # Frontier
-fp-account = { workspace = true }
-fp-evm = { workspace = true }
+fp-account = { workspace = true, features = ["serde"] }
+fp-evm = { workspace = true, features = ["serde"] }
 fp-rpc = { workspace = true }
-fp-self-contained = { workspace = true }
+fp-self-contained = { workspace = true, features = ["serde"] }
 # Frontier FRAME
 pallet-base-fee = { workspace = true }
 pallet-dynamic-fee = { workspace = true }
@@ -111,7 +112,7 @@ std = [
     "frame-support/std",
     "frame-system/std",
     "frame-system-rpc-runtime-api/std",
-    "frame-system-benchmarking/std",
+    "frame-system-benchmarking?/std",
     "pallet-assets/std",
     "pallet-authorship/std",
     "pallet-babe/std",
@@ -125,6 +126,7 @@ std = [
     "pallet-transaction-payment-rpc-runtime-api/std",
     "pallet-transaction-payment/std",
     "pallet-uniques/std",
+    "pallet-utility/std",
     # Frontier
     "fp-account/std",
     "fp-evm/std",
