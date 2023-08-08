@@ -18,7 +18,7 @@ use core::ops::{Deref, DerefMut};
 
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::traits::UniqueSaturatedInto;
+use sp_runtime::traits::SaturatedConversion;
 
 pub use pallet::*;
 
@@ -38,65 +38,90 @@ pub mod weights;
 pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(90);
 /// The number of reputation points per 24 hours.
 ///
-/// Given that a slot duration is 6000 ms per block
-/// REPUTATION_POINTS_PER_BLOCK * 10 blocks/minute * 60 minutes * 24 hours
+/// Given that a slot duration is 3000 ms per block (for BABE), we have 60_000 / 3000 blocks per
+/// minute, so:
+///
+/// REPUTATION_POINTS_PER_BLOCK * 20 blocks/minute * 60 minutes * 24 hours
 pub const REPUTATION_POINTS_PER_DAY: ReputationPoint =
     ReputationPoint(REPUTATION_POINTS_PER_BLOCK.0 * 10 * 60 * 24);
 
 /// The reputation type has the amount of reputation (called `points`) and when it was updated.
-#[derive(Clone, Encode, Decode, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(
+    Clone,
+    Encode,
+    Decode,
+    frame_support::Deserialize,
+    frame_support::Serialize,
+    PartialEq,
+    Eq,
+    MaxEncodedLen,
+    TypeInfo,
+)]
+// #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(test, derive(Debug))]
 #[scale_info(skip_type_params(T))]
 // we use `T: Config`, instead of `T: UniqueSaturatedInfo`, because `UniqueSaturationInto` would
 // require `Config` anyway.
-pub struct ReputationRecord<T: pallet::Config> {
+pub struct ReputationRecord {
     /// The amount of reputation.
     pub points: ReputationPoint,
     /// When the reputation was updated.
-    pub updated: T::BlockNumber,
+    pub updated: u64,
 }
 
-impl<T: Config> Default for ReputationRecord<T> {
-    fn default() -> Self {
-        let now = frame_system::Pallet::<T>::block_number();
-        Self::with_blocknumber(now)
-    }
-}
-
-impl<T: pallet::Config> ReputationRecord<T> {
+impl ReputationRecord {
     /// Create a new reputation with the given block number.
-    pub fn with_blocknumber(updated: T::BlockNumber) -> Self {
+    pub fn with_blocknumber(updated: u64) -> Self {
         Self { points: ReputationPoint(0), updated }
     }
 
+    /// Create a new reputation with the current block number.
+    ///
+    /// Shouldn't be called outside of externalities context.
+    pub fn with_now<T: pallet::Config>() -> Self {
+        Self::with_blocknumber(frame_system::Pallet::<T>::block_number().saturated_into())
+    }
+
     /// Update the reputation points for the range between `Self::updated` and `block_number`.
-    pub fn update_with_block_number(&mut self, block_number: T::BlockNumber) {
+    pub fn update_with_block_number(&mut self, block_number: u64) {
         let reward = Self::calculate(self.updated, block_number);
         *self.points = self.points.saturating_add(reward);
         self.updated = block_number;
     }
 
     /// Calculate reputation points for the range between `start` and `end` blocks.
-    pub fn calculate(start: T::BlockNumber, end: T::BlockNumber) -> u64 {
+    pub fn calculate(start: u64, end: u64) -> u64 {
         if end < start {
             return 0;
         }
 
         let difference = end - start;
-        crate::REPUTATION_POINTS_PER_BLOCK.saturating_mul(difference.unique_saturated_into())
+        crate::REPUTATION_POINTS_PER_BLOCK.saturating_mul(difference.saturated_into())
     }
 }
 
-impl<T: Config> From<ReputationPoint> for ReputationRecord<T> {
+impl From<ReputationPoint> for ReputationRecord {
     fn from(points: ReputationPoint) -> Self {
-        Self { points, updated: frame_system::Pallet::<T>::block_number() }
+        Self { points, updated: 0 }
     }
 }
 
 /// The reputation points type.
-#[derive(Clone, Debug, Default, Copy, Encode, Decode, PartialEq, Eq, MaxEncodedLen, TypeInfo)]
-#[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
+#[derive(
+    Clone,
+    Debug,
+    Default,
+    Copy,
+    frame_support::Deserialize,
+    frame_support::Serialize,
+    Encode,
+    Decode,
+    PartialEq,
+    Eq,
+    MaxEncodedLen,
+    TypeInfo,
+)]
+// #[cfg_attr(feature = "std", derive(serde::Serialize, serde::Deserialize))]
 #[scale_info(skip_type_params(T))]
 pub struct ReputationPoint(pub u64);
 

@@ -11,6 +11,7 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
+    use sp_runtime::SaturatedConversion;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
@@ -28,7 +29,7 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn reputation)]
     pub type AccountReputation<T: Config> =
-        StorageMap<_, Twox64Concat, T::AccountId, ReputationRecord<T>>;
+        StorageMap<_, Twox64Concat, T::AccountId, ReputationRecord>;
 
     /// Pallet event type.
     #[pallet::event]
@@ -71,7 +72,7 @@ pub mod pallet {
             points: ReputationPoint,
         ) -> DispatchResult {
             ensure_root(origin)?;
-            let updated = <frame_system::Pallet<T>>::block_number();
+            let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
 
             <AccountReputation<T>>::insert(&account, ReputationRecord { points, updated });
 
@@ -118,7 +119,7 @@ pub mod pallet {
         #[pallet::weight(T::WeightInfo::update_points())]
         pub fn update_points(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
             let _ = ensure_signed(origin)?;
-            let now = <frame_system::Pallet<T>>::block_number();
+            let now = <frame_system::Pallet<T>>::block_number().saturated_into();
             let mut rep = <AccountReputation<T>>::get(&account)
                 .unwrap_or_else(|| ReputationRecord::with_blocknumber(now));
             rep.update_with_block_number(now);
@@ -133,20 +134,20 @@ pub mod pallet {
     }
 
     #[pallet::genesis_config]
+    #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
-        /// Preallocated accounts with reputation points.
-        pub accounts: Vec<(T::AccountId, ReputationRecord<T>)>,
+        pub accounts: Vec<(T::AccountId, ReputationRecord)>,
     }
 
-    #[cfg(feature = "std")]
-    impl<T: Config> Default for GenesisConfig<T> {
-        fn default() -> Self {
-            GenesisConfig { accounts: Default::default() }
-        }
-    }
+    // #[cfg(feature = "std")]
+    // impl<T: Config> Default for GenesisConfig<T> {
+    //     fn default() -> Self {
+    //         GenesisConfig { accounts: Default::default() }
+    //     }
+    // }
 
     #[pallet::genesis_build]
-    impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             for (account, reputation) in &self.accounts {
                 AccountReputation::<T>::insert(account, reputation);

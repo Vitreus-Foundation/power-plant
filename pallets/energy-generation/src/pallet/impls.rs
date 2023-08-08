@@ -14,7 +14,7 @@ use frame_support::{
 };
 use scale_info::prelude::*;
 
-use pallet_reputation::ReputationPoint;
+use pallet_reputation::{ReputationPoint, ReputationRecord};
 use pallet_session::historical;
 use sp_runtime::{
     traits::{Convert, One, Saturating, Zero},
@@ -69,7 +69,8 @@ impl<T: Config> Pallet<T> {
 
     pub(crate) fn check_reputation_cooperator(validator: &T::AccountId, cooperator: &T::AccountId) {
         let prefs = Self::validators(validator);
-        let rep = pallet_reputation::AccountReputation::<T>::get(cooperator).unwrap_or_default();
+        let rep = pallet_reputation::AccountReputation::<T>::get(cooperator)
+            .unwrap_or_else(ReputationRecord::with_now);
 
         if *prefs.min_coop_reputation > *rep.points {
             Self::chill_stash(cooperator);
@@ -592,7 +593,7 @@ impl<T: Config> Pallet<T> {
                                 Some(value) => {
                                     let reputation =
                                         pallet_reputation::Pallet::<T>::reputation(&who)
-                                            .unwrap_or_default();
+                                            .unwrap_or_else(ReputationRecord::with_now);
                                     if *reputation.points >= *prefs.min_coop_reputation {
                                         Some(IndividualExposure { who, value })
                                     } else {

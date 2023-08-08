@@ -132,8 +132,8 @@ impl frame_system::Config for Test {
     type Version = ();
     type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = ();
-    type OnKilledAccount = ();
+    type OnNewAccount = Reputation;
+    type OnKilledAccount = Reputation;
     type SystemWeightInfo = ();
     type SS58Prefix = ();
     type OnSetCode = ();

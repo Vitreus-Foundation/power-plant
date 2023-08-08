@@ -5,6 +5,7 @@ use crate::{ReputationPoint, ReputationRecord};
 use super::pallet::*;
 use frame_support::pallet_prelude::*;
 use frame_support::traits::{OnKilledAccount, OnNewAccount};
+use sp_runtime::SaturatedConversion;
 
 /// Notice that this pallet implements the `OnNewAccount` and `OnKilledAccount` traits from
 /// `frame_support`. If you want any account to have associated reputation with it, you need to
@@ -14,8 +15,8 @@ use frame_support::traits::{OnKilledAccount, OnNewAccount};
 impl<T: Config> Pallet<T> {
     /// Updates the points for the time since the last time the account was updated.
     pub fn update_points_for_time() {
-        let now = <frame_system::Pallet<T>>::block_number();
-        AccountReputation::<T>::translate(|_: T::AccountId, mut old: ReputationRecord<T>| {
+        let now = <frame_system::Pallet<T>>::block_number().saturated_into();
+        AccountReputation::<T>::translate(|_: T::AccountId, mut old: ReputationRecord| {
             old.update_with_block_number(now);
             Some(old)
         });
@@ -23,7 +24,7 @@ impl<T: Config> Pallet<T> {
 
     /// Acturally do the slash.
     pub fn do_slash(account: &T::AccountId, points: ReputationPoint) -> DispatchResult {
-        let updated = <frame_system::Pallet<T>>::block_number();
+        let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
 
         AccountReputation::<T>::try_mutate_exists(account, |value| {
             value
@@ -44,7 +45,7 @@ impl<T: Config> Pallet<T> {
     pub fn add_not_exists(account: &T::AccountId) {
         AccountReputation::<T>::mutate(account, |old| {
             if old.is_none() {
-                *old = Some(ReputationRecord::default());
+                *old = Some(ReputationRecord::with_now::<T>());
             }
         });
     }
@@ -53,13 +54,13 @@ impl<T: Config> Pallet<T> {
     pub fn increase_creating(account: &T::AccountId, points: ReputationPoint) {
         AccountReputation::<T>::mutate(account, |old| match old {
             Some(rec) => *rec.points += *points,
-            None => *old = Some(ReputationRecord::<T>::from(points)),
+            None => *old = Some(ReputationRecord::from(points)),
         });
     }
 
     /// Acturally increase points.
     pub fn do_increase_points(account: &T::AccountId, points: ReputationPoint) -> DispatchResult {
-        let updated = <frame_system::Pallet<T>>::block_number();
+        let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
 
         <AccountReputation<T>>::try_mutate_exists(account, |value| {
             value
@@ -79,8 +80,8 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
     fn on_new_account(who: &T::AccountId) {
-        let now = <frame_system::Pallet<T>>::block_number();
-        let new_rep = ReputationRecord::<T>::with_blocknumber(now);
+        let now = <frame_system::Pallet<T>>::block_number().saturated_into();
+        let new_rep = ReputationRecord::with_blocknumber(now);
         AccountReputation::<T>::insert(who, new_rep);
     }
 }

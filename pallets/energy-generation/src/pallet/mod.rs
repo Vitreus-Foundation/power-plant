@@ -29,7 +29,7 @@ use frame_support::{
     weights::Weight,
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-use pallet_reputation::ReputationPoint;
+use pallet_reputation::{ReputationPoint, ReputationRecord};
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, CheckedSub, SaturatedConversion, StaticLookup, Zero},
     ArithmeticError, Perbill, Percent,
@@ -1131,7 +1131,8 @@ pub mod pallet {
 
             let old =
                 Cooperators::<T>::get(stash).map_or_else(BTreeMap::new, |x| x.targets.into_inner());
-            let reputation = pallet_reputation::Pallet::<T>::reputation(stash).unwrap_or_default();
+            let reputation = pallet_reputation::Pallet::<T>::reputation(stash)
+                .unwrap_or_else(ReputationRecord::with_now);
 
             let targets: BoundedBTreeMap<_, _, _> = targets
                 .into_iter()

@@ -13,8 +13,9 @@ use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    AccountId, EnableManualSeal, GenesisConfig, ReputationPoint, SS58Prefix, Signature,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VALIDATOR_REPUTATION_THRESHOLD, WASM_BINARY,
+    opaque, AccountId, EnableManualSeal, GenesisConfig, ReputationPoint, SS58Prefix, Signature,
+    StakerStatus, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VALIDATOR_REPUTATION_THRESHOLD,
+    WASM_BINARY,
 };
 
 // The URL for the telemetry server.
@@ -69,6 +70,11 @@ where
 /// Generate an Aura authority key.
 pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
     (get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s))
+}
+
+pub fn session_keys_from_seed(s: &str) -> opaque::SessionKeys {
+    let (aura, grandpa) = authority_keys_from_seed(s);
+    opaque::SessionKeys { aura, grandpa }
 }
 
 fn properties() -> Properties {
@@ -177,8 +183,8 @@ fn testnet_genesis(
     chain_id: u64,
 ) -> GenesisConfig {
     use vitreus_power_plant_runtime::{
-        AuraConfig, BalancesConfig, EVMChainIdConfig, EVMConfig, GrandpaConfig, ReputationConfig,
-        SudoConfig, SystemConfig,
+        AuraConfig, BalancesConfig, EVMChainIdConfig, EVMConfig, EnergyGenerationConfig,
+        GrandpaConfig, ReputationConfig, SessionConfig, SudoConfig, SystemConfig,
     };
 
     GenesisConfig {
@@ -200,12 +206,14 @@ fn testnet_genesis(
         transaction_payment: Default::default(),
 
         // Consensus
-        aura: AuraConfig {
-            authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
-        },
-        grandpa: GrandpaConfig {
-            authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
-        },
+        // aura: AuraConfig {
+        //     authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
+        // },
+        // grandpa: GrandpaConfig {
+        //     authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
+        // },
+        aura: Default::default(),
+        grandpa: Default::default(),
 
         // EVM compatibility
         evm_chain_id: EVMChainIdConfig { chain_id },
@@ -286,7 +294,59 @@ fn testnet_genesis(
                 ), // Faith
             ],
         },
-        energy_generation: Default::default(),
-        session: Default::default(),
+        energy_generation: EnergyGenerationConfig {
+            stakers: vec![
+                (
+                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
+                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
+                    (1u128 << 60).into(),
+                    StakerStatus::Validator,
+                ), // Alith
+                (
+                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
+                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
+                    (1u128 << 60).into(),
+                    StakerStatus::Validator,
+                ), // Baltathar
+                (
+                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
+                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
+                    (1u128 << 60).into(),
+                    StakerStatus::Validator,
+                ), // Charleth
+                (
+                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
+                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
+                    (1u128 << 60).into(),
+                    StakerStatus::Validator,
+                ), // Dorothy
+            ],
+            ..Default::default()
+        },
+        // session: Default::default(),
+        session: SessionConfig {
+            keys: vec![
+                (
+                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
+                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
+                    session_keys_from_seed("Alith"),
+                ), // Alith
+                (
+                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
+                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
+                    session_keys_from_seed("Baltathar"),
+                ), // Baltathar
+                (
+                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
+                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
+                    session_keys_from_seed("Charleth"),
+                ), // Charleth
+                (
+                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
+                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
+                    session_keys_from_seed("Dorothy"),
+                ), // Dorothy
+            ],
+        },
     }
 }

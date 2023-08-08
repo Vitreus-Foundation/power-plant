@@ -8,9 +8,9 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
 use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
@@ -20,8 +20,9 @@ use sp_runtime::{
     curve::PiecewiseLinear,
     generic, impl_opaque_keys,
     traits::{
-        BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Get, IdentifyAccount,
-        IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf, UniqueSaturatedInto, Verify,
+        self, AccountIdLookup, BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Get,
+        IdentifyAccount, IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf,
+        SaturatedConversion, UniqueSaturatedInto, Verify,
     },
     transaction_validity::{TransactionSource, TransactionValidity, TransactionValidityError},
     ApplyExtrinsicResult, ConsensusEngineId, Perbill, Permill,
@@ -36,7 +37,9 @@ use frame_support::weights::constants::ParityDbWeight as RuntimeDbWeight;
 use frame_support::weights::constants::RocksDbWeight as RuntimeDbWeight;
 use frame_support::{
     construct_runtime, parameter_types,
-    traits::{AsEnsureOriginWithArg, ConstU32, ConstU8, FindAuthor, OnTimestampSet},
+    traits::{
+        AsEnsureOriginWithArg, ConstU32, ConstU8, FindAuthor, KeyOwnerProofSystem, OnTimestampSet,
+    },
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
@@ -54,6 +57,7 @@ use pallet_evm::{
     IdentityAddressMapping, Runner,
 };
 
+pub use pallet_energy_generation::StakerStatus;
 pub use pallet_reputation::ReputationPoint;
 
 // A few exports that help ease life for downstream crates.
@@ -93,6 +97,64 @@ pub type Hash = sp_core::H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem;
 
+/// This is a workaround for the signer, as it doesn't have some derives we need.
+/// It should be done in a normal way later. It's here just because we're out of time now.
+// pub mod eth_signer {
+//     use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
+//     use scale_info::TypeInfo;
+//     use sp_core::{ecdsa, H160, H256};
+//     use sp_io::hashing::keccak_256;
+//
+//     #[derive(
+//         Clone,
+//         Copy,
+//         Debug,
+//         PartialEq,
+//         Eq,
+//         PartialOrd,
+//         Ord,
+//         RuntimeDebug,
+//         Encode,
+//         Decode,
+//         MaxEncodedLen,
+//         TypeInfo,
+//         PassByInner,
+//     )]
+//     pub struct EthereumSigner([u8; 20]);
+//
+//     impl From<[u8; 20]> for EthereumSigner {
+//         fn from(x: [u8; 20]) -> Self {
+//             EthereumSigner(x)
+//         }
+//     }
+//
+//     impl sp_runtime::traits::IdentifyAccount for EthereumSigner {
+//         type AccountId = AccountId20;
+//         fn into_account(self) -> AccountId20 {
+//             AccountId20(self.0)
+//         }
+//     }
+//
+//     #[cfg(feature = "std")]
+//     impl std::fmt::Display for EthereumSigner {
+//         fn fmt(&self, fmt: &mut std::fmt::Formatter) -> std::fmt::Result {
+//             write!(fmt, "{:?}", H160::from(self.0))
+//         }
+//     }
+//
+//     impl From<ecdsa::Public> for EthereumSigner {
+//         fn from(pk: ecdsa::Public) -> Self {
+//             let decompressed = libsecp256k1::PublicKey::parse_compressed(&pk.0)
+//                 .expect("Wrong compressed public key provided")
+//                 .serialize();
+//             let mut m = [0u8; 64];
+//             m.copy_from_slice(&decompressed[1..65]);
+//             let account = H160::from(H256::from(keccak_256(&m)));
+//             EthereumSigner(account.into())
+//         }
+//     }
+// }
+
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
@@ -111,11 +173,19 @@ pub mod opaque {
 
     impl_opaque_keys! {
         pub struct SessionKeys {
-            pub aura: Aura,
+            pub babe: Babe,
             pub grandpa: Grandpa,
+            pub im_online: ImOnline,
         }
     }
 }
+
+/// The BABE epoch configuration at genesis.
+pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
+    sp_consensus_babe::BabeEpochConfiguration {
+        c: PRIMARY_PROBABILITY,
+        allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryPlainSlots,
+    };
 
 pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
@@ -128,9 +198,25 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     state_version: 1,
 };
 
-pub const MILLISECS_PER_BLOCK: u64 = 6000;
+// Time measurmement primitive
+pub type Moment = u64;
 
-pub const SLOT_DURATION: u64 = MILLISECS_PER_BLOCK;
+pub const MILLISECS_PER_BLOCK: Moment = 3000;
+pub const SECS_PER_BLOCK: Moment = MILLISECS_PER_BLOCK / 1000;
+
+pub const SLOT_DURATION: Moment = MILLISECS_PER_BLOCK;
+
+// 1 in 4 blocks (on average, not counting collisions) will be primary BABE blocks.
+pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
+
+// NOTE: Currently it is not possible to change the epoch duration after the chain has started.
+//       Attempting to do so will brick block production.
+pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
+pub const EPOCH_DURATION_IN_SLOTS: u64 = {
+    const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
+
+    (EPOCH_DURATION_IN_BLOCKS as f64 * SLOT_FILL_RATE) as u64
+};
 
 // Time is measured by number of blocks.
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
@@ -202,9 +288,9 @@ impl frame_system::Config for Runtime {
     /// The data to be stored in an account.
     type AccountData = pallet_balances::AccountData<Balance>;
     /// What to do if a new account is created.
-    type OnNewAccount = ();
+    type OnNewAccount = Reputation;
     /// What to do if an account is fully reaped from the system.
-    type OnKilledAccount = ();
+    type OnKilledAccount = Reputation;
     /// Weight information for the extrinsics of this pallet.
     type SystemWeightInfo = ();
     /// This is used as an identifier of the chain. 42 is the generic substrate prefix.
@@ -213,15 +299,27 @@ impl frame_system::Config for Runtime {
     type OnSetCode = ();
     type MaxConsumers = ConstU32<16>;
 }
-
 parameter_types! {
+    // NOTE: Currently it is not possible to change the epoch duration after the chain has started.
+    //       Attempting to do so will brick block production.
+    pub const EpochDuration: u64 = EPOCH_DURATION_IN_SLOTS;
+    pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
+    pub const ReportLongevity: u64 = 24 * 28 * 6 * EpochDuration::get();
+        // BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
     pub const MaxAuthorities: u32 = 100;
 }
 
-impl pallet_aura::Config for Runtime {
-    type AuthorityId = AuraId;
+impl pallet_babe::Config for Runtime {
+    type EpochDuration = EpochDuration;
+    type ExpectedBlockTime = ExpectedBlockTime;
+    type EpochChangeTrigger = pallet_babe::ExternalTrigger;
+    type DisabledValidators = Session;
+    type WeightInfo = ();
     type MaxAuthorities = MaxAuthorities;
-    type DisabledValidators = ();
+    type KeyOwnerProof =
+        <Historical as KeyOwnerProofSystem<(KeyTypeId, pallet_babe::AuthorityId)>>::Proof;
+    type EquivocationReportSystem =
+        pallet_babe::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 impl pallet_grandpa::Config for Runtime {
@@ -240,25 +338,15 @@ parameter_types! {
     pub storage EnableManualSeal: bool = false;
 }
 
-pub struct ConsensusOnTimestampSet<T>(PhantomData<T>);
-impl<T: pallet_aura::Config> OnTimestampSet<T::Moment> for ConsensusOnTimestampSet<T> {
-    fn on_timestamp_set(moment: T::Moment) {
-        if EnableManualSeal::get() {
-            return;
-        }
-        <pallet_aura::Pallet<T> as OnTimestampSet<T::Moment>>::on_timestamp_set(moment)
-    }
-}
-
 impl pallet_timestamp::Config for Runtime {
     /// A timestamp: milliseconds since the unix epoch.
     type Moment = u64;
-    type OnTimestampSet = ConsensusOnTimestampSet<Self>;
+    type OnTimestampSet = Babe;
     type MinimumPeriod = MinimumPeriod;
     type WeightInfo = ();
 }
 
-const EXISTENTIAL_DEPOSIT: u128 = 500;
+const EXISTENTIAL_DEPOSIT: u128 = 1;
 
 parameter_types! {
     pub const ExistentialDeposit: u128 = EXISTENTIAL_DEPOSIT;
@@ -339,45 +427,15 @@ pallet_staking_reward_curve::build! {
     );
 }
 
-// it takes a month to become a validator from 0
-pub const VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
-    ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 30);
-// it takes 2 months to become a collaborative validator from 0
-pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
-    ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 60);
-
-parameter_types! {
-    pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const SessionsPerEra: SessionIndex = 3;
-    pub const SlashDeferDuration: EraIndex = 0;
-    pub const Period: BlockNumber = 5;
-    pub const Offset: BlockNumber = 0;
-    pub const VNRG: AssetId = 1;
-    pub const BatterySlotCapacity: Energy = 100_000_000_000;
-    pub const MaxCooperations: u32 = 16;
-    pub const HistoryDepth: u32 = 80;
-    pub const MaxUnlockingChunks: u32 = 32;
-    pub const RewardOnUnbalanceWasCalled: bool = false;
-    pub const MaxWinners: u32 = 100;
-    // it takes a month to become a validator from 0
-    pub const ValidatorReputationThreshold: ReputationPoint = VALIDATOR_REPUTATION_THRESHOLD;
-    // it takes 2 months to become a collaborative validator from 0
-    pub const CollaborativeValidatorReputationThreshold: ReputationPoint = COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD;
-    pub const RewardRemainderUnbalanced: u128 = 0;
-    pub const BondingDuration: EraIndex = 3;
-    pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
-
-}
-
 impl pallet_session::Config for Runtime {
     type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, EnergyGeneration>;
     type Keys = opaque::SessionKeys;
-    type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+    type ShouldEndSession = Babe;
     type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
     type RuntimeEvent = RuntimeEvent;
     type ValidatorId = AccountId;
     type ValidatorIdOf = StashOf<Runtime>;
-    type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+    type NextSessionRotation = Babe;
     type WeightInfo = ();
 }
 
@@ -387,8 +445,118 @@ impl pallet_session::historical::Config for Runtime {
 }
 
 impl pallet_authorship::Config for Runtime {
-    type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Aura>;
-    type EventHandler = EnergyGeneration;
+    type FindAuthor = pallet_session::FindAccountFromAuthorIndex<Self, Babe>;
+    type EventHandler = (EnergyGeneration, ImOnline);
+}
+
+impl pallet_offences::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
+    type OnOffenceHandler = Staking;
+}
+
+parameter_types! {
+    pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
+    pub const MaxKeys: u32 = 10_000;
+    pub const MaxPeerInHeartbeats: u32 = 10_000;
+    pub const MaxPeerDataEncodingSize: u32 = 1_000;
+}
+
+impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
+where
+    RuntimeCall: From<LocalCall>,
+{
+    fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
+        call: RuntimeCall,
+        public: <Signature as traits::Verify>::Signer,
+        account: AccountId,
+        nonce: Index,
+    ) -> Option<(RuntimeCall, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
+        let tip = 0;
+        // take the biggest period possible.
+        let period =
+            BlockHashCount::get().checked_next_power_of_two().map(|c| c / 2).unwrap_or(2) as u64;
+        let current_block = System::block_number()
+            .saturated_into::<u64>()
+            // The `System::block_number` is initialized with `n+1`,
+            // so the actual block number is `n`.
+            .saturating_sub(1);
+        let era = Era::mortal(period, current_block);
+        let extra = (
+            frame_system::CheckNonZeroSender::<Runtime>::new(),
+            frame_system::CheckSpecVersion::<Runtime>::new(),
+            frame_system::CheckTxVersion::<Runtime>::new(),
+            frame_system::CheckGenesis::<Runtime>::new(),
+            frame_system::CheckEra::<Runtime>::from(era),
+            frame_system::CheckNonce::<Runtime>::from(nonce),
+            frame_system::CheckWeight::<Runtime>::new(),
+            pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+        );
+        let raw_payload = SignedPayload::new(call, extra)
+            .map_err(|e| {
+                log::warn!("Unable to create signed payload: {:?}", e);
+            })
+            .ok()?;
+        let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
+        let address = AccountIdLookup::unlookup(account);
+        let (call, extra, _) = raw_payload.deconstruct();
+        Some((call, (address, signature, extra)))
+    }
+}
+
+impl frame_system::offchain::SigningTypes for Runtime {
+    type Public = <Signature as Verify>::Signer;
+    type Signature = Signature;
+}
+
+impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
+where
+    RuntimeCall: From<C>,
+{
+    type Extrinsic = UncheckedExtrinsic;
+    type OverarchingCall = RuntimeCall;
+}
+
+impl pallet_im_online::Config for Runtime {
+    type AuthorityId = ImOnlineId;
+    type RuntimeEvent = RuntimeEvent;
+    type NextSessionRotation = Babe;
+    type ValidatorSet = Historical;
+    type ReportUnresponsiveness = Offences;
+    type UnsignedPriority = ImOnlineUnsignedPriority;
+    type WeightInfo = pallet_im_online::weights::SubstrateWeight<Runtime>;
+    type MaxKeys = MaxKeys;
+    type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
+    type MaxPeerDataEncodingSize = MaxPeerDataEncodingSize;
+}
+// it takes a month to become a validator from 0
+pub const VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
+    ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 30);
+// it takes 2 months to become a collaborative validator from 0
+pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
+    ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 60);
+
+parameter_types! {
+    pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
+    pub const SessionsPerEra: SessionIndex = 6;
+    pub const BondingDuration: EraIndex = 24 * 28;
+    pub const SlashDeferDuration: EraIndex = 24 * 7; // 1/4 the bonding duration.
+    pub const Period: BlockNumber = 5;
+    pub const Offset: BlockNumber = 0;
+    pub const VNRG: AssetId = 1;
+    pub const BatterySlotCapacity: Energy = 100_000_000_000;
+    pub const MaxCooperations: u32 = 1024;
+    pub const HistoryDepth: u32 = 84;
+    pub const MaxUnlockingChunks: u32 = 32;
+    pub const RewardOnUnbalanceWasCalled: bool = false;
+    pub const MaxWinners: u32 = 100;
+    // it takes a month to become a validator from 0
+    pub const ValidatorReputationThreshold: ReputationPoint = VALIDATOR_REPUTATION_THRESHOLD;
+    // it takes 2 months to become a collaborative validator from 0
+    pub const CollaborativeValidatorReputationThreshold: ReputationPoint = COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD;
+    pub const RewardRemainderUnbalanced: u128 = 0;
+    pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+
 }
 
 pub struct EnergyPerStakeCurrency;
@@ -512,7 +680,7 @@ impl<F: FindAuthor<u32>> FindAuthor<H160> for FindAuthorTruncated<F> {
         I: 'a + IntoIterator<Item = (ConsensusEngineId, &'a [u8])>,
     {
         if let Some(author_index) = F::find_author(digests) {
-            let authority_id = Aura::authorities()[author_index as usize].clone();
+            let authority_id = Babe::authorities()[author_index as usize].clone();
             return Some(H160::from_slice(&authority_id.to_raw_vec()[4..24]));
         }
         None
@@ -542,7 +710,7 @@ impl pallet_evm::Config for Runtime {
     type Timestamp = Timestamp;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
     type FeeCalculator = BaseFee;
-    type FindAuthor = FindAuthorTruncated<Aura>;
+    type FindAuthor = FindAuthorTruncated<Babe>;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
     type OnChargeTransaction = EVMCurrencyAdapter<Balances, ()>;
     /// TODO looks like the balances precompile leads to the hanging transactions issue. Balances
@@ -611,7 +779,8 @@ construct_runtime!(
     {
         Authorship: pallet_authorship,
         Assets: pallet_assets,
-        Aura: pallet_aura,
+        Babe: pallet_babe,
+        Offences: pallet_offences,
         Balances: pallet_balances,
         BaseFee: pallet_base_fee,
         DynamicFee: pallet_dynamic_fee,
@@ -620,13 +789,14 @@ construct_runtime!(
         Ethereum: pallet_ethereum,
         Grandpa: pallet_grandpa,
         HotfixSufficients: pallet_hotfix_sufficients,
+        ImOnline: pallet_im_online,
         Sudo: pallet_sudo,
         System: frame_system,
         Timestamp: pallet_timestamp,
         TransactionPayment: pallet_transaction_payment,
         Uniques: pallet_uniques,
-        EnergyGeneration: pallet_energy_generation,
         Reputation: pallet_reputation,
+        EnergyGeneration: pallet_energy_generation,
         Session: pallet_session,
         Historical: pallet_session::historical,
     }
@@ -825,16 +995,6 @@ impl_runtime_apis! {
     impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
         fn offchain_worker(header: &<Block as BlockT>::Header) {
             Executive::offchain_worker(header)
-        }
-    }
-
-    impl sp_consensus_aura::AuraApi<Block, AuraId> for Runtime {
-        fn slot_duration() -> sp_consensus_aura::SlotDuration {
-            sp_consensus_aura::SlotDuration::from_millis(Aura::slot_duration())
-        }
-
-        fn authorities() -> Vec<AuraId> {
-            Aura::authorities().to_vec()
         }
     }
 

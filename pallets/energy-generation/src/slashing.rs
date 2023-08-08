@@ -637,7 +637,7 @@ fn pay_reporters<T: Config>(
     let asset_id = T::EnergyAssetId::get();
     for reporter in reporters {
         let _ = pallet_assets::Pallet::<T>::deposit(
-            asset_id,
+            asset_id.clone(),
             reporter,
             per_reporter,
             Precision::Exact,

@@ -53,7 +53,7 @@ std = [
     "pallet-session/std",
     "parity-scale-codec/std",
     "scale-info/std",
-    "serde",
+    "serde/std",
     "sp-application-crypto/std",
     "sp-io/std",
     "sp-runtime/std",

@@ -280,8 +280,8 @@
 //! - [Session](../pallet_session/index.html): Used to manage sessions. Also, a list of new
 //!   validators is stored in the Session pallet's `Validators` at the end of each era.
 
-#![warn(clippy::all)]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(clippy::all)]
 #![recursion_limit = "256"]
 
 #[cfg(feature = "runtime-benchmarks")]
