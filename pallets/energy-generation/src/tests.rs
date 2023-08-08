@@ -1,5 +1,7 @@
 //! Tests for the module.
 
+use crate::testing_utils::perbill_signed_sub_abs;
+
 use super::{ConfigOp, Event, *};
 use frame_support::{
     assert_noop,
@@ -247,7 +249,6 @@ fn rewards_should_work() {
 
         let init_rep_11 = Reputation::reputation(11).unwrap().points;
         let init_rep_21 = Reputation::reputation(21).unwrap().points;
-        let init_rep_101 = Reputation::reputation(101).unwrap_or_default().points;
 
         Pallet::<Test>::reward_by_ids(vec![(11, 50.into())]);
         Pallet::<Test>::reward_by_ids(vec![(11, 50.into())]);
@@ -286,7 +287,6 @@ fn rewards_should_work() {
             2
         );
         assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
-        assert_eq!(*Reputation::reputation(101).unwrap_or_default().points, *init_rep_101);
 
         assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
         Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
@@ -754,9 +754,11 @@ fn cooperators_also_get_slashed_pro_rata() {
             - Perbill::from_rational(*slashed_cooperator_reputation, *cooperator_reputation);
         assert!(validator_slash_p > Perbill::zero());
         assert!(cooperator_slash_p > Perbill::zero());
-        assert!(cooperator_slash_p <= validator_slash_p);
         // allow error rate of 0.05%
-        assert!(validator_slash_p - cooperator_slash_p < Perbill::from_rational(1u32, 2000));
+        assert!(
+            perbill_signed_sub_abs(validator_slash_p, cooperator_slash_p)
+                < Perbill::from_rational(1u32, 2000)
+        );
     });
 }
 

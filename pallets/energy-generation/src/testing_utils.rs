@@ -229,3 +229,12 @@ pub fn create_validators_with_cooperators_for_era<T: Config>(
 pub fn current_era<T: Config>() -> EraIndex {
     <Pallet<T>>::current_era().unwrap_or(0)
 }
+
+/// make signed subtraction and return absolute value
+pub fn perbill_signed_sub_abs(a: Perbill, b: Perbill) -> Perbill {
+    if a >= b {
+        a - b
+    } else {
+        b - a
+    }
+}

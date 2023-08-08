@@ -12,6 +12,7 @@ use frame_support::{
     },
     weights::Weight,
 };
+use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::prelude::*;
 
 use pallet_reputation::{ReputationPoint, ReputationRecord};
@@ -70,7 +71,7 @@ impl<T: Config> Pallet<T> {
     pub(crate) fn check_reputation_cooperator(validator: &T::AccountId, cooperator: &T::AccountId) {
         let prefs = Self::validators(validator);
         let rep = pallet_reputation::AccountReputation::<T>::get(cooperator)
-            .unwrap_or_else(ReputationRecord::with_now);
+            .unwrap_or_else(ReputationRecord::with_now::<T>);
 
         if *prefs.min_coop_reputation > *rep.points {
             Self::chill_stash(cooperator);
@@ -593,7 +594,7 @@ impl<T: Config> Pallet<T> {
                                 Some(value) => {
                                     let reputation =
                                         pallet_reputation::Pallet::<T>::reputation(&who)
-                                            .unwrap_or_else(ReputationRecord::with_now);
+                                            .unwrap_or_else(ReputationRecord::with_now::<T>);
                                     if *reputation.points >= *prefs.min_coop_reputation {
                                         Some(IndividualExposure { who, value })
                                     } else {
@@ -1030,174 +1031,9 @@ where
     }
 }
 
-// TODO: This interface relies on NPoS with which our staking is not compatible.
-//
-// For the pallet in isolation it works without this implementation. But it's here in case it's
-// needed to connect the pallet to the runtime.
-//
-// If you see this after the pallet connect to the runtime and everything works, you can safely
-// remove this comment.
-// NOTE: in this entire impl block, the assumption is that `who` is a stash account.
-// impl<T: Config> StakingInterface for Pallet<T> {
-//     type AccountId = T::AccountId;
-//     type Balance = StakeOf<T>;
-//
-//     fn minimum_nominator_bond() -> Self::Balance {
-//         MinCooperatorBond::<T>::get()
-//     }
-//
-//     fn minimum_validator_bond() -> Self::Balance {
-//         MinValidatorBond::<T>::get()
-//     }
-//
-//     fn desired_validator_count() -> u32 {
-//         ValidatorCount::<T>::get()
-//     }
-//
-//     fn election_ongoing() -> bool {
-//         false
-//     }
-//
-//     fn force_unstake(who: Self::AccountId) -> sp_runtime::DispatchResult {
-//         let num_slashing_spans = Self::slashing_spans(&who).map_or(0, |s| s.iter().count() as u32);
-//         Self::force_unstake(RawOrigin::Root.into(), who.clone(), num_slashing_spans)
-//     }
-//
-//     fn stash_by_ctrl(controller: &Self::AccountId) -> Result<Self::AccountId, DispatchError> {
-//         Self::ledger(controller)
-//             .map(|l| l.stash)
-//             .ok_or(Error::<T>::NotController.into())
-//     }
-//
-//     fn is_exposed_in_era(who: &Self::AccountId, era: &EraIndex) -> bool {
-//         ErasStakers::<T>::iter_prefix(era).any(|(validator, exposures)| {
-//             validator == *who || exposures.others.iter().any(|i| i.who == *who)
-//         })
-//     }
-//
-//     fn bonding_duration() -> EraIndex {
-//         T::BondingDuration::get()
-//     }
-//
-//     fn current_era() -> EraIndex {
-//         Self::current_era().unwrap_or(Zero::zero())
-//     }
-//
-//     fn stake(who: &Self::AccountId) -> Result<Stake<StakeOf<T>>, DispatchError> {
-//         Self::bonded(who)
-//             .and_then(|c| Self::ledger(c))
-//             .map(|l| Stake { total: l.total, active: l.active })
-//             .ok_or(Error::<T>::NotStash.into())
-//     }
-//
-//     fn bond_extra(who: &Self::AccountId, extra: Self::Balance) -> DispatchResult {
-//         Self::bond_extra(RawOrigin::Signed(who.clone()).into(), extra)
-//     }
-//
-//     fn unbond(who: &Self::AccountId, value: Self::Balance) -> DispatchResult {
-//         let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-//         Self::unbond(RawOrigin::Signed(ctrl).into(), value)
-//             .map_err(|with_post| with_post.error)
-//             .map(|_| ())
-//     }
-//
-//     fn chill(who: &Self::AccountId) -> DispatchResult {
-//         // defensive-only: any account bonded via this interface has the stash set as the
-//         // controller, but we have to be sure. Same comment anywhere else that we read this.
-//         let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-//         Self::chill(RawOrigin::Signed(ctrl).into())
-//     }
-//
-//     fn withdraw_unbonded(
-//         who: Self::AccountId,
-//         num_slashing_spans: u32,
-//     ) -> Result<bool, DispatchError> {
-//         let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-//         Self::withdraw_unbonded(RawOrigin::Signed(ctrl.clone()).into(), num_slashing_spans)
-//             .map(|_| !Ledger::<T>::contains_key(&ctrl))
-//             .map_err(|with_post| with_post.error)
-//     }
-//
-//     fn bond(
-//         who: &Self::AccountId,
-//         value: Self::Balance,
-//         payee: &Self::AccountId,
-//     ) -> DispatchResult {
-//         Self::bond(
-//             RawOrigin::Signed(who.clone()).into(),
-//             T::Lookup::unlookup(who.clone()),
-//             value,
-//             RewardDestination::Account(payee.clone()),
-//         )
-//     }
-//
-//     fn nominate(who: &Self::AccountId, targets: Vec<Self::AccountId>) -> DispatchResult {
-//         let ctrl = Self::bonded(who).ok_or(Error::<T>::NotStash)?;
-//         let ledger = Self::ledger(&ctrl).ok_or(Error::<T>::NotController)?;
-//         let ratio = Perbill::from_rational(1, targets.len() as u32);
-//         let stake = ratio * ledger.active;
-//         let targets = targets.into_iter().map(|a| (T::Lookup::unlookup(a), stake)).collect();
-//         Self::cooperate(RawOrigin::Signed(ctrl).into(), targets)
-//     }
-//
-//     fn status(
-//         who: &Self::AccountId,
-//     ) -> Result<sp_staking::StakerStatus<Self::AccountId>, DispatchError> {
-//         let is_bonded = Self::bonded(who).is_some();
-//         if !is_bonded {
-//             return Err(Error::<T>::NotStash.into());
-//         }
-//
-//         let is_validator = Validators::<T>::contains_key(who);
-//         let is_cooperator = Cooperators::<T>::get(who);
-//
-//         use sp_staking::StakerStatus;
-//         match (is_validator, is_cooperator.is_some()) {
-//             (false, false) => Ok(StakerStatus::Idle),
-//             (true, false) => Ok(StakerStatus::Validator),
-//             (false, true) => Ok(StakerStatus::Nominator(
-//                 is_cooperator
-//                     .expect("is checked above; qed")
-//                     .targets
-//                     .into_inner()
-//                     .into_iter()
-//                     .map(|(n, _)| n)
-//                     .collect(),
-//             )),
-//             (true, true) => {
-//                 defensive!("cannot be both validators and cooperator");
-//                 Err(Error::<T>::BadState.into())
-//             },
-//         }
-//     }
-//
-//     sp_staking::runtime_benchmarks_enabled! {
-//         fn cooperations(who: &Self::AccountId) -> Option<Vec<T::AccountId>> {
-//             Cooperators::<T>::get(who).map(|n| n.targets.into_inner())
-//         }
-//
-//         fn add_era_stakers(
-//             current_era: &EraIndex,
-//             stash: &T::AccountId,
-//             exposures: Vec<(Self::AccountId, Self::Balance)>,
-//         ) {
-//             let others = exposures
-//                 .iter()
-//                 .map(|(who, value)| IndividualExposure { who: who.clone(), value: value.clone() })
-//                 .collect::<Vec<_>>();
-//             let exposure = Exposure { total: Default::default(), own: Default::default(), others };
-//             <ErasStakers<T>>::insert(&current_era, &stash, &exposure);
-//         }
-//
-//         fn set_current_era(era: EraIndex) {
-//             CurrentEra::<T>::put(era);
-//         }
-//     }
-// }
-
 /// Add reputation points to block authors:
 /// + REPUTATION_POINTS_PER_DAY to the block producer for producing a (non-uncle) block,
-impl<T> pallet_authorship::EventHandler<T::AccountId, T::BlockNumber> for Pallet<T>
+impl<T> pallet_authorship::EventHandler<T::AccountId, BlockNumberFor<T>> for Pallet<T>
 where
     T: Config + pallet_authorship::Config + pallet_session::Config,
 {

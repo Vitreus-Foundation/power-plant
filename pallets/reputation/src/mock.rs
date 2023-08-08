@@ -51,9 +51,5 @@ impl pallet_reputation::Config for Test {
 
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext() -> sp_io::TestExternalities {
-    <frame_system::GenesisConfig<Test> as BuildStorage>::build_storage(
-        &frame_system::GenesisConfig::default(),
-    )
-    .unwrap()
-    .into()
+    frame_system::GenesisConfig::<Test>::default().build_storage().unwrap().into()
 }

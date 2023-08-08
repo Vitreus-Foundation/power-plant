@@ -86,7 +86,7 @@ pub mod pallet {
         /// The staking currency.
         type StakeCurrency: LockableCurrency<
             Self::AccountId,
-            Moment = Self::BlockNumber,
+            Moment = BlockNumberFor<Self>,
             Balance = Self::StakeBalance,
         >;
 
@@ -188,7 +188,7 @@ pub mod pallet {
 
         /// Something that can estimate the next session change, accurately or as a best effort
         /// guess.
-        type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
+        type NextNewSession: EstimateNextNewSession<BlockNumberFor<Self>>;
 
         /// The maximum number of cooperators rewarded for each validator.
         ///
@@ -214,9 +214,11 @@ pub mod pallet {
         #[pallet::constant]
         type MaxUnlockingChunks: Get<u32>;
 
-        /// A hook called when any staker is slashed. Mostly likely this can be a no-op unless
-        /// other pallets exist that are affected by slashing per-staker.
-        type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, StakeOf<Self>>;
+        /// Something that listens to staking updates and performs actions based on the data it
+        /// receives.
+        ///
+        /// WARNING: this only reports slashing events for the time being.
+        type EventListeners: sp_staking::OnStakingUpdate<Self::AccountId, StakeOf<Self>>;
 
         /// The minimum reputation to be a validator.
         #[pallet::constant]
@@ -589,7 +591,7 @@ pub mod pallet {
     }
 
     #[pallet::genesis_build]
-    impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             ValidatorCount::<T>::put(self.validator_count);
             MinimumValidatorCount::<T>::put(self.minimum_validator_count);
@@ -1132,7 +1134,7 @@ pub mod pallet {
             let old =
                 Cooperators::<T>::get(stash).map_or_else(BTreeMap::new, |x| x.targets.into_inner());
             let reputation = pallet_reputation::Pallet::<T>::reputation(stash)
-                .unwrap_or_else(ReputationRecord::with_now);
+                .unwrap_or_else(ReputationRecord::with_now::<T>);
 
             let targets: BoundedBTreeMap<_, _, _> = targets
                 .into_iter()

@@ -80,6 +80,10 @@ impl<T: Config> Pallet<T> {
 
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
     fn on_new_account(who: &T::AccountId) {
+        if AccountReputation::<T>::contains_key(who) {
+            return;
+        }
+
         let now = <frame_system::Pallet<T>>::block_number().saturated_into();
         let new_rep = ReputationRecord::with_blocknumber(now);
         AccountReputation::<T>::insert(who, new_rep);

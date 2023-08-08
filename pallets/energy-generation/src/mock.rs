@@ -7,8 +7,8 @@ use crate::{self as energy_generation, *};
 use frame_support::{
     assert_ok, ord_parameter_types, parameter_types,
     traits::{
-        AsEnsureOriginWithArg, ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor,
-        GenesisBuild, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
+        AsEnsureOriginWithArg, ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, Get,
+        Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
     },
     weights::constants::RocksDbWeight,
 };
@@ -31,7 +31,7 @@ pub const BLOCK_TIME: u64 = 1000;
 
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
-pub(crate) type AccountIndex = u64;
+pub(crate) type Nonce = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
 
@@ -73,15 +73,10 @@ pub fn is_disabled(controller: AccountId) -> bool {
     Session::disabled_validators().contains(&validator_index)
 }
 
-type UncheckedExtrinsic = frame_system::mocking::MockUncheckedExtrinsic<Test>;
 type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
-    pub enum Test where
-        Block = Block,
-        NodeBlock = Block,
-        UncheckedExtrinsic = UncheckedExtrinsic,
-    {
+    pub enum Test {
         Assets: pallet_assets,
         Authorship: pallet_authorship,
         Balances: pallet_balances,
@@ -119,14 +114,13 @@ impl frame_system::Config for Test {
     type BlockLength = ();
     type DbWeight = RocksDbWeight;
     type RuntimeOrigin = RuntimeOrigin;
-    type Index = AccountIndex;
-    type BlockNumber = BlockNumber;
     type RuntimeCall = RuntimeCall;
+    type Nonce = Nonce;
+    type Block = Block;
     type Hash = H256;
     type Hashing = ::sp_runtime::traits::BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
-    type Header = Header;
     type RuntimeEvent = RuntimeEvent;
     type BlockHashCount = frame_support::traits::ConstU64<250>;
     type Version = ();
@@ -152,8 +146,8 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ();
-    type HoldIdentifier = ();
     type MaxHolds = ();
+    type RuntimeHoldReason = ();
 }
 
 impl pallet_reputation::Config for Test {
@@ -284,8 +278,8 @@ impl OnUnbalanced<EnergyDebtOf<Test>> for MockReward {
     }
 }
 
-pub struct OnStakerSlashMock<T: Config>(core::marker::PhantomData<T>);
-impl<T: Config> sp_staking::OnStakerSlash<AccountId, Balance> for OnStakerSlashMock<T> {
+pub struct EventListenerMock;
+impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
     fn on_slash(
         _pool_account: &AccountId,
         slashed_bonded: Balance,
@@ -336,7 +330,7 @@ impl crate::pallet::pallet::Config for Test {
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-    type OnStakerSlash = OnStakerSlashMock<Test>;
+    type EventListeners = EventListenerMock;
     type Reward = MockReward;
     type RewardRemainder = RewardRemainderMock;
     type RuntimeEvent = RuntimeEvent;
@@ -465,7 +459,7 @@ impl ExtBuilder {
     }
     fn build(self) -> sp_io::TestExternalities {
         sp_tracing::try_init_simple();
-        let mut storage = frame_system::GenesisConfig::default().build_storage::<Test>().unwrap();
+        let mut storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
         let _ = pallet_assets::GenesisConfig::<Test> {
             assets: vec![(VNRG::get(), 1, true, 1)],
