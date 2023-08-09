@@ -9,8 +9,8 @@ use sc_client_api::{
     backend::{Backend, StorageProvider},
     client::BlockchainEvents,
 };
-use sc_consensus_babe::{BabeConfiguration, BabeWorkerHandle, Epoch};
-use sc_consensus_epochs::SharedEpochChanges;
+use sc_consensus_babe::BabeWorkerHandle;
+
 use sc_consensus_grandpa::{
     FinalityProofProvider, GrandpaJustificationStream, SharedAuthoritySet, SharedVoterState,
 };

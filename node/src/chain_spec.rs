@@ -16,9 +16,9 @@ use sp_state_machine::BasicExternalities;
 use vitreus_power_plant_runtime::{
     opaque, AccountId, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig, EVMConfig,
     EnableManualSeal, EnergyGenerationConfig, GrandpaConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix,
-    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VALIDATOR_REPUTATION_THRESHOLD, WASM_BINARY,
+    MaxCooperations, ReputationConfig, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
+    StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, WASM_BINARY,
 };
 
 // The URL for the telemetry server.
@@ -214,7 +214,7 @@ fn testnet_genesis(
         .chain(initial_cooperators.iter())
         .for_each(|x| {
             if !endowed_accounts.contains(x) {
-                endowed_accounts.push(x.clone())
+                endowed_accounts.push(*x)
             }
         });
 
@@ -224,7 +224,7 @@ fn testnet_genesis(
     let mut rng = rand::thread_rng();
     let stakers = initial_authorities
         .iter()
-        .map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
+        .map(|x| (x.0, x.1, STASH, StakerStatus::Validator))
         .chain(initial_cooperators.iter().map(|x| {
             use rand::{seq::SliceRandom, Rng};
             let limit = (MaxCooperations::get() as usize).min(initial_authorities.len());
@@ -233,10 +233,9 @@ fn testnet_genesis(
             let cooperations = initial_authorities
                 .as_slice()
                 .choose_multiple(&mut rng, count)
-                .into_iter()
-                .map(|choice| (choice.0.clone(), stake))
+                .map(|choice| (choice.0, stake))
                 .collect::<Vec<_>>();
-            (x.clone(), x.clone(), STASH, StakerStatus::Cooperator(cooperations))
+            (*x, *x, STASH, StakerStatus::Cooperator(cooperations))
         }))
         .collect::<Vec<_>>();
 
@@ -319,13 +318,12 @@ fn testnet_genesis(
         reputation: ReputationConfig {
             accounts: stakers
                 .iter()
-                .map(|x| {
+                .flat_map(|x| {
                     [
-                        (x.0.clone(), COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into()),
-                        (x.1.clone(), COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into()),
+                        (x.0, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into()),
+                        (x.1, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into()),
                     ]
                 })
-                .flatten()
                 .collect::<Vec<_>>(),
             // accounts: vec![
             //     (
@@ -381,7 +379,7 @@ fn testnet_genesis(
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_authorities.len() as u32,
             minimum_validator_count: initial_authorities.len() as u32,
-            invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+            invulnerables: initial_authorities.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
             stakers,
             ..Default::default()
@@ -389,9 +387,7 @@ fn testnet_genesis(
         session: SessionConfig {
             keys: initial_authorities
                 .iter()
-                .map(|x| {
-                    (x.0.clone(), x.0.clone(), session_keys(x.2.clone(), x.3.clone(), x.4.clone()))
-                })
+                .map(|x| (x.0, x.0, session_keys(x.2.clone(), x.3.clone(), x.4.clone())))
                 .collect::<Vec<_>>(),
         },
         im_online: ImOnlineConfig { keys: vec![] },

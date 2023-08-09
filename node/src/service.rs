@@ -218,7 +218,7 @@ where
         RuntimeApiCollection<StateBackend = StateBackendFor<FullBackend, Block>>,
     Executor: NativeExecutionDispatch + 'static,
 {
-    let frontier_block_import =
+    let _frontier_block_import =
         FrontierBlockImport::new(grandpa_block_import.clone(), client.clone());
 
     let (block_import, babe_link) = sc_consensus_babe::block_import(
@@ -255,41 +255,6 @@ where
     })?;
 
     Ok((import_queue, Box::new(block_import), babe_link))
-}
-
-/// Build the import queue for the template runtime (manual seal).
-pub fn build_manual_seal_import_queue<RuntimeApi, Executor>(
-    client: Arc<FullClient<RuntimeApi, Executor>>,
-    config: &Configuration,
-    _eth_config: &EthConfiguration,
-    task_manager: &TaskManager,
-    _telemetry: Option<TelemetryHandle>,
-    _grandpa_block_import: GrandpaBlockImport<FullClient<RuntimeApi, Executor>>,
-    _select_chain: FullSelectChain,
-    _offchain_tx_pool_factory: OffchainTransactionPoolFactory<Block>,
-) -> Result<
-    (
-        BasicImportQueue<FullClient<RuntimeApi, Executor>>,
-        BoxBlockImport<FullClient<RuntimeApi, Executor>>,
-    ),
-    ServiceError,
->
-where
-    RuntimeApi: ConstructRuntimeApi<Block, FullClient<RuntimeApi, Executor>>,
-    RuntimeApi: Send + Sync + 'static,
-    RuntimeApi::RuntimeApi:
-        RuntimeApiCollection<StateBackend = StateBackendFor<FullBackend, Block>>,
-    Executor: NativeExecutionDispatch + 'static,
-{
-    let frontier_block_import = FrontierBlockImport::new(client.clone(), client);
-    Ok((
-        sc_consensus_manual_seal::import_queue(
-            Box::new(frontier_block_import.clone()),
-            &task_manager.spawn_essential_handle(),
-            config.prometheus_registry(),
-        ),
-        Box::new(frontier_block_import),
-    ))
 }
 
 /// Builds a new service for a full client.
