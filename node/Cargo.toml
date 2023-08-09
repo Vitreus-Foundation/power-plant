@@ -21,6 +21,7 @@ jsonrpsee = { workspace = true, features = ["server", "macros"] }
 log = "0.4.17"
 parity-scale-codec = { workspace = true }
 serde = { workspace = true }
+rand = { workspace = true }
 
 # Substrate
 substrate-prometheus-endpoint = { workspace = true }
@@ -29,32 +30,41 @@ sc-chain-spec = { workspace = true }
 sc-cli = { workspace = true }
 sc-client-api = { workspace = true }
 sc-consensus = { workspace = true }
-sc-consensus-aura = { workspace = true }
+sc-consensus-babe = { workspace = true }
+sc-consensus-babe-rpc = { workspace = true }
+sc-consensus-epochs = { workspace = true }
 sc-consensus-grandpa = { workspace = true }
+sc-consensus-grandpa-rpc = { workspace = true }
 sc-consensus-manual-seal = { workspace = true }
+sc-consensus-slots = { workspace = true }
 sc-executor = { workspace = true }
 sc-network = { workspace = true }
 sc-network-common = { workspace = true }
 sc-network-sync = { workspace = true }
+sc-offchain = { workspace = true }
 sc-rpc = { workspace = true }
 sc-rpc-api = { workspace = true }
 sc-service = { workspace = true }
+sc-sysinfo = { workspace = true }
 sc-telemetry = { workspace = true }
 sc-transaction-pool = { workspace = true }
 sc-transaction-pool-api = { workspace = true }
 sp-api = { workspace = true, features = ["default"] }
 sp-block-builder = { workspace = true }
 sp-blockchain = { workspace = true }
+sp-consensus = { workspace = true, features = ["default"] }
 sp-consensus-babe = { workspace = true, features = ["default"] }
 sp-consensus-grandpa = { workspace = true, features = ["default"] }
 sp-core = { workspace = true, features = ["default"] }
 sp-inherents = { workspace = true, features = ["default"] }
+sp-keystore = { workspace = true }
 sp-offchain = { workspace = true, features = ["default"] }
 sp-runtime = { workspace = true, features = ["default"] }
 sp-session = { workspace = true, features = ["default"] }
 sp-state-machine = { workspace = true, features = ["default"] }
 sp-timestamp = { workspace = true, features = ["default"] }
 sp-transaction-pool = { workspace = true, features = ["default"] }
+sp-transaction-storage-proof = { workspace = true, features = ["default"] }
 sp-trie = { workspace = true, features = ["default"] }
 # These dependencies are used for RPC
 frame-system-rpc-runtime-api = { workspace = true }
@@ -88,9 +98,19 @@ pallet-reputation = { workspace = true }
 substrate-build-script-utils = { workspace = true }
 
 [features]
-default = ["with-rocksdb-weights"]
+default = ["with-rocksdb-weights", "rocksdb", "sql", "txpool"]
 with-rocksdb-weights = ["vitreus-power-plant-runtime/with-rocksdb-weights"]
 with-paritydb-weights = ["vitreus-power-plant-runtime/with-paritydb-weights"]
+rocksdb = [
+    "sc-cli/rocksdb",
+    "sc-service/rocksdb",
+    "fc-cli/rocksdb",
+    "fc-db/rocksdb",
+    "fc-mapping-sync/rocksdb",
+    "fc-rpc/rocksdb",
+]
+sql = ["fc-db/sql", "fc-mapping-sync/sql"]
+txpool = ["fc-rpc/txpool"]
 rpc-binary-search-estimate = ["fc-rpc/rpc-binary-search-estimate"]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",

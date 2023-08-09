@@ -4,25 +4,28 @@ use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 // Substrate
 use sc_chain_spec::{ChainType, Properties};
-use sp_consensus_aura::sr25519::AuthorityId as AuraId;
+use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 #[allow(unused_imports)]
 use sp_core::ecdsa;
 use sp_core::{storage::Storage, Pair, Public, H160, U256};
 use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::Perbill;
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, AccountId, EnableManualSeal, GenesisConfig, ReputationPoint, SS58Prefix, Signature,
-    StakerStatus, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VALIDATOR_REPUTATION_THRESHOLD,
-    WASM_BINARY,
+    opaque, AccountId, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig, EVMConfig,
+    EnableManualSeal, EnergyGenerationConfig, GrandpaConfig, ImOnlineConfig, ImOnlineId,
+    MaxCooperations, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix,
+    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VALIDATOR_REPUTATION_THRESHOLD, WASM_BINARY,
 };
 
 // The URL for the telemetry server.
 // const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::GenericChainSpec<GenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
 
 /// Specialized `ChainSpec` for development.
 pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt>;
@@ -31,7 +34,7 @@ pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt>;
 #[derive(Serialize, Deserialize)]
 pub struct DevGenesisExt {
     /// Genesis config.
-    genesis_config: GenesisConfig,
+    genesis_config: RuntimeGenesisConfig,
     /// The flag that if enable manual-seal mode.
     enable_manual_seal: Option<bool>,
 }
@@ -67,14 +70,19 @@ where
     AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
 }
 
-/// Generate an Aura authority key.
-pub fn authority_keys_from_seed(s: &str) -> (AuraId, GrandpaId) {
-    (get_from_seed::<AuraId>(s), get_from_seed::<GrandpaId>(s))
+fn session_keys(babe: BabeId, grandpa: GrandpaId, im_online: ImOnlineId) -> opaque::SessionKeys {
+    opaque::SessionKeys { babe, grandpa, im_online }
 }
 
-pub fn session_keys_from_seed(s: &str) -> opaque::SessionKeys {
-    let (aura, grandpa) = authority_keys_from_seed(s);
-    opaque::SessionKeys { aura, grandpa }
+/// Generate a Babe authority key.
+pub fn authority_keys_from_seed(s: &str) -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    (
+        get_account_id_from_seed::<ecdsa::Public>(&format!("{}//stash", s)),
+        get_account_id_from_seed::<ecdsa::Public>(s),
+        get_from_seed::<BabeId>(s),
+        get_from_seed::<GrandpaId>(s),
+        get_from_seed::<ImOnlineId>(s),
+    )
 }
 
 fn properties() -> Properties {
@@ -84,6 +92,8 @@ fn properties() -> Properties {
     properties.insert("ss58Format".into(), SS58Prefix::get().into());
     properties
 }
+
+const UNITS: Balance = 1_000_000_000_000_000_000;
 
 pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
     let wasm_binary = WASM_BINARY.expect("WASM not available");
@@ -108,9 +118,16 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
                         AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")), // Dorothy
                         AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB")), // Ethan
                         AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d")), // Faith
+                        get_account_id_from_seed::<ecdsa::Public>("Alith//stash"),
+                        get_account_id_from_seed::<ecdsa::Public>("Baltathar//stash"),
+                        get_account_id_from_seed::<ecdsa::Public>("Charleth//stash"),
+                        get_account_id_from_seed::<ecdsa::Public>("Dorothy//stash"),
+                        get_account_id_from_seed::<ecdsa::Public>("Ethan//stash"),
+                        get_account_id_from_seed::<ecdsa::Public>("Faith//stash"),
                     ],
                     // Initial PoA authorities
                     vec![authority_keys_from_seed("Alice")],
+                    vec![],
                     // Ethereum chain ID
                     SS58Prefix::get() as u64,
                 ),
@@ -155,8 +172,15 @@ pub fn local_testnet_config() -> ChainSpec {
                     AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")), // Dorothy
                     AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB")), // Ethan
                     AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d")), // Faith
+                    get_account_id_from_seed::<ecdsa::Public>("Alith//stash"),
+                    get_account_id_from_seed::<ecdsa::Public>("Baltathar//stash"),
+                    get_account_id_from_seed::<ecdsa::Public>("Charleth//stash"),
+                    get_account_id_from_seed::<ecdsa::Public>("Dorothy//stash"),
+                    get_account_id_from_seed::<ecdsa::Public>("Ethan//stash"),
+                    get_account_id_from_seed::<ecdsa::Public>("Faith//stash"),
                 ],
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+                vec![],
                 SS58Prefix::get() as u64,
             )
         },
@@ -177,46 +201,71 @@ pub fn local_testnet_config() -> ChainSpec {
 /// Configure initial storage state for FRAME modules.
 fn testnet_genesis(
     wasm_binary: &[u8],
-    sudo_key: AccountId,
-    endowed_accounts: Vec<AccountId>,
-    initial_authorities: Vec<(AuraId, GrandpaId)>,
+    root_key: AccountId,
+    mut endowed_accounts: Vec<AccountId>,
+    initial_authorities: Vec<(AccountId, AccountId, BabeId, GrandpaId, ImOnlineId)>,
+    initial_cooperators: Vec<AccountId>,
     chain_id: u64,
-) -> GenesisConfig {
-    use vitreus_power_plant_runtime::{
-        AuraConfig, BalancesConfig, EVMChainIdConfig, EVMConfig, EnergyGenerationConfig,
-        GrandpaConfig, ReputationConfig, SessionConfig, SudoConfig, SystemConfig,
-    };
+) -> RuntimeGenesisConfig {
+    // endow all authorities and cooperators.
+    initial_authorities
+        .iter()
+        .map(|x| &x.0)
+        .chain(initial_cooperators.iter())
+        .for_each(|x| {
+            if !endowed_accounts.contains(x) {
+                endowed_accounts.push(x.clone())
+            }
+        });
 
-    GenesisConfig {
+    // stakers: all validators and nominators.
+    const ENDOWMENT: Balance = 1_000_000 * UNITS;
+    const STASH: Balance = ENDOWMENT / 1000;
+    let mut rng = rand::thread_rng();
+    let stakers = initial_authorities
+        .iter()
+        .map(|x| (x.0.clone(), x.1.clone(), STASH, StakerStatus::Validator))
+        .chain(initial_cooperators.iter().map(|x| {
+            use rand::{seq::SliceRandom, Rng};
+            let limit = (MaxCooperations::get() as usize).min(initial_authorities.len());
+            let count = rng.gen::<usize>() % limit;
+            let stake = STASH / count as Balance;
+            let cooperations = initial_authorities
+                .as_slice()
+                .choose_multiple(&mut rng, count)
+                .into_iter()
+                .map(|choice| (choice.0.clone(), stake))
+                .collect::<Vec<_>>();
+            (x.clone(), x.clone(), STASH, StakerStatus::Cooperator(cooperations))
+        }))
+        .collect::<Vec<_>>();
+
+    RuntimeGenesisConfig {
         // System
         system: SystemConfig {
             // Add Wasm runtime to storage.
             code: wasm_binary.to_vec(),
+            ..Default::default()
         },
         sudo: SudoConfig {
             // Assign network admin rights.
-            key: Some(sudo_key),
+            key: Some(root_key),
         },
 
         // Monetary
         balances: BalancesConfig {
-            // Configure endowed accounts with initial balance of 1 << 60.
-            balances: endowed_accounts.iter().cloned().map(|k| (k, 1 << 60)).collect(),
+            balances: endowed_accounts.iter().cloned().map(|k| (k, ENDOWMENT)).collect(),
         },
+        babe: BabeConfig {
+            authorities: vec![],
+            epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG),
+            ..Default::default()
+        },
+        grandpa: GrandpaConfig { authorities: vec![], ..Default::default() },
         transaction_payment: Default::default(),
 
-        // Consensus
-        // aura: AuraConfig {
-        //     authorities: initial_authorities.iter().map(|x| (x.0.clone())).collect(),
-        // },
-        // grandpa: GrandpaConfig {
-        //     authorities: initial_authorities.iter().map(|x| (x.1.clone(), 1)).collect(),
-        // },
-        aura: Default::default(),
-        grandpa: Default::default(),
-
         // EVM compatibility
-        evm_chain_id: EVMChainIdConfig { chain_id },
+        evm_chain_id: EVMChainIdConfig { chain_id, ..Default::default() },
         evm: EVMConfig {
             accounts: {
                 let mut map = BTreeMap::new();
@@ -261,92 +310,90 @@ fn testnet_genesis(
                 );
                 map
             },
+            ..Default::default()
         },
         ethereum: Default::default(),
         dynamic_fee: Default::default(),
         base_fee: Default::default(),
         assets: Default::default(),
         reputation: ReputationConfig {
-            accounts: vec![
-                (
-                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
-                    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
-                ), // Alith
-                (
-                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
-                    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
-                ), // Baltathar
-                (
-                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
-                    VALIDATOR_REPUTATION_THRESHOLD.into(),
-                ), // Charleth
-                (
-                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
-                    VALIDATOR_REPUTATION_THRESHOLD.into(),
-                ), // Dorothy
-                (
-                    AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB")),
-                    ReputationPoint::from(0).into(),
-                ), // Ethan
-                (
-                    AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d")),
-                    ReputationPoint::from(0).into(),
-                ), // Faith
-            ],
+            accounts: stakers
+                .iter()
+                .map(|x| {
+                    [
+                        (x.0.clone(), COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into()),
+                        (x.1.clone(), COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into()),
+                    ]
+                })
+                .flatten()
+                .collect::<Vec<_>>(),
+            // accounts: vec![
+            //     (
+            //         AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
+            //         COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ), // Alith
+            //     (
+            //         AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
+            //         COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ), // Baltathar
+            //     (
+            //         AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
+            //         VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ), // Charleth
+            //     (
+            //         AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
+            //         VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ), // Dorothy
+            //     (
+            //         AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB")),
+            //         ReputationPoint::from(0).into(),
+            //     ), // Ethan
+            //     (
+            //         AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d")),
+            //         ReputationPoint::from(0).into(),
+            //     ), // Faith
+            //     (
+            //         get_account_id_from_seed::<ecdsa::Public>("Alith//stash"),
+            //         COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ),
+            //     (
+            //         get_account_id_from_seed::<ecdsa::Public>("Baltathar//stash"),
+            //         COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ),
+            //     (
+            //         get_account_id_from_seed::<ecdsa::Public>("Charleth//stash"),
+            //         VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ),
+            //     (
+            //         get_account_id_from_seed::<ecdsa::Public>("Dorothy//stash"),
+            //         VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ),
+            //     (
+            //         get_account_id_from_seed::<ecdsa::Public>("Alice"),
+            //         COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ),
+            //     (
+            //         get_account_id_from_seed::<ecdsa::Public>("Bob"),
+            //         COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into(),
+            //     ),
+            // ],
         },
         energy_generation: EnergyGenerationConfig {
-            stakers: vec![
-                (
-                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
-                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
-                    (1u128 << 60).into(),
-                    StakerStatus::Validator,
-                ), // Alith
-                (
-                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
-                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
-                    (1u128 << 60).into(),
-                    StakerStatus::Validator,
-                ), // Baltathar
-                (
-                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
-                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
-                    (1u128 << 60).into(),
-                    StakerStatus::Validator,
-                ), // Charleth
-                (
-                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
-                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
-                    (1u128 << 60).into(),
-                    StakerStatus::Validator,
-                ), // Dorothy
-            ],
+            validator_count: initial_authorities.len() as u32,
+            minimum_validator_count: initial_authorities.len() as u32,
+            invulnerables: initial_authorities.iter().map(|x| x.0.clone()).collect(),
+            slash_reward_fraction: Perbill::from_percent(10),
+            stakers,
             ..Default::default()
         },
-        // session: Default::default(),
         session: SessionConfig {
-            keys: vec![
-                (
-                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
-                    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac")),
-                    session_keys_from_seed("Alith"),
-                ), // Alith
-                (
-                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
-                    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0")),
-                    session_keys_from_seed("Baltathar"),
-                ), // Baltathar
-                (
-                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
-                    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc")),
-                    session_keys_from_seed("Charleth"),
-                ), // Charleth
-                (
-                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
-                    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9")),
-                    session_keys_from_seed("Dorothy"),
-                ), // Dorothy
-            ],
+            keys: initial_authorities
+                .iter()
+                .map(|x| {
+                    (x.0.clone(), x.0.clone(), session_keys(x.2.clone(), x.3.clone(), x.4.clone()))
+                })
+                .collect::<Vec<_>>(),
         },
+        im_online: ImOnlineConfig { keys: vec![] },
     }
 }
