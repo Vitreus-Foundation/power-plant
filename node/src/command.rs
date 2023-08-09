@@ -15,11 +15,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+use futures::TryFutureExt;
 // Substrate
-use sc_cli::{ChainSpec, RuntimeVersion, SubstrateCli};
+use sc_cli::{ChainSpec, SubstrateCli};
 use sc_service::DatabaseSource;
 // Frontier
-use fc_db::frontier_database_dir;
+use fc_db::kv::frontier_database_dir;
 
 use crate::{
     chain_spec,
@@ -32,7 +33,7 @@ use crate::chain_spec::get_account_id_from_seed;
 
 impl SubstrateCli for Cli {
     fn impl_name() -> String {
-        "Vitreus Power Plant".into()
+        "Vitreus Power Plant Node".into()
     }
 
     fn impl_version() -> String {
@@ -52,7 +53,7 @@ impl SubstrateCli for Cli {
     }
 
     fn copyright_start_year() -> i32 {
-        2021
+        2023
     }
 
     fn load_spec(&self, id: &str) -> Result<Box<dyn ChainSpec>, String> {
@@ -66,10 +67,6 @@ impl SubstrateCli for Cli {
                 Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?)
             },
         })
-    }
-
-    fn native_runtime_version(_: &Box<dyn ChainSpec>) -> &'static RuntimeVersion {
-        &vitreus_power_plant_runtime::VERSION
     }
 }
 
@@ -120,19 +117,45 @@ pub fn run() -> sc_cli::Result<()> {
             runner.sync_run(|config| {
                 // Remove Frontier offchain db
                 let db_config_dir = db_config_dir(&config);
-                let frontier_database_config = match config.database {
-                    DatabaseSource::RocksDb { .. } => DatabaseSource::RocksDb {
-                        path: frontier_database_dir(&db_config_dir, "db"),
-                        cache_size: 0,
+                match cli.eth.frontier_backend_type {
+                    crate::eth::BackendType::KeyValue => {
+                        let frontier_database_config = match config.database {
+                            DatabaseSource::RocksDb { .. } => DatabaseSource::RocksDb {
+                                path: frontier_database_dir(&db_config_dir, "db"),
+                                cache_size: 0,
+                            },
+                            DatabaseSource::ParityDb { .. } => DatabaseSource::ParityDb {
+                                path: frontier_database_dir(&db_config_dir, "paritydb"),
+                            },
+                            _ => {
+                                return Err(format!(
+                                    "Cannot purge `{:?}` database",
+                                    config.database
+                                )
+                                .into())
+                            },
+                        };
+                        cmd.run(frontier_database_config)?;
                     },
-                    DatabaseSource::ParityDb { .. } => DatabaseSource::ParityDb {
-                        path: frontier_database_dir(&db_config_dir, "paritydb"),
-                    },
-                    _ => {
-                        return Err(format!("Cannot purge `{:?}` database", config.database).into())
+                    crate::eth::BackendType::Sql => {
+                        let db_path = db_config_dir.join("sql");
+                        match std::fs::remove_dir_all(&db_path) {
+                            Ok(_) => {
+                                println!("{:?} removed.", &db_path);
+                            },
+                            Err(ref err) if err.kind() == std::io::ErrorKind::NotFound => {
+                                eprintln!("{:?} did not exist.", &db_path);
+                            },
+                            Err(err) => {
+                                return Err(format!(
+                                    "Cannot purge `{:?}` database: {:?}",
+                                    db_path, err,
+                                )
+                                .into())
+                            },
+                        };
                     },
                 };
-                cmd.run(frontier_database_config)?;
                 cmd.run(config.database)
             })
         },
@@ -156,12 +179,11 @@ pub fn run() -> sc_cli::Result<()> {
             use frame_benchmarking_cli::{
                 BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE,
             };
-            use vitreus_power_plant_runtime::{Block, ExistentialDeposit};
+            use frontier_template_runtime::{Block, ExistentialDeposit};
 
             let runner = cli.create_runner(cmd)?;
             match cmd {
-                BenchmarkCmd::Pallet(cmd) => runner
-                    .sync_run(|config| cmd.run::<Block, service::TemplateRuntimeExecutor>(config)),
+                BenchmarkCmd::Pallet(cmd) => runner.sync_run(|config| cmd.run::<Block, ()>(config)),
                 BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
                     let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth)?;
                     cmd.run(client)
@@ -205,13 +227,17 @@ pub fn run() -> sc_cli::Result<()> {
             runner.sync_run(|mut config| {
                 let (client, _, _, _, frontier_backend) =
                     service::new_chain_ops(&mut config, &cli.eth)?;
+                let frontier_backend = match frontier_backend {
+                    fc_db::Backend::KeyValue(kv) => std::sync::Arc::new(kv),
+                    _ => panic!("Only fc_db::Backend::KeyValue supported"),
+                };
                 cmd.run(client, frontier_backend)
             })
         },
         None => {
             let runner = cli.create_runner(&cli.run)?;
             runner.run_node_until_exit(|config| async move {
-                service::build_full(config, cli.eth, cli.sealing).map_err(Into::into)
+                service::build_full(config, cli.eth, cli.sealing).map_err(Into::into).await
             })
         },
     }

@@ -1,0 +1,68 @@
+[package]
+name = "pallet-energy-generation"
+version = "0.1.0"
+authors = ["Innowise FinTech Team"]
+edition = "2021"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+log = { workspace = true }
+pallet-assets = { workspace = true }
+pallet-authorship = { workspace = true }
+pallet-reputation = { workspace = true }
+pallet-session = { workspace = true }
+parity-scale-codec = { workspace = true }
+scale-info = { workspace = true }
+serde = { workspace = true }
+sp-application-crypto = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
+sp-staking = { workspace = true }
+sp-std = { workspace = true }
+
+# Optional imports for benchmarking
+frame-benchmarking = { workspace = true, optional = true }
+rand_chacha = { workspace = true, optional = true }
+
+[dev-dependencies]
+sp-tracing = { workspace = true }
+sp-core = { workspace = true }
+pallet-balances = { workspace = true }
+pallet-timestamp = { workspace = true }
+pallet-staking-reward-curve = { workspace = true }
+substrate-test-utils = { workspace = true }
+frame-benchmarking = { workspace = true }
+rand_chacha = { workspace = true }
+
+[features]
+default = ["std"]
+std = [
+    "frame-benchmarking?/std",
+    "frame-support/std",
+    "frame-system/std",
+    "log/std",
+    "pallet-balances/std",
+    "pallet-assets/std",
+    "pallet-authorship/std",
+    "pallet-reputation/std",
+    "pallet-session/std",
+    "parity-scale-codec/std",
+    "scale-info/std",
+    "serde/std",
+    "sp-application-crypto/std",
+    "sp-io/std",
+    "sp-runtime/std",
+    "sp-staking/std",
+    "sp-std/std",
+]
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+    "rand_chacha",
+    "sp-staking/runtime-benchmarks",
+]
+try-runtime = ["frame-support/try-runtime"]

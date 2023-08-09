@@ -20,6 +20,8 @@
 use frame_support::{
     dispatch::Codec,
     pallet_prelude::*,
+    storage::bounded_btree_map::BoundedBTreeMap,
+    storage::bounded_btree_set::BoundedBTreeSet,
     traits::{
         Currency, DefensiveResult, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
         LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
@@ -27,11 +29,13 @@ use frame_support::{
     weights::Weight,
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
+use pallet_reputation::{ReputationPoint, ReputationRecord};
 use sp_runtime::{
-    traits::{CheckedSub, SaturatedConversion, StaticLookup, Zero},
+    traits::{AtLeast32BitUnsigned, CheckedSub, SaturatedConversion, StaticLookup, Zero},
     ArithmeticError, Perbill, Percent,
 };
 use sp_staking::{EraIndex, SessionIndex};
+use sp_std::collections::btree_map::BTreeMap;
 use sp_std::prelude::*;
 
 mod impls;
@@ -39,10 +43,9 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-    slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, BalanceOf, EraPayout,
-    EraRewardPoints, Exposure, Forcing, NegativeImbalanceOf, PositiveImbalanceOf,
-    RewardDestination, SessionInterface, StakingLedger, UnappliedSlash, UnlockChunk,
-    ValidatorPrefs,
+    slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, Cooperations, EnergyDebtOf,
+    EnergyRateCalculator, Exposure, Forcing, RewardDestination, SessionInterface,
+    StakeNegativeImbalanceOf, StakeOf, StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 const STAKING_ID: LockIdentifier = *b"staking ";
@@ -54,7 +57,7 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[allow(clippy::module_inception)]
 #[frame_support::pallet]
 pub mod pallet {
-    use crate::BenchmarkingConfig;
+    use crate::{BenchmarkingConfig, EnergyOf};
 
     use super::*;
 
@@ -77,29 +80,44 @@ pub mod pallet {
     }
 
     #[pallet::config]
-    pub trait Config: frame_system::Config {
-        /// The staking balance.
-        type Currency: LockableCurrency<
+    pub trait Config:
+        frame_system::Config + pallet_assets::Config + pallet_reputation::Config
+    {
+        /// The staking currency.
+        type StakeCurrency: LockableCurrency<
             Self::AccountId,
-            Moment = Self::BlockNumber,
-            Balance = Self::CurrencyBalance,
+            Moment = BlockNumberFor<Self>,
+            Balance = Self::StakeBalance,
         >;
-        /// Just the `Currency::Balance` type; we have this item to allow us to constrain it to
+
+        /// Just the `StakeCurrency::Balance` type; we have this item to allow us to constrain it to
         /// `From<u64>`.
-        type CurrencyBalance: sp_runtime::traits::AtLeast32BitUnsigned
+        type StakeBalance: AtLeast32BitUnsigned
             + parity_scale_codec::FullCodec
             + Copy
             + MaybeSerializeDeserialize
             + sp_std::fmt::Debug
             + Default
             + From<u64>
+            + Into<Self::Balance>
             + TypeInfo
             + MaxEncodedLen;
+
+        /// Energy asset ID.
+        type EnergyAssetId: Get<Self::AssetId>;
+
+        /// Battery slot capacity.
+        type BatterySlotCapacity: Get<EnergyOf<Self>>;
+
         /// Time used for computing era duration.
         ///
         /// It is guaranteed to start being called from the first `on_finalize`. Thus value at
         /// genesis is not used.
         type UnixTime: UnixTime;
+
+        /// Maximum number of cooperations per cooperator.
+        #[pallet::constant]
+        type MaxCooperations: Get<u32>;
 
         /// Number of eras to keep in history.
         ///
@@ -126,18 +144,18 @@ pub mod pallet {
 
         /// Tokens have been minted and are unused for validator-reward.
         /// See [Era payout](./index.html#era-payout).
-        type RewardRemainder: OnUnbalanced<NegativeImbalanceOf<Self>>;
+        type RewardRemainder: OnUnbalanced<StakeNegativeImbalanceOf<Self>>;
 
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// Handler for the unbalanced reduction when slashing a staker.
-        type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
+        type Slash: OnUnbalanced<StakeNegativeImbalanceOf<Self>>;
 
         /// Handler for the unbalanced increment when rewarding a staker.
         /// NOTE: in most cases, the implementation of `OnUnbalanced` should modify the total
         /// issuance.
-        type Reward: OnUnbalanced<PositiveImbalanceOf<Self>>;
+        type Reward: OnUnbalanced<EnergyDebtOf<Self>>;
 
         /// Number of sessions per era.
         #[pallet::constant]
@@ -162,13 +180,22 @@ pub mod pallet {
         /// Interface for interacting with a session pallet.
         type SessionInterface: SessionInterface<Self::AccountId>;
 
-        /// The payout for validators and the system for the current era.
-        /// See [Era payout](./index.html#era-payout).
-        type EraPayout: EraPayout<BalanceOf<Self>>;
+        /// Energy per stake currency rate calculation callback.
+        type EnergyPerStakeCurrency: EnergyRateCalculator<StakeOf<Self>, EnergyOf<Self>>;
+
+        /// Energy per reputation point rate calculation callback.
+        type EnergyPerReputationPoint: EnergyRateCalculator<StakeOf<Self>, EnergyOf<Self>>;
 
         /// Something that can estimate the next session change, accurately or as a best effort
         /// guess.
-        type NextNewSession: EstimateNextNewSession<Self::BlockNumber>;
+        type NextNewSession: EstimateNextNewSession<BlockNumberFor<Self>>;
+
+        /// The maximum number of cooperators rewarded for each validator.
+        ///
+        /// For each validator only the `$MaxCooperatorRewardedPerValidator` biggest stakers can
+        /// claim their reward. This used to limit the i/o cost for the cooperator payout.
+        #[pallet::constant]
+        type MaxCooperatorRewardedPerValidator: Get<u32>;
 
         /// The fraction of the validator set that is safe to be offending.
         /// After the threshold is reached a new era will be forced.
@@ -187,21 +214,37 @@ pub mod pallet {
         #[pallet::constant]
         type MaxUnlockingChunks: Get<u32>;
 
-        /// A hook called when any staker is slashed. Mostly likely this can be a no-op unless
-        /// other pallets exist that are affected by slashing per-staker.
-        type OnStakerSlash: sp_staking::OnStakerSlash<Self::AccountId, BalanceOf<Self>>;
+        /// Something that listens to staking updates and performs actions based on the data it
+        /// receives.
+        ///
+        /// WARNING: this only reports slashing events for the time being.
+        type EventListeners: sp_staking::OnStakingUpdate<Self::AccountId, StakeOf<Self>>;
+
+        /// The minimum reputation to be a validator.
+        #[pallet::constant]
+        type ValidatorReputationThreshold: Get<ReputationPoint>;
+
+        /// The minimum reputation to be able to expose your account in the staking marketplace for
+        /// collaborative staking.
+        #[pallet::constant]
+        type CollaborativeValidatorReputationThreshold: Get<ReputationPoint>;
 
         /// Some parameters of the benchmarking.
         type BenchmarkingConfig: BenchmarkingConfig;
 
         /// Weight information for extrinsics in this pallet.
-        type WeightInfo: WeightInfo;
+        type ThisWeightInfo: WeightInfo;
     }
 
     /// The ideal number of active validators.
     #[pallet::storage]
     #[pallet::getter(fn validator_count)]
     pub type ValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
+
+    /// The number of the core nodes.
+    #[pallet::storage]
+    #[pallet::getter(fn core_nodes_count)]
+    pub type CoreNodesCount<T> = StorageValue<_, u32, ValueQuery>;
 
     /// Minimum number of staking participants before emergency conditions are imposed.
     #[pallet::storage]
@@ -223,9 +266,17 @@ pub mod pallet {
     #[pallet::getter(fn bonded)]
     pub type Bonded<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, T::AccountId>;
 
+    /// The minimum active bond to become and maintain the role of a cooperator.
+    #[pallet::storage]
+    pub type MinCooperatorBond<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
+
     /// The minimum active bond to become and maintain the role of a validator.
     #[pallet::storage]
-    pub type MinValidatorBond<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+    pub type MinValidatorBond<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
+
+    /// The minimum active cooperator stake of the last successful election.
+    #[pallet::storage]
+    pub type MinimumActiveStake<T> = StorageValue<_, StakeOf<T>, ValueQuery>;
 
     /// The minimum amount of commission that validators can set.
     ///
@@ -259,6 +310,46 @@ pub mod pallet {
     /// When this value is not set, no limits are enforced.
     #[pallet::storage]
     pub type MaxValidatorsCount<T> = StorageValue<_, u32, OptionQuery>;
+
+    /// The map from cooperator stash key to their cooperation preferences, namely the validators
+    /// that they wish to support.
+    ///
+    /// Note that the keys of this storage map might become non-decodable in case the
+    /// [`Config::MaxCooperations`] configuration is decreased. In this rare case, these cooperators
+    /// are still existent in storage, their key is correct and retrievable (i.e. `contains_key`
+    /// indicates that they exist), but their value cannot be decoded. Therefore, the non-decodable
+    /// cooperators will effectively not-exist, until they re-submit their preferences such that it
+    /// is within the bounds of the newly set `Config::MaxCooperations`.
+    ///
+    /// This implies that `::iter_keys().count()` and `::iter().count()` might return different
+    /// values for this map. Moreover, the main `::count()` is aligned with the former, namely the
+    /// number of keys that exist.
+    ///
+    /// Lastly, if any of the cooperators become non-decodable, they can be chilled immediately via
+    /// [`Call::chill_other`] dispatchable by anyone.
+    ///
+    /// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
+    #[pallet::storage]
+    #[pallet::getter(fn cooperators)]
+    pub type Cooperators<T: Config> =
+        CountedStorageMap<_, Twox64Concat, T::AccountId, Cooperations<T>>;
+
+    /// The list of potential collaborations. The key is the validator and the value is the
+    /// cooperators, who want to collaborate with the validator.
+    #[pallet::storage]
+    #[pallet::getter(fn collaborations)]
+    pub type Collaborations<T: Config> = StorageMap<
+        _,
+        Twox64Concat,
+        T::AccountId,
+        BoundedBTreeSet<T::AccountId, T::MaxCooperations>,
+    >;
+
+    /// The maximum cooperator count before we stop allowing new validators to join.
+    ///
+    /// When this value is not set, no limits are enforced.
+    #[pallet::storage]
+    pub type MaxCooperatorsCount<T> = StorageValue<_, u32, OptionQuery>;
 
     /// The current era index.
     ///
@@ -299,16 +390,16 @@ pub mod pallet {
         EraIndex,
         Twox64Concat,
         T::AccountId,
-        Exposure<BalanceOf<T>>,
+        Exposure<T::AccountId, StakeOf<T>>,
         ValueQuery,
     >;
 
     /// Clipped Exposure of validator at era.
     ///
-    /// This is similar to [`ErasStakers`] but number of nominators exposed is reduced to the
-    /// `T::MaxNominatorRewardedPerValidator` biggest stakers.
+    /// This is similar to [`ErasStakers`] but number of cooperators exposed is reduced to the
+    /// `T::MaxCooperatorRewardedPerValidator` biggest stakers.
     /// (Note: the field `total` and `own` of the exposure remains unchanged).
-    /// This is used to limit the i/o cost for the nominator payout.
+    /// This is used to limit the i/o cost for the cooperator payout.
     ///
     /// This is keyed fist by the era index to allow bulk deletion and then the stash account.
     ///
@@ -323,7 +414,7 @@ pub mod pallet {
         EraIndex,
         Twox64Concat,
         T::AccountId,
-        Exposure<BalanceOf<T>>,
+        Exposure<T::AccountId, StakeOf<T>>,
         ValueQuery,
     >;
 
@@ -345,27 +436,24 @@ pub mod pallet {
         ValueQuery,
     >;
 
-    /// The total validator era payout for the last `HISTORY_DEPTH` eras.
-    ///
-    /// Eras that haven't finished yet or has been removed doesn't have reward.
+    /// Eras energy rate per stake currency (VNRG per 1 VTRS)
     #[pallet::storage]
-    #[pallet::getter(fn eras_validator_reward)]
-    pub type ErasValidatorReward<T: Config> = StorageMap<_, Twox64Concat, EraIndex, BalanceOf<T>>;
+    #[pallet::getter(fn eras_energy_per_stake_cur)]
+    pub type ErasEnergyPerStakeCurrency<T: Config> =
+        StorageMap<_, Twox64Concat, EraIndex, EnergyOf<T>>;
 
-    /// Rewards for the last `HISTORY_DEPTH` eras.
-    /// If reward hasn't been set or has been removed then 0 reward is returned.
+    /// Energy rate per reputation point per eras.
     #[pallet::storage]
-    #[pallet::unbounded]
-    #[pallet::getter(fn eras_reward_points)]
-    pub type ErasRewardPoints<T: Config> =
-        StorageMap<_, Twox64Concat, EraIndex, EraRewardPoints<T::AccountId>, ValueQuery>;
+    #[pallet::getter(fn eras_energy_per_reputation)]
+    pub type ErasEnergyPerReputaionPoint<T: Config> =
+        StorageMap<_, Twox64Concat, EraIndex, EnergyOf<T>>;
 
     /// The total amount staked for the last `HISTORY_DEPTH` eras.
     /// If total hasn't been set or has been removed then 0 stake is returned.
     #[pallet::storage]
     #[pallet::getter(fn eras_total_stake)]
     pub type ErasTotalStake<T: Config> =
-        StorageMap<_, Twox64Concat, EraIndex, BalanceOf<T>, ValueQuery>;
+        StorageMap<_, Twox64Concat, EraIndex, StakeOf<T>, ValueQuery>;
 
     /// Mode of era forcing.
     #[pallet::storage]
@@ -383,18 +471,13 @@ pub mod pallet {
     /// canceled by extraordinary circumstances (e.g. governance).
     #[pallet::storage]
     #[pallet::getter(fn canceled_payout)]
-    pub type CanceledSlashPayout<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+    pub type CanceledSlashPayout<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
 
     /// All unapplied slashes that are queued for later.
     #[pallet::storage]
     #[pallet::unbounded]
-    pub type UnappliedSlashes<T: Config> = StorageMap<
-        _,
-        Twox64Concat,
-        EraIndex,
-        Vec<UnappliedSlash<T::AccountId, BalanceOf<T>>>,
-        ValueQuery,
-    >;
+    pub type UnappliedSlashes<T: Config> =
+        StorageMap<_, Twox64Concat, EraIndex, Vec<UnappliedSlash<T::AccountId>>, ValueQuery>;
 
     /// A mapping from still-bonded eras to the first session index of that era.
     ///
@@ -414,8 +497,13 @@ pub mod pallet {
         EraIndex,
         Twox64Concat,
         T::AccountId,
-        (Perbill, BalanceOf<T>),
+        (Perbill, ReputationPoint),
     >;
+
+    /// All slashing events on cooperators, mapped by era to the highest slash value of the era.
+    #[pallet::storage]
+    pub(crate) type CooperatorSlashInEra<T: Config> =
+        StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, ReputationPoint>;
 
     /// Slashing spans for stash accounts.
     #[pallet::storage]
@@ -431,7 +519,7 @@ pub mod pallet {
         _,
         Twox64Concat,
         (T::AccountId, slashing::SpanIndex),
-        slashing::SpanRecord<BalanceOf<T>>,
+        slashing::SpanRecord<ReputationPoint>,
         ValueQuery,
     >;
 
@@ -457,45 +545,35 @@ pub mod pallet {
     pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
 
     /// The threshold for when users can start calling `chill_other` for other validators /
-    /// nominators. The threshold is compared to the actual number of validators / nominators
+    /// cooperators. The threshold is compared to the actual number of validators / cooperators
     /// (`CountFor*`) in the system compared to the configured max (`Max*Count`).
     #[pallet::storage]
     pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
     #[pallet::genesis_config]
+    #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
         pub validator_count: u32,
         pub minimum_validator_count: u32,
         pub invulnerables: Vec<T::AccountId>,
         pub force_era: Forcing,
         pub slash_reward_fraction: Perbill,
-        pub canceled_payout: BalanceOf<T>,
+        pub canceled_payout: StakeOf<T>,
         #[allow(clippy::type_complexity)]
-        pub stakers:
-            Vec<(T::AccountId, T::AccountId, BalanceOf<T>, crate::StakerStatus<T::AccountId>)>,
-        pub min_validator_bond: BalanceOf<T>,
+        pub stakers: Vec<(
+            T::AccountId,
+            T::AccountId,
+            StakeOf<T>,
+            crate::StakerStatus<T::AccountId, StakeOf<T>>,
+        )>,
+        pub min_cooperator_bond: StakeOf<T>,
+        pub min_validator_bond: StakeOf<T>,
         pub max_validator_count: Option<u32>,
-    }
-
-    #[cfg(feature = "std")]
-    impl<T: Config> Default for GenesisConfig<T> {
-        fn default() -> Self {
-            GenesisConfig {
-                validator_count: Default::default(),
-                minimum_validator_count: Default::default(),
-                invulnerables: Default::default(),
-                force_era: Default::default(),
-                slash_reward_fraction: Default::default(),
-                canceled_payout: Default::default(),
-                stakers: Default::default(),
-                min_validator_bond: Default::default(),
-                max_validator_count: None,
-            }
-        }
+        pub max_cooperator_count: Option<u32>,
     }
 
     #[pallet::genesis_build]
-    impl<T: Config> GenesisBuild<T> for GenesisConfig<T> {
+    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             ValidatorCount::<T>::put(self.validator_count);
             MinimumValidatorCount::<T>::put(self.minimum_validator_count);
@@ -503,9 +581,13 @@ pub mod pallet {
             ForceEra::<T>::put(self.force_era);
             CanceledSlashPayout::<T>::put(self.canceled_payout);
             SlashRewardFraction::<T>::put(self.slash_reward_fraction);
+            MinCooperatorBond::<T>::put(self.min_cooperator_bond);
             MinValidatorBond::<T>::put(self.min_validator_bond);
             if let Some(x) = self.max_validator_count {
                 MaxValidatorsCount::<T>::put(x);
+            }
+            if let Some(x) = self.max_cooperator_count {
+                MaxCooperatorsCount::<T>::put(x);
             }
 
             for &(ref stash, ref controller, balance, ref status) in &self.stakers {
@@ -517,21 +599,28 @@ pub mod pallet {
                     status
                 );
                 assert!(
-                    T::Currency::free_balance(stash) >= balance,
+                    T::StakeCurrency::free_balance(stash) >= balance,
                     "Stash does not have enough balance to bond."
                 );
-
                 frame_support::assert_ok!(<Pallet<T>>::bond(
                     T::RuntimeOrigin::from(Some(stash.clone()).into()),
                     T::Lookup::unlookup(controller.clone()),
                     balance,
-                    RewardDestination::Staked,
+                    RewardDestination::default(),
                 ));
-
+                let prefs = if Pallet::<T>::is_legit_for_collab(stash) {
+                    ValidatorPrefs::default_collaborative()
+                } else {
+                    Default::default()
+                };
                 frame_support::assert_ok!(match status {
                     crate::StakerStatus::Validator => <Pallet<T>>::validate(
                         T::RuntimeOrigin::from(Some(controller.clone()).into()),
-                        Default::default(),
+                        prefs,
+                    ),
+                    crate::StakerStatus::Cooperator(votes) => <Pallet<T>>::cooperate(
+                        T::RuntimeOrigin::from(Some(controller.clone()).into()),
+                        votes.iter().map(|(l, s)| (T::Lookup::unlookup(l.clone()), *s)).collect(),
                     ),
                     _ => Ok(()),
                 });
@@ -542,30 +631,37 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(crate) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// The era payout has been set; the first balance is the validator-payout; the second is
-        /// the remainder from the maximum amount of reward.
-        EraPaid { era_index: EraIndex, validator_payout: BalanceOf<T>, remainder: BalanceOf<T> },
-        /// The nominator has been rewarded by this amount.
-        Rewarded { stash: T::AccountId, amount: BalanceOf<T> },
-        /// A staker (validator or nominator) has been slashed by the given amount.
-        Slashed { staker: T::AccountId, amount: BalanceOf<T> },
+        /// The era energy per stake currency has been set.
+        EraEnergyPerStakeCurrencySet { era_index: EraIndex, energy_rate: EnergyOf<T> },
+        /// The era energy per reputation point has been set.
+        EraEnergyPerReputationPointSet { era_index: EraIndex, energy_rate: EnergyOf<T> },
+        /// The cooperator has been rewarded by this amount.
+        Rewarded { stash: T::AccountId, amount: EnergyOf<T> },
+        /// A staker (validator or cooperator) has been slashed by the given amount.
+        Slashed { staker: T::AccountId, amount: ReputationPoint },
         /// A slash for the given validator, for the given percentage of their stake, at the given
         /// era as been reported.
         SlashReported { validator: T::AccountId, fraction: Perbill, slash_era: EraIndex },
         /// An old slashing report from a prior era was discarded because it could
         /// not be processed.
         OldSlashingReportDiscarded { session_index: SessionIndex },
+        /// A new set of stakers was elected.
+        StakersElected,
         /// An account has bonded this amount. \[stash, amount\]
         ///
         /// NOTE: This event is only emitted when funds are bonded via a dispatchable. Notably,
         /// it will not be emitted for staking rewards when they are added to stake.
-        Bonded { stash: T::AccountId, amount: BalanceOf<T> },
+        Bonded { stash: T::AccountId, amount: StakeOf<T> },
         /// An account has unbonded this amount.
-        Unbonded { stash: T::AccountId, amount: BalanceOf<T> },
+        Unbonded { stash: T::AccountId, amount: StakeOf<T> },
         /// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
         /// from the unlocking queue.
-        Withdrawn { stash: T::AccountId, amount: BalanceOf<T> },
-        /// An account has stopped participating as either a validator or nominator.
+        Withdrawn { stash: T::AccountId, amount: StakeOf<T> },
+        /// A cooperator has been kicked from a validator.
+        Kicked { cooperator: T::AccountId, stash: T::AccountId },
+        /// The election failed. No new era is planned.
+        StakingElectionFailed,
+        /// An account has stopped participating as either a validator or cooperator.
         Chilled { stash: T::AccountId },
         /// The stakers' rewards are getting paid.
         PayoutStarted { era_index: EraIndex, validator_stash: T::AccountId },
@@ -591,9 +687,9 @@ pub mod pallet {
         DuplicateIndex,
         /// Slash record index out of bounds.
         InvalidSlashIndex,
-        /// Cannot have a validator or nominator role, with value less than the minimum defined by
-        /// governance (see `MinValidatorBond` and `MinNominatorBond`). If unbonding is the
-        /// intention, `chill` first to remove one's role as validator/nominator.
+        /// Cannot have a validator or cooperator role, with value less than the minimum defined by
+        /// governance (see `MinValidatorBond` and `MinCooperatorBond`). If unbonding is the
+        /// intention, `chill` first to remove one's role as validator/cooperator.
         InsufficientBond,
         /// Can not schedule more unlock chunks.
         NoMoreChunks,
@@ -603,6 +699,8 @@ pub mod pallet {
         FundedTarget,
         /// Invalid era to reward.
         InvalidEraToReward,
+        /// Invalid number of cooperations.
+        InvalidNumberOfCooperations,
         /// Items are not sorted and unique.
         NotSortedAndUnique,
         /// Rewards for this era have already been claimed for this validator.
@@ -613,10 +711,16 @@ pub mod pallet {
         IncorrectSlashingSpans,
         /// Internal state has become somehow corrupted and the operation cannot continue.
         BadState,
-        /// A nomination target was supplied that was blocked or otherwise not a validator.
+        /// Too many cooperation targets supplied.
+        TooManyTargets,
+        /// A cooperation target was supplied that was blocked, has not enought reputation or
+        /// otherwise not a validator.
         BadTarget,
         /// The user has enough bond and thus cannot be chilled forcefully by an external person.
         CannotChillOther,
+        /// There are too many cooperators in the system. Governance needs to adjust the staking
+        /// settings to keep things safe for the runtime.
+        TooManyCooperators,
         /// There are too many validator candidates in the system. Governance needs to adjust the
         /// staking settings to keep things safe for the runtime.
         TooManyValidators,
@@ -624,6 +728,8 @@ pub mod pallet {
         CommissionTooLow,
         /// Some bound is not met.
         BoundNotMet,
+        /// The reputation is too low for the operation.
+        ReputationTooLow,
     }
 
     #[pallet::hooks]
@@ -648,6 +754,9 @@ pub mod pallet {
         }
 
         fn integrity_test() {
+            // and that MaxCooperations is always greater than 1, since we count on this.
+            assert!(!T::MaxCooperations::get().is_zero());
+
             sp_std::if_std! {
                 sp_io::TestExternalities::new_empty().execute_with(||
                     assert!(
@@ -671,7 +780,7 @@ pub mod pallet {
         /// Take the origin account as a stash and lock up `value` of its balance. `controller` will
         /// be the account that controls it.
         ///
-        /// `value` must be more than the `minimum_balance` specified by `T::Currency`.
+        /// `value` must be more than the `minimum_balance` specified by `T::StakeCurrency`.
         ///
         /// The dispatch origin for this call must be _Signed_ by the stash account.
         ///
@@ -684,11 +793,11 @@ pub mod pallet {
         /// NOTE: Two of the storage writes (`Self::bonded`, `Self::payee`) are _never_ cleaned
         /// unless the `origin` falls below _existential deposit_ and gets removed as dust.
         #[pallet::call_index(0)]
-        #[pallet::weight(T::WeightInfo::bond())]
+        #[pallet::weight(T::ThisWeightInfo::bond())]
         pub fn bond(
             origin: OriginFor<T>,
             controller: AccountIdLookupOf<T>,
-            #[pallet::compact] value: BalanceOf<T>,
+            #[pallet::compact] value: StakeOf<T>,
             payee: RewardDestination<T::AccountId>,
         ) -> DispatchResult {
             let stash = ensure_signed(origin)?;
@@ -704,14 +813,14 @@ pub mod pallet {
             }
 
             // Reject a bond which is considered to be _dust_.
-            if value < T::Currency::minimum_balance() {
+            if value < T::StakeCurrency::minimum_balance() {
                 return Err(Error::<T>::InsufficientBond.into());
             }
 
             frame_system::Pallet::<T>::inc_consumers(&stash).map_err(|_| Error::<T>::BadState)?;
 
             // You're auto-bonded forever, here. We might improve this by only bonding when
-            // you actually validate/nominate and remove once you unbond __everything__.
+            // you actually validate/cooperate and remove once you unbond __everything__.
             <Bonded<T>>::insert(&stash, &controller);
             <Payee<T>>::insert(&stash, payee);
 
@@ -719,7 +828,7 @@ pub mod pallet {
             let history_depth = T::HistoryDepth::get();
             let last_reward_era = current_era.saturating_sub(history_depth);
 
-            let stash_balance = T::Currency::free_balance(&stash);
+            let stash_balance = T::StakeCurrency::free_balance(&stash);
             let value = value.min(stash_balance);
             Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
             let item = StakingLedger {
@@ -753,24 +862,24 @@ pub mod pallet {
         /// - Independent of the arguments. Insignificant complexity.
         /// - O(1).
         #[pallet::call_index(1)]
-        #[pallet::weight(T::WeightInfo::bond_extra())]
+        #[pallet::weight(T::ThisWeightInfo::bond_extra())]
         pub fn bond_extra(
             origin: OriginFor<T>,
-            #[pallet::compact] max_additional: BalanceOf<T>,
+            #[pallet::compact] max_additional: StakeOf<T>,
         ) -> DispatchResult {
             let stash = ensure_signed(origin)?;
 
             let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
             let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
-            let stash_balance = T::Currency::free_balance(&stash);
+            let stash_balance = T::StakeCurrency::free_balance(&stash);
             if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
                 let extra = extra.min(max_additional);
                 ledger.total += extra;
                 ledger.active += extra;
                 // Last check: the new active amount of ledger must be more than ED.
                 ensure!(
-                    ledger.active >= T::Currency::minimum_balance(),
+                    ledger.active >= T::StakeCurrency::minimum_balance(),
                     Error::<T>::InsufficientBond
                 );
 
@@ -784,7 +893,7 @@ pub mod pallet {
 
         /// Schedule a portion of the stash to be unlocked ready for transfer out after the bond
         /// period ends. If this leaves an amount actively bonded less than
-        /// T::Currency::minimum_balance(), then it is increased to the full amount.
+        /// T::StakeCurrency::minimum_balance(), then it is increased to the full amount.
         ///
         /// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
         ///
@@ -803,11 +912,11 @@ pub mod pallet {
         /// See also [`Call::withdraw_unbonded`].
         #[pallet::call_index(2)]
         #[pallet::weight(
-            T::WeightInfo::withdraw_unbonded_kill(SPECULATIVE_NUM_SPANS).saturating_add(T::WeightInfo::unbond()))
+            T::ThisWeightInfo::withdraw_unbonded_kill(SPECULATIVE_NUM_SPANS).saturating_add(T::ThisWeightInfo::unbond()))
         ]
         pub fn unbond(
             origin: OriginFor<T>,
-            #[pallet::compact] value: BalanceOf<T>,
+            #[pallet::compact] value: StakeOf<T>,
         ) -> DispatchResultWithPostInfo {
             let controller = ensure_signed(origin)?;
             let unlocking = Self::ledger(&controller)
@@ -840,12 +949,14 @@ pub mod pallet {
                 ledger.active -= value;
 
                 // Avoid there being a dust balance left in the staking system.
-                if ledger.active < T::Currency::minimum_balance() {
+                if ledger.active < T::StakeCurrency::minimum_balance() {
                     value += ledger.active;
                     ledger.active = Zero::zero();
                 }
 
-                let min_active_bond = if Validators::<T>::contains_key(&ledger.stash) {
+                let min_active_bond = if Cooperators::<T>::contains_key(&ledger.stash) {
+                    MinCooperatorBond::<T>::get()
+                } else if Validators::<T>::contains_key(&ledger.stash) {
                     MinValidatorBond::<T>::get()
                 } else {
                     Zero::zero()
@@ -875,9 +986,9 @@ pub mod pallet {
             }
 
             let actual_weight = if let Some(withdraw_weight) = maybe_withdraw_weight {
-                Some(T::WeightInfo::unbond().saturating_add(withdraw_weight))
+                Some(T::ThisWeightInfo::unbond().saturating_add(withdraw_weight))
             } else {
-                Some(T::WeightInfo::unbond())
+                Some(T::ThisWeightInfo::unbond())
             };
 
             Ok(actual_weight.into())
@@ -898,7 +1009,7 @@ pub mod pallet {
         /// O(S) where S is the number of slashing spans to remove
         /// NOTE: Weight annotation is the kill scenario, we refund otherwise.
         #[pallet::call_index(3)]
-        #[pallet::weight(T::WeightInfo::withdraw_unbonded_kill(*num_slashing_spans))]
+        #[pallet::weight(T::ThisWeightInfo::withdraw_unbonded_kill(*num_slashing_spans))]
         pub fn withdraw_unbonded(
             origin: OriginFor<T>,
             num_slashing_spans: u32,
@@ -915,7 +1026,7 @@ pub mod pallet {
         ///
         /// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
         #[pallet::call_index(4)]
-        #[pallet::weight(T::WeightInfo::validate())]
+        #[pallet::weight(T::ThisWeightInfo::validate())]
         pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
             let controller = ensure_signed(origin)?;
 
@@ -924,8 +1035,14 @@ pub mod pallet {
             ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
             let stash = &ledger.stash;
 
+            ensure!(Self::is_legit_for_validator(stash), Error::<T>::ReputationTooLow,);
+
             // ensure their commission is correct.
             ensure!(prefs.commission >= MinCommission::<T>::get(), Error::<T>::CommissionTooLow);
+
+            if prefs.collaborative {
+                ensure!(Self::is_legit_for_collab(stash), Error::<T>::ReputationTooLow,);
+            }
 
             // Only check limits if they are not already a validator.
             if !Validators::<T>::contains_key(stash) {
@@ -940,13 +1057,101 @@ pub mod pallet {
                 }
             }
 
-            Validators::<T>::insert(stash, prefs.clone());
+            Self::do_remove_cooperator(stash);
+            Self::do_add_validator(stash, prefs.clone());
             Self::deposit_event(Event::<T>::ValidatorPrefsSet { stash: ledger.stash, prefs });
 
             Ok(())
         }
 
-        /// Declare no desire to either validate or nominate.
+        /// Declare the desire to cooperate `targets` for the origin controller.
+        ///
+        /// Effects will be felt at the beginning of the next era.
+        ///
+        /// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+        ///
+        /// ## Complexity
+        /// - The transaction's complexity is proportional to the size of `targets` (N)
+        /// which is capped at CompactAssignments::LIMIT (T::MaxCooperations).
+        /// - Both the reads and writes follow a similar pattern.
+        #[pallet::call_index(5)]
+        #[pallet::weight(T::ThisWeightInfo::cooperate(targets.len() as u32))]
+        pub fn cooperate(
+            origin: OriginFor<T>,
+            targets: Vec<(AccountIdLookupOf<T>, StakeOf<T>)>,
+        ) -> DispatchResult {
+            let controller = ensure_signed(origin)?;
+
+            let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+            ensure!(
+                ledger.active >= MinCooperatorBond::<T>::get()
+                    && ledger.active
+                        >= targets.iter().fold(Zero::zero(), |mut acc, (_, n)| {
+                            acc += *n;
+                            acc
+                        }),
+                Error::<T>::InsufficientBond
+            );
+            let stash = &ledger.stash;
+
+            // Only check limits if they are not already a cooperator.
+            if !Cooperators::<T>::contains_key(stash) {
+                // If this error is reached, we need to adjust the `MinCooperatorBond` and start
+                // calling `chill_other`. Until then, we explicitly block new cooperators to protect
+                // the runtime.
+                if let Some(max_cooperators) = MaxCooperatorsCount::<T>::get() {
+                    ensure!(
+                        Cooperators::<T>::count() < max_cooperators,
+                        Error::<T>::TooManyCooperators
+                    );
+                }
+            }
+
+            ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
+            ensure!(
+                targets.len() <= T::MaxCooperations::get() as usize,
+                Error::<T>::TooManyTargets
+            );
+
+            let old =
+                Cooperators::<T>::get(stash).map_or_else(BTreeMap::new, |x| x.targets.into_inner());
+            let reputation = pallet_reputation::Pallet::<T>::reputation(stash)
+                .unwrap_or_else(ReputationRecord::with_now::<T>);
+
+            let targets: BoundedBTreeMap<_, _, _> = targets
+                .into_iter()
+                .map(|(t, s)| (T::Lookup::lookup(t).map_err(DispatchError::from), s))
+                .map(|(n, s)| {
+                    n.and_then(|n| {
+                        let target = Validators::<T>::get(&n);
+                        if !Self::is_legit_for_collab(&n)
+                            || *target.min_coop_reputation > *reputation.points
+                        {
+                            Err(Error::<T>::ReputationTooLow.into())
+                        } else if old.contains_key(&n) || target.collaborative {
+                            Ok((n, s))
+                        } else {
+                            Err(Error::<T>::BadTarget.into())
+                        }
+                    })
+                })
+                .collect::<Result<BTreeMap<_, _>, _>>()?
+                .try_into()
+                .map_err(|_| Error::<T>::TooManyCooperators)?;
+
+            let cooperations = Cooperations {
+                targets,
+                // Initial cooperations are considered submitted at era 0. See `Cooperations` doc.
+                submitted_in: Self::current_era().unwrap_or(0),
+                suppressed: false,
+            };
+
+            Self::do_remove_validator(stash);
+            Self::do_add_cooperator(stash, cooperations)?;
+            Ok(())
+        }
+
+        /// Declare no desire to either validate or cooperate.
         ///
         /// Effects will be felt at the beginning of the next era.
         ///
@@ -957,7 +1162,7 @@ pub mod pallet {
         /// - Contains one read.
         /// - Writes are limited to the `origin` account key.
         #[pallet::call_index(6)]
-        #[pallet::weight(T::WeightInfo::chill())]
+        #[pallet::weight(T::ThisWeightInfo::chill())]
         pub fn chill(origin: OriginFor<T>) -> DispatchResult {
             let controller = ensure_signed(origin)?;
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -978,7 +1183,7 @@ pub mod pallet {
         /// - Writes are limited to the `origin` account key.
         /// ---------
         #[pallet::call_index(7)]
-        #[pallet::weight(T::WeightInfo::set_payee())]
+        #[pallet::weight(T::ThisWeightInfo::set_payee())]
         pub fn set_payee(
             origin: OriginFor<T>,
             payee: RewardDestination<T::AccountId>,
@@ -1002,7 +1207,7 @@ pub mod pallet {
         /// - Contains a limited number of reads.
         /// - Writes are limited to the `origin` account key.
         #[pallet::call_index(8)]
-        #[pallet::weight(T::WeightInfo::set_controller())]
+        #[pallet::weight(T::ThisWeightInfo::set_controller())]
         pub fn set_controller(
             origin: OriginFor<T>,
             controller: AccountIdLookupOf<T>,
@@ -1029,7 +1234,7 @@ pub mod pallet {
         /// ## Complexity
         /// O(1)
         #[pallet::call_index(9)]
-        #[pallet::weight(T::WeightInfo::set_validator_count())]
+        #[pallet::weight(T::ThisWeightInfo::set_validator_count())]
         pub fn set_validator_count(
             origin: OriginFor<T>,
             #[pallet::compact] new: u32,
@@ -1039,15 +1244,15 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Increments the ideal number of validators upto maximum of
-        /// `ElectionProviderBase::MaxWinners`.
+        /// Increments the ideal number of validators.
+        ///
         ///
         /// The dispatch origin must be Root.
         ///
         /// ## Complexity
         /// Same as [`Self::set_validator_count`].
         #[pallet::call_index(10)]
-        #[pallet::weight(T::WeightInfo::set_validator_count())]
+        #[pallet::weight(T::ThisWeightInfo::set_validator_count())]
         pub fn increase_validator_count(
             origin: OriginFor<T>,
             #[pallet::compact] additional: u32,
@@ -1055,19 +1260,19 @@ pub mod pallet {
             ensure_root(origin)?;
             let old = ValidatorCount::<T>::get();
             let new = old.checked_add(additional).ok_or(ArithmeticError::Overflow)?;
+
             ValidatorCount::<T>::put(new);
             Ok(())
         }
 
-        /// Scale up the ideal number of validators by a factor upto maximum of
-        /// `ElectionProviderBase::MaxWinners`.
+        /// Scale up the ideal number of validators by a factor
         ///
         /// The dispatch origin must be Root.
         ///
         /// ## Complexity
         /// Same as [`Self::set_validator_count`].
         #[pallet::call_index(11)]
-        #[pallet::weight(T::WeightInfo::set_validator_count())]
+        #[pallet::weight(T::ThisWeightInfo::set_validator_count())]
         pub fn scale_validator_count(origin: OriginFor<T>, factor: Percent) -> DispatchResult {
             ensure_root(origin)?;
             let old = ValidatorCount::<T>::get();
@@ -1076,6 +1281,21 @@ pub mod pallet {
             ValidatorCount::<T>::put(new);
             Ok(())
         }
+
+        /// Set the total number of the core nodes in the network.
+        ///
+        /// The dispatch origin must be Root.
+        ///
+        /// ## Complexity
+        /// Same as [`Self::set_validator_count`].
+        #[pallet::call_index(12)]
+        #[pallet::weight(T::ThisWeightInfo::set_validator_count())]
+        pub fn set_core_nodes_count(origin: OriginFor<T>, num: u32) -> DispatchResult {
+            ensure_root(origin)?;
+            CoreNodesCount::<T>::put(num);
+            Ok(())
+        }
+
         /// Force there to be no new eras indefinitely.
         ///
         /// The dispatch origin must be Root.
@@ -1089,8 +1309,8 @@ pub mod pallet {
         /// ## Complexity
         /// - No arguments.
         /// - Weight: O(1)
-        #[pallet::call_index(12)]
-        #[pallet::weight(T::WeightInfo::force_no_eras())]
+        #[pallet::call_index(13)]
+        #[pallet::weight(T::ThisWeightInfo::force_no_eras())]
         pub fn force_no_eras(origin: OriginFor<T>) -> DispatchResult {
             ensure_root(origin)?;
             Self::set_force_era(Forcing::ForceNone);
@@ -1111,8 +1331,8 @@ pub mod pallet {
         /// ## Complexity
         /// - No arguments.
         /// - Weight: O(1)
-        #[pallet::call_index(13)]
-        #[pallet::weight(T::WeightInfo::force_new_era())]
+        #[pallet::call_index(14)]
+        #[pallet::weight(T::ThisWeightInfo::force_new_era())]
         pub fn force_new_era(origin: OriginFor<T>) -> DispatchResult {
             ensure_root(origin)?;
             Self::set_force_era(Forcing::ForceNew);
@@ -1122,8 +1342,8 @@ pub mod pallet {
         /// Set the validators who cannot be slashed (if any).
         ///
         /// The dispatch origin must be Root.
-        #[pallet::call_index(14)]
-        #[pallet::weight(T::WeightInfo::set_invulnerables(invulnerables.len() as u32))]
+        #[pallet::call_index(15)]
+        #[pallet::weight(T::ThisWeightInfo::set_invulnerables(invulnerables.len() as u32))]
         pub fn set_invulnerables(
             origin: OriginFor<T>,
             invulnerables: Vec<T::AccountId>,
@@ -1136,8 +1356,8 @@ pub mod pallet {
         /// Force a current staker to become completely unstaked, immediately.
         ///
         /// The dispatch origin must be Root.
-        #[pallet::call_index(15)]
-        #[pallet::weight(T::WeightInfo::force_unstake(*num_slashing_spans))]
+        #[pallet::call_index(16)]
+        #[pallet::weight(T::ThisWeightInfo::force_unstake(*num_slashing_spans))]
         pub fn force_unstake(
             origin: OriginFor<T>,
             stash: T::AccountId,
@@ -1149,7 +1369,7 @@ pub mod pallet {
             Self::kill_stash(&stash, num_slashing_spans)?;
 
             // Remove the lock.
-            T::Currency::remove_lock(STAKING_ID, &stash);
+            T::StakeCurrency::remove_lock(STAKING_ID, &stash);
             Ok(())
         }
 
@@ -1162,8 +1382,8 @@ pub mod pallet {
         /// The election process starts multiple blocks before the end of the era.
         /// If this is called just before a new era is triggered, the election process may not
         /// have enough blocks to get a result.
-        #[pallet::call_index(16)]
-        #[pallet::weight(T::WeightInfo::force_new_era_always())]
+        #[pallet::call_index(17)]
+        #[pallet::weight(T::ThisWeightInfo::force_new_era_always())]
         pub fn force_new_era_always(origin: OriginFor<T>) -> DispatchResult {
             ensure_root(origin)?;
             Self::set_force_era(Forcing::ForceAlways);
@@ -1175,8 +1395,8 @@ pub mod pallet {
         /// Can be called by the `T::AdminOrigin`.
         ///
         /// Parameters: era and indices of the slashes for that era to kill.
-        #[pallet::call_index(17)]
-        #[pallet::weight(T::WeightInfo::cancel_deferred_slash(slash_indices.len() as u32))]
+        #[pallet::call_index(18)]
+        #[pallet::weight(T::ThisWeightInfo::cancel_deferred_slash(slash_indices.len() as u32))]
         pub fn cancel_deferred_slash(
             origin: OriginFor<T>,
             era: EraIndex,
@@ -1202,17 +1422,19 @@ pub mod pallet {
 
         /// Pay out all the stakers behind a single validator for a single era.
         ///
-        /// - `validator_stash` is the stash account of the validator. Their nominators, up to
-        ///   `T::MaxNominatorRewardedPerValidator`, will also receive their rewards.
+        /// - `validator_stash` is the stash account of the validator. Their cooperators, up to
+        ///   `T::MaxCooperatorRewardedPerValidator`, will also receive their rewards.
         /// - `era` may be any era between `[current_era - history_depth; current_era]`.
         ///
         /// The origin of this call must be _Signed_. Any account can call this function, even if
         /// it is not one of the stakers.
         ///
         /// ## Complexity
-        /// - At most O(MaxNominatorRewardedPerValidator).
-        #[pallet::call_index(18)]
-        #[pallet::weight(T::WeightInfo::payout_stakers_alive_staked(0))]
+        /// - At most O(MaxCooperatorRewardedPerValidator).
+        #[pallet::call_index(19)]
+        #[pallet::weight(T::ThisWeightInfo::payout_stakers_alive_staked(
+            T::MaxCooperatorRewardedPerValidator::get()
+        ))]
         pub fn payout_stakers(
             origin: OriginFor<T>,
             validator_stash: T::AccountId,
@@ -1229,11 +1451,11 @@ pub mod pallet {
         /// ## Complexity
         /// - Time complexity: O(L), where L is unlocking chunks
         /// - Bounded by `MaxUnlockingChunks`.
-        #[pallet::call_index(19)]
-        #[pallet::weight(T::WeightInfo::rebond(T::MaxUnlockingChunks::get()))]
+        #[pallet::call_index(20)]
+        #[pallet::weight(T::ThisWeightInfo::rebond(T::MaxUnlockingChunks::get()))]
         pub fn rebond(
             origin: OriginFor<T>,
-            #[pallet::compact] value: BalanceOf<T>,
+            #[pallet::compact] value: StakeOf<T>,
         ) -> DispatchResultWithPostInfo {
             let controller = ensure_signed(origin)?;
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
@@ -1242,20 +1464,22 @@ pub mod pallet {
             let initial_unlocking = ledger.unlocking.len() as u32;
             let (ledger, rebonded_value) = ledger.rebond(value);
             // Last check: the new active amount of ledger must be more than ED.
-            ensure!(ledger.active >= T::Currency::minimum_balance(), Error::<T>::InsufficientBond);
+            ensure!(
+                ledger.active >= T::StakeCurrency::minimum_balance(),
+                Error::<T>::InsufficientBond
+            );
 
             Self::deposit_event(Event::<T>::Bonded {
                 stash: ledger.stash.clone(),
                 amount: rebonded_value,
             });
 
-            // NOTE: ledger must be updated prior to calling `Self::weight_of`.
             Self::update_ledger(&controller, &ledger);
 
             let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
                 .saturating_add(initial_unlocking)
                 .saturating_sub(ledger.unlocking.len() as u32);
-            Ok(Some(T::WeightInfo::rebond(removed_chunks)).into())
+            Ok(Some(T::ThisWeightInfo::rebond(removed_chunks)).into())
         }
 
         /// Remove all data structures concerning a staker/stash once it is at a state where it can
@@ -1270,8 +1494,8 @@ pub mod pallet {
         /// It can be called by anyone, as long as `stash` meets the above requirements.
         ///
         /// Refunds the transaction fees upon successful execution.
-        #[pallet::call_index(20)]
-        #[pallet::weight(T::WeightInfo::reap_stash(*num_slashing_spans))]
+        #[pallet::call_index(21)]
+        #[pallet::weight(T::ThisWeightInfo::reap_stash(*num_slashing_spans))]
         pub fn reap_stash(
             origin: OriginFor<T>,
             stash: T::AccountId,
@@ -1279,8 +1503,8 @@ pub mod pallet {
         ) -> DispatchResultWithPostInfo {
             let _ = ensure_signed(origin)?;
 
-            let ed = T::Currency::minimum_balance();
-            let reapable = T::Currency::total_balance(&stash) < ed
+            let ed = T::StakeCurrency::minimum_balance();
+            let reapable = T::StakeCurrency::total_balance(&stash) < ed
                 || Self::ledger(Self::bonded(stash.clone()).ok_or(Error::<T>::NotStash)?)
                     .map(|l| l.total)
                     .unwrap_or_default()
@@ -1288,38 +1512,79 @@ pub mod pallet {
             ensure!(reapable, Error::<T>::FundedTarget);
 
             Self::kill_stash(&stash, num_slashing_spans)?;
-            T::Currency::remove_lock(STAKING_ID, &stash);
+            T::StakeCurrency::remove_lock(STAKING_ID, &stash);
 
             Ok(Pays::No.into())
         }
 
+        /// Remove the given cooperations from the calling validator.
+        ///
+        /// Effects will be felt at the beginning of the next era.
+        ///
+        /// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
+        ///
+        /// - `who`: A list of cooperator stash accounts who are cooperating this validator which
+        ///   should no longer be cooperating this validator.
+        ///
+        /// Note: Making this call only makes sense if you first set the validator preferences to
+        /// block any further cooperations.
+        #[pallet::call_index(22)]
+        #[pallet::weight(T::ThisWeightInfo::kick(who.len() as u32))]
+        pub fn kick(origin: OriginFor<T>, who: Vec<AccountIdLookupOf<T>>) -> DispatchResult {
+            let controller = ensure_signed(origin)?;
+            let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+            let stash = &ledger.stash;
+
+            for nom_stash in who
+                .into_iter()
+                .map(T::Lookup::lookup)
+                .collect::<Result<Vec<T::AccountId>, _>>()?
+                .into_iter()
+            {
+                Cooperators::<T>::mutate(&nom_stash, |maybe_nom| {
+                    if let Some(ref mut nom) = maybe_nom {
+                        if nom.targets.remove(stash).is_some() {
+                            Self::deposit_event(Event::<T>::Kicked {
+                                cooperator: nom_stash.clone(),
+                                stash: stash.clone(),
+                            });
+                        }
+                    }
+                });
+            }
+
+            Ok(())
+        }
+
         /// Update the various staking configurations .
         ///
-        /// * `min_nominator_bond`: The minimum active bond needed to be a nominator.
+        /// * `min_cooperator_bond`: The minimum active bond needed to be a cooperator.
         /// * `min_validator_bond`: The minimum active bond needed to be a validator.
-        /// * `max_nominator_count`: The max number of users who can be a nominator at once. When
+        /// * `max_cooperator_count`: The max number of users who can be a cooperator at once. When
         ///   set to `None`, no limit is enforced.
         /// * `max_validator_count`: The max number of users who can be a validator at once. When
         ///   set to `None`, no limit is enforced.
-        /// * `chill_threshold`: The ratio of `max_nominator_count` or `max_validator_count` which
+        /// * `chill_threshold`: The ratio of `max_cooperator_count` or `max_validator_count` which
         ///   should be filled in order for the `chill_other` transaction to work.
         /// * `min_commission`: The minimum amount of commission that each validators must maintain.
         ///   This is checked only upon calling `validate`. Existing validators are not affected.
         ///
         /// RuntimeOrigin must be Root to call this function.
         ///
-        /// NOTE: Existing nominators and validators will not be affected by this update.
+        /// NOTE: Existing cooperators and validators will not be affected by this update.
         /// to kick people under the new limits, `chill_other` should be called.
         // We assume the worst case for this call is either: all items are set or all items are
         // removed.
-        #[pallet::call_index(22)]
+        #[pallet::call_index(23)]
         #[pallet::weight(
-			T::WeightInfo::set_staking_configs_all_set()
-				.max(T::WeightInfo::set_staking_configs_all_remove())
-		)]
+            T::ThisWeightInfo::set_staking_configs_all_set()
+            .max(T::ThisWeightInfo::set_staking_configs_all_remove())
+        )]
         pub fn set_staking_configs(
             origin: OriginFor<T>,
-            min_validator_bond: ConfigOp<BalanceOf<T>>,
+            min_cooperator_bond: ConfigOp<StakeOf<T>>,
+            min_validator_bond: ConfigOp<StakeOf<T>>,
+            max_cooperator_count: ConfigOp<u32>,
             max_validator_count: ConfigOp<u32>,
             chill_threshold: ConfigOp<Percent>,
             min_commission: ConfigOp<Perbill>,
@@ -1336,14 +1601,15 @@ pub mod pallet {
                 };
             }
 
+            config_op_exp!(MinCooperatorBond<T>, min_cooperator_bond);
             config_op_exp!(MinValidatorBond<T>, min_validator_bond);
+            config_op_exp!(MaxCooperatorsCount<T>, max_cooperator_count);
             config_op_exp!(MaxValidatorsCount<T>, max_validator_count);
             config_op_exp!(ChillThreshold<T>, chill_threshold);
             config_op_exp!(MinCommission<T>, min_commission);
             Ok(())
         }
-
-        /// Declare a `controller` to stop participating as either a validator or nominator.
+        /// Declare a `controller` to stop participating as either a validator or cooperator.
         ///
         /// Effects will be felt at the beginning of the next era.
         ///
@@ -1355,22 +1621,22 @@ pub mod pallet {
         /// If the caller is different than the controller being targeted, the following conditions
         /// must be met:
         ///
-        /// * `controller` must belong to a nominator who has become non-decodable,
+        /// * `controller` must belong to a cooperator who has become non-decodable,
         ///
         /// Or:
         ///
         /// * A `ChillThreshold` must be set and checked which defines how close to the max
-        ///   nominators or validators we must reach before users can start chilling one-another.
-        /// * A `MaxNominatorCount` and `MaxValidatorCount` must be set which is used to determine
+        ///   cooperators or validators we must reach before users can start chilling one-another.
+        /// * A `MaxCooperatorCount` and `MaxValidatorCount` must be set which is used to determine
         ///   how close we are to the threshold.
-        /// * A `MinNominatorBond` and `MinValidatorBond` must be set and checked, which determines
+        /// * A `MinCooperatorBond` and `MinValidatorBond` must be set and checked, which determines
         ///   if this is a person that should be chilled because they have not met the threshold
         ///   bond required.
         ///
         /// This can be helpful if bond requirements are updated, and we need to remove old users
         /// who do not satisfy these requirements.
-        #[pallet::call_index(23)]
-        #[pallet::weight(T::WeightInfo::chill_other())]
+        #[pallet::call_index(24)]
+        #[pallet::weight(T::ThisWeightInfo::chill_other())]
         pub fn chill_other(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
             // Anyone can call this function.
             let caller = ensure_signed(origin)?;
@@ -1379,23 +1645,37 @@ pub mod pallet {
 
             // In order for one user to chill another user, the following conditions must be met:
             //
-            // * `controller` belongs to a nominator who has become non-decodable,
+            // * `controller` belongs to a cooperator who has become non-decodable,
             //
             // Or
             //
-            // * A `ChillThreshold` is set which defines how close to the max nominators or
+            // * A `ChillThreshold` is set which defines how close to the max cooperators or
             //   validators we must reach before users can start chilling one-another.
-            // * A `MaxNominatorCount` and `MaxValidatorCount` which is used to determine how close
+            // * A `MaxCooperatorCount` and `MaxValidatorCount` which is used to determine how close
             //   we are to the threshold.
-            // * A `MinNominatorBond` and `MinValidatorBond` which is the final condition checked to
+            // * A `MinCooperatorBond` and `MinValidatorBond` which is the final condition checked to
             //   determine this is a person that should be chilled because they have not met the
             //   threshold bond required.
             //
             // Otherwise, if caller is the same as the controller, this is just like `chill`.
 
+            if Cooperators::<T>::contains_key(&stash) && Cooperators::<T>::get(&stash).is_none() {
+                Self::chill_stash(&stash);
+                return Ok(());
+            }
+
             if caller != controller {
                 let threshold = ChillThreshold::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
-                let min_active_bond = if Validators::<T>::contains_key(&stash) {
+                let min_active_bond = if Cooperators::<T>::contains_key(&stash) {
+                    let max_cooperator_count =
+                        MaxCooperatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
+                    let current_cooperator_count = Cooperators::<T>::count();
+                    ensure!(
+                        threshold * max_cooperator_count < current_cooperator_count,
+                        Error::<T>::CannotChillOther
+                    );
+                    MinCooperatorBond::<T>::get()
+                } else if Validators::<T>::contains_key(&stash) {
                     let max_validator_count =
                         MaxValidatorsCount::<T>::get().ok_or(Error::<T>::CannotChillOther)?;
                     let current_validator_count = Validators::<T>::count();
@@ -1418,8 +1698,8 @@ pub mod pallet {
         /// Force a validator to have at least the minimum commission. This will not affect a
         /// validator who already has a commission greater than or equal to the minimum. Any account
         /// can call this.
-        #[pallet::call_index(24)]
-        #[pallet::weight(T::WeightInfo::force_apply_min_commission())]
+        #[pallet::call_index(25)]
+        #[pallet::weight(T::ThisWeightInfo::force_apply_min_commission())]
         pub fn force_apply_min_commission(
             origin: OriginFor<T>,
             validator_stash: T::AccountId,
@@ -1442,11 +1722,26 @@ pub mod pallet {
         ///
         /// This call has lower privilege requirements than `set_staking_config` and can be called
         /// by the `T::AdminOrigin`. Root can always call this.
-        #[pallet::call_index(25)]
-        #[pallet::weight(T::WeightInfo::set_min_commission())]
+        #[pallet::call_index(26)]
+        #[pallet::weight(T::ThisWeightInfo::set_min_commission())]
         pub fn set_min_commission(origin: OriginFor<T>, new: Perbill) -> DispatchResult {
             T::AdminOrigin::ensure_origin(origin)?;
             MinCommission::<T>::put(new);
+            Ok(())
+        }
+
+        /// Make a validator collaborative (if applicable).
+        #[pallet::call_index(27)]
+        #[pallet::weight(T::ThisWeightInfo::make_collaborative())]
+        pub fn make_collaborative(origin: OriginFor<T>) -> DispatchResult {
+            let stash = ensure_signed(origin)?;
+            ensure!(Self::is_legit_for_collab(&stash), Error::<T>::ReputationTooLow);
+            Validators::<T>::try_mutate_exists(stash, |maybe_prefs| {
+                maybe_prefs
+                    .as_mut()
+                    .map(|prefs| prefs.collaborative = true)
+                    .ok_or(Error::<T>::NotStash)
+            })?;
             Ok(())
         }
     }
