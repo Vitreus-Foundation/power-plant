@@ -1,0 +1,10 @@
+{
+    "jsonrpc":"2.0",
+    "id":1,
+    "method":"author_insertKey",
+    "params": [
+        "gran",
+        "bottom drive obey lake curtain smoke basket hold race lonely fit walk//Alith",
+        "0x037f681482822fd3c407061aaa647fde4464d0b1922348ae8558d7cba2e94f06"
+    ]
+}

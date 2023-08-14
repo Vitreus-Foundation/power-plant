@@ -1,0 +1,10 @@
+{
+    "jsonrpc":"2.0",
+    "id":1,
+    "method":"author_insertKey",
+    "params": [
+        "gran",
+        "bottom drive obey lake curtain smoke basket hold race lonely fit walk//Baltathar",
+        "0x985442a943eeb5f99e85ca520935238b53750d6abb8669e598857d1f767a7b2b"
+    ]
+}

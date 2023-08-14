@@ -1846,61 +1846,87 @@ fn reap_stash_works() {
 fn switching_roles() {
     // Test that it should be possible to switch between roles (cooperator, validator, idle) with
     // minimal overhead.
-    ExtBuilder::default().cooperate(false).build_and_execute(|| {
-        // Reset reward destination
-        for i in &[10, 20] {
-            assert_ok!(PowerPlant::set_payee(
-                RuntimeOrigin::signed(*i),
+    ExtBuilder::default()
+        // .add_staker(5, 6, 2000, status)
+        .cooperate(false)
+        .build_and_execute(|| {
+            // Reset reward destination
+            for i in &[10, 20] {
+                assert_ok!(PowerPlant::set_payee(
+                    RuntimeOrigin::signed(*i),
+                    RewardDestination::Controller
+                ));
+            }
+
+            assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+
+            // put some money in account that we'll use.
+            for i in 1..7 {
+                let _ = Balances::deposit_creating(&i, 5000);
+            }
+
+            Reputation::force_set_points(
+                RuntimeOrigin::root(),
+                5,
+                CollaborativeValidatorReputationThreshold::get(),
+            )
+            .unwrap();
+
+            // add 2 cooperators
+            assert_ok!(PowerPlant::bond(
+                RuntimeOrigin::signed(1),
+                2,
+                2000,
                 RewardDestination::Controller
             ));
-        }
+            assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(2), vec![(11, 750)]));
 
-        // assert_eq_uvec!(validator_controllers(), vec![20, 10]);
+            assert_ok!(PowerPlant::bond(
+                RuntimeOrigin::signed(3),
+                4,
+                500,
+                RewardDestination::Controller
+            ));
+            assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(4), vec![(21, 425)]));
 
-        // // put some money in account that we'll use.
-        // for i in 1..7 {
-        //     let _ = Balances::deposit_creating(&i, 5000);
-        // }
-        //
-        // // add 2 cooperators
-        // assert_ok!(PowerPlant::bond(RuntimeOrigin::signed(1), 2, 2000, RewardDestination::Controller));
-        // assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(2), vec![11, 5]));
-        //
-        // assert_ok!(PowerPlant::bond(RuntimeOrigin::signed(3), 4, 500, RewardDestination::Controller));
-        // assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(4), vec![21, 1]));
-        //
-        // // add a new validator candidate
-        // assert_ok!(PowerPlant::bond(RuntimeOrigin::signed(5), 6, 1000, RewardDestination::Controller));
-        // assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(6), ValidatorPrefs::default()));
-        // assert_ok!(Session::set_keys(
-        //     RuntimeOrigin::signed(6),
-        //     SessionKeys { other: 6.into() },
-        //     vec![]
-        // ));
-        //
-        // mock::start_active_era(1);
-        //
-        // // with current cooperators 10 and 5 have the most stake
-        // assert_eq_uvec!(validator_controllers(), vec![6, 10]);
-        //
-        // // 2 decides to be a validator. Consequences:
-        // assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
-        // assert_ok!(Session::set_keys(
-        //     RuntimeOrigin::signed(2),
-        //     SessionKeys { other: 2.into() },
-        //     vec![]
-        // ));
-        // // new stakes:
-        // // 10: 1000 self vote
-        // // 20: 1000 self vote + 250 vote
-        // // 6 : 1000 self vote
-        // // 2 : 2000 self vote + 250 vote.
-        // // Winners: 20 and 2
-        //
-        // mock::start_active_era(2);
-        //
-        // assert_eq_uvec!(validator_controllers(), vec![2, 20]);
-    });
+            // add a new validator candidate
+            assert_ok!(PowerPlant::bond(
+                RuntimeOrigin::signed(5),
+                6,
+                1000,
+                RewardDestination::Controller
+            ));
+            assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(6), ValidatorPrefs::default()));
+            assert_ok!(Session::set_keys(
+                RuntimeOrigin::signed(6),
+                SessionKeys { other: 6.into() },
+                vec![]
+            ));
+
+            mock::start_active_era(1);
+
+            // with current cooperators 10 and 5 have the most stake
+            assert_eq_uvec!(validator_controllers(), vec![6, 30, 20, 10]);
+
+            // 2 decides to be a validator. Consequences:
+            // first we need to make it have enough reputation
+            assert_ok!(Reputation::force_set_points(
+                RuntimeOrigin::root(),
+                1,
+                ValidatorReputationThreshold::get()
+            ));
+
+            assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+            assert_ok!(Session::set_keys(
+                RuntimeOrigin::signed(2),
+                SessionKeys { other: 2.into() },
+                vec![]
+            ));
+
+            mock::start_active_era(2);
+
+            assert_eq_uvec!(validator_controllers(), vec![6, 30, 2, 20, 10]);
+        });
 }
 
 // #[test]
