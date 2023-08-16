@@ -4,18 +4,14 @@ use crate::testing_utils::perbill_signed_sub_abs;
 
 use super::{ConfigOp, Event, *};
 use frame_support::{
-    assert_noop,
-    assert_ok,
-    assert_storage_noop,
-    bounded_vec,
-    // pallet_prelude::*,
+    assert_noop, assert_ok, assert_storage_noop, bounded_vec,
     traits::{Currency, Get, ReservableCurrency},
 };
 use mock::*;
 use pallet_balances::Error as BalancesError;
 
 use sp_runtime::{assert_eq_error_rate, traits::BadOrigin, Perbill, Percent, TokenError};
-use sp_staking::offence::OffenceDetails;
+use sp_staking::offence::{DisableStrategy, OffenceDetails};
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
 
@@ -1929,658 +1925,563 @@ fn switching_roles() {
         });
 }
 
-// #[test]
-// fn wrong_vote_is_moot() {
-//     ExtBuilder::default()
-//         .add_staker(
-//             61,
-//             60,
-//             500,
-//             StakerStatus::Cooperator(vec![
-//                 11, 21, // good votes
-//                 1, 2, 15, 1000, 25, // crap votes. No effect.
-//             ]),
-//         )
-//         .build_and_execute(|| {
-//             // the genesis validators already reflect the above vote, nonetheless start a new era.
-//             mock::start_active_era(1);
-//
-//             // new validators
-//             assert_eq_uvec!(validator_controllers(), vec![20, 10]);
-//
-//             // our new voter is taken into account
-//             assert!(PowerPlant::eras_stakers(active_era(), 11).others.iter().any(|i| i.who == 61));
-//             assert!(PowerPlant::eras_stakers(active_era(), 21).others.iter().any(|i| i.who == 61));
-//         });
-// }
-//
-// #[test]
-// fn bond_with_no_staked_value() {
-//     // Behavior when someone bonds with no staked value.
-//     // Particularly when they votes and the candidate is elected.
-//     ExtBuilder::default()
-//         .validator_count(3)
-//         .existential_deposit(5)
-//         .balance_factor(5)
-//         .cooperate(false)
-//         .minimum_validator_count(1)
-//         .build_and_execute(|| {
-//             // Can't bond with 1
-//             assert_noop!(
-//                 PowerPlant::bond(RuntimeOrigin::signed(1), 2, 1, RewardDestination::Controller),
-//                 Error::<Test>::InsufficientBond,
-//             );
-//             // bonded with absolute minimum value possible.
-//             assert_ok!(PowerPlant::bond(
-//                 RuntimeOrigin::signed(1),
-//                 2,
-//                 5,
-//                 RewardDestination::Controller
-//             ));
-//             assert_eq!(Balances::locks(&1)[0].amount, 5);
-//
-//             // unbonding even 1 will cause all to be unbonded.
-//             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(2), 1));
-//             assert_eq!(
-//                 PowerPlant::ledger(2),
-//                 Some(StakingLedger {
-//                     stash: 1,
-//                     active: 0,
-//                     total: 5,
-//                     unlocking: bounded_vec![UnlockChunk { value: 5, era: 3 }],
-//                     claimed_rewards: bounded_vec![],
-//                 })
-//             );
-//
-//             mock::start_active_era(1);
-//             mock::start_active_era(2);
-//
-//             // not yet removed.
-//             assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
-//             assert!(PowerPlant::ledger(2).is_some());
-//             assert_eq!(Balances::locks(&1)[0].amount, 5);
-//
-//             mock::start_active_era(3);
-//
-//             // poof. Account 1 is removed from the staking system.
-//             assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
-//             assert!(PowerPlant::ledger(2).is_none());
-//             assert_eq!(Balances::locks(&1).len(), 0);
-//         });
-// }
-//
-// #[test]
-// fn bond_with_little_staked_value_bounded() {
-//     ExtBuilder::default()
-//         .validator_count(3)
-//         .cooperate(false)
-//         .minimum_validator_count(1)
-//         .build_and_execute(|| {
-//             // setup
-//             assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(30)));
-//             assert_ok!(PowerPlant::set_payee(
-//                 RuntimeOrigin::signed(10),
-//                 RewardDestination::Controller
-//             ));
-//             let init_balance_2 = Balances::free_balance(&2);
-//             let init_balance_10 = Balances::free_balance(&10);
-//
-//             // Stingy validator.
-//             assert_ok!(PowerPlant::bond(
-//                 RuntimeOrigin::signed(1),
-//                 2,
-//                 1,
-//                 RewardDestination::Controller
-//             ));
-//             assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
-//             assert_ok!(Session::set_keys(
-//                 RuntimeOrigin::signed(2),
-//                 SessionKeys { other: 2.into() },
-//                 vec![]
-//             ));
-//
-//             // 1 era worth of reward. BUT, we set the timestamp after on_initialize, so outdated by
-//             // one block.
-//             let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-//
-//             reward_all_elected();
-//             mock::start_active_era(1);
-//             mock::make_all_reward_payment(0);
-//
-//             // 2 is elected.
-//             assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
-//             assert_eq!(PowerPlant::eras_stakers(active_era(), 2).total, 0);
-//
-//             // Old ones are rewarded.
-//             assert_eq_error_rate!(
-//                 Balances::free_balance(10),
-//                 init_balance_10 + total_payout_0 / 3,
-//                 1
-//             );
-//             // no rewards paid to 2. This was initial election.
-//             assert_eq!(Balances::free_balance(2), init_balance_2);
-//
-//             // reward era 2
-//             let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-//             reward_all_elected();
-//             mock::start_active_era(2);
-//             mock::make_all_reward_payment(1);
-//
-//             assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
-//             assert_eq!(PowerPlant::eras_stakers(active_era(), 2).total, 0);
-//
-//             // 2 is now rewarded.
-//             assert_eq_error_rate!(
-//                 Balances::free_balance(2),
-//                 init_balance_2 + total_payout_1 / 3,
-//                 1
-//             );
-//             assert_eq_error_rate!(
-//                 Balances::free_balance(&10),
-//                 init_balance_10 + total_payout_0 / 3 + total_payout_1 / 3,
-//                 2,
-//             );
-//         });
-// }
-//
-// #[test]
-// fn bond_with_duplicate_vote_should_be_ignored_by_election_provider() {
-//     ExtBuilder::default()
-//         .validator_count(2)
-//         .cooperate(false)
-//         .minimum_validator_count(1)
-//         .set_stake(31, 1000)
-//         .build_and_execute(|| {
-//             // ensure all have equal stake.
-//             assert_eq!(
-//                 <Validators<Test>>::iter()
-//                     .map(|(v, _)| (v, PowerPlant::ledger(v - 1).unwrap().total))
-//                     .collect::<Vec<_>>(),
-//                 vec![(31, 1000), (21, 1000), (11, 1000)],
-//             );
-//             // no cooperators shall exist.
-//             assert!(<Cooperators<Test>>::iter().map(|(n, _)| n).collect::<Vec<_>>().is_empty());
-//
-//             // give the man some money.
-//             let initial_balance = 1000;
-//             for i in [1, 2, 3, 4].iter() {
-//                 let _ = Balances::make_free_balance_be(i, initial_balance);
-//             }
-//
-//             assert_ok!(PowerPlant::bond(
-//                 RuntimeOrigin::signed(1),
-//                 2,
-//                 1000,
-//                 RewardDestination::Controller
-//             ));
-//             assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(2), vec![11, 11, 11, 21, 31]));
-//
-//             assert_ok!(PowerPlant::bond(
-//                 RuntimeOrigin::signed(3),
-//                 4,
-//                 1000,
-//                 RewardDestination::Controller
-//             ));
-//             assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(4), vec![21, 31]));
-//
-//             // winners should be 21 and 31. Otherwise this election is taking duplicates into
-//             // account.
-//             let supports = <Test as Config>::ElectionProvider::elect().unwrap();
-//             assert_eq!(
-//                 supports,
-//                 vec![
-//                     (21, Support { total: 1800, voters: vec![(21, 1000), (1, 400), (3, 400)] }),
-//                     (31, Support { total: 2200, voters: vec![(31, 1000), (1, 600), (3, 600)] })
-//                 ],
-//             );
-//         });
-// }
-//
-// #[test]
-// fn bond_with_duplicate_vote_should_be_ignored_by_election_provider_elected() {
-//     // same as above but ensures that even when the dupe is being elected, everything is sane.
-//     ExtBuilder::default()
-//         .validator_count(2)
-//         .cooperate(false)
-//         .set_stake(31, 1000)
-//         .minimum_validator_count(1)
-//         .build_and_execute(|| {
-//             // ensure all have equal stake.
-//             assert_eq!(
-//                 <Validators<Test>>::iter()
-//                     .map(|(v, _)| (v, PowerPlant::ledger(v - 1).unwrap().total))
-//                     .collect::<Vec<_>>(),
-//                 vec![(31, 1000), (21, 1000), (11, 1000)],
-//             );
-//
-//             // no cooperators shall exist.
-//             assert!(<Cooperators<Test>>::iter().collect::<Vec<_>>().is_empty());
-//
-//             // give the man some money.
-//             let initial_balance = 1000;
-//             for i in [1, 2, 3, 4].iter() {
-//                 let _ = Balances::make_free_balance_be(i, initial_balance);
-//             }
-//
-//             assert_ok!(PowerPlant::bond(
-//                 RuntimeOrigin::signed(1),
-//                 2,
-//                 1000,
-//                 RewardDestination::Controller
-//             ));
-//             assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(2), vec![11, 11, 11, 21]));
-//
-//             assert_ok!(PowerPlant::bond(
-//                 RuntimeOrigin::signed(3),
-//                 4,
-//                 1000,
-//                 RewardDestination::Controller
-//             ));
-//             assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(4), vec![21]));
-//
-//             // winners should be 21 and 11.
-//             let supports = <Test as Config>::ElectionProvider::elect().unwrap();
-//             assert_eq!(
-//                 supports,
-//                 vec![
-//                     (11, Support { total: 1500, voters: vec![(11, 1000), (1, 500)] }),
-//                     (21, Support { total: 2500, voters: vec![(21, 1000), (1, 500), (3, 1000)] })
-//                 ],
-//             );
-//         });
-// }
-//
-// #[test]
-// fn new_era_elects_correct_number_of_validators() {
-//     ExtBuilder::default().cooperate(true).validator_count(1).build_and_execute(|| {
-//         assert_eq!(PowerPlant::validator_count(), 1);
-//         assert_eq!(validator_controllers().len(), 1);
-//
-//         Session::on_initialize(System::block_number());
-//
-//         assert_eq!(validator_controllers().len(), 1);
-//     })
-// }
-//
-// #[test]
-// fn phragmen_should_not_overflow() {
-//     ExtBuilder::default().cooperate(false).build_and_execute(|| {
-//         // This is the maximum value that we can have as the outcome of CurrencyToVote.
-//         type Votes = u64;
-//
-//         let _ = PowerPlant::chill(RuntimeOrigin::signed(10));
-//         let _ = PowerPlant::chill(RuntimeOrigin::signed(20));
-//
-//         bond_validator(3, 2, Votes::max_value() as Balance);
-//         bond_validator(5, 4, Votes::max_value() as Balance);
-//
-//         bond_cooperator(7, 6, Votes::max_value() as Balance, vec![3, 5]);
-//         bond_cooperator(9, 8, Votes::max_value() as Balance, vec![3, 5]);
-//
-//         mock::start_active_era(1);
-//
-//         assert_eq_uvec!(validator_controllers(), vec![4, 2]);
-//
-//         // We can safely convert back to values within [u64, u128].
-//         assert!(PowerPlant::eras_stakers(active_era(), 3).total > Votes::max_value() as Balance);
-//         assert!(PowerPlant::eras_stakers(active_era(), 5).total > Votes::max_value() as Balance);
-//     })
-// }
-//
-// #[test]
-// fn reward_validator_slashing_validator_does_not_overflow() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         let stake = u64::MAX as Balance * 2;
-//         let reward_slash = u64::MAX as Balance * 2;
-//
-//         // Assert multiplication overflows in balance arithmetic.
-//         assert!(stake.checked_mul(reward_slash).is_none());
-//
-//         // Set staker
-//         let _ = Balances::make_free_balance_be(&11, stake);
-//
-//         let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
-//         let reward = EraRewardPoints::<AccountId> {
-//             total: 1,
-//             individual: vec![(11, 1)].into_iter().collect(),
-//         };
-//
-//         // Check reward
-//         ErasRewardPoints::<Test>::insert(0, reward);
-//         ErasStakers::<Test>::insert(0, 11, &exposure);
-//         ErasStakersClipped::<Test>::insert(0, 11, exposure);
-//         ErasEnergyPerStakeCurrency::<Test>::insert(0, stake);
-//         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 0));
-//         assert_eq!(Balances::total_balance(&11), stake * 2);
-//
-//         // Set staker
-//         let _ = Balances::make_free_balance_be(&11, stake);
-//         let _ = Balances::make_free_balance_be(&2, stake);
-//
-//         // only slashes out of bonded stake are applied. without this line, it is 0.
-//         PowerPlant::bond(RuntimeOrigin::signed(2), 20000, stake - 1, RewardDestination::default())
-//             .unwrap();
-//         // Override exposure of 11
-//         ErasStakers::<Test>::insert(
-//             0,
-//             11,
-//             Exposure {
-//                 total: stake,
-//                 own: 1,
-//                 others: vec![IndividualExposure { who: 2, value: stake - 1 }],
-//             },
-//         );
-//
-//         // Check slashing
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(100)],
-//         );
-//
-//         assert_eq!(Balances::total_balance(&11), stake - 1);
-//         assert_eq!(Balances::total_balance(&2), 1);
-//     })
-// }
-//
-// #[test]
-// fn reward_from_authorship_event_handler_works() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         use pallet_authorship::EventHandler;
-//
-//         assert_eq!(<pallet_authorship::Pallet<Test>>::author(), Some(11));
-//
-//         Pallet::<Test>::note_author(11);
-//         Pallet::<Test>::note_author(11);
-//
-//         // Not mandatory but must be coherent with rewards
-//         assert_eq_uvec!(Session::validators(), vec![11, 21]);
-//
-//         // 21 is rewarded as an uncle producer
-//         // 11 is rewarded as a block producer and uncle referencer and uncle producer
-//         assert_eq!(
-//             ErasRewardPoints::<Test>::get(active_era()),
-//             EraRewardPoints { individual: vec![(11, 20 * 2)].into_iter().collect(), total: 40 },
-//         );
-//     })
-// }
-//
-// #[test]
-// fn add_reward_points_fns_works() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         // Not mandatory but must be coherent with rewards
-//         assert_eq_uvec!(Session::validators(), vec![21, 11]);
-//
-//         Pallet::<Test>::reward_by_ids(vec![(21, 1), (11, 1), (11, 1)]);
-//
-//         Pallet::<Test>::reward_by_ids(vec![(21, 1), (11, 1), (11, 1)]);
-//
-//         assert_eq!(
-//             ErasRewardPoints::<Test>::get(active_era()),
-//             EraRewardPoints { individual: vec![(11, 4), (21, 2)].into_iter().collect(), total: 6 },
-//         );
-//     })
-// }
-//
-// #[test]
-// fn unbonded_balance_is_not_slashable() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         // total amount staked is slashable.
-//         assert_eq!(PowerPlant::slashable_balance_of(&11), 1000);
-//
-//         assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(10), 800));
-//
-//         // only the active portion.
-//         assert_eq!(PowerPlant::slashable_balance_of(&11), 200);
-//     })
-// }
-//
-// #[test]
-// fn era_is_always_same_length() {
-//     // This ensures that the sessions is always of the same length if there is no forcing no
-//     // session changes.
-//     ExtBuilder::default().build_and_execute(|| {
-//         let session_per_era = <SessionsPerEra as Get<SessionIndex>>::get();
-//
-//         mock::start_active_era(1);
-//         assert_eq!(PowerPlant::eras_start_session_index(current_era()).unwrap(), session_per_era);
-//
-//         mock::start_active_era(2);
-//         assert_eq!(
-//             PowerPlant::eras_start_session_index(current_era()).unwrap(),
-//             session_per_era * 2u32
-//         );
-//
-//         let session = Session::current_index();
-//         PowerPlant::set_force_era(Forcing::ForceNew);
-//         advance_session();
-//         advance_session();
-//         assert_eq!(current_era(), 3);
-//         assert_eq!(PowerPlant::eras_start_session_index(current_era()).unwrap(), session + 2);
-//
-//         mock::start_active_era(4);
-//         assert_eq!(
-//             PowerPlant::eras_start_session_index(current_era()).unwrap(),
-//             session + 2u32 + session_per_era
-//         );
-//     });
-// }
-//
-// #[test]
-// fn offence_forces_new_era() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(5)],
-//         );
-//
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-//     });
-// }
-//
-// #[test]
-// fn offence_ensures_new_era_without_clobbering() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         assert_ok!(PowerPlant::force_new_era_always(RuntimeOrigin::root()));
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceAlways);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(5)],
-//         );
-//
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceAlways);
-//     });
-// }
-//
-// #[test]
-// fn offence_deselects_validator_even_when_slash_is_zero() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         assert!(Session::validators().contains(&11));
-//         assert!(<Validators<Test>>::contains_key(11));
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(0)],
-//         );
-//
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-//         assert!(!<Validators<Test>>::contains_key(11));
-//
-//         mock::start_active_era(1);
-//
-//         assert!(!Session::validators().contains(&11));
-//         assert!(!<Validators<Test>>::contains_key(11));
-//     });
-// }
-//
-// #[test]
-// fn slashing_performed_according_exposure() {
-//     // This test checks that slashing is performed according the exposure (or more precisely,
-//     // historical exposure), not the current balance.
-//     ExtBuilder::default().build_and_execute(|| {
-//         assert_eq!(PowerPlant::eras_stakers(active_era(), 11).own, 1000);
-//
-//         // Handle an offence with a historical exposure.
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, Exposure { total: 500, own: 500, others: vec![] }),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(50)],
-//         );
-//
-//         // The stash account should be slashed for 250 (50% of 500).
-//         assert_eq!(Balances::free_balance(11), 1000 - 250);
-//     });
-// }
-//
-// #[test]
-// fn slash_in_old_span_does_not_deselect() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         mock::start_active_era(1);
-//
-//         assert!(<Validators<Test>>::contains_key(11));
-//         assert!(Session::validators().contains(&11));
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(0)],
-//         );
-//
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-//         assert!(!<Validators<Test>>::contains_key(11));
-//
-//         mock::start_active_era(2);
-//
-//         PowerPlant::validate(RuntimeOrigin::signed(10), Default::default()).unwrap();
-//         assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
-//         assert!(<Validators<Test>>::contains_key(11));
-//         assert!(!Session::validators().contains(&11));
-//
-//         mock::start_active_era(3);
-//
-//         // this staker is in a new slashing span now, having re-registered after
-//         // their prior slash.
-//
-//         on_offence_in_era(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(0)],
-//             1,
-//             DisableStrategy::WhenSlashed,
-//         );
-//
-//         // the validator doesn't get chilled again
-//         assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
-//
-//         // but we are still forcing a new era
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-//
-//         on_offence_in_era(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             // NOTE: A 100% slash here would clean up the account, causing de-registration.
-//             &[Perbill::from_percent(95)],
-//             1,
-//             DisableStrategy::WhenSlashed,
-//         );
-//
-//         // the validator doesn't get chilled again
-//         assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
-//
-//         // but it's disabled
-//         assert!(is_disabled(10));
-//         // and we are still forcing a new era
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-//     });
-// }
-//
-// #[test]
-// fn reporters_receive_their_slice() {
-//     // This test verifies that the reporters of the offence receive their slice from the slashed
-//     // amount.
-//     ExtBuilder::default().build_and_execute(|| {
-//         // The reporters' reward is calculated from the total exposure.
-//         let initial_balance = 1125;
-//
-//         assert_eq!(PowerPlant::eras_stakers(active_era(), 11).total, initial_balance);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![1, 2],
-//             }],
-//             &[Perbill::from_percent(50)],
-//         );
-//
-//         // F1 * (reward_proportion * slash - 0)
-//         // 50% * (10% * initial_balance / 2)
-//         let reward = (initial_balance / 20) / 2;
-//         let reward_each = reward / 2; // split into two pieces.
-//         assert_eq!(Balances::free_balance(1), 10 + reward_each);
-//         assert_eq!(Balances::free_balance(2), 20 + reward_each);
-//     });
-// }
-//
-// #[test]
-// fn subsequent_reports_in_same_span_pay_out_less() {
-//     // This test verifies that the reporters of the offence receive their slice from the slashed
-//     // amount, but less and less if they submit multiple reports in one span.
-//     ExtBuilder::default().build_and_execute(|| {
-//         // The reporters' reward is calculated from the total exposure.
-//         let initial_balance = 1125;
-//
-//         assert_eq!(PowerPlant::eras_stakers(active_era(), 11).total, initial_balance);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![1],
-//             }],
-//             &[Perbill::from_percent(20)],
-//         );
-//
-//         // F1 * (reward_proportion * slash - 0)
-//         // 50% * (10% * initial_balance * 20%)
-//         let reward = (initial_balance / 5) / 20;
-//         assert_eq!(Balances::free_balance(1), 10 + reward);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![1],
-//             }],
-//             &[Perbill::from_percent(50)],
-//         );
-//
-//         let prior_payout = reward;
-//
-//         // F1 * (reward_proportion * slash - prior_payout)
-//         // 50% * (10% * (initial_balance / 2) - prior_payout)
-//         let reward = ((initial_balance / 20) - prior_payout) / 2;
-//         assert_eq!(Balances::free_balance(1), 10 + prior_payout + reward);
-//     });
-// }
-//
+#[test]
+fn wrong_vote_is_moot() {
+    // this test is not applicable to our implementation, but still it checks the collaboraitve
+    // staking works
+    ExtBuilder::default()
+        .add_staker(61, 60, 500, StakerStatus::Cooperator(vec![(11, 150), (21, 100)]))
+        .build_and_execute(|| {
+            // the genesis validators already reflect the above vote, nonetheless start a new era.
+            mock::start_active_era(1);
+
+            // new validators
+            assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+
+            // our new voter is taken into account
+            assert!(PowerPlant::eras_stakers(active_era(), 11).others.iter().any(|i| i.who == 61));
+            assert!(PowerPlant::eras_stakers(active_era(), 21).others.iter().any(|i| i.who == 61));
+        });
+}
+
+#[test]
+fn bond_with_no_staked_value() {
+    // Behavior when someone bonds with no staked value.
+    // Particularly when they votes and the candidate is elected.
+    ExtBuilder::default()
+        .validator_count(3)
+        .existential_deposit(5)
+        .balance_factor(5)
+        .cooperate(false)
+        .minimum_validator_count(1)
+        .build_and_execute(|| {
+            // Can't bond with 1
+            assert_noop!(
+                PowerPlant::bond(RuntimeOrigin::signed(1), 2, 1, RewardDestination::Controller),
+                Error::<Test>::InsufficientBond,
+            );
+            // bonded with absolute minimum value possible.
+            assert_ok!(PowerPlant::bond(
+                RuntimeOrigin::signed(1),
+                2,
+                5,
+                RewardDestination::Controller
+            ));
+            assert_eq!(Balances::locks(&1)[0].amount, 5);
+
+            // unbonding even 1 will cause all to be unbonded.
+            assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(2), 1));
+            assert_eq!(
+                PowerPlant::ledger(2),
+                Some(StakingLedger {
+                    stash: 1,
+                    active: 0,
+                    total: 5,
+                    unlocking: bounded_vec![UnlockChunk { value: 5, era: 3 }],
+                    claimed_rewards: bounded_vec![],
+                })
+            );
+
+            mock::start_active_era(1);
+            mock::start_active_era(2);
+
+            // not yet removed.
+            assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
+            assert!(PowerPlant::ledger(2).is_some());
+            assert_eq!(Balances::locks(&1)[0].amount, 5);
+
+            mock::start_active_era(3);
+
+            // poof. Account 1 is removed from the staking system.
+            assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
+            assert!(PowerPlant::ledger(2).is_none());
+            assert_eq!(Balances::locks(&1).len(), 0);
+        });
+}
+
+#[test]
+fn bond_with_little_staked_value_bounded() {
+    ExtBuilder::default()
+        .validator_count(3)
+        .cooperate(false)
+        .minimum_validator_count(1)
+        .build_and_execute(|| {
+            // setup
+            assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(30)));
+            assert_ok!(PowerPlant::set_payee(
+                RuntimeOrigin::signed(10),
+                RewardDestination::Controller
+            ));
+            let init_balance_2 = Assets::balance(VNRG::get(), &2);
+            let init_balance_10 = Assets::balance(VNRG::get(), &10);
+
+            // set enought reputation for the stash account
+            assert_ok!(Reputation::force_set_points(
+                RuntimeOrigin::root(),
+                1,
+                ValidatorReputationThreshold::get()
+            ));
+
+            // Stingy validator.
+            assert_ok!(PowerPlant::bond(
+                RuntimeOrigin::signed(1),
+                2,
+                1,
+                RewardDestination::Controller
+            ));
+            assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
+            assert_ok!(Session::set_keys(
+                RuntimeOrigin::signed(2),
+                SessionKeys { other: 2.into() },
+                vec![]
+            ));
+
+            // 1 era worth of reward. BUT, we set the timestamp after on_initialize, so outdated by
+            // one block.
+            let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
+
+            reward_all_elected();
+            mock::start_active_era(1);
+            mock::make_all_reward_payment(0);
+
+            // 2 is elected.
+            assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
+            assert_eq!(PowerPlant::eras_stakers(active_era(), 2).total, 0);
+
+            let total_stake = ErasTotalStake::<Test>::get(0);
+            let bonded = PowerPlant::ledger(10).unwrap();
+            let part_of_10_0 = Perbill::from_rational(bonded.total, total_stake);
+
+            assert!(!Assets::balance(VNRG::get(), 10).is_zero());
+
+            // Old ones are rewarded.
+            assert_eq_error_rate!(
+                Assets::balance(VNRG::get(), 10),
+                init_balance_10 + part_of_10_0 * total_payout_0,
+                1
+            );
+            // no rewards paid to 2. This was initial election.
+            assert_eq!(Assets::balance(VNRG::get(), 2), init_balance_2);
+
+            // reward era 2
+            let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
+            reward_all_elected();
+            mock::start_active_era(2);
+            mock::make_all_reward_payment(1);
+
+            assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
+            assert_eq!(PowerPlant::eras_stakers(active_era(), 2).total, 0);
+
+            let total_stake = ErasTotalStake::<Test>::get(1);
+            let bonded = PowerPlant::ledger(2).unwrap();
+            let part_of_2 = Perbill::from_rational(bonded.total, total_stake);
+            let bonded = PowerPlant::ledger(10).unwrap();
+            let part_of_10_1 = Perbill::from_rational(bonded.total, total_stake);
+
+            assert!(!Assets::balance(VNRG::get(), 2).is_zero());
+            assert!(!Assets::balance(VNRG::get(), 10).is_zero());
+
+            // 2 is now rewarded.
+            assert_eq_error_rate!(
+                Assets::balance(VNRG::get(), 2),
+                init_balance_2 + part_of_2 * total_payout_1,
+                1
+            );
+            assert_eq_error_rate!(
+                Assets::balance(VNRG::get(), &10),
+                init_balance_10 + part_of_10_0 * total_payout_0 + part_of_10_1 * total_payout_1,
+                2,
+            );
+        });
+}
+
+#[test]
+fn reward_validator_slashing_validator_does_not_overflow() {
+    ExtBuilder::default().build_and_execute(|| {
+        let stake = u64::MAX as Balance * 2;
+        let reward_slash = u64::MAX as Balance * 2;
+
+        // Assert multiplication overflows in balance arithmetic.
+        assert!(stake.checked_mul(reward_slash).is_none());
+
+        // Set staker
+        let _ = Balances::make_free_balance_be(&11, stake);
+
+        let exposure = Exposure::<AccountId, Balance> { total: stake, own: stake, others: vec![] };
+
+        // Check reward
+        ErasStakers::<Test>::insert(0, 11, &exposure);
+        ErasStakersClipped::<Test>::insert(0, 11, exposure);
+        ErasEnergyPerStakeCurrency::<Test>::insert(0, stake);
+        assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 0));
+        assert_eq!(Assets::balance(VNRG::get(), &10), Balance::max_value());
+
+        // Set staker
+        let _ = Balances::make_free_balance_be(&11, stake);
+        let _ = Balances::make_free_balance_be(&2, stake);
+
+        // only slashes out of bonded stake are applied. without this line, it is 0.
+        PowerPlant::bond(RuntimeOrigin::signed(2), 20000, stake - 1, RewardDestination::default())
+            .unwrap();
+        // Override exposure of 11
+        ErasStakers::<Test>::insert(
+            0,
+            11,
+            Exposure {
+                total: stake,
+                own: 1,
+                others: vec![IndividualExposure { who: 2, value: stake - 1 }],
+            },
+        );
+
+        let reputation = Reputation::reputation(&11).unwrap().points;
+
+        // Check slashing
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(100)],
+        );
+
+        let after_slash = Reputation::reputation(&11).unwrap().points;
+
+        assert!(*after_slash > 0);
+
+        assert_eq!(after_slash, (*reputation - *ValidatorReputationThreshold::get()).into());
+    })
+}
+
+#[test]
+fn reward_from_authorship_event_handler_works() {
+    ExtBuilder::default().build_and_execute(|| {
+        use pallet_authorship::EventHandler;
+
+        assert_eq!(<pallet_authorship::Pallet<Test>>::author(), Some(11));
+
+        let init_reputation_11 = Reputation::reputation(11).unwrap().points;
+        dbg!(init_reputation_11);
+
+        Pallet::<Test>::note_author(11);
+        Pallet::<Test>::note_author(11);
+
+        // Not mandatory but must be coherent with rewards
+        assert_eq_uvec!(Session::validators(), vec![31, 11, 21]);
+
+        assert_eq!(
+            *Reputation::reputation(11).unwrap().points,
+            *init_reputation_11 + *pallet_reputation::REPUTATION_POINTS_PER_DAY * 2
+        );
+    })
+}
+
+#[test]
+fn era_is_always_same_length() {
+    // This ensures that the sessions is always of the same length if there is no forcing no
+    // session changes.
+    ExtBuilder::default().build_and_execute(|| {
+        let session_per_era = <SessionsPerEra as Get<SessionIndex>>::get();
+
+        mock::start_active_era(1);
+        assert_eq!(PowerPlant::eras_start_session_index(current_era()).unwrap(), session_per_era);
+
+        mock::start_active_era(2);
+        assert_eq!(
+            PowerPlant::eras_start_session_index(current_era()).unwrap(),
+            session_per_era * 2u32
+        );
+
+        let session = Session::current_index();
+        PowerPlant::set_force_era(Forcing::ForceNew);
+        advance_session();
+        advance_session();
+        assert_eq!(current_era(), 3);
+        assert_eq!(PowerPlant::eras_start_session_index(current_era()).unwrap(), session + 2);
+
+        mock::start_active_era(4);
+        assert_eq!(
+            PowerPlant::eras_start_session_index(current_era()).unwrap(),
+            session + 2u32 + session_per_era
+        );
+    });
+}
+
+#[test]
+fn offence_forces_new_era() {
+    ExtBuilder::default().build_and_execute(|| {
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(5)],
+        );
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (31, PowerPlant::eras_stakers(active_era(), 31)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(5)],
+        );
+
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+    });
+}
+
+#[test]
+fn offence_ensures_new_era_without_clobbering() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_ok!(PowerPlant::force_new_era_always(RuntimeOrigin::root()));
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceAlways);
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(5)],
+        );
+
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceAlways);
+    });
+}
+
+#[test]
+fn offence_deselects_validator_even_when_slash_is_zero() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert!(Session::validators().contains(&11));
+        assert!(Session::validators().contains(&21));
+        assert!(<Validators<Test>>::contains_key(11));
+        assert!(<Validators<Test>>::contains_key(21));
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(0)],
+        );
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (21, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(0)],
+        );
+
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+        assert!(!<Validators<Test>>::contains_key(11));
+        assert!(!<Validators<Test>>::contains_key(21));
+
+        mock::start_active_era(1);
+
+        assert!(!Session::validators().contains(&11));
+        assert!(!Session::validators().contains(&21));
+        assert!(!<Validators<Test>>::contains_key(11));
+        assert!(!<Validators<Test>>::contains_key(21));
+    });
+}
+
+#[test]
+fn slashing_performed_according_exposure() {
+    // This test checks that slashing is performed according the exposure (or more precisely,
+    // historical exposure), not the current balance.
+    //
+    // above was for the original test, but our implementation is different. we have slashing per
+    // ratio to some validator reputation threshold.
+    ExtBuilder::default().build_and_execute(|| {
+        assert_eq!(PowerPlant::eras_stakers(active_era(), 11).own, 1000);
+        let init_reputation_11 = *Reputation::reputation(11).unwrap().points;
+
+        // Handle an offence with a historical exposure.
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, Exposure { total: 500, own: 500, others: vec![] }),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(50)],
+        );
+
+        // The stash account should be slashed for 250 (50% of 500).
+        assert_eq!(
+            *Reputation::reputation(11).unwrap().points,
+            init_reputation_11 - *ValidatorReputationThreshold::get() / 2
+        );
+    });
+}
+
+#[test]
+fn slash_in_old_span_does_not_deselect() {
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+
+        assert!(<Validators<Test>>::contains_key(11));
+        assert!(Session::validators().contains(&11));
+        assert!(<Validators<Test>>::contains_key(21));
+        assert!(Session::validators().contains(&21));
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(0)],
+        );
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(0)],
+        );
+
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+        assert!(!<Validators<Test>>::contains_key(11));
+        assert!(!<Validators<Test>>::contains_key(21));
+
+        mock::start_active_era(2);
+
+        PowerPlant::validate(RuntimeOrigin::signed(10), Default::default()).unwrap();
+        PowerPlant::validate(RuntimeOrigin::signed(20), Default::default()).unwrap();
+        assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
+        assert!(<Validators<Test>>::contains_key(11));
+        assert!(!Session::validators().contains(&11));
+        assert!(<Validators<Test>>::contains_key(21));
+        assert!(!Session::validators().contains(&21));
+
+        mock::start_active_era(3);
+
+        // this staker is in a new slashing span now, having re-registered after
+        // their prior slash.
+
+        on_offence_in_era(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(0)],
+            1,
+            DisableStrategy::WhenSlashed,
+        );
+        on_offence_in_era(
+            &[OffenceDetails {
+                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(0)],
+            1,
+            DisableStrategy::WhenSlashed,
+        );
+
+        // the validator doesn't get chilled again
+        assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
+        assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 21));
+
+        // but we are still forcing a new era
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+
+        on_offence_in_era(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            // NOTE: A 100% slash here would clean up the account, causing de-registration.
+            &[Perbill::from_percent(95)],
+            1,
+            DisableStrategy::WhenSlashed,
+        );
+        on_offence_in_era(
+            &[OffenceDetails {
+                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                reporters: vec![],
+            }],
+            // NOTE: A 100% slash here would clean up the account, causing de-registration.
+            &[Perbill::from_percent(95)],
+            1,
+            DisableStrategy::WhenSlashed,
+        );
+
+        // the validator doesn't get chilled again
+        assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
+        assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 21));
+
+        // but it's disabled
+        assert!(is_disabled(10));
+        assert!(is_disabled(20));
+        // and we are still forcing a new era
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+    });
+}
+
+#[test]
+fn reporters_receive_their_slice() {
+    ExtBuilder::default().build_and_execute(|| {
+        let initial_energy_1 = Assets::balance(VNRG::get(), 1);
+        let initial_energy_2 = Assets::balance(VNRG::get(), 2);
+
+        let offender_before = *Reputation::reputation(11).unwrap().points;
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![1, 2],
+            }],
+            &[Perbill::from_percent(50)],
+        );
+        let offender_after = *Reputation::reputation(11).unwrap().points;
+
+        // F1 * slash * reward_proportion / num_of_reporters * energy_per_reputation
+        let slash = (offender_before - offender_after) as u128;
+        let energy_rate = PowerPlant::eras_energy_per_reputation(active_era()).unwrap();
+        let reward = slash * energy_rate / 2 / 10; // F! (50%) and reward prop (10%)
+        let reward_each = reward / 2; // split between reporters
+        assert!(!Assets::balance(VNRG::get(), 1).is_zero());
+        assert!(!Assets::balance(VNRG::get(), 2).is_zero());
+        assert_eq!(Assets::balance(VNRG::get(), 1), initial_energy_1 + reward_each);
+        assert_eq!(Assets::balance(VNRG::get(), 2), initial_energy_2 + reward_each);
+    });
+}
+
+#[test]
+fn subsequent_reports_in_same_span_pay_out_less() {
+    // This test verifies that the reporters of the offence receive their slice from the slashed
+    // amount, but less and less if they submit multiple reports in one span.
+    ExtBuilder::default().build_and_execute(|| {
+        // The reporters' reward is calculated from the total exposure.
+        let initial_balance = 1125;
+
+        assert_eq!(PowerPlant::eras_stakers(active_era(), 11).total, initial_balance);
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![1],
+            }],
+            &[Perbill::from_percent(20)],
+        );
+
+        // F1 * (reward_proportion * slash - 0)
+        // 50% * (10% * initial_balance * 20%)
+        let reward = (initial_balance / 5) / 20;
+        assert_eq!(Balances::free_balance(1), 10 + reward);
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![1],
+            }],
+            &[Perbill::from_percent(50)],
+        );
+
+        let prior_payout = reward;
+
+        // F1 * (reward_proportion * slash - prior_payout)
+        // 50% * (10% * (initial_balance / 2) - prior_payout)
+        let reward = ((initial_balance / 20) - prior_payout) / 2;
+        assert_eq!(Balances::free_balance(1), 10 + prior_payout + reward);
+    });
+}
+
 // #[test]
 // fn invulnerables_are_not_slashed() {
 //     // For invulnerable validators no slashing is performed.

@@ -160,7 +160,7 @@ pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
 // NOTE: Currently it is not possible to change the epoch duration after the chain has started.
 //       Attempting to do so will brick block production.
-pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 1 * MINUTES;
+pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
 pub const EPOCH_DURATION_IN_SLOTS: u64 = {
     const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
 
@@ -490,7 +490,7 @@ pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
 
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const SessionsPerEra: SessionIndex = 2;
+    pub const SessionsPerEra: SessionIndex = 5;
     pub const BondingDuration: EraIndex = 24 * 28;
     pub const SlashDeferDuration: EraIndex = 24 * 7; // 1/4 the bonding duration.
     pub const Period: BlockNumber = 5;
