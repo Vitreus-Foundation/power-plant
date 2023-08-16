@@ -41,13 +41,12 @@ use frame_support::{
     traits::{
         AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
+    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
-use pallet_transaction_payment::CurrencyAdapter;
 // Frontier
 use fp_account::EthereumSignature;
 use fp_evm::weight_per_gas;
@@ -611,11 +610,22 @@ parameter_types! {
 
 impl pallet_transaction_payment::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
+    type OnChargeTransaction = EnergyFee;
     type OperationalFeeMultiplier = ConstU8<5>;
-    type WeightToFee = IdentityFee<Balance>;
+    type WeightToFee = EnergyFee;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = ();
+}
+
+parameter_types! {
+    pub const GetConstantEnergyFee: Balance = 1_000_000_000;
+}
+
+impl pallet_energy_fee::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Balanced = Assets;
+    type GetEnergyAssetId = VNRG;
+    type GetConstantEnergyFee = GetConstantEnergyFee;
 }
 
 impl pallet_sudo::Config for Runtime {
@@ -748,6 +758,7 @@ construct_runtime!(
         Offences: pallet_offences,
         ImOnline: pallet_im_online,
         EnergyGeneration: pallet_energy_generation,
+        EnergyFee: pallet_energy_fee,
         Session: pallet_session,
         Historical: pallet_session::historical,
     }

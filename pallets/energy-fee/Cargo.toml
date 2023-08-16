@@ -1,0 +1,57 @@
+[package]
+name = "pallet-energy-fee"
+version = "0.1.0"
+authors = ["Innowise FinTech Team"]
+edition = "2021"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+log = { workspace = true }
+pallet-assets = { workspace = true }
+pallet-transaction-payment = { workspace = true }
+parity-scale-codec = { workspace = true }
+scale-info = { workspace = true }
+serde = { workspace = true }
+sp-application-crypto = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
+sp-std = { workspace = true }
+smallvec = { workspace = true }
+
+# Optional imports for benchmarking
+frame-benchmarking = { workspace = true, optional = true }
+rand_chacha = { workspace = true, optional = true }
+
+[dev-dependencies]
+sp-tracing = { workspace = true }
+sp-core = { workspace = true }
+pallet-balances = { workspace = true }
+pallet-timestamp = { workspace = true }
+pallet-staking-reward-curve = { workspace = true }
+substrate-test-utils = { workspace = true }
+frame-benchmarking = { workspace = true }
+rand_chacha = { workspace = true }
+
+[features]
+default = ["std"]
+std = [
+    "frame-benchmarking/std",
+    "frame-support/std",
+    "frame-system/std",
+    "log/std",
+    "pallet-balances/std",
+    "pallet-assets/std",
+    "parity-scale-codec/std",
+    "pallet-transaction-payment/std",
+    "scale-info/std",
+    "serde/std",
+    "sp-application-crypto/std",
+    "sp-io/std",
+    "sp-runtime/std",
+    "sp-std/std",
+]

@@ -14,8 +14,8 @@ use sp_runtime::Perbill;
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, AccountId, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig, EVMConfig,
-    EnableManualSeal, EnergyGenerationConfig, GrandpaConfig, ImOnlineConfig, ImOnlineId,
+    opaque, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
+    EVMConfig, EnableManualSeal, EnergyGenerationConfig, GrandpaConfig, ImOnlineConfig, ImOnlineId,
     MaxCooperations, ReputationConfig, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
     StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, WASM_BINARY,
@@ -217,6 +217,8 @@ fn testnet_genesis(
                 endowed_accounts.push(*x)
             }
         });
+    // Alith account
+    let alith: AccountId = AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"));
 
     // stakers: all validators and nominators.
     const ENDOWMENT: Balance = 1_000_000 * UNITS;
@@ -314,7 +316,11 @@ fn testnet_genesis(
         ethereum: Default::default(),
         dynamic_fee: Default::default(),
         base_fee: Default::default(),
-        assets: Default::default(),
+        assets: AssetsConfig {
+            assets: vec![(1, alith.clone(), true, 1)],
+            metadata: vec![(1, "VNRG".into(), "VNRG".into(), 18)],
+            accounts: vec![(1, alith, 1_000_000_000_000_000_000_000u128)],
+        },
         reputation: ReputationConfig {
             accounts: stakers
                 .iter()
