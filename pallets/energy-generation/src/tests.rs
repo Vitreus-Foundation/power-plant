@@ -256,7 +256,6 @@ fn rewards_should_work() {
 
         // Compute total payout now for whole duration of the session.
         let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-        // let maximum_payout = maximum_payout_for_duration(reward_time_per_era());
 
         start_session(1);
         assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
@@ -2211,18 +2210,17 @@ fn era_is_always_same_length() {
 fn offence_forces_new_era() {
     ExtBuilder::default().build_and_execute(|| {
         on_offence_now(
-            &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-                reporters: vec![],
-            }],
-            &[Perbill::from_percent(5)],
-        );
-        on_offence_now(
-            &[OffenceDetails {
-                offender: (31, PowerPlant::eras_stakers(active_era(), 31)),
-                reporters: vec![],
-            }],
-            &[Perbill::from_percent(5)],
+            &[
+                OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                },
+                OffenceDetails {
+                    offender: (31, PowerPlant::eras_stakers(active_era(), 31)),
+                    reporters: vec![],
+                },
+            ],
+            &[Perbill::from_percent(5), Perbill::from_percent(5)],
         );
 
         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
@@ -2256,18 +2254,17 @@ fn offence_deselects_validator_even_when_slash_is_zero() {
         assert!(<Validators<Test>>::contains_key(21));
 
         on_offence_now(
-            &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-                reporters: vec![],
-            }],
-            &[Perbill::from_percent(0)],
-        );
-        on_offence_now(
-            &[OffenceDetails {
-                offender: (21, PowerPlant::eras_stakers(active_era(), 11)),
-                reporters: vec![],
-            }],
-            &[Perbill::from_percent(0)],
+            &[
+                OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                },
+                OffenceDetails {
+                    offender: (21, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                },
+            ],
+            &[Perbill::from_percent(0), Perbill::from_percent(0)],
         );
 
         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
@@ -2322,18 +2319,17 @@ fn slash_in_old_span_does_not_deselect() {
         assert!(Session::validators().contains(&21));
 
         on_offence_now(
-            &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-                reporters: vec![],
-            }],
-            &[Perbill::from_percent(0)],
-        );
-        on_offence_now(
-            &[OffenceDetails {
-                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
-                reporters: vec![],
-            }],
-            &[Perbill::from_percent(0)],
+            &[
+                OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                },
+                OffenceDetails {
+                    offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                    reporters: vec![],
+                },
+            ],
+            &[Perbill::from_percent(0), Perbill::from_percent(0)],
         );
 
         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
@@ -2447,11 +2443,7 @@ fn subsequent_reports_in_same_span_pay_out_less() {
     // This test verifies that the reporters of the offence receive their slice from the slashed
     // amount, but less and less if they submit multiple reports in one span.
     ExtBuilder::default().build_and_execute(|| {
-        // The reporters' reward is calculated from the total exposure.
-        let initial_balance = 1125;
-
-        assert_eq!(PowerPlant::eras_stakers(active_era(), 11).total, initial_balance);
-
+        let before_offence = *Reputation::reputation(11).unwrap().points;
         on_offence_now(
             &[OffenceDetails {
                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
@@ -2459,12 +2451,15 @@ fn subsequent_reports_in_same_span_pay_out_less() {
             }],
             &[Perbill::from_percent(20)],
         );
+        let after_offence = *Reputation::reputation(11).unwrap().points;
 
-        // F1 * (reward_proportion * slash - 0)
-        // 50% * (10% * initial_balance * 20%)
-        let reward = (initial_balance / 5) / 20;
-        assert_eq!(Balances::free_balance(1), 10 + reward);
+        // F1 * slash * reward_proportion * energy_per_reputation
+        let slash = (before_offence - after_offence) as u128;
+        let energy_rate = PowerPlant::eras_energy_per_reputation(active_era()).unwrap();
+        let reward = slash * energy_rate / 2 / 10; // F! (50%) and reward prop (10%)
+        assert_eq!(Assets::balance(VNRG::get(), 1), reward);
 
+        let before_offence = *Reputation::reputation(11).unwrap().points;
         on_offence_now(
             &[OffenceDetails {
                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
@@ -2472,412 +2467,440 @@ fn subsequent_reports_in_same_span_pay_out_less() {
             }],
             &[Perbill::from_percent(50)],
         );
+        let after_offence = *Reputation::reputation(11).unwrap().points;
 
         let prior_payout = reward;
+        // F1 * slash * reward_proportion * energy_per_reputation
+        let slash = (before_offence - after_offence) as u128;
+        let energy_rate = PowerPlant::eras_energy_per_reputation(active_era()).unwrap();
+        let reward = slash * energy_rate / 2 / 10; // F1 (50%) and reward prop (10%)
 
-        // F1 * (reward_proportion * slash - prior_payout)
-        // 50% * (10% * (initial_balance / 2) - prior_payout)
-        let reward = ((initial_balance / 20) - prior_payout) / 2;
-        assert_eq!(Balances::free_balance(1), 10 + prior_payout + reward);
+        assert_eq!(Assets::balance(VNRG::get(), 1), reward + prior_payout + prior_payout / 2);
     });
 }
 
-// #[test]
-// fn invulnerables_are_not_slashed() {
-//     // For invulnerable validators no slashing is performed.
-//     ExtBuilder::default().invulnerables(vec![11]).build_and_execute(|| {
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         assert_eq!(Balances::free_balance(21), 2000);
-//
-//         let exposure = PowerPlant::eras_stakers(active_era(), 21);
-//         let initial_balance = PowerPlant::slashable_balance_of(&21);
-//
-//         let cooperator_balances: Vec<_> =
-//             exposure.others.iter().map(|o| Balances::free_balance(&o.who)).collect();
-//
-//         on_offence_now(
-//             &[
-//                 OffenceDetails {
-//                     offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                     reporters: vec![],
-//                 },
-//                 OffenceDetails {
-//                     offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
-//                     reporters: vec![],
-//                 },
-//             ],
-//             &[Perbill::from_percent(50), Perbill::from_percent(20)],
-//         );
-//
-//         // The validator 11 hasn't been slashed, but 21 has been.
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         // 2000 - (0.2 * initial_balance)
-//         assert_eq!(Balances::free_balance(21), 2000 - (2 * initial_balance / 10));
-//
-//         // ensure that cooperators were slashed as well.
-//         for (initial_balance, other) in cooperator_balances.into_iter().zip(exposure.others) {
-//             assert_eq!(
-//                 Balances::free_balance(&other.who),
-//                 initial_balance - (2 * other.value / 10),
-//             );
-//         }
-//     });
-// }
-//
-// #[test]
-// fn dont_slash_if_fraction_is_zero() {
-//     // Don't slash if the fraction is zero.
-//     ExtBuilder::default().build_and_execute(|| {
-//         assert_eq!(Balances::free_balance(11), 1000);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(0)],
-//         );
-//
-//         // The validator hasn't been slashed. The new era is not forced.
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-//     });
-// }
-//
-// #[test]
-// fn only_slash_for_max_in_era() {
-//     // multiple slashes within one era are only applied if it is more than any previous slash in the
-//     // same era.
-//     ExtBuilder::default().build_and_execute(|| {
-//         assert_eq!(Balances::free_balance(11), 1000);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(50)],
-//         );
-//
-//         // The validator has been slashed and has been force-chilled.
-//         assert_eq!(Balances::free_balance(11), 500);
-//         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(25)],
-//         );
-//
-//         // The validator has not been slashed additionally.
-//         assert_eq!(Balances::free_balance(11), 500);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(60)],
-//         );
-//
-//         // The validator got slashed 10% more.
-//         assert_eq!(Balances::free_balance(11), 400);
-//     })
-// }
-//
-// #[test]
-// fn garbage_collection_after_slashing() {
-//     // ensures that `SlashingSpans` and `SpanSlash` of an account is removed after reaping.
-//     ExtBuilder::default()
-//         .existential_deposit(2)
-//         .balance_factor(2)
-//         .build_and_execute(|| {
-//             assert_eq!(Balances::free_balance(11), 2000);
-//
-//             on_offence_now(
-//                 &[OffenceDetails {
-//                     offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                     reporters: vec![],
-//                 }],
-//                 &[Perbill::from_percent(10)],
-//             );
-//
-//             assert_eq!(Balances::free_balance(11), 2000 - 200);
-//             assert!(SlashingSpans::<Test>::get(&11).is_some());
-//             assert_eq!(SpanSlash::<Test>::get(&(11, 0)).amount(), &200);
-//
-//             on_offence_now(
-//                 &[OffenceDetails {
-//                     offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                     reporters: vec![],
-//                 }],
-//                 &[Perbill::from_percent(100)],
-//             );
-//
-//             // validator and cooperator slash in era are garbage-collected by era change,
-//             // so we don't test those here.
-//
-//             assert_eq!(Balances::free_balance(11), 2);
-//             assert_eq!(Balances::total_balance(&11), 2);
-//
-//             let slashing_spans = SlashingSpans::<Test>::get(&11).unwrap();
-//             assert_eq!(slashing_spans.iter().count(), 2);
-//
-//             // reap_stash respects num_slashing_spans so that weight is accurate
-//             assert_noop!(
-//                 PowerPlant::reap_stash(RuntimeOrigin::signed(20), 11, 0),
-//                 Error::<Test>::IncorrectSlashingSpans
-//             );
-//             assert_ok!(PowerPlant::reap_stash(RuntimeOrigin::signed(20), 11, 2));
-//
-//             assert!(SlashingSpans::<Test>::get(&11).is_none());
-//             assert_eq!(SpanSlash::<Test>::get(&(11, 0)).amount(), &0);
-//         })
-// }
-//
-// #[test]
-// fn garbage_collection_on_window_pruning() {
-//     // ensures that `ValidatorSlashInEra` and `CooperatorSlashInEra` are cleared after
-//     // `BondingDuration`.
-//     ExtBuilder::default().build_and_execute(|| {
-//         mock::start_active_era(1);
-//
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         let now = active_era();
-//
-//         let exposure = PowerPlant::eras_stakers(now, 11);
-//         assert_eq!(Balances::free_balance(101), 2000);
-//         let cooperated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
-//
-//         on_offence_now(
-//             &[OffenceDetails { offender: (11, PowerPlant::eras_stakers(now, 11)), reporters: vec![] }],
-//             &[Perbill::from_percent(10)],
-//         );
-//
-//         assert_eq!(Balances::free_balance(11), 900);
-//         assert_eq!(Balances::free_balance(101), 2000 - (cooperated_value / 10));
-//
-//         assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
-//         assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_some());
-//
-//         // + 1 because we have to exit the bonding window.
-//         for era in (0..(BondingDuration::get() + 1)).map(|offset| offset + now + 1) {
-//             assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
-//             assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_some());
-//
-//             mock::start_active_era(era);
-//         }
-//
-//         assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_none());
-//         assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_none());
-//     })
-// }
-//
-// #[test]
-// fn slashing_cooperators_by_span_max() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         mock::start_active_era(1);
-//         mock::start_active_era(2);
-//         mock::start_active_era(3);
-//
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         assert_eq!(Balances::free_balance(21), 2000);
-//         assert_eq!(Balances::free_balance(101), 2000);
-//         assert_eq!(PowerPlant::slashable_balance_of(&21), 1000);
-//
-//         let exposure_11 = PowerPlant::eras_stakers(active_era(), 11);
-//         let exposure_21 = PowerPlant::eras_stakers(active_era(), 21);
-//         let cooperated_value_11 = exposure_11.others.iter().find(|o| o.who == 101).unwrap().value;
-//         let cooperated_value_21 = exposure_21.others.iter().find(|o| o.who == 101).unwrap().value;
-//
-//         on_offence_in_era(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(10)],
-//             2,
-//             DisableStrategy::WhenSlashed,
-//         );
-//
-//         assert_eq!(Balances::free_balance(11), 900);
-//
-//         let slash_1_amount = Perbill::from_percent(10) * cooperated_value_11;
-//         assert_eq!(Balances::free_balance(101), 2000 - slash_1_amount);
-//
-//         let expected_spans = vec![
-//             slashing::SlashingSpan { index: 1, start: 4, length: None },
-//             slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
-//         ];
-//
-//         let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
-//
-//         assert_eq!(get_span(11).iter().collect::<Vec<_>>(), expected_spans);
-//
-//         assert_eq!(get_span(101).iter().collect::<Vec<_>>(), expected_spans);
-//
-//         // second slash: higher era, higher value, same span.
-//         on_offence_in_era(
-//             &[OffenceDetails {
-//                 offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(30)],
-//             3,
-//             DisableStrategy::WhenSlashed,
-//         );
-//
-//         // 11 was not further slashed, but 21 and 101 were.
-//         assert_eq!(Balances::free_balance(11), 900);
-//         assert_eq!(Balances::free_balance(21), 1700);
-//
-//         let slash_2_amount = Perbill::from_percent(30) * cooperated_value_21;
-//         assert!(slash_2_amount > slash_1_amount);
-//
-//         // only the maximum slash in a single span is taken.
-//         assert_eq!(Balances::free_balance(101), 2000 - slash_2_amount);
-//
-//         // third slash: in same era and on same validator as first, higher
-//         // in-era value, but lower slash value than slash 2.
-//         on_offence_in_era(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(20)],
-//             2,
-//             DisableStrategy::WhenSlashed,
-//         );
-//
-//         // 11 was further slashed, but 21 and 101 were not.
-//         assert_eq!(Balances::free_balance(11), 800);
-//         assert_eq!(Balances::free_balance(21), 1700);
-//
-//         let slash_3_amount = Perbill::from_percent(20) * cooperated_value_21;
-//         assert!(slash_3_amount < slash_2_amount);
-//         assert!(slash_3_amount > slash_1_amount);
-//
-//         // only the maximum slash in a single span is taken.
-//         assert_eq!(Balances::free_balance(101), 2000 - slash_2_amount);
-//     });
-// }
-//
-// #[test]
-// fn slashes_are_summed_across_spans() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         mock::start_active_era(1);
-//         mock::start_active_era(2);
-//         mock::start_active_era(3);
-//
-//         assert_eq!(Balances::free_balance(21), 2000);
-//         assert_eq!(PowerPlant::slashable_balance_of(&21), 1000);
-//
-//         let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(10)],
-//         );
-//
-//         let expected_spans = vec![
-//             slashing::SlashingSpan { index: 1, start: 4, length: None },
-//             slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
-//         ];
-//
-//         assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
-//         assert_eq!(Balances::free_balance(21), 1900);
-//
-//         // 21 has been force-chilled. re-signal intent to validate.
-//         PowerPlant::validate(RuntimeOrigin::signed(20), Default::default()).unwrap();
-//
-//         mock::start_active_era(4);
-//
-//         assert_eq!(PowerPlant::slashable_balance_of(&21), 900);
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(10)],
-//         );
-//
-//         let expected_spans = vec![
-//             slashing::SlashingSpan { index: 2, start: 5, length: None },
-//             slashing::SlashingSpan { index: 1, start: 4, length: Some(1) },
-//             slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
-//         ];
-//
-//         assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
-//         assert_eq!(Balances::free_balance(21), 1810);
-//     });
-// }
-//
-// #[test]
-// fn deferred_slashes_are_deferred() {
-//     ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
-//         mock::start_active_era(1);
-//
-//         assert_eq!(Balances::free_balance(11), 1000);
-//
-//         let exposure = PowerPlant::eras_stakers(active_era(), 11);
-//         assert_eq!(Balances::free_balance(101), 2000);
-//         let cooperated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
-//
-//         System::reset_events();
-//
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![],
-//             }],
-//             &[Perbill::from_percent(10)],
-//         );
-//
-//         // cooperations are not removed regardless of the deferring.
-//         assert_eq!(PowerPlant::cooperators(101).unwrap().targets, vec![11, 21]);
-//
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         assert_eq!(Balances::free_balance(101), 2000);
-//
-//         mock::start_active_era(2);
-//
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         assert_eq!(Balances::free_balance(101), 2000);
-//
-//         mock::start_active_era(3);
-//
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         assert_eq!(Balances::free_balance(101), 2000);
-//
-//         // at the start of era 4, slashes from era 1 are processed,
-//         // after being deferred for at least 2 full eras.
-//         mock::start_active_era(4);
-//
-//         assert_eq!(Balances::free_balance(11), 900);
-//         assert_eq!(Balances::free_balance(101), 2000 - (cooperated_value / 10));
-//
-//         assert!(matches!(
-//             staking_events_since_last_call().as_slice(),
-//             &[
-//                 Event::Chilled { stash: 11 },
-//                 Event::ForceEra { mode: Forcing::ForceNew },
-//                 Event::SlashReported { validator: 11, slash_era: 1, .. },
-//                 Event::StakersElected,
-//                 Event::ForceEra { mode: Forcing::NotForcing },
-//                 ..,
-//                 Event::Slashed { staker: 11, amount: 100 },
-//                 Event::Slashed { staker: 101, amount: 12 }
-//             ]
-//         ));
-//     })
-// }
-//
+#[test]
+fn invulnerables_are_not_slashed() {
+    // For invulnerable validators no slashing is performed.
+    ExtBuilder::default().invulnerables(vec![11]).build_and_execute(|| {
+        assert_eq!(Balances::free_balance(11), 1000);
+        assert_eq!(Balances::free_balance(21), 2000);
+
+        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let exposure_21 = PowerPlant::eras_stakers(active_era(), 21);
+        let initial_reputation_21 = *Reputation::reputation(21).unwrap().points;
+
+        // make cooperators reputation non-zero value
+        for other in &exposure_21.others {
+            assert_ok!(Reputation::force_set_points(
+                RuntimeOrigin::root(),
+                other.who,
+                ValidatorReputationThreshold::get(),
+            ));
+        }
+
+        let cooperator_reputations: Vec<_> = exposure_21
+            .others
+            .iter()
+            .map(|o| *Reputation::reputation(&o.who).unwrap().points)
+            .collect();
+
+        on_offence_now(
+            &[
+                OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                },
+                OffenceDetails {
+                    offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                    reporters: vec![],
+                },
+            ],
+            &[Perbill::from_percent(50), Perbill::from_percent(20)],
+        );
+
+        // The validator 11 hasn't been slashed, but 21 has been.
+        assert_eq!(*Reputation::reputation(11).unwrap().points, initial_reputation_11);
+        // 2000 - (0.2 * initial_balance)
+        let affter_slash_reputation_21 =
+            initial_reputation_21 - (2 * *ValidatorReputationThreshold::get() / 10);
+        assert_eq!(*Reputation::reputation(21).unwrap().points, affter_slash_reputation_21);
+
+        let slash_prop = Perbill::from_rational(affter_slash_reputation_21, initial_reputation_21);
+
+        // ensure that cooperators were slashed as well.
+        for (initial_reputation, other) in
+            cooperator_reputations.into_iter().zip(exposure_21.others)
+        {
+            assert_eq!(
+                *Reputation::reputation(&other.who).unwrap().points,
+                slash_prop * initial_reputation
+            );
+        }
+    });
+}
+
+#[test]
+fn dont_slash_if_fraction_is_zero() {
+    // Don't slash if the fraction is zero.
+    ExtBuilder::default().build_and_execute(|| {
+        let initial_reptutation_11 = Reputation::reputation(11).unwrap().points;
+        let initial_reptutation_21 = Reputation::reputation(21).unwrap().points;
+
+        on_offence_now(
+            &[
+                OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                },
+                OffenceDetails {
+                    offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                    reporters: vec![],
+                },
+            ],
+            &[Perbill::from_percent(0), Perbill::from_percent(0)],
+        );
+
+        // The validator hasn't been slashed. The new era is not forced.
+        assert_eq!(Reputation::reputation(11).unwrap().points, initial_reptutation_11);
+        assert_eq!(Reputation::reputation(21).unwrap().points, initial_reptutation_21);
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+    });
+}
+
+#[test]
+fn only_slash_for_max_in_era() {
+    // multiple slashes within one era are only applied if it is more than any previous slash in the
+    // same era.
+    ExtBuilder::default().build_and_execute(|| {
+        let initial_reptutation_11 = *Reputation::reputation(11).unwrap().points;
+
+        on_offence_now(
+            &[
+                OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                },
+                OffenceDetails {
+                    offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                    reporters: vec![],
+                },
+            ],
+            &[Perbill::from_percent(50), Perbill::from_percent(50)],
+        );
+
+        // The validator has been slashed and has been force-chilled.
+        let affter_slash_reputation_21 = *Reputation::reputation(11).unwrap().points;
+        assert_eq!(
+            affter_slash_reputation_21,
+            initial_reptutation_11 - (*ValidatorReputationThreshold::get() / 2)
+        );
+        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(25)],
+        );
+
+        // The validator has not been slashed additionally.
+        assert_eq!(*Reputation::reputation(11).unwrap().points, affter_slash_reputation_21);
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(60)],
+        );
+
+        // The validator got slashed 10% more.
+        assert_eq!(
+            *Reputation::reputation(11).unwrap().points,
+            initial_reptutation_11 - (*ValidatorReputationThreshold::get() * 3 / 5)
+        );
+    })
+}
+
+#[test]
+fn garbage_collection_after_slashing() {
+    // ensures that `SlashingSpans` and `SpanSlash` of an account is removed after reaping.
+    ExtBuilder::default()
+        .existential_deposit(2)
+        .balance_factor(2)
+        .build_and_execute(|| {
+            let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+
+            on_offence_now(
+                &[OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                }],
+                &[Perbill::from_percent(10)],
+            );
+
+            assert_eq!(
+                *Reputation::reputation(11).unwrap().points,
+                initial_reputation_11 - (*ValidatorReputationThreshold::get() / 10)
+            );
+            assert!(SlashingSpans::<Test>::get(&11).is_some());
+            assert_eq!(
+                **SpanSlash::<Test>::get(&(11, 0)).amount(),
+                *ValidatorReputationThreshold::get() / 10
+            );
+
+            on_offence_now(
+                &[OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                }],
+                &[Perbill::from_percent(100)],
+            );
+
+            // validator and cooperator slash in era are garbage-collected by era change,
+            // so we don't test those here.
+
+            assert_eq!(
+                *Reputation::reputation(11).unwrap().points,
+                initial_reputation_11 - *ValidatorReputationThreshold::get()
+            );
+
+            // we need to slash the stake to be able to reap the stash
+            let _ = Balances::slash(&11, Balances::total_balance(&11));
+
+            Ledger::<Test>::insert(
+                10,
+                StakingLedger {
+                    stash: 11,
+                    total: 0,
+                    active: 0,
+                    unlocking: Default::default(),
+                    claimed_rewards: bounded_vec![],
+                },
+            );
+
+            assert_eq!(Balances::free_balance(11), 2);
+            assert_eq!(Balances::total_balance(&11), 2);
+
+            let slashing_spans = SlashingSpans::<Test>::get(&11).unwrap();
+            assert_eq!(slashing_spans.iter().count(), 2);
+
+            // reap_stash respects num_slashing_spans so that weight is accurate
+            // we can't reap it if it has funds, so we remove them first
+            assert_noop!(
+                PowerPlant::reap_stash(RuntimeOrigin::signed(20), 11, 0),
+                Error::<Test>::IncorrectSlashingSpans
+            );
+            assert_ok!(PowerPlant::reap_stash(RuntimeOrigin::signed(20), 11, 2));
+
+            assert!(SlashingSpans::<Test>::get(&11).is_none());
+            assert_eq!(SpanSlash::<Test>::get(&(11, 0)).amount(), &0.into());
+        })
+}
+
+#[test]
+fn garbage_collection_on_window_pruning() {
+    // ensures that `ValidatorSlashInEra` and `CooperatorSlashInEra` are cleared after
+    // `BondingDuration`.
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+
+        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        assert!(initial_reputation_11 > 0);
+        let now = active_era();
+
+        // let's make the reputation of the cooperator equal to the validator's stash (just make it
+        // to be non-zero)
+        assert_ok!(Reputation::force_set_points(
+            RuntimeOrigin::root(),
+            101,
+            initial_reputation_11.into()
+        ));
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(now, 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(10)],
+        );
+
+        assert_eq!(
+            *Reputation::reputation(11).unwrap().points,
+            initial_reputation_11 - *ValidatorReputationThreshold::get() / 10
+        );
+        assert_eq!(
+            *Reputation::reputation(101).unwrap().points,
+            initial_reputation_11 - *ValidatorReputationThreshold::get() / 10
+        );
+
+        assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
+        assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_some());
+
+        // + 1 because we have to exit the bonding window.
+        for era in (0..(BondingDuration::get() + 1)).map(|offset| offset + now + 1) {
+            assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
+            assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_some());
+
+            mock::start_active_era(era);
+        }
+
+        assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_none());
+        assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_none());
+    })
+}
+
+#[test]
+fn slashes_are_summed_across_spans() {
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+        mock::start_active_era(2);
+        mock::start_active_era(3);
+
+        let initial_reputation_21 = *Reputation::reputation(21).unwrap().points;
+
+        let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(10)],
+        );
+
+        let reputation_after_slash = *Reputation::reputation(21).unwrap().points;
+
+        let expected_spans = vec![
+            slashing::SlashingSpan { index: 1, start: 4, length: None },
+            slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
+        ];
+
+        assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
+        assert_eq!(
+            reputation_after_slash,
+            initial_reputation_21 - *ValidatorReputationThreshold::get() / 10
+        );
+
+        // 21 has been force-chilled. re-signal intent to validate.
+        PowerPlant::validate(RuntimeOrigin::signed(20), Default::default()).unwrap();
+
+        mock::start_active_era(4);
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(10)],
+        );
+
+        let expected_spans = vec![
+            slashing::SlashingSpan { index: 2, start: 5, length: None },
+            slashing::SlashingSpan { index: 1, start: 4, length: Some(1) },
+            slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
+        ];
+
+        assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
+        assert_eq!(
+            *Reputation::reputation(21).unwrap().points,
+            reputation_after_slash - *ValidatorReputationThreshold::get() / 10
+                + reputation_per_era(),
+        );
+    });
+}
+
+#[test]
+fn deferred_slashes_are_deferred() {
+    ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
+        mock::start_active_era(1);
+
+        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_101 = initial_reputation_11;
+        assert_ok!(Reputation::force_set_points(
+            RuntimeOrigin::root(),
+            101,
+            initial_reputation_101.into()
+        ));
+        // let exposure = PowerPlant::eras_stakers(active_era(), 11);
+        // assert_eq!(Balances::free_balance(101), 2000);
+        // let cooperated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
+        //
+        System::reset_events();
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(10)],
+        );
+
+        // cooperations are not removed regardless of the deferring.
+        assert_eq!(
+            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+            vec![&11, &21]
+        );
+
+        assert_eq!(*Reputation::reputation(11).unwrap().points, initial_reputation_11);
+        assert_eq!(*Reputation::reputation(101).unwrap().points, initial_reputation_101);
+
+        mock::start_active_era(2);
+
+        assert_eq!(
+            *Reputation::reputation(11).unwrap().points,
+            initial_reputation_11 + reputation_per_era()
+        );
+        assert_eq!(
+            *Reputation::reputation(101).unwrap().points,
+            initial_reputation_101 + reputation_per_era()
+        );
+
+        mock::start_active_era(3);
+
+        assert_eq!(
+            *Reputation::reputation(11).unwrap().points,
+            initial_reputation_11 + reputation_per_era() * 2
+        );
+        assert_eq!(
+            *Reputation::reputation(101).unwrap().points,
+            initial_reputation_101 + reputation_per_era() * 2
+        );
+
+        let reputation_11 = initial_reputation_11 + reputation_per_era() * 2;
+        let reputation_101 = initial_reputation_101 + reputation_per_era() * 2;
+
+        // at the start of era 4, slashes from era 1 are processed,
+        // after being deferred for at least 2 full eras.
+        mock::start_active_era(4);
+
+        assert_eq!(
+            *Reputation::reputation(11).unwrap().points,
+            (reputation_11 + reputation_per_sessions(2))
+                - *ValidatorReputationThreshold::get() / 10
+        );
+        assert_eq!(
+            *Reputation::reputation(101).unwrap().points,
+            (reputation_101 + reputation_per_sessions(2))
+                - *ValidatorReputationThreshold::get() / 10
+        );
+
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::StakersElected,
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(3888000) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(3888000) },
+            ]
+        ));
+    })
+}
+
 // #[test]
 // fn retroactive_deferred_slashes_two_eras_before() {
 //     ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
