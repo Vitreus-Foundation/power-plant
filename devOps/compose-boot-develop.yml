@@ -19,13 +19,15 @@ services:
       --base-path /tmp/alice
       --chain local
       --alice
+      --force-authoring
       --port 30333
       --rpc-port 9944
       --unsafe-rpc-external
-      --node-key c12b6d18942f5ee8528c8e2baf4e147b5c5c18710926ea492d09cbd9f6c9f82a
+      --node-key 0000000000000000000000000000000000000000000000000000000000000001
       --validator
       --prometheus-external
       --rpc-cors all
+      --tmp
       --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 9"
 
     ports:
