@@ -15,6 +15,11 @@ use sp_runtime::Perbill;
 // #[cfg(test)]
 // mod tests;
 
+/// Custom fee calculation for specified scenarios
+pub trait CustomFee<RuntimeCall, DispatchInfo, Balance> {
+    fn dispatch_info_to_fee(runtime_call: &RuntimeCall, dispatch_info: &DispatchInfo) -> Option<Balance>;
+}
+
 type BalanceOf<T> =
     <<T as Config>::Balanced as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
@@ -38,6 +43,8 @@ pub mod pallet {
         type GetEnergyAssetId: Get<<Self::Balanced as Inspect<Self::AccountId>>::AssetId>;
         /// Get constant fee value in energy units
         type GetConstantEnergyFee: Get<Self::Balance>;
+        /// Calculates custom fee for selected pallets/extrinsics/execution scenarios
+        type CustomFee: CustomFee<Self::RuntimeCall, DispatchInfoOf<Self::RuntimeCall>, BalanceOf<Self>>;
     }
 
     #[pallet::event]
@@ -53,8 +60,8 @@ pub mod pallet {
 
         fn withdraw_fee(
             who: &T::AccountId,
-            _call: &T::RuntimeCall,
-            _dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+            call: &T::RuntimeCall,
+            dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
             fee: Self::Balance,
             _tip: Self::Balance,
         ) -> Result<Self::LiquidityInfo, TransactionValidityError> {
@@ -63,6 +70,11 @@ pub mod pallet {
             }
 
             let energy_asset_id = T::GetEnergyAssetId::get();
+            let fee = if let Some(custom_fee) = T::CustomFee::dispatch_info_to_fee(call, dispatch_info) {
+                custom_fee
+            } else {
+                fee
+            };
 
             match T::Balanced::withdraw(
                 energy_asset_id,

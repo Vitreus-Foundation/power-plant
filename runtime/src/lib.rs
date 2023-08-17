@@ -8,6 +8,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use pallet_energy_fee::CustomFee;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_core::{
@@ -41,7 +42,7 @@ use frame_support::{
     traits::{
         AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
+    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightToFee},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_grandpa::{
@@ -612,7 +613,7 @@ impl pallet_transaction_payment::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type OnChargeTransaction = EnergyFee;
     type OperationalFeeMultiplier = ConstU8<5>;
-    type WeightToFee = EnergyFee;
+    type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = ();
 }
@@ -626,6 +627,21 @@ impl pallet_energy_fee::Config for Runtime {
     type Balanced = Assets;
     type GetEnergyAssetId = VNRG;
     type GetConstantEnergyFee = GetConstantEnergyFee;
+    type CustomFee = EnergyFee;
+}
+
+// We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
+impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance> for EnergyFee {
+    fn dispatch_info_to_fee(runtime_call: &RuntimeCall, dispatch_info: &DispatchInfoOf<RuntimeCall>) -> Option<Balance> {
+        match runtime_call {
+            RuntimeCall::Balances(..) 
+            | RuntimeCall::Assets(..)
+            | RuntimeCall::Uniques(..)
+            | RuntimeCall::Reputation(..)
+            | RuntimeCall::EnergyGeneration(..) => Some(<Self as WeightToFee>::weight_to_fee(&dispatch_info.weight)),
+            _ => None
+        }
+    }
 }
 
 impl pallet_sudo::Config for Runtime {
