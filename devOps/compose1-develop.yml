@@ -3,7 +3,7 @@ version: "3.3"
 services:
   vitreus_power_plant:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     image: vitreus_power_plant
     networks:
@@ -17,17 +17,17 @@ services:
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/bob
-      --chain dev
+      --chain local
       --bob
       --port 30333
       --rpc-port 9944
       --unsafe-rpc-external
-      --node-key=6ce3be907dbcabf20a9a5a60a712b4256a54196000a8ed4050d352bc113f8c58
+      --node-key 6ce3be907dbcabf20a9a5a60a712b4256a54196000a8ed4050d352bc113f8c58
       --validator
       --prometheus-external
       --bootnodes /ip4/140.82.46.161/tcp/30333/p2p/12D3KooWBmAwcd4PJNJvfV89HwE48nwkRmAgo8Vy3uQEyNNHBox2
       --rpc-cors all
-      --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 9"
+      --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 5"
 
 
     ports:
