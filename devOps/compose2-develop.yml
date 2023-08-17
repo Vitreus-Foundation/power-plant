@@ -16,7 +16,6 @@ services:
       - vitreus_power_plant
     command: >
       ./target/release/vitreus-power-plant-node
-      --base-path /tmp/charlie
       --chain local
       --port 30333
       --rpc-port 9944

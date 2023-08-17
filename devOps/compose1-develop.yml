@@ -16,7 +16,6 @@ services:
       - vitreus_power_plant
     command: >
       ./target/release/vitreus-power-plant-node
-      --base-path /tmp/bob
       --chain local
       --bob
       --force-authoring
