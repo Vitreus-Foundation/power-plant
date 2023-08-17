@@ -42,7 +42,7 @@ use frame_support::{
     traits::{
         AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightToFee},
+    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, IdentityFee, ConstantMultiplier, Weight, WeightToFee},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_grandpa::{
