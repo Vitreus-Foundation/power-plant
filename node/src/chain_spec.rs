@@ -156,6 +156,42 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
     )
 }
 
+pub fn devnet_config() -> ChainSpec {
+    let wasm_binary = WASM_BINARY.expect("WASM not available");
+
+    ChainSpec::from_genesis(
+        // Name
+        "Devnet",
+        // ID
+        "devnet",
+        ChainType::Custom("Devnet".into()),
+        move || {
+            testnet_genesis(
+                wasm_binary,
+                // Sudo account
+                alith(),
+                // Pre-funded accounts
+                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
+                // Initial Validators
+                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+                vec![],
+                SS58Prefix::get() as u64,
+            )
+        },
+        // Bootnodes
+        vec![],
+        // Telemetry
+        None,
+        // Protocol ID
+        None,
+        None,
+        // Properties
+        Some(properties()),
+        // Extensions
+        None,
+    )
+}
+
 pub fn local_testnet_config() -> ChainSpec {
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -186,7 +222,7 @@ pub fn local_testnet_config() -> ChainSpec {
         None,
         None,
         // Properties
-        None,
+        Some(properties()),
         // Extensions
         None,
     )
@@ -216,7 +252,7 @@ fn testnet_genesis(
 
     // stakers: all validators and nominators.
     const ENDOWMENT: Balance = 1_000_000 * UNITS;
-    const STASH: Balance = ENDOWMENT / 1000_000;
+    const STASH: Balance = ENDOWMENT / 1_000_000;
     let mut rng = rand::thread_rng();
     let stakers = initial_validators
         .iter()
