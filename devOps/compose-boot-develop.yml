@@ -16,9 +16,9 @@ services:
       - vitreus_power_plant
     command: >
       ./target/release/vitreus-power-plant-node
-      --chain local
+      --base-path /tmp/alice
+      --chain devnet
       --alice
-      --force-authoring
       --port 30333
       --rpc-port 9944
       --unsafe-rpc-external
@@ -26,7 +26,6 @@ services:
       --validator
       --prometheus-external
       --rpc-cors all
-      --tmp
       --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 9"
 
     ports:
