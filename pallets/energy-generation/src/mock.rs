@@ -720,22 +720,21 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
     payout
 }
 
-pub(crate) fn maximum_payout_for_duration(_duration: u64) -> Balance {
-    // let (payout, rest) = <Test as Config>::EraPayout::era_energy_rate(
-    //     Staking::eras_total_stake(active_era()),
-    //     Balances::total_issuance(),
-    //     duration,
-    // );
-    // payout + rest
-    todo!()
-}
-
 /// Time it takes to finish a session.
 ///
 /// Note, if you see `time_per_session() - BLOCK_TIME`, it is fine. This is because we set the
 /// timestamp after on_initialize, so the timestamp is always one block old.
 pub(crate) fn time_per_session() -> u64 {
     Period::get() * BLOCK_TIME
+}
+
+// reputation reward points each account receive per session
+pub(crate) fn reputation_per_sessions(num: u64) -> u64 {
+    Period::get() * num * *pallet_reputation::REPUTATION_POINTS_PER_BLOCK
+}
+
+pub(crate) fn reputation_per_era() -> u64 {
+    reputation_per_sessions(SessionsPerEra::get() as u64)
 }
 
 /// Time it takes to finish an era.

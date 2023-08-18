@@ -12,7 +12,7 @@ pub type FullBackend = sc_service::TFullBackend<Block>;
 pub type FullClient<RuntimeApi, Executor> =
     sc_service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<Executor>>;
 
-pub type Client = FullClient<vitreus_power_plant_runtime::RuntimeApi, TemplateRuntimeExecutor>;
+pub type Client = FullClient<vitreus_power_plant_runtime::RuntimeApi, PowerPlantRuntimeExecutor>;
 
 /// Only enable the benchmarking host functions when we actually want to benchmark.
 #[cfg(feature = "runtime-benchmarks")]
@@ -21,8 +21,8 @@ pub type HostFunctions = frame_benchmarking::benchmarking::HostFunctions;
 #[cfg(not(feature = "runtime-benchmarks"))]
 pub type HostFunctions = ();
 
-pub struct TemplateRuntimeExecutor;
-impl NativeExecutionDispatch for TemplateRuntimeExecutor {
+pub struct PowerPlantRuntimeExecutor;
+impl NativeExecutionDispatch for PowerPlantRuntimeExecutor {
     type ExtendHostFunctions = HostFunctions;
 
     fn dispatch(method: &str, data: &[u8]) -> Option<Vec<u8>> {

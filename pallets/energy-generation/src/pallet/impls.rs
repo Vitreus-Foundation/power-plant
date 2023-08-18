@@ -181,7 +181,7 @@ impl<T: Config> Pallet<T> {
 
         <Ledger<T>>::insert(&controller, &ledger);
 
-        let validator_total_payout = exposure.total.into() * era_energy_rate;
+        let validator_total_payout = exposure.total.into().saturating_mul(era_energy_rate);
 
         let validator_prefs = Self::eras_validator_prefs(era, &validator_stash);
         // Validator first gets a cut off the top.

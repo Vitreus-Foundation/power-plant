@@ -1,0 +1,10 @@
+{
+    "jsonrpc":"2.0",
+    "id":1,
+    "method":"author_insertKey",
+    "params": [
+        "gran",
+        "bottom drive obey lake curtain smoke basket hold race lonely fit walk//Charleth",
+        "0x16eb29496b7168b9fae8dc03ab1170a5660c4d9cc9417141c814488b3a6acd37"
+    ]
+}

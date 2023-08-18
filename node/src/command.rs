@@ -14,7 +14,6 @@
 // WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 // See the License for the specific language governing permissions and
 // limitations under the License.
-
 use futures::TryFutureExt;
 // Substrate
 use sc_cli::{ChainSpec, SubstrateCli};
@@ -63,6 +62,7 @@ impl SubstrateCli for Cli {
                 Box::new(chain_spec::development_config(enable_manual_seal))
             },
             "" | "local" => Box::new(chain_spec::local_testnet_config()),
+            "devnet" => Box::new(chain_spec::devnet_config()),
             path => {
                 Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?)
             },
