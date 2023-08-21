@@ -5,7 +5,8 @@ use crate::testing_utils::perbill_signed_sub_abs;
 use super::{ConfigOp, Event, *};
 use frame_support::{
     assert_noop, assert_ok, assert_storage_noop, bounded_vec,
-    traits::{Currency, Get,  ReservableCurrency},
+    dispatch::WithPostDispatchInfo,
+    traits::{Currency, Get, ReservableCurrency},
 };
 use mock::*;
 use pallet_balances::Error as BalancesError;
@@ -3282,322 +3283,284 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
     });
 }
 
-// #[test]
-// fn non_slashable_offence_doesnt_disable_validator() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         mock::start_active_era(1);
-//         assert_eq_uvec!(Session::validators(), vec![11, 21]);
-//
-//         let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
-//         let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
-//
-//         // offence with no slash associated
-//         on_offence_now(
-//             &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-//             &[Perbill::zero()],
-//         );
-//
-//         // it does NOT affect the cooperator.
-//         assert_eq!(PowerPlant::cooperators(101).unwrap().targets, vec![11, 21]);
-//
-//         // offence that slashes 25% of the bond
-//         on_offence_now(
-//             &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-//             &[Perbill::from_percent(25)],
-//         );
-//
-//         // it DOES NOT affect the cooperator.
-//         assert_eq!(PowerPlant::cooperators(101).unwrap().targets, vec![11, 21]);
-//
-//         assert_eq!(
-//             staking_events_since_last_call(),
-//             vec![
-//                 Event::StakersElected,
-//                 Event::EraEnergyPerStakeCurrencySet {
-//                     era_index: 0,
-//                     validator_payout: 11075,
-//                     remainder: 33225
-//                 },
-//                 Event::Chilled { stash: 11 },
-//                 Event::ForceEra { mode: Forcing::ForceNew },
-//                 Event::SlashReported {
-//                     validator: 11,
-//                     fraction: Perbill::from_percent(0),
-//                     slash_era: 1
-//                 },
-//                 Event::Chilled { stash: 21 },
-//                 Event::SlashReported {
-//                     validator: 21,
-//                     fraction: Perbill::from_percent(25),
-//                     slash_era: 1
-//                 },
-//                 Event::Slashed { staker: 21, amount: 250 },
-//                 Event::Slashed { staker: 101, amount: 94 }
-//             ]
-//         );
-//
-//         // the offence for validator 10 wasn't slashable so it wasn't disabled
-//         assert!(!is_disabled(10));
-//         // whereas validator 20 gets disabled
-//         assert!(is_disabled(20));
-//     });
-// }
-//
-// #[test]
-// fn slashing_independent_of_disabling_validator() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         mock::start_active_era(1);
-//         assert_eq_uvec!(Session::validators(), vec![11, 21]);
-//
-//         let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
-//         let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
-//
-//         let now = PowerPlant::active_era().unwrap().index;
-//
-//         // offence with no slash associated, BUT disabling
-//         on_offence_in_era(
-//             &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-//             &[Perbill::zero()],
-//             now,
-//             DisableStrategy::Always,
-//         );
-//
-//         // cooperation remains untouched.
-//         assert_eq!(PowerPlant::cooperators(101).unwrap().targets, vec![11, 21]);
-//
-//         // offence that slashes 25% of the bond, BUT not disabling
-//         on_offence_in_era(
-//             &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-//             &[Perbill::from_percent(25)],
-//             now,
-//             DisableStrategy::Never,
-//         );
-//
-//         // cooperation remains untouched.
-//         assert_eq!(PowerPlant::cooperators(101).unwrap().targets, vec![11, 21]);
-//
-//         assert_eq!(
-//             staking_events_since_last_call(),
-//             vec![
-//                 Event::StakersElected,
-//                 Event::EraEnergyPerStakeCurrencySet {
-//                     era_index: 0,
-//                     validator_payout: 11075,
-//                     remainder: 33225
-//                 },
-//                 Event::Chilled { stash: 11 },
-//                 Event::ForceEra { mode: Forcing::ForceNew },
-//                 Event::SlashReported {
-//                     validator: 11,
-//                     fraction: Perbill::from_percent(0),
-//                     slash_era: 1
-//                 },
-//                 Event::Chilled { stash: 21 },
-//                 Event::SlashReported {
-//                     validator: 21,
-//                     fraction: Perbill::from_percent(25),
-//                     slash_era: 1
-//                 },
-//                 Event::Slashed { staker: 21, amount: 250 },
-//                 Event::Slashed { staker: 101, amount: 94 }
-//             ]
-//         );
-//
-//         // the offence for validator 10 was explicitly disabled
-//         assert!(is_disabled(10));
-//         // whereas validator 20 is explicitly not disabled
-//         assert!(!is_disabled(20));
-//     });
-// }
-//
-// #[test]
-// fn offence_threshold_triggers_new_era() {
-//     ExtBuilder::default()
-//         .validator_count(4)
-//         .set_status(41, StakerStatus::Validator)
-//         .build_and_execute(|| {
-//             mock::start_active_era(1);
-//             assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41]);
-//
-//             assert_eq!(
-//                 <Test as Config>::OffendingValidatorsThreshold::get(),
-//                 Perbill::from_percent(75),
-//             );
-//
-//             // we have 4 validators and an offending validator threshold of 75%,
-//             // once the third validator commits an offence a new era should be forced
-//
-//             let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
-//             let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
-//             let exposure_31 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &31);
-//
-//             on_offence_now(
-//                 &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-//                 &[Perbill::zero()],
-//             );
-//
-//             assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
-//
-//             on_offence_now(
-//                 &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-//                 &[Perbill::zero()],
-//             );
-//
-//             assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
-//
-//             on_offence_now(
-//                 &[OffenceDetails { offender: (31, exposure_31.clone()), reporters: vec![] }],
-//                 &[Perbill::zero()],
-//             );
-//
-//             assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
-//         });
-// }
-//
-// #[test]
-// fn disabled_validators_are_kept_disabled_for_whole_era() {
-//     ExtBuilder::default()
-//         .validator_count(4)
-//         .set_status(41, StakerStatus::Validator)
-//         .build_and_execute(|| {
-//             mock::start_active_era(1);
-//             assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41]);
-//             assert_eq!(<Test as Config>::SessionsPerEra::get(), 3);
-//
-//             let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
-//             let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
-//
-//             on_offence_now(
-//                 &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-//                 &[Perbill::zero()],
-//             );
-//
-//             on_offence_now(
-//                 &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-//                 &[Perbill::from_percent(25)],
-//             );
-//
-//             // cooperations are not updated.
-//             assert_eq!(PowerPlant::cooperators(101).unwrap().targets, vec![11, 21]);
-//
-//             // validator 10 should not be disabled since the offence wasn't slashable
-//             assert!(!is_disabled(10));
-//             // validator 20 gets disabled since it got slashed
-//             assert!(is_disabled(20));
-//
-//             advance_session();
-//
-//             // disabled validators should carry-on through all sessions in the era
-//             assert!(!is_disabled(10));
-//             assert!(is_disabled(20));
-//
-//             // validator 10 should now get disabled
-//             on_offence_now(
-//                 &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-//                 &[Perbill::from_percent(25)],
-//             );
-//
-//             // cooperations are not updated.
-//             assert_eq!(PowerPlant::cooperators(101).unwrap().targets, vec![11, 21]);
-//
-//             advance_session();
-//
-//             // and both are disabled in the last session of the era
-//             assert!(is_disabled(10));
-//             assert!(is_disabled(20));
-//
-//             mock::start_active_era(2);
-//
-//             // when a new era starts disabled validators get cleared
-//             assert!(!is_disabled(10));
-//             assert!(!is_disabled(20));
-//         });
-// }
-//
-// #[test]
-// fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
-//     // should check that:
-//     // * rewards get paid until history_depth for both validators and cooperators
-//     // * an invalid era to claim doesn't update last_reward
-//     // * double claim of one era fails
-//     ExtBuilder::default().cooperate(true).build_and_execute(|| {
-//         // Consumed weight for all payout_stakers dispatches that fail
-//         let err_weight = <Test as Config>::WeightInfo::payout_stakers_alive_staked(0);
-//
-//         let init_balance_10 = Balances::total_balance(&10);
-//         let init_balance_100 = Balances::total_balance(&100);
-//
-//         let part_for_10 = Perbill::from_rational::<u32>(1000, 1125);
-//         let part_for_100 = Perbill::from_rational::<u32>(125, 1125);
-//
-//         // Check state
-//         Payee::<Test>::insert(11, RewardDestination::Controller);
-//         Payee::<Test>::insert(101, RewardDestination::Controller);
-//
-//         Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
-//         // Compute total payout now for whole duration as other parameter won't change
-//         let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-//
-//         mock::start_active_era(1);
-//
-//         Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
-//         // Change total issuance in order to modify total payout
-//         let _ = Balances::deposit_creating(&999, 1_000_000_000);
-//         // Compute total payout now for whole duration as other parameter won't change
-//         let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-//         assert!(total_payout_1 != total_payout_0);
-//
-//         mock::start_active_era(2);
-//
-//         Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
-//         // Change total issuance in order to modify total payout
-//         let _ = Balances::deposit_creating(&999, 1_000_000_000);
-//         // Compute total payout now for whole duration as other parameter won't change
-//         let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
-//         assert!(total_payout_2 != total_payout_0);
-//         assert!(total_payout_2 != total_payout_1);
-//
-//         mock::start_active_era(HistoryDepth::get() + 1);
-//
-//         let active_era = active_era();
-//
-//         // This is the latest planned era in staking, not the active era
-//         let current_era = PowerPlant::current_era().unwrap();
-//
-//         // Last kept is 1:
-//         assert!(current_era - HistoryDepth::get() == 1);
-//         assert_noop!(
-//             PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 0),
-//             // Fail: Era out of history
-//             Error::<Test>::InvalidEraToReward.with_weight(err_weight)
-//         );
-//         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
-//         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 2));
-//         assert_noop!(
-//             PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 2),
-//             // Fail: Double claim
-//             Error::<Test>::AlreadyClaimed.with_weight(err_weight)
-//         );
-//         assert_noop!(
-//             PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era),
-//             // Fail: Era not finished yet
-//             Error::<Test>::InvalidEraToReward.with_weight(err_weight)
-//         );
-//
-//         // Era 0 can't be rewarded anymore and current era can't be rewarded yet
-//         // only era 1 and 2 can be rewarded.
-//
-//         assert_eq!(
-//             Balances::total_balance(&10),
-//             init_balance_10 + part_for_10 * (total_payout_1 + total_payout_2),
-//         );
-//         assert_eq!(
-//             Balances::total_balance(&100),
-//             init_balance_100 + part_for_100 * (total_payout_1 + total_payout_2),
-//         );
-//     });
-// }
-//
+#[test]
+fn non_slashable_offence_doesnt_disable_validator() {
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+        assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
+
+        let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
+        let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
+
+        // offence with no slash associated
+        on_offence_now(
+            &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+            &[Perbill::zero()],
+        );
+
+        // it does NOT affect the cooperator.
+        assert_eq!(
+            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+            vec![&11, &21]
+        );
+
+        // offence that slashes 25% of reputation
+        on_offence_now(
+            &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+            &[Perbill::from_percent(25)],
+        );
+
+        // it DOES NOT affect the cooperator.
+        assert_eq!(
+            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+            vec![&11, &21]
+        );
+
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::Chilled { stash: 21 },
+                Event::ForceEra { mode: Forcing::ForceNew },
+                Event::SlashReported { validator: 21, slash_era: 1, .. },
+                Event::Slashed { staker: 21, amount: ReputationPoint(9720000,) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(169,) }
+            ]
+        ));
+
+        // the offence for validator 10 wasn't slashable so it wasn't disabled
+        assert!(!is_disabled(10));
+        // whereas validator 20 gets disabled
+        assert!(is_disabled(20));
+    });
+}
+
+#[test]
+fn slashing_independent_of_disabling_validator() {
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+        assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
+
+        let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
+        let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
+
+        let now = PowerPlant::active_era().unwrap().index;
+
+        // offence with no slash associated, BUT disabling
+        on_offence_in_era(
+            &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+            &[Perbill::zero()],
+            now,
+            DisableStrategy::Always,
+        );
+
+        // cooperation remains untouched.
+        assert_eq!(
+            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+            vec![&11, &21]
+        );
+
+        // offence that slashes 25% of the bond, BUT not disabling
+        on_offence_in_era(
+            &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+            &[Perbill::from_percent(25)],
+            now,
+            DisableStrategy::Never,
+        );
+
+        // cooperation remains untouched.
+        assert_eq!(
+            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+            vec![&11, &21]
+        );
+
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::Chilled { stash: 21 },
+                Event::ForceEra { mode: Forcing::ForceNew },
+                Event::SlashReported { validator: 21, slash_era: 1, .. },
+                Event::Slashed { staker: 21, amount: ReputationPoint(9720000,) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(169,) },
+            ]
+        ));
+
+        // the offence for validator 10 was explicitly disabled
+        assert!(is_disabled(10));
+        // whereas validator 20 is explicitly not disabled
+        assert!(!is_disabled(20));
+    });
+}
+
+#[test]
+fn offence_threshold_triggers_new_era() {
+    ExtBuilder::default()
+        .validator_count(4)
+        .set_status(41, StakerStatus::Validator)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+            assert_eq_uvec!(Session::validators(), vec![41, 31, 21, 11]);
+
+            assert_eq!(
+                <Test as Config>::OffendingValidatorsThreshold::get(),
+                Perbill::from_percent(75),
+            );
+
+            // we have 4 validators and an offending validator threshold of 75%,
+            // once the third validator commits an offence a new era should be forced
+
+            let exposure_11 =
+                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
+            let exposure_21 =
+                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
+            let exposure_31 =
+                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &31);
+
+            on_offence_now(
+                &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+                &[Perbill::zero()],
+            );
+
+            assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
+
+            on_offence_now(
+                &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+                &[Perbill::zero()],
+            );
+
+            assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
+
+            on_offence_now(
+                &[OffenceDetails { offender: (31, exposure_31.clone()), reporters: vec![] }],
+                &[Perbill::zero()],
+            );
+
+            assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
+        });
+}
+
+#[test]
+fn disabled_validators_are_kept_disabled_for_whole_era() {
+    ExtBuilder::default()
+        .validator_count(4)
+        .set_status(41, StakerStatus::Validator)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+            assert_eq_uvec!(Session::validators(), vec![41, 31, 21, 11]);
+            assert_eq!(<Test as Config>::SessionsPerEra::get(), 3);
+
+            let exposure_11 =
+                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
+            let exposure_21 =
+                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
+
+            on_offence_now(
+                &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+                &[Perbill::zero()],
+            );
+
+            on_offence_now(
+                &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+                &[Perbill::from_percent(25)],
+            );
+
+            // cooperations are not updated.
+            assert_eq!(
+                PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+                vec![&11, &21]
+            );
+
+            // validator 10 should not be disabled since the offence wasn't slashable
+            assert!(!is_disabled(10));
+            // validator 20 gets disabled since it got slashed
+            assert!(is_disabled(20));
+
+            advance_session();
+
+            // disabled validators should carry-on through all sessions in the era
+            assert!(!is_disabled(10));
+            assert!(is_disabled(20));
+
+            // validator 10 should now get disabled
+            on_offence_now(
+                &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+                &[Perbill::from_percent(25)],
+            );
+
+            // cooperations are not updated.
+            assert_eq!(
+                PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+                vec![&11, &21]
+            );
+
+            advance_session();
+
+            // and both are disabled in the last session of the era
+            assert!(is_disabled(10));
+            assert!(is_disabled(20));
+
+            mock::start_active_era(2);
+
+            // when a new era starts disabled validators get cleared
+            assert!(!is_disabled(10));
+            assert!(!is_disabled(20));
+        });
+}
+
+#[test]
+fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
+    // should check that:
+    // * rewards get paid until history_depth for both validators and cooperators
+    // * an invalid era to claim doesn't update last_reward
+    // * double claim of one era fails
+    ExtBuilder::default().cooperate(true).build_and_execute(|| {
+        // Consumed weight for all payout_stakers dispatches that fail
+        let err_weight = <Test as Config>::ThisWeightInfo::payout_stakers_alive_staked(0);
+
+        // Check state
+        Payee::<Test>::insert(11, RewardDestination::Controller);
+        Payee::<Test>::insert(101, RewardDestination::Controller);
+
+        Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
+
+        mock::start_active_era(1);
+
+        Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
+
+        mock::start_active_era(HistoryDepth::get() + 1);
+
+        let active_era = active_era();
+
+        // This is the latest planned era in staking, not the active era
+        let current_era = PowerPlant::current_era().unwrap();
+
+        // Last kept is 1:
+        assert!(current_era - HistoryDepth::get() == 1);
+        assert_noop!(
+            PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 0),
+            // Fail: Era out of history
+            Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+        );
+        assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
+        assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 2));
+        assert_noop!(
+            PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 2),
+            // Fail: Double claim
+            Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+        );
+        assert_noop!(
+            PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era),
+            // Fail: Era not finished yet
+            Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+        );
+    });
+}
+
 // #[test]
 // fn zero_slash_keeps_cooperators() {
 //     ExtBuilder::default().build_and_execute(|| {
