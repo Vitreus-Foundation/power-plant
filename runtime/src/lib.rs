@@ -38,16 +38,22 @@ use frame_support::weights::constants::ParityDbWeight as RuntimeDbWeight;
 #[cfg(feature = "with-rocksdb-weights")]
 use frame_support::weights::constants::RocksDbWeight as RuntimeDbWeight;
 use frame_support::{
-    construct_runtime, parameter_types,
+    construct_runtime,
+    dispatch::GetDispatchInfo,
+    parameter_types,
     traits::{
-        AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, FindAuthor, Hooks, KeyOwnerProofSystem,
+        AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall, FindAuthor, Hooks,
+        KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, IdentityFee, ConstantMultiplier, Weight, WeightToFee},
+    weights::{
+        constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight, WeightToFee,
+    },
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
+use pallet_transaction_payment::{FeeDetails, InclusionFee};
 // Frontier
 use fp_account::EthereumSignature;
 use fp_evm::weight_per_gas;
@@ -632,14 +638,19 @@ impl pallet_energy_fee::Config for Runtime {
 
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
 impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance> for EnergyFee {
-    fn dispatch_info_to_fee(runtime_call: &RuntimeCall, dispatch_info: &DispatchInfoOf<RuntimeCall>) -> Option<Balance> {
+    fn dispatch_info_to_fee(
+        runtime_call: &RuntimeCall,
+        dispatch_info: &DispatchInfoOf<RuntimeCall>,
+    ) -> Option<Balance> {
         match runtime_call {
-            RuntimeCall::Balances(..) 
+            RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
-            | RuntimeCall::EnergyGeneration(..) => Some(<Self as WeightToFee>::weight_to_fee(&dispatch_info.weight)),
-            _ => None
+            | RuntimeCall::EnergyGeneration(..) => {
+                Some(<Self as WeightToFee>::weight_to_fee(&dispatch_info.weight))
+            },
+            _ => None,
         }
     }
 }
@@ -1235,14 +1246,42 @@ impl_runtime_apis! {
             uxt: <Block as BlockT>::Extrinsic,
             len: u32
         ) -> pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo<Balance> {
-            TransactionPayment::query_info(uxt, len)
+            let dispatch_info = <<Block as BlockT>::Extrinsic as GetDispatchInfo>::get_dispatch_info(&uxt);
+            let custom_fee = EnergyFee::dispatch_info_to_fee(uxt.call(), &dispatch_info);
+            let mut runtime_dispatch_info = TransactionPayment::query_info(uxt, len);
+
+            if let Some(custom_fee) = custom_fee {
+                runtime_dispatch_info.partial_fee = custom_fee;
+            }
+            runtime_dispatch_info
         }
 
         fn query_fee_details(
             uxt: <Block as BlockT>::Extrinsic,
             len: u32,
-        ) -> pallet_transaction_payment::FeeDetails<Balance> {
-            TransactionPayment::query_fee_details(uxt, len)
+        ) -> FeeDetails<Balance> {
+            let dispatch_info = <<Block as BlockT>::Extrinsic as GetDispatchInfo>::get_dispatch_info(&uxt);
+            let custom_fee = EnergyFee::dispatch_info_to_fee(uxt.call(), &dispatch_info);
+
+            let fee_details = TransactionPayment::query_fee_details(uxt, len);
+
+            match (custom_fee, fee_details) {
+                (
+                    Some(custom_fee),
+                    FeeDetails {
+                        inclusion_fee: Some(_),
+                        tip
+                }) => FeeDetails {
+                    inclusion_fee: Some(InclusionFee{
+                        base_fee: custom_fee,
+                        len_fee: 0,
+                        adjusted_weight_fee: 0,
+                    }),
+                    tip
+                },
+                (_, fee_details) => fee_details
+            }
+
         }
 
         fn query_weight_to_fee(weight: Weight) -> Balance {
