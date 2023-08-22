@@ -9,15 +9,18 @@ use smallvec::{smallvec, SmallVec};
 use sp_runtime::traits::{DispatchInfoOf, PostDispatchInfoOf, Zero};
 use sp_runtime::Perbill;
 
-// #[cfg(test)]
-// pub(crate) mod mock;
+#[cfg(test)]
+pub(crate) mod mock;
 
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 /// Custom fee calculation for specified scenarios
 pub trait CustomFee<RuntimeCall, DispatchInfo, Balance> {
-    fn dispatch_info_to_fee(runtime_call: &RuntimeCall, dispatch_info: &DispatchInfo) -> Option<Balance>;
+    fn dispatch_info_to_fee(
+        runtime_call: &RuntimeCall,
+        dispatch_info: &DispatchInfo,
+    ) -> Option<Balance>;
 }
 
 type BalanceOf<T> =
@@ -44,7 +47,11 @@ pub mod pallet {
         /// Get constant fee value in energy units
         type GetConstantEnergyFee: Get<Self::Balance>;
         /// Calculates custom fee for selected pallets/extrinsics/execution scenarios
-        type CustomFee: CustomFee<Self::RuntimeCall, DispatchInfoOf<Self::RuntimeCall>, BalanceOf<Self>>;
+        type CustomFee: CustomFee<
+            Self::RuntimeCall,
+            DispatchInfoOf<Self::RuntimeCall>,
+            BalanceOf<Self>,
+        >;
     }
 
     #[pallet::event]
@@ -70,11 +77,12 @@ pub mod pallet {
             }
 
             let energy_asset_id = T::GetEnergyAssetId::get();
-            let fee = if let Some(custom_fee) = T::CustomFee::dispatch_info_to_fee(call, dispatch_info) {
-                custom_fee
-            } else {
-                fee
-            };
+            let fee =
+                if let Some(custom_fee) = T::CustomFee::dispatch_info_to_fee(call, dispatch_info) {
+                    custom_fee
+                } else {
+                    fee
+                };
 
             match T::Balanced::withdraw(
                 energy_asset_id,
