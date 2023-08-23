@@ -61,6 +61,7 @@ use pallet_evm::{
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
 pub use pallet_energy_generation::StakerStatus;
+pub use pallet_nac_managing;
 pub use pallet_reputation::ReputationPoint;
 
 // A few exports that help ease life for downstream crates.
@@ -388,6 +389,16 @@ impl pallet_session::Config for Runtime {
 impl pallet_session::historical::Config for Runtime {
     type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
+}
+
+impl pallet_nac_managing::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type CollectionId = u32;
+    type ItemId = u32;
+    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type Locker = ();
+    type StringLimit = AssetsStringLimit;
 }
 
 impl pallet_utility::Config for Runtime {
@@ -750,6 +761,7 @@ construct_runtime!(
         Session: pallet_session,
         Utility: pallet_utility,
         Historical: pallet_session::historical,
+        NacManaging: pallet_nac_managing,
     }
 );
 

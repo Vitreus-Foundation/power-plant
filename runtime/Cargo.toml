@@ -48,6 +48,7 @@ pallet-balances = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-grandpa = { workspace = true }
 pallet-im-online = { workspace = true }
+pallet-nac-managing = { workspace = true }
 pallet-offences = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-session = { workspace = true }
@@ -142,7 +143,7 @@ std = [
     "pallet-evm-precompile-sha3fips/std",
     "pallet-evm-precompile-simple/std",
     "pallet-hotfix-sufficients/std",
-
+    "pallet-nac-managing/std",
     "pallet-reputation/std",
     "pallet-energy-generation/std",
 ]
