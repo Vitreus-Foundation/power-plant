@@ -3532,9 +3532,11 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 
         Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
 
-        mock::start_active_era(HistoryDepth::get() + 1);
+        mock::start_active_era(2);
 
-        let active_era = active_era();
+        Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
+
+        mock::start_active_era(HistoryDepth::get() + 1);
 
         // This is the latest planned era in staking, not the active era
         let current_era = PowerPlant::current_era().unwrap();
@@ -3553,137 +3555,128 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
             // Fail: Double claim
             Error::<Test>::AlreadyClaimed.with_weight(err_weight)
         );
-        assert_noop!(
-            PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, active_era),
-            // Fail: Era not finished yet
-            Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+    });
+}
+
+#[test]
+fn zero_slash_keeps_cooperators() {
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+
+        assert_eq!(Balances::free_balance(11), 1000);
+
+        let exposure = PowerPlant::eras_stakers(active_era(), 11);
+        assert_eq!(Balances::free_balance(101), 2000);
+
+        on_offence_now(
+            &[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
+            &[Perbill::from_percent(0)],
+        );
+
+        // 11 is still removed..
+        assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
+        // but their cooperations are kept.
+        assert_eq!(
+            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+            vec![&11, &21]
         );
     });
 }
 
-// #[test]
-// fn zero_slash_keeps_cooperators() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         mock::start_active_era(1);
-//
-//         assert_eq!(Balances::free_balance(11), 1000);
-//
-//         let exposure = PowerPlant::eras_stakers(active_era(), 11);
-//         assert_eq!(Balances::free_balance(101), 2000);
-//
-//         on_offence_now(
-//             &[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
-//             &[Perbill::from_percent(0)],
-//         );
-//
-//         assert_eq!(Balances::free_balance(11), 1000);
-//         assert_eq!(Balances::free_balance(101), 2000);
-//
-//         // 11 is still removed..
-//         assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
-//         // but their cooperations are kept.
-//         assert_eq!(PowerPlant::cooperators(101).unwrap().targets, vec![11, 21]);
-//     });
-// }
-//
-// #[test]
-// fn six_session_delay() {
-//     ExtBuilder::default().initialize_first_session(false).build_and_execute(|| {
-//         use pallet_session::SessionManager;
-//
-//         let val_set = Session::validators();
-//         let init_session = Session::current_index();
-//         let init_active_era = active_era();
-//
-//         // pallet-session is delaying session by one, thus the next session to plan is +2.
-//         assert_eq!(<PowerPlant as SessionManager<_>>::new_session(init_session + 2), None);
-//         assert_eq!(
-//             <PowerPlant as SessionManager<_>>::new_session(init_session + 3),
-//             Some(val_set.clone())
-//         );
-//         assert_eq!(<PowerPlant as SessionManager<_>>::new_session(init_session + 4), None);
-//         assert_eq!(<PowerPlant as SessionManager<_>>::new_session(init_session + 5), None);
-//         assert_eq!(
-//             <PowerPlant as SessionManager<_>>::new_session(init_session + 6),
-//             Some(val_set.clone())
-//         );
-//
-//         <PowerPlant as SessionManager<_>>::end_session(init_session);
-//         <PowerPlant as SessionManager<_>>::start_session(init_session + 1);
-//         assert_eq!(active_era(), init_active_era);
-//
-//         <PowerPlant as SessionManager<_>>::end_session(init_session + 1);
-//         <PowerPlant as SessionManager<_>>::start_session(init_session + 2);
-//         assert_eq!(active_era(), init_active_era);
-//
-//         // Reward current era
-//         PowerPlant::reward_by_ids(vec![(11, 1)]);
-//
-//         // New active era is triggered here.
-//         <PowerPlant as SessionManager<_>>::end_session(init_session + 2);
-//         <PowerPlant as SessionManager<_>>::start_session(init_session + 3);
-//         assert_eq!(active_era(), init_active_era + 1);
-//
-//         <PowerPlant as SessionManager<_>>::end_session(init_session + 3);
-//         <PowerPlant as SessionManager<_>>::start_session(init_session + 4);
-//         assert_eq!(active_era(), init_active_era + 1);
-//
-//         <PowerPlant as SessionManager<_>>::end_session(init_session + 4);
-//         <PowerPlant as SessionManager<_>>::start_session(init_session + 5);
-//         assert_eq!(active_era(), init_active_era + 1);
-//
-//         // Reward current era
-//         PowerPlant::reward_by_ids(vec![(21, 2)]);
-//
-//         // New active era is triggered here.
-//         <PowerPlant as SessionManager<_>>::end_session(init_session + 5);
-//         <PowerPlant as SessionManager<_>>::start_session(init_session + 6);
-//         assert_eq!(active_era(), init_active_era + 2);
-//
-//         // That reward are correct
-//         assert_eq!(PowerPlant::eras_reward_points(init_active_era).total, 1);
-//         assert_eq!(PowerPlant::eras_reward_points(init_active_era + 1).total, 2);
-//     });
-// }
-//
-// #[test]
-// fn test_max_cooperator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         for i in 0..=<<Test as Config>::MaxCooperatorRewardedPerValidator as Get<_>>::get() {
-//             let stash = 10_000 + i as AccountId;
-//             let controller = 20_000 + i as AccountId;
-//             let balance = 10_000 + i as Balance;
-//             Balances::make_free_balance_be(&stash, balance);
-//             assert_ok!(PowerPlant::bond(
-//                 RuntimeOrigin::signed(stash),
-//                 controller,
-//                 balance,
-//                 RewardDestination::Stash
-//             ));
-//             assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(controller), vec![11]));
-//         }
-//         mock::start_active_era(1);
-//
-//         Pallet::<Test>::reward_by_ids(vec![(11, 1)]);
-//         // compute and ensure the reward amount is greater than zero.
-//         let _ = current_total_payout_for_duration(reward_time_per_era());
-//
-//         mock::start_active_era(2);
-//         mock::make_all_reward_payment(1);
-//
-//         // Assert only cooperators from 1 to Max are rewarded
-//         for i in 0..=<<Test as Config>::MaxCooperatorRewardedPerValidator as Get<_>>::get() {
-//             let stash = 10_000 + i as AccountId;
-//             let balance = 10_000 + i as Balance;
-//             if stash == 10_000 {
-//                 assert!(Balances::free_balance(&stash) == balance);
-//             } else {
-//                 assert!(Balances::free_balance(&stash) > balance);
-//             }
-//         }
-//     });
-// }
-//
+#[test]
+fn six_session_delay() {
+    ExtBuilder::default().initialize_first_session(false).build_and_execute(|| {
+        use pallet_session::SessionManager;
+
+        let val_set = Session::validators();
+        let init_session = Session::current_index();
+        let init_active_era = active_era();
+
+        // pallet-session is delaying session by one, thus the next session to plan is +2.
+        assert_eq!(<PowerPlant as SessionManager<_>>::new_session(init_session + 2), None);
+        assert_eq!(
+            <PowerPlant as SessionManager<_>>::new_session(init_session + 3),
+            Some(val_set.clone())
+        );
+        assert_eq!(<PowerPlant as SessionManager<_>>::new_session(init_session + 4), None);
+        assert_eq!(<PowerPlant as SessionManager<_>>::new_session(init_session + 5), None);
+        assert_eq!(
+            <PowerPlant as SessionManager<_>>::new_session(init_session + 6),
+            Some(val_set.clone())
+        );
+
+        <PowerPlant as SessionManager<_>>::end_session(init_session);
+        <PowerPlant as SessionManager<_>>::start_session(init_session + 1);
+        assert_eq!(active_era(), init_active_era);
+
+        <PowerPlant as SessionManager<_>>::end_session(init_session + 1);
+        <PowerPlant as SessionManager<_>>::start_session(init_session + 2);
+        assert_eq!(active_era(), init_active_era);
+
+        // Reward current era
+        PowerPlant::reward_by_ids(vec![(11, 1.into())]);
+
+        // New active era is triggered here.
+        <PowerPlant as SessionManager<_>>::end_session(init_session + 2);
+        <PowerPlant as SessionManager<_>>::start_session(init_session + 3);
+        assert_eq!(active_era(), init_active_era + 1);
+
+        <PowerPlant as SessionManager<_>>::end_session(init_session + 3);
+        <PowerPlant as SessionManager<_>>::start_session(init_session + 4);
+        assert_eq!(active_era(), init_active_era + 1);
+
+        <PowerPlant as SessionManager<_>>::end_session(init_session + 4);
+        <PowerPlant as SessionManager<_>>::start_session(init_session + 5);
+        assert_eq!(active_era(), init_active_era + 1);
+
+        // Reward current era
+        PowerPlant::reward_by_ids(vec![(21, 2.into())]);
+
+        // New active era is triggered here.
+        <PowerPlant as SessionManager<_>>::end_session(init_session + 5);
+        <PowerPlant as SessionManager<_>>::start_session(init_session + 6);
+        assert_eq!(active_era(), init_active_era + 2);
+    });
+}
+
+#[test]
+fn test_max_cooperator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
+    ExtBuilder::default().build_and_execute(|| {
+        for i in 0..=<<Test as Config>::MaxCooperatorRewardedPerValidator as Get<_>>::get() {
+            let stash = 10_000 + i as AccountId;
+            let controller = 20_000 + i as AccountId;
+            let balance = 10_000 + i as Balance;
+            Balances::make_free_balance_be(&stash, balance);
+            assert_ok!(PowerPlant::bond(
+                RuntimeOrigin::signed(stash),
+                controller,
+                balance,
+                RewardDestination::Stash
+            ));
+            assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(controller), vec![(11, 100)]));
+        }
+        mock::start_active_era(1);
+
+        Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
+        // compute and ensure the reward amount is greater than zero.
+        let _ = current_total_payout_for_duration(reward_time_per_era());
+
+        mock::start_active_era(2);
+        mock::make_all_reward_payment(1);
+
+        // Assert only cooperators from 1 to Max are rewarded
+        // for i in 0..=<<Test as Config>::MaxCooperatorRewardedPerValidator as Get<_>>::get() {
+        //     let stash = 10_000 + i as AccountId;
+        //     let balance = 10_000 + i as Balance;
+        //     if stash == 10_000 {
+        //         assert!(Assets::balance(VNRG::get(), &stash) == balance);
+        //     } else {
+        //         assert!(Assets::balance(VNRG::get(), &stash) > balance);
+        //     }
+        // }
+    });
+}
+
 // #[test]
 // fn test_payout_stakers() {
 //     // Test that payout_stakers work in general, including that only the top

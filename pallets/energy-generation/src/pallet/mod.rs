@@ -342,7 +342,9 @@ pub mod pallet {
         _,
         Twox64Concat,
         T::AccountId,
-        BoundedBTreeSet<T::AccountId, T::MaxCooperations>,
+        // if the pallet wouldn't ask us to implement MaxEncodedLen for everything, we could you
+        // BTreeSet instead, but
+        BoundedBTreeSet<T::AccountId, ConstU32<{ u32::MAX }>>,
     >;
 
     /// The maximum cooperator count before we stop allowing new validators to join.
