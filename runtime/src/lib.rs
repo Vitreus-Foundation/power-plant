@@ -399,6 +399,9 @@ impl pallet_nac_managing::Config for Runtime {
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
     type StringLimit = AssetsStringLimit;
+    #[cfg(feature = "runtime-benchmarks")]
+    type Helper = ();
+    type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_utility::Config for Runtime {

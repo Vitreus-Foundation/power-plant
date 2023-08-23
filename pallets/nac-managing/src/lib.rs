@@ -8,9 +8,19 @@ use sp_std::prelude::*;
 
 pub use pallet::*;
 pub use types::*;
+pub use weights::WeightInfo;
+
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+#[cfg(test)]
+pub mod mock;
+#[cfg(test)]
+mod tests;
 
 mod functions;
 mod types;
+
+pub mod weights;
 
 /// A type alias for the account ID type used in the dispatchable functions of this pallet.
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -23,6 +33,21 @@ pub mod pallet {
 
     #[pallet::pallet]
     pub struct Pallet<T, I = ()>(_);
+
+    #[cfg(feature = "runtime-benchmarks")]
+    pub trait BenchmarkHelper<CollectionId, ItemId> {
+        fn collection(i: u16) -> CollectionId;
+        fn item(i: u16) -> ItemId;
+    }
+    #[cfg(feature = "runtime-benchmarks")]
+    impl<CollectionId: From<u16>, ItemId: From<u16>> BenchmarkHelper<CollectionId, ItemId> for () {
+        fn collection(i: u16) -> CollectionId {
+            i.into()
+        }
+        fn item(i: u16) -> ItemId {
+            i.into()
+        }
+    }
 
     #[pallet::config]
     /// The module configuration trait.
@@ -55,6 +80,13 @@ pub mod pallet {
         /// The maximum length of data stored on-chain.
         #[pallet::constant]
         type StringLimit: Get<u32>;
+
+        #[cfg(feature = "runtime-benchmarks")]
+        /// A set of helper functions for benchmarking.
+        type Helper: BenchmarkHelper<Self::CollectionId, Self::ItemId>;
+
+        /// Weight information for extrinsics in this pallet.
+        type WeightInfo: WeightInfo;
     }
 
     #[pallet::storage]
@@ -142,7 +174,7 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config<I>, I: 'static> Pallet<T, I> {
         #[pallet::call_index(0)]
-        #[pallet::weight({0})]
+        #[pallet::weight(T::WeightInfo::create_collection())]
         pub fn create_collection(
             origin: OriginFor<T>,
             collection: T::CollectionId,
@@ -160,7 +192,7 @@ pub mod pallet {
         }
 
         #[pallet::call_index(1)]
-        #[pallet::weight({0})]
+        #[pallet::weight(T::WeightInfo::mint())]
         pub fn mint(
             origin: OriginFor<T>,
             collection: T::CollectionId,
