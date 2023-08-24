@@ -249,8 +249,6 @@ fn testnet_genesis(
                 }
             }
         });
-    // Alith account
-    let alith: AccountId = AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"));
 
     // stakers: all validators and nominators.
     const ENDOWMENT: Balance = 1_000_000 * UNITS;
