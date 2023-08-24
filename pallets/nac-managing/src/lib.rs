@@ -184,13 +184,16 @@ impl<T: Config> Pallet<T> {
     }
 
     pub fn check_level_by_item_id(item_id: T::ItemId) -> u8 {
-        NftAccessLevels::<T>::get(item_id).unwrap_or_default()
+        NftAccessLevels::<T>::get(item_id).unwrap_or(0)
     }
 
-    pub fn check_level_by_account_id(acc_id: T::AccountId) -> u8 {
-        let item_id = UsersNft::<T>::get(account_id).unwrap_or_default();
+    pub fn check_level_by_account_id(account_id: T::AccountId) -> u8 {
+        let item_id = match UsersNft::<T>::get(account_id) {
+            Some(item_id) => item_id,
+            None => return 0,
+        };
 
-        NftAccessLevels::<T>::get(item_id).unwrap_or_default();
+        NftAccessLevels::<T>::get(item_id).unwrap_or(0)
     }
 }
 
