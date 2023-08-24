@@ -1,14 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::{tokens::Locker, EnsureOriginWithArg};
-use frame_system::Config as SystemConfig;
-use parity_scale_codec::{Decode, Encode};
-use sp_runtime::{traits::StaticLookup, ArithmeticError, RuntimeDebug};
+use frame_support::pallet_prelude::BoundedVec;
+use frame_support::traits::EnsureOriginWithArg;
+use sp_runtime::{traits::StaticLookup, traits::Zero};
 use sp_std::prelude::*;
+use frame_support::{ensure};
+use frame_system::pallet_prelude::OriginFor;
+use frame_support::pallet_prelude::DispatchResult;
 
-pub use pallet::*;
-pub use types::*;
 pub use weights::WeightInfo;
+pub use pallet::*;
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
@@ -17,50 +18,25 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-mod functions;
-mod types;
-
 pub mod weights;
 
-/// A type alias for the account ID type used in the dispatchable functions of this pallet.
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
+    use frame_system::pallet_prelude::OriginFor;
 
     #[pallet::pallet]
-    pub struct Pallet<T, I = ()>(_);
-
-    #[cfg(feature = "runtime-benchmarks")]
-    pub trait BenchmarkHelper<CollectionId, ItemId> {
-        fn collection(i: u16) -> CollectionId;
-        fn item(i: u16) -> ItemId;
-    }
-    #[cfg(feature = "runtime-benchmarks")]
-    impl<CollectionId: From<u16>, ItemId: From<u16>> BenchmarkHelper<CollectionId, ItemId> for () {
-        fn collection(i: u16) -> CollectionId {
-            i.into()
-        }
-        fn item(i: u16) -> ItemId {
-            i.into()
-        }
-    }
+    pub struct Pallet<T>(_);
 
     #[pallet::config]
     /// The module configuration trait.
-    pub trait Config<I: 'static = ()>: frame_system::Config {
+    pub trait Config: frame_system::Config + pallet_uniques::Config {
         /// The overarching event type.
-        type RuntimeEvent: From<Event<Self, I>>
+        type RuntimeEvent: From<Event<Self>>
             + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-
-        /// Identifier for the collection of item.
-        type CollectionId: Member + Parameter + MaxEncodedLen;
-
-        /// The type used to identify a unique item within a collection.
-        type ItemId: Member + Parameter + MaxEncodedLen + Copy;
 
         /// The origin which may forcibly create or destroy an item or otherwise alter privileged
         /// attributes.
@@ -74,147 +50,147 @@ pub mod pallet {
             Success = Self::AccountId,
         >;
 
-        /// Locker trait to enable Locking mechanism downstream.
-        type Locker: Locker<Self::CollectionId, Self::ItemId>;
-
-        /// The maximum length of data stored on-chain.
-        #[pallet::constant]
-        type StringLimit: Get<u32>;
-
-        #[cfg(feature = "runtime-benchmarks")]
-        /// A set of helper functions for benchmarking.
-        type Helper: BenchmarkHelper<Self::CollectionId, Self::ItemId>;
-
         /// Weight information for extrinsics in this pallet.
         type WeightInfo: WeightInfo;
     }
 
     #[pallet::storage]
-    /// Details of a collection.
-    pub(super) type Collection<T: Config<I>, I: 'static = ()> =
-        StorageMap<_, Blake2_128Concat, T::CollectionId, CollectionDetails<T::AccountId>>;
+    pub type UsersNft<T> = StorageMap<_, Blake2_128Concat, <T as frame_system::Config>::AccountId, <T as pallet_uniques::Config>::ItemId, OptionQuery>;
 
     #[pallet::storage]
-    /// The items held by any given account; set out this way so that items owned by a single
-    /// account can be enumerated.
-    pub(super) type Account<T: Config<I>, I: 'static = ()> = StorageNMap<
-        _,
-        (
-            NMapKey<Blake2_128Concat, T::AccountId>,
-            NMapKey<Blake2_128Concat, T::CollectionId>,
-            NMapKey<Blake2_128Concat, T::ItemId>,
-        ),
-        (),
-        OptionQuery,
-    >;
-
-    #[pallet::storage]
-    pub(super) type Item<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
-        _,
-        Blake2_128Concat,
-        T::CollectionId,
-        Blake2_128Concat,
-        T::ItemId,
-        ItemDetails<T::AccountId>,
-        OptionQuery,
-    >;
-
-    #[pallet::storage]
-    pub(super) type ItemMetadataOf<T: Config<I>, I: 'static = ()> = StorageDoubleMap<
-        _,
-        Blake2_128Concat,
-        T::CollectionId,
-        Blake2_128Concat,
-        T::ItemId,
-        ItemMetadata<T::StringLimit>,
-        OptionQuery,
-    >;
+    pub type NftAccessLevels<T> = StorageMap<_, Blake2_128Concat, <T as pallet_uniques::Config>::ItemId, u8, OptionQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
-    pub enum Event<T: Config<I>, I: 'static = ()> {
-        /// A `collection` was created.
-        CollectionCreated { collection: T::CollectionId, owner: T::AccountId },
-        /// An `item` was issued.
-        Issued { collection: T::CollectionId, item: T::ItemId, owner: T::AccountId },
-        /// Check NAC level
-        FoundNacLevel { data: BoundedVec<u8, T::StringLimit>, nac: u8 },
+    pub enum Event<T: Config> {
+        ///An item was minted
+        ItemMinted {
+            owner: T::AccountId,
+            collection_id: T::CollectionId,
+            item_id: T::ItemId,
+            metadata: BoundedVec<u8, T::StringLimit>,
+            verification_level: u8,
+        }
     }
 
     #[pallet::error]
-    pub enum Error<T, I = ()> {
-        /// The signing account has no permission to do the operation.
-        NoPermission,
-        /// The given item ID is unknown.
-        UnknownCollection,
-        /// The item ID has already been used for an item.
-        AlreadyExists,
-        /// The owner turned out to be different to what was expected.
-        WrongOwner,
-        /// The item ID is already taken.
-        InUse,
-        /// The collection ID is already taken.
-        CollectionIdInUse,
-        /// The given item ID is unknown.
-        UnknownItem,
+    pub enum Error<T> {
+        /// The user already has a NFT
+        TokenAlreadyExists,
     }
 
-    impl<T: Config<I>, I: 'static> Pallet<T, I> {
-        /// Get the owner of the item, if the item exists.
-        pub fn owner(collection: T::CollectionId, item: T::ItemId) -> Option<T::AccountId> {
-            Item::<T, I>::get(collection, item).map(|i| i.owner)
-        }
-
-        /// Get the owner of the collection, if the item exists.
-        pub fn collection_owner(collection: T::CollectionId) -> Option<T::AccountId> {
-            Collection::<T, I>::get(collection).map(|i| i.owner)
-        }
-    }
 
     #[pallet::call]
-    impl<T: Config<I>, I: 'static> Pallet<T, I> {
+    impl<T: Config> Pallet<T> {
         #[pallet::call_index(0)]
-        #[pallet::weight(T::WeightInfo::create_collection())]
+        #[pallet::weight(<T as Config>::WeightInfo::create_collection())]
         pub fn create_collection(
             origin: OriginFor<T>,
             collection: T::CollectionId,
             owner: AccountIdLookupOf<T>,
         ) -> DispatchResult {
-            T::ForceOrigin::ensure_origin(origin)?;
+            <T as Config>::ForceOrigin::ensure_origin(origin)?;
             let owner = T::Lookup::lookup(owner)?;
 
             Self::do_create_collection(
                 collection.clone(),
                 owner.clone(),
-                owner.clone(),
-                Event::CollectionCreated { collection, owner },
-            )
+                owner.clone()
+            )?;
+
+            Ok(())
         }
 
         #[pallet::call_index(1)]
-        #[pallet::weight(T::WeightInfo::mint())]
+        #[pallet::weight(<T as Config>::WeightInfo::mint())]
         pub fn mint(
             origin: OriginFor<T>,
             collection: T::CollectionId,
             item: T::ItemId,
-            nac_level: u8,
             data: BoundedVec<u8, T::StringLimit>,
+            verification_level: u8,
             owner: AccountIdLookupOf<T>,
         ) -> DispatchResult {
-            let origin = ensure_signed(origin)?;
             let owner = T::Lookup::lookup(owner)?;
 
-            Self::do_mint(collection, item, nac_level, data, owner, |collection_details| {
-                ensure!(collection_details.issuer == origin, Error::<T, I>::NoPermission);
-                Ok(())
-            })
-        }
+            Self::do_mint(origin, collection, item, data, verification_level, owner)?;
 
-        #[pallet::call_index(2)]
-        #[pallet::weight({0})]
-        pub fn check_levels(origin: OriginFor<T>, acc_id: T::AccountId) -> DispatchResult {
-            ensure_signed(origin)?;
-            Self::check_level(&acc_id)
+            Ok(())
         }
     }
 }
+
+impl<T: Config> Pallet<T> {
+    fn do_create_collection(
+        collection: T::CollectionId,
+        owner: T::AccountId,
+        issuer: T::AccountId,
+    ) -> DispatchResult {
+        let deposit_info = (Zero::zero(), true);
+
+        pallet_uniques::Pallet::<T>::do_create_collection(
+            collection.clone(),
+            owner.clone(),
+            issuer.clone(),
+            deposit_info.0,
+            deposit_info.1,
+            pallet_uniques::Event::Created {
+                collection: collection.clone(),
+                creator: owner.clone(),
+                owner: issuer.clone()
+            }
+        )
+    }
+
+    fn do_mint(
+        origin: OriginFor<T>,
+        collection: T::CollectionId,
+        item: T::ItemId,
+        data: BoundedVec<u8, T::StringLimit>,
+        verification_level: u8,
+        owner: T::AccountId
+    ) -> DispatchResult {
+        ensure!(!UsersNft::<T>::get(&owner).is_some(), Error::<T>::TokenAlreadyExists);
+
+        pallet_uniques::Pallet::<T>::do_mint(
+            collection.clone(),
+            item.into(),
+            owner.clone(),
+            |_details| Ok(())
+        )?;
+
+        let is_frozen = true;
+
+        pallet_uniques::Pallet::<T>::set_metadata(
+            origin,
+            collection.clone(),
+            item.clone(),
+            data.clone(),
+            is_frozen
+        )?;
+
+        UsersNft::<T>::insert(&owner, &item);
+        NftAccessLevels::<T>::insert(&item, &verification_level);
+
+        Self::deposit_event(Event::ItemMinted {
+            owner,
+            collection_id: collection,
+            item_id: item,
+            metadata: data,
+            verification_level,
+        });
+
+        Ok(())
+    }
+
+    pub fn check_level_by_item_id(item_id: T::ItemId) -> u8 {
+        NftAccessLevels::<T>::get(item_id).unwrap_or_default()
+    }
+
+    pub fn check_level_by_account_id(acc_id: T::AccountId) -> u8 {
+        let item_id = UsersNft::<T>::get(account_id).unwrap_or_default();
+
+        NftAccessLevels::<T>::get(item_id).unwrap_or_default();
+    }
+}
+

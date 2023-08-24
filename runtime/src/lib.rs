@@ -393,14 +393,8 @@ impl pallet_session::historical::Config for Runtime {
 
 impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type CollectionId = u32;
-    type ItemId = u32;
     type ForceOrigin = frame_system::EnsureRoot<AccountId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type Locker = ();
-    type StringLimit = AssetsStringLimit;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
 }
 

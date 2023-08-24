@@ -5376,6 +5376,7 @@ dependencies = [
  "pallet-session",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
+ "pallet-uniques",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",

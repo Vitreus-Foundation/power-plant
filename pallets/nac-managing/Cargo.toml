@@ -15,6 +15,7 @@ frame-system = { workspace = true }
 log = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-session = { workspace = true }
+pallet-uniques = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
 serde = { workspace = true, optional = true }
@@ -49,6 +50,7 @@ std = [
     "pallet-authorship/std",
     "pallet-balances/std",
     "pallet-session/std",
+    "pallet-uniques/std",
     "parity-scale-codec/std",
     "scale-info/std",
     "serde",
