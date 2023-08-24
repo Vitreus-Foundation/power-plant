@@ -29,7 +29,7 @@ use crate::{
     },
 };
 pub use crate::{
-    client::{Client, TemplateRuntimeExecutor},
+    client::{Client, PowerPlantRuntimeExecutor},
     eth::{db_config_dir, EthConfiguration},
 };
 
@@ -699,7 +699,7 @@ pub async fn build_full(
     eth_config: EthConfiguration,
     sealing: Option<Sealing>,
 ) -> Result<TaskManager, ServiceError> {
-    new_full::<vitreus_power_plant_runtime::RuntimeApi, TemplateRuntimeExecutor>(
+    new_full::<vitreus_power_plant_runtime::RuntimeApi, PowerPlantRuntimeExecutor>(
         config, eth_config, sealing,
     )
     .await
@@ -720,7 +720,7 @@ pub fn new_chain_ops(
 > {
     config.keystore = sc_service::config::KeystoreConfig::InMemory;
     let PartialComponents { client, backend, import_queue, task_manager, other, .. } =
-        new_partial::<vitreus_power_plant_runtime::RuntimeApi, TemplateRuntimeExecutor, _>(
+        new_partial::<vitreus_power_plant_runtime::RuntimeApi, PowerPlantRuntimeExecutor, _>(
             config,
             eth_config,
             build_babe_grandpa_import_queue,

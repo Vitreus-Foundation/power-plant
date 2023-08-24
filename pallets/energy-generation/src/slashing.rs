@@ -45,7 +45,7 @@ use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{Saturating, Zero},
-    DispatchResult, RuntimeDebug,
+    DispatchResult, RuntimeDebug, SaturatedConversion,
 };
 use sp_staking::{offence::DisableStrategy, EraIndex};
 use sp_std::vec::Vec;
@@ -631,9 +631,10 @@ fn pay_reporters<T: Config>(
         None => return Ok(()),
     };
 
-    let reward_payout: EnergyOf<T> = energy_rate.saturating_mul((*reward_payout as u32).into());
+    let energy_reward_payout: EnergyOf<T> =
+        energy_rate.saturating_mul((*reward_payout).saturated_into());
     let prop = Perbill::from_rational(1, reporters.len() as u64);
-    let per_reporter = prop * reward_payout;
+    let per_reporter = prop * energy_reward_payout;
     let asset_id = T::EnergyAssetId::get();
     for reporter in reporters {
         let _ = pallet_assets::Pallet::<T>::deposit(

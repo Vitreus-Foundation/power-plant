@@ -496,7 +496,7 @@ pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
 
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const SessionsPerEra: SessionIndex = 6;
+    pub const SessionsPerEra: SessionIndex = 5;
     pub const BondingDuration: EraIndex = 24 * 28;
     pub const SlashDeferDuration: EraIndex = 24 * 7; // 1/4 the bonding duration.
     pub const Period: BlockNumber = 5;
@@ -781,12 +781,12 @@ construct_runtime!(
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
         Authorship: pallet_authorship,
-        Utility: pallet_utility,
-        Offences: pallet_offences,
         ImOnline: pallet_im_online,
         EnergyGeneration: pallet_energy_generation,
         EnergyFee: pallet_energy_fee,
+        Offences: pallet_offences,
         Session: pallet_session,
+        Utility: pallet_utility,
         Historical: pallet_session::historical,
     }
 );
