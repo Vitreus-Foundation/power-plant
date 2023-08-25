@@ -1,6 +1,6 @@
 # Stage 1: Build the application
 
-FROM rust:1.70 as builder
+FROM rust:1.71 as builder
 
 ARG PROFILE=release
 WORKDIR /app
