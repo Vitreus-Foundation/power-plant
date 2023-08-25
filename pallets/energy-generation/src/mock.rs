@@ -1,7 +1,6 @@
 //! Test utilities
 
 #![allow(unused_imports)]
-#![allow(dead_code)] // TODO remove it after deploy!
 
 use crate::{self as energy_generation, *};
 use frame_support::{
@@ -718,6 +717,35 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 
     assert!(payout > 0);
     payout
+}
+
+pub(crate) fn make_validator_with_controller(controller: AccountId) {
+    let stash = controller + 1;
+    assert_ok!(pallet_reputation::Pallet::<Test>::force_set_points(
+        RuntimeOrigin::root(),
+        controller,
+        CollaborativeValidatorReputationThreshold::get()
+    ));
+
+    assert_ok!(pallet_reputation::Pallet::<Test>::force_set_points(
+        RuntimeOrigin::root(),
+        stash,
+        CollaborativeValidatorReputationThreshold::get()
+    ));
+
+    Balances::make_free_balance_be(&stash, 1000);
+
+    assert_ok!(Pallet::<Test>::bond(
+        RuntimeOrigin::signed(stash),
+        controller,
+        1000,
+        RewardDestination::Controller
+    ));
+
+    assert_ok!(Pallet::<Test>::validate(
+        RuntimeOrigin::signed(controller),
+        ValidatorPrefs::default_collaborative()
+    ));
 }
 
 /// Time it takes to finish a session.

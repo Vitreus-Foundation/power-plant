@@ -3641,39 +3641,56 @@ fn six_session_delay() {
 
 #[test]
 fn test_max_cooperator_rewarded_per_validator_and_cant_steal_someone_else_reward() {
-    ExtBuilder::default().build_and_execute(|| {
-        for i in 0..=<<Test as Config>::MaxCooperatorRewardedPerValidator as Get<_>>::get() {
+    ExtBuilder::default().validator_count(0).build_and_execute(|| {
+        make_validator_with_controller(1010);
+        mock::start_active_era(1);
+        let max_rewarded: u32 =
+            <<Test as Config>::MaxCooperatorRewardedPerValidator as Get<_>>::get();
+        let cooperators_num = max_rewarded + 3;
+
+        for i in 0..cooperators_num {
             let stash = 10_000 + i as AccountId;
             let controller = 20_000 + i as AccountId;
             let balance = 10_000 + i as Balance;
             Balances::make_free_balance_be(&stash, balance);
+            assert_ok!(Assets::mint(RuntimeOrigin::signed(1), VNRG::get().into(), stash, balance));
             assert_ok!(PowerPlant::bond(
                 RuntimeOrigin::signed(stash),
                 controller,
                 balance,
                 RewardDestination::Stash
             ));
-            assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(controller), vec![(11, 100)]));
+            assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(controller), vec![(1011, 100)]));
         }
-        mock::start_active_era(1);
+        mock::start_active_era(2);
 
-        Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
+        let exposure = PowerPlant::eras_stakers(2, 1011);
+
+        assert_eq!(exposure.others.len() as u32, cooperators_num);
+
+        Pallet::<Test>::reward_by_ids(vec![(1011, 1.into())]);
         // compute and ensure the reward amount is greater than zero.
         let _ = current_total_payout_for_duration(reward_time_per_era());
 
-        mock::start_active_era(2);
-        mock::make_all_reward_payment(1);
+        mock::start_active_era(3);
+        mock::make_all_reward_payment(2);
 
-        // Assert only cooperators from 1 to Max are rewarded
-        // for i in 0..=<<Test as Config>::MaxCooperatorRewardedPerValidator as Get<_>>::get() {
-        //     let stash = 10_000 + i as AccountId;
-        //     let balance = 10_000 + i as Balance;
-        //     if stash == 10_000 {
-        //         assert!(Assets::balance(VNRG::get(), &stash) == balance);
-        //     } else {
-        //         assert!(Assets::balance(VNRG::get(), &stash) > balance);
-        //     }
-        // }
+        let energy_rate = ErasEnergyPerStakeCurrency::<Test>::get(1).unwrap();
+        let total_payout_10 = exposure.total * energy_rate;
+        let cooperator_part = Perbill::from_rational(100, exposure.total);
+        let cooperator_reward = cooperator_part * total_payout_10;
+        mock::start_active_era(4);
+
+        for i in 0..cooperators_num {
+            let stash = 10_000 + i as AccountId;
+            let balance = 10_000 + i as Balance;
+
+            if i < max_rewarded {
+                assert_eq!(Assets::balance(VNRG::get(), &stash), balance + cooperator_reward);
+            } else {
+                assert_eq!(Assets::balance(VNRG::get(), &stash), balance);
+            }
+        }
     });
 }
 
