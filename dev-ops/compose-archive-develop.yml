@@ -11,6 +11,7 @@ services:
 
   archive_node:
     image: vitreus_power_plant
+    container_name: power-plant-archive-node
     depends_on:
       - vitreus_power_plant
     command: >
