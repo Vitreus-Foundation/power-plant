@@ -134,6 +134,13 @@ impl<T: Config> Pallet<T> {
         era: EraIndex,
     ) -> DispatchResultWithPostInfo {
         // Validate input data
+        let active_era = Self::active_era().map(|v| v.index).unwrap_or_default();
+        ensure!(
+            era != active_era,
+            Error::<T>::InvalidEraToReward
+                .with_weight(T::ThisWeightInfo::payout_stakers_alive_staked(0))
+        );
+        
         let current_era = CurrentEra::<T>::get().ok_or_else(|| {
             Error::<T>::InvalidEraToReward
                 .with_weight(T::ThisWeightInfo::payout_stakers_alive_staked(0))

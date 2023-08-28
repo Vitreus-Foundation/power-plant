@@ -719,32 +719,30 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
     payout
 }
 
-pub(crate) fn make_validator_with_controller(controller: AccountId) {
-    let stash = controller + 1;
-    assert_ok!(pallet_reputation::Pallet::<Test>::force_set_points(
+pub(crate) fn make_validator(controller: AccountId, stash: AccountId, balance: Balance) {
+    assert_ok!(Reputation::force_set_points(
         RuntimeOrigin::root(),
         controller,
         CollaborativeValidatorReputationThreshold::get()
     ));
 
-    assert_ok!(pallet_reputation::Pallet::<Test>::force_set_points(
+    assert_ok!(Reputation::force_set_points(
         RuntimeOrigin::root(),
         stash,
         CollaborativeValidatorReputationThreshold::get()
     ));
 
-    Balances::make_free_balance_be(&stash, 1000);
+    bond(stash, controller, balance);
 
-    assert_ok!(Pallet::<Test>::bond(
-        RuntimeOrigin::signed(stash),
-        controller,
-        1000,
-        RewardDestination::Controller
-    ));
-
-    assert_ok!(Pallet::<Test>::validate(
+    assert_ok!(PowerPlant::validate(
         RuntimeOrigin::signed(controller),
         ValidatorPrefs::default_collaborative()
+    ));
+
+    assert_ok!(Session::set_keys(
+        RuntimeOrigin::signed(controller),
+        SessionKeys { other: controller.into() },
+        vec![]
     ));
 }
 
