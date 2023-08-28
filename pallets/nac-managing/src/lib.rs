@@ -7,6 +7,8 @@ use sp_std::prelude::*;
 use frame_support::{ensure};
 use frame_system::pallet_prelude::OriginFor;
 use frame_support::pallet_prelude::DispatchResult;
+use sp_core::H160;
+use pallet_evm::AddressMapping;
 
 pub use weights::WeightInfo;
 pub use pallet::*;
@@ -19,6 +21,7 @@ pub mod mock;
 mod tests;
 
 pub mod weights;
+pub mod runner;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
@@ -33,7 +36,7 @@ pub mod pallet {
 
     #[pallet::config]
     /// The module configuration trait.
-    pub trait Config: frame_system::Config + pallet_uniques::Config {
+    pub trait Config: frame_system::Config + pallet_uniques::Config + pallet_evm::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>>
             + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -50,15 +53,19 @@ pub mod pallet {
             Success = Self::AccountId,
         >;
 
+        /// Mapping from address to account id.
+        type AddressMapping: AddressMapping<Self::AccountId>;
+
         /// Weight information for extrinsics in this pallet.
         type WeightInfo: WeightInfo;
+
+        /// EVM Runner of transactions
+        type Runner: pallet_evm::runner::Runner<Self, Error = pallet_evm::Error<Self>>;
     }
 
+    /// change logic
     #[pallet::storage]
-    pub type UsersNft<T> = StorageMap<_, Blake2_128Concat, <T as frame_system::Config>::AccountId, <T as pallet_uniques::Config>::ItemId, OptionQuery>;
-
-    #[pallet::storage]
-    pub type NftAccessLevels<T> = StorageMap<_, Blake2_128Concat, <T as pallet_uniques::Config>::ItemId, u8, OptionQuery>;
+    pub type UsersNft<T> = StorageMap<_, Blake2_128Concat, <T as frame_system::Config>::AccountId, (<T as pallet_uniques::Config>::ItemId, u8), OptionQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -77,6 +84,8 @@ pub mod pallet {
     pub enum Error<T> {
         /// The user already has a NFT
         TokenAlreadyExists,
+
+        NoPermissions
     }
 
 
@@ -169,8 +178,7 @@ impl<T: Config> Pallet<T> {
             is_frozen
         )?;
 
-        UsersNft::<T>::insert(&owner, &item);
-        NftAccessLevels::<T>::insert(&item, &verification_level);
+        UsersNft::<T>::insert(&owner, (&item, &verification_level));
 
         Self::deposit_event(Event::ItemMinted {
             owner,
@@ -183,17 +191,12 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
-    pub fn check_level_by_item_id(item_id: T::ItemId) -> u8 {
-        NftAccessLevels::<T>::get(item_id).unwrap_or(0)
-    }
+    pub fn user_has_access(account_id: H160, desired_access_level: u8) -> bool {
+        let account_id = <T as Config>::AddressMapping::into_account_id(account_id);
 
-    pub fn check_level_by_account_id(account_id: T::AccountId) -> u8 {
-        let item_id = match UsersNft::<T>::get(account_id) {
-            Some(item_id) => item_id,
-            None => return 0,
-        };
-
-        NftAccessLevels::<T>::get(item_id).unwrap_or(0)
+        match UsersNft::<T>::get(account_id) {
+            Some(nft) => nft.1 >= desired_access_level,
+            None => false
+        }
     }
 }
-

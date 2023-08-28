@@ -395,7 +395,9 @@ impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type ForceOrigin = frame_system::EnsureRoot<AccountId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type AddressMapping = IdentityAddressMapping;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
+    type Runner = pallet_evm::runner::stack::Runner<Self>;
 }
 
 impl pallet_utility::Config for Runtime {
@@ -665,7 +667,7 @@ impl pallet_evm::Config for Runtime {
     type CallOrigin = EnsureAccountId20;
     type ChainId = EVMChainId;
     type Currency = Balances;
-    type Runner = pallet_evm::runner::stack::Runner<Self>;
+    type Runner = pallet_nac_managing::runner::NacRunner<Self>;
     type RuntimeEvent = RuntimeEvent;
     type WeightPerGas = WeightPerGas;
     type WithdrawOrigin = EnsureAccountId20;

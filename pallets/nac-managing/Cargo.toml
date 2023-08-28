@@ -13,13 +13,16 @@ targets = ["x86_64-unknown-linux-gnu"]
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 log = { workspace = true }
+hex = { workspace = true }
 pallet-authorship = { workspace = true }
+pallet-evm = { workspace = true }
 pallet-session = { workspace = true }
 pallet-uniques = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
 serde = { workspace = true, optional = true }
 sp-application-crypto = { workspace = true }
+sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 sp-staking = { workspace = true }
@@ -35,7 +38,6 @@ pallet-balances = { workspace = true }
 pallet-staking-reward-curve = { workspace = true }
 pallet-timestamp = { workspace = true }
 rand_chacha = { workspace = true }
-sp-core = { workspace = true }
 sp-tracing = { workspace = true }
 substrate-test-utils = { workspace = true }
 
