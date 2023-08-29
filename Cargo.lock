@@ -5197,6 +5197,7 @@ dependencies = [
  "log",
  "pallet-assets",
  "pallet-balances",
+ "pallet-evm",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -5212,6 +5213,7 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-utils",
+ "vitreus-power-plant-runtime",
 ]
 
 [[package]]
