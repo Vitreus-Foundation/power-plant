@@ -3,6 +3,19 @@ clone:
   depth: full 
 
 pipelines:
+  pull-requests:
+    '**':
+      - step:
+          name: Build for branch pull request
+          script:
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo fmt -- --check
+            - cargo clippy -- -D warnings
+            - cargo build --locked
+            - cargo test --locked
+
   branches:   
     develop:
       - step:
@@ -63,13 +76,17 @@ pipelines:
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d --build"
                   - ssh ${USERNAME}@${HOST3} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep second-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise DEVnet Second Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep second-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise DEVnet Second Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
                   
-
-
     testnet:
       - step:
-          name: First step
+          name: Build and Run Tests
           script:
-            - echo "Hello"
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo fmt -- --check
+            - cargo clippy -- -D warnings
+            - cargo build --locked
+            - cargo test --locked -- --include-ignored
 
       - parallel:
           steps:
