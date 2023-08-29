@@ -13,11 +13,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 log = { workspace = true }
-hex = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-evm = { workspace = true }
 pallet-session = { workspace = true }
 pallet-uniques = { workspace = true }
+pallet-timestamp = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
 serde = { workspace = true, optional = true }

@@ -1,12 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::pallet_prelude::BoundedVec;
-use frame_support::traits::EnsureOriginWithArg;
+use frame_support::{pallet_prelude::{BoundedVec, DispatchResult},
+                    traits::EnsureOriginWithArg, ensure};
 use sp_runtime::{traits::StaticLookup, traits::Zero};
 use sp_std::prelude::*;
-use frame_support::{ensure};
 use frame_system::pallet_prelude::OriginFor;
-use frame_support::pallet_prelude::DispatchResult;
 use sp_core::H160;
 use pallet_evm::AddressMapping;
 
@@ -29,13 +27,11 @@ type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup
 pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::OriginFor;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    /// The module configuration trait.
     pub trait Config: frame_system::Config + pallet_uniques::Config + pallet_evm::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>>
@@ -53,24 +49,24 @@ pub mod pallet {
             Success = Self::AccountId,
         >;
 
-        /// Mapping from address to account id.
+        /// Mapping from address to AccountId.
         type AddressMapping: AddressMapping<Self::AccountId>;
 
-        /// Weight information for extrinsics in this pallet.
+        /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
 
-        /// EVM Runner of transactions
+        /// EVM Runner of transactions.
         type Runner: pallet_evm::runner::Runner<Self, Error = pallet_evm::Error<Self>>;
     }
 
-    /// change logic
+    /// The information about user NFTs and NAC levels.
     #[pallet::storage]
     pub type UsersNft<T> = StorageMap<_, Blake2_128Concat, <T as frame_system::Config>::AccountId, (<T as pallet_uniques::Config>::ItemId, u8), OptionQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        ///An item was minted
+        ///An item was minted.
         ItemMinted {
             owner: T::AccountId,
             collection_id: T::CollectionId,
@@ -82,9 +78,9 @@ pub mod pallet {
 
     #[pallet::error]
     pub enum Error<T> {
-        /// The user already has a NFT
+        /// The user already has a NFT.
         TokenAlreadyExists,
-
+        /// The user hasn't permissions to transaction in EVM.
         NoPermissions
     }
 
@@ -122,7 +118,13 @@ pub mod pallet {
         ) -> DispatchResult {
             let owner = T::Lookup::lookup(owner)?;
 
-            Self::do_mint(origin, collection, item, data, verification_level, owner)?;
+            Self::do_mint(
+                origin,
+                collection,
+                item,
+                data,
+                verification_level,
+                owner)?;
 
             Ok(())
         }
@@ -197,6 +199,15 @@ impl<T: Config> Pallet<T> {
         match UsersNft::<T>::get(account_id) {
             Some(nft) => nft.1 >= desired_access_level,
             None => false
+        }
+    }
+}
+
+impl<T> From<Error<T>> for pallet_evm::Error<T> {
+    fn from(error: Error<T>) -> Self {
+        match error {
+            Error::<T>::NoPermissions => pallet_evm::Error::TransactionMustComeFromEOA,
+            _ => pallet_evm::Error::Undefined,
         }
     }
 }
