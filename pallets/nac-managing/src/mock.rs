@@ -42,7 +42,7 @@ construct_runtime!(
 		System: frame_system,
 		Balances: pallet_balances,
 		NacManaging: pallet_nac_managing,
-        Evm: pallet_evm,
+        Evm: pallet_evm::{Event<T>},
         Uniques: pallet_uniques,
         Timestamp: pallet_timestamp,
 	}

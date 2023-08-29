@@ -19,60 +19,31 @@
 
 use crate::{mock::*, *};
 use frame_support::assert_ok;
-/*
-fn items() -> Vec<(u64, u32, u32)> {
-    let mut r: Vec<_> = UsersNft::<Test>::iter().map(|x| x.0, x.1).collect();
-    r.sort();
-    let mut s: Vec<_> = Item::<Test>::iter().map(|x| (x.2.owner, x.0, x.1)).collect();
-    s.sort();
-    assert_eq!(r, s);
-    for collection in Item::<Test>::iter()
-        .map(|x| x.0)
-        .scan(None, |s, item| {
-            if s.map_or(false, |last| last == item) {
-                *s = Some(item);
-                Some(None)
-            } else {
-                Some(Some(item))
-            }
-        })
-        .flatten()
-    {
-        let details = Collection::<Test>::get(collection).unwrap();
-        let items = Item::<Test>::iter_prefix(collection).count() as u32;
-        assert_eq!(details.items, items);
-    }
-    r
-}*/
+
+
+fn get_user_nfts() -> Vec<(u32, u8)> {
+    let nfts: Vec<_> = UsersNft::<Test>::iter().map(|(_account_id, (item_id, level))| (item_id, level)).collect();
+    nfts
+}
 
 #[test]
 fn basic_setup_works() {
     new_test_ext().execute_with(|| {
-        //assert_eq!(items(), vec![]);
+        assert_eq!(get_user_nfts(), vec![]);
     });
 }
 
 #[test]
 fn basic_minting_should_work() {
     new_test_ext().execute_with(|| {
-        /*assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 0, 1));
-        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, 2, 1_u8, Default::default(), 1));
-        assert_eq!(items(), vec![(1, 0, 42)]);
+        let first_owner = H160::random();
+        assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 0, first_owner));
+        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(first_owner), 0, 2, BoundedVec::new(), 1_u8, Default::default()));
+        assert_eq!(get_user_nfts(), vec![(2, 1)]);
 
-        assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 1, 2));
-        assert_eq!(collections(), vec![(1, 0), (2, 1)]);
-        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(2), 1, 69, 1_u8, Default::default(), 1));
-        assert_eq!(items(), vec![(1, 0, 42), (1, 1, 69)]);*/
-    });
-}
-
-#[test]
-fn mint_should_work() {
-    new_test_ext().execute_with(|| {
-        /*assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 0, 1));
-        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, 42, 1_u8, Default::default(), 1));
-        assert_eq!(NacManaging::owner(0, 42).unwrap(), 1);
-        assert_eq!(collections(), vec![(1, 0)]);
-        assert_eq!(items(), vec![(1, 0, 42)]);*/
+        let second_owner = H160::random();
+        assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 1, second_owner));
+        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(second_owner), 1, 4, BoundedVec::new(), 2_u8, H160::random()));
+        assert_eq!(get_user_nfts(), vec![(4, 2), (2, 1)]);
     });
 }

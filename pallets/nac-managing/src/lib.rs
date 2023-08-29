@@ -11,8 +11,6 @@ use pallet_evm::AddressMapping;
 pub use weights::WeightInfo;
 pub use pallet::*;
 
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
