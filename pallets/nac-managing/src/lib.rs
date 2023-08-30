@@ -2,7 +2,7 @@
 
 use frame_support::{
     pallet_prelude::{BoundedVec, DispatchResult},
-    traits::{EnsureOriginWithArg, Get},
+    traits::EnsureOriginWithArg,
 };
 use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{traits::StaticLookup, traits::Zero};
@@ -19,6 +19,9 @@ mod tests;
 pub mod weights;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
+
+/// NAC level index in NFT metadata.
+const NAC_LEVEL_INDEX: usize = 2;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -47,9 +50,6 @@ pub mod pallet {
 
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
-
-        /// NAC level index in NFT metadata.
-        type NacLevelIndex: Get<usize>;
     }
 
     /// The information about user NFTs and NAC levels.
@@ -66,13 +66,7 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// An item was minted.
-        ItemMinted {
-            owner: T::AccountId,
-            collection_id: T::CollectionId,
-            item_id: T::ItemId,
-            metadata: BoundedVec<u8, T::StringLimit>,
-            verification_level: u8,
-        },
+        NacLevelSet { owner: T::AccountId, item_id: T::ItemId, verification_level: u8 },
     }
 
     #[pallet::error]
@@ -95,6 +89,7 @@ pub mod pallet {
             owner: AccountIdLookupOf<T>,
         ) -> DispatchResult {
             <T as Config>::ForceOrigin::ensure_origin(origin)?;
+
             let owner = T::Lookup::lookup(owner)?;
 
             Self::do_create_collection(collection.clone(), owner.clone(), owner.clone())
@@ -163,16 +158,10 @@ impl<T: Config> Pallet<T> {
         )?;
 
         let verification_level: u8 =
-            *data.get(T::NacLevelIndex::get()).ok_or(Error::<T>::InvalidMetadata)?;
+            *data.get(NAC_LEVEL_INDEX).ok_or(Error::<T>::InvalidMetadata)?;
         UsersNft::<T>::insert(&owner, (&item, &verification_level));
 
-        Self::deposit_event(Event::ItemMinted {
-            owner,
-            collection_id: collection,
-            item_id: item,
-            metadata: data,
-            verification_level,
-        });
+        Self::deposit_event(Event::NacLevelSet { owner, item_id: item, verification_level });
 
         Ok(())
     }

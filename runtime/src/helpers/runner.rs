@@ -22,7 +22,7 @@ where
     type Error = pallet_evm::Error<T>;
 
     fn validate(source: H160, target: Option<H160>, input: Vec<u8>, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, evm_config: &pallet_evm::EvmConfig) -> Result<(), RunnerError<Self::Error>> {
-        user_has_permission(source, weight_limit, VALIDATE_ACCESS_LEVEL)?;
+        evm_user_has_permission(source, weight_limit, VALIDATE_ACCESS_LEVEL)?;
 
         Runner::validate(
             source,
@@ -42,7 +42,7 @@ where
     }
 
     fn call(source: H160, target: H160, input: Vec<u8>, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CallInfo, RunnerError<Self::Error>> {
-        user_has_permission(source, weight_limit, CALL_ACCESS_LEVEL)?;
+        evm_user_has_permission(source, weight_limit, CALL_ACCESS_LEVEL)?;
 
         Runner::call(
             source,
@@ -63,7 +63,7 @@ where
     }
 
     fn create(source: H160, init: Vec<u8>, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CreateInfo, RunnerError<Self::Error>> {
-        user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
+        evm_user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
 
         Runner::create(
             source,
@@ -83,7 +83,7 @@ where
     }
 
     fn create2(source: H160, init: Vec<u8>, salt: H256, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CreateInfo, RunnerError<Self::Error>> {
-        user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
+        evm_user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
 
         Runner::create2(
             source,
@@ -104,7 +104,7 @@ where
     }
 }
 
-fn user_has_permission<T: pallet_evm::Config + pallet_nac_managing::Config>(
+fn evm_user_has_permission<T: pallet_evm::Config + pallet_nac_managing::Config>(
     source: H160,
     weight_limit: Option<Weight>,
     access_level: u8,

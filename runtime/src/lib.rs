@@ -395,17 +395,11 @@ impl pallet_session::historical::Config for Runtime {
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
 }
 
-parameter_types! {
-    /// Denoting the index under which the NAC level lies in the NFT metadata.
-    pub const NacLevelIndex: usize = 2;
-}
-
 impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type ForceOrigin = frame_system::EnsureRoot<AccountId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
-    type NacLevelIndex = NacLevelIndex;
 }
 
 impl pallet_utility::Config for Runtime {

@@ -108,16 +108,11 @@ impl pallet_uniques::Config for Test {
     type WeightInfo = ();
 }
 
-parameter_types! {
-    pub const NacLevelIndex: usize = 1;
-}
-
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type ForceOrigin = frame_system::EnsureRoot<u32>;
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u32>>;
     type WeightInfo = ();
-    type NacLevelIndex = NacLevelIndex;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
