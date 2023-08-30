@@ -907,9 +907,13 @@ impl Currency<AccountId> for EnergyCurrency<EnergyItem, EnergyDebt, EnergyCredit
         who: &AccountId,
         value: Self::Balance,
         _reasons: frame_support::traits::WithdrawReasons,
-        _liveness: ExistenceRequirement,
+        liveness: ExistenceRequirement,
     ) -> Result<Self::NegativeImbalance, sp_runtime::DispatchError> {
-        EnergyItem::withdraw(who, value, Precision::Exact, Preservation::Protect, Fortitude::Polite)
+        let preservation = match liveness {
+            ExistenceRequirement::AllowDeath => Preservation::Expendable,
+            _ => Preservation::Protect,
+        };
+        EnergyItem::withdraw(who, value, Precision::Exact, preservation, Fortitude::Polite)
     }
 
     // TODO: implement this function
