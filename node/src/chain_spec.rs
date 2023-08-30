@@ -53,7 +53,7 @@ fn faith() -> AccountId {
     AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d"))
 }
 
-const INITIAL_ENERGY_BALANCE: Balance = 100__000_000_000_000_000_000u128;
+const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
 #[derive(Serialize, Deserialize)]
