@@ -5188,6 +5188,39 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-energy-fee"
+version = "0.1.0"
+dependencies = [
+ "ethereum-types",
+ "fp-account",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-base-fee",
+ "pallet-ethereum",
+ "pallet-evm",
+ "pallet-evm-chain-id",
+ "pallet-staking-reward-curve",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "rand_chacha 0.2.2",
+ "scale-info",
+ "serde",
+ "smallvec",
+ "sp-application-crypto",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-tracing",
+ "substrate-test-utils",
+]
+
+[[package]]
 name = "pallet-energy-generation"
 version = "0.1.0"
 dependencies = [
@@ -10095,6 +10128,7 @@ dependencies = [
  "pallet-balances",
  "pallet-base-fee",
  "pallet-dynamic-fee",
+ "pallet-energy-fee",
  "pallet-energy-generation",
  "pallet-ethereum",
  "pallet-evm",
