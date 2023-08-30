@@ -21,7 +21,7 @@ pub mod weights;
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 /// NAC level index in NFT metadata.
-const NAC_LEVEL_INDEX: usize = 2;
+const NAC_LEVEL_INDEX: usize = 1;
 
 #[frame_support::pallet]
 pub mod pallet {
