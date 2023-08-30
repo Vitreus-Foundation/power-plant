@@ -53,6 +53,8 @@ fn faith() -> AccountId {
     AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d"))
 }
 
+const INITIAL_ENERGY_BALANCE: Balance = 100__000_000_000_000_000_000u128;
+
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
 #[derive(Serialize, Deserialize)]
 pub struct DevGenesisExt {
@@ -350,7 +352,14 @@ fn testnet_genesis(
                 "VNRG".as_bytes().to_vec(),
                 18,
             )],
-            accounts: vec![(VNRG::get(), alith(), 1_000_000_000_000_000_000_000u128)],
+            accounts: vec![
+                (VNRG::get(), alith(), INITIAL_ENERGY_BALANCE),
+                (VNRG::get(), baltathar(), INITIAL_ENERGY_BALANCE),
+                (VNRG::get(), charleth(), INITIAL_ENERGY_BALANCE),
+                (VNRG::get(), dorothy(), INITIAL_ENERGY_BALANCE),
+                (VNRG::get(), ethan(), INITIAL_ENERGY_BALANCE),
+                (VNRG::get(), faith(), INITIAL_ENERGY_BALANCE),
+            ],
         },
         reputation: ReputationConfig {
             accounts: stakers
