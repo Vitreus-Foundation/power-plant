@@ -15,9 +15,9 @@ use sp_state_machine::BasicExternalities;
 use vitreus_power_plant_runtime::{
     opaque, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
     EVMConfig, EnableManualSeal, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, ReputationConfig, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
-    StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY, NacManagingConfig,
+    MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix,
+    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 const INITIAL_NAC_COLLECTION_ID: u32 = 0;
@@ -366,7 +366,7 @@ fn testnet_genesis(
                 .collect::<Vec<_>>(),
         },
         nac_managing: NacManagingConfig {
-            accounts: endowed_accounts.iter().map(|x| (x.clone(), 1)).collect(),
+            accounts: endowed_accounts.iter().map(|x| (*x, 1)).collect(),
             collections: vec![(INITIAL_NAC_COLLECTION_ID, root_key)],
         },
         session: SessionConfig {

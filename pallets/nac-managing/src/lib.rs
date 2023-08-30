@@ -157,7 +157,7 @@ pub mod pallet {
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             for (collection, owner) in self.collections.iter() {
-                Pallet::<T>::do_create_collection(collection.clone(), owner.clone(), owner.clone())
+                Pallet::<T>::do_create_collection(*collection, owner.clone(), owner.clone())
                     .expect("Cannot create collection");
 
                 for (n, (account, level)) in self.accounts.iter().enumerate() {
@@ -165,7 +165,7 @@ pub mod pallet {
                         .expect("Cannot initialize metadata");
                     Pallet::<T>::do_mint(
                         frame_system::RawOrigin::Signed(owner.clone()).into(),
-                        collection.clone(),
+                        *collection,
                         (n as u32).into(),
                         metadata,
                         account.clone(),
