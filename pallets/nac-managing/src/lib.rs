@@ -1,4 +1,11 @@
+//! This pallet holds the NAC - NFTs with granted access level of the user.
+//! It uses `pallet_uniques` under the hood.
+//!
+//! It's supposed there is a single collection holding all the NACs. The level is a `u8` value
+//! stored in the NAC's metadata.
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
+#![warn(clippy::all)]
 
 use frame_support::{
     pallet_prelude::{BoundedVec, DispatchResult},
@@ -36,6 +43,23 @@ pub mod pallet {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+        /// The collection id type.
+        type CollectionId: MaybeSerializeDeserialize
+            + Parameter
+            + Member
+            + Copy
+            + Default
+            + Ord
+            + Into<<Self as pallet_uniques::Config>::CollectionId>;
+
+        /// The item id type.
+        type ItemId: Member
+            + Parameter
+            + MaxEncodedLen
+            + Copy
+            + From<u32>
+            + Into<<Self as pallet_uniques::Config>::ItemId>;
+
         /// The origin which may forcibly create or destroy an item or otherwise alter privileged
         /// attributes.
         type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
@@ -44,7 +68,7 @@ pub mod pallet {
         /// collection are in this set.
         type CreateOrigin: EnsureOriginWithArg<
             Self::RuntimeOrigin,
-            Self::CollectionId,
+            <Self as Config>::CollectionId,
             Success = Self::AccountId,
         >;
 
@@ -58,7 +82,7 @@ pub mod pallet {
         _,
         Blake2_128Concat,
         <T as frame_system::Config>::AccountId,
-        (<T as pallet_uniques::Config>::ItemId, u8),
+        (<T as Config>::ItemId, u8),
         OptionQuery,
     >;
 
@@ -66,7 +90,14 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// An item was minted.
-        NacLevelSet { owner: T::AccountId, item_id: T::ItemId, verification_level: u8 },
+        NacLevelSet {
+            /// Who gets the NAC
+            owner: T::AccountId,
+            /// The NAC unique ID
+            item_id: <T as Config>::ItemId,
+            /// The access level
+            verification_level: u8,
+        },
     }
 
     #[pallet::error]
@@ -81,26 +112,28 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
+        /// Create a collection.
         #[pallet::call_index(0)]
         #[pallet::weight(<T as Config>::WeightInfo::create_collection())]
         pub fn create_collection(
             origin: OriginFor<T>,
-            collection: T::CollectionId,
+            collection: <T as Config>::CollectionId,
             owner: AccountIdLookupOf<T>,
         ) -> DispatchResult {
             <T as Config>::ForceOrigin::ensure_origin(origin)?;
 
             let owner = T::Lookup::lookup(owner)?;
 
-            Self::do_create_collection(collection.clone(), owner.clone(), owner.clone())
+            Self::do_create_collection(collection, owner.clone(), owner)
         }
 
+        /// Mint NAC.
         #[pallet::call_index(1)]
         #[pallet::weight(<T as Config>::WeightInfo::mint())]
         pub fn mint(
             origin: OriginFor<T>,
-            collection: T::CollectionId,
-            item: T::ItemId,
+            collection: <T as Config>::CollectionId,
+            item: <T as Config>::ItemId,
             data: BoundedVec<u8, T::StringLimit>,
             owner: AccountIdLookupOf<T>,
         ) -> DispatchResult {
@@ -109,15 +142,51 @@ pub mod pallet {
             Self::do_mint(origin, collection, item, data, owner)
         }
     }
+
+    #[pallet::genesis_config]
+    #[derive(frame_support::DefaultNoBound)]
+    pub struct GenesisConfig<T: Config> {
+        /// The accounts, who get NACs with values as the second field.
+        pub accounts: Vec<(T::AccountId, u8)>,
+        /// The initial collections. The first field is the collection ID and the second is the
+        /// owner ID.
+        pub collections: Vec<(<T as Config>::CollectionId, T::AccountId)>,
+    }
+
+    #[pallet::genesis_build]
+    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+        fn build(&self) {
+            for (collection, owner) in self.collections.iter() {
+                Pallet::<T>::do_create_collection(collection.clone(), owner.clone(), owner.clone())
+                    .expect("Cannot create collection");
+
+                for (n, (account, level)) in self.accounts.iter().enumerate() {
+                    let metadata = BoundedVec::<u8, T::StringLimit>::try_from(vec![0, *level, 0])
+                        .expect("Cannot initialize metadata");
+                    Pallet::<T>::do_mint(
+                        frame_system::RawOrigin::Signed(owner.clone()).into(),
+                        collection.clone(),
+                        (n as u32).into(),
+                        metadata,
+                        account.clone(),
+                    )
+                    .expect("Cannot mint NAC");
+                }
+            }
+        }
+    }
 }
 
 impl<T: Config> Pallet<T> {
-    fn do_create_collection(
-        collection: T::CollectionId,
+    /// Non-dispatchable `Self::creat_collection`.
+    pub fn do_create_collection(
+        collection: <T as Config>::CollectionId,
         owner: T::AccountId,
         issuer: T::AccountId,
     ) -> DispatchResult {
         let deposit_info = (Zero::zero(), true);
+
+        let collection = collection.into();
 
         pallet_uniques::Pallet::<T>::do_create_collection(
             collection.clone(),
@@ -125,24 +194,21 @@ impl<T: Config> Pallet<T> {
             issuer.clone(),
             deposit_info.0,
             deposit_info.1,
-            pallet_uniques::Event::Created {
-                collection: collection.clone(),
-                creator: owner.clone(),
-                owner: issuer.clone(),
-            },
+            pallet_uniques::Event::Created { collection, creator: owner, owner: issuer },
         )
     }
 
-    fn do_mint(
+    /// Non-dispatchable `Self::mint`.
+    pub fn do_mint(
         origin: OriginFor<T>,
-        collection: T::CollectionId,
-        item: T::ItemId,
+        collection: <T as Config>::CollectionId,
+        item: <T as Config>::ItemId,
         data: BoundedVec<u8, T::StringLimit>,
         owner: T::AccountId,
     ) -> DispatchResult {
         pallet_uniques::Pallet::<T>::do_mint(
-            collection.clone(),
-            item,
+            collection.into().clone(),
+            item.into(),
             owner.clone(),
             |_details| Ok(()),
         )?;
@@ -151,8 +217,8 @@ impl<T: Config> Pallet<T> {
 
         pallet_uniques::Pallet::<T>::set_metadata(
             origin,
-            collection.clone(),
-            item,
+            collection.into(),
+            item.into(),
             data.clone(),
             is_frozen,
         )?;
@@ -166,6 +232,7 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
+    /// Check whether the account has the level.
     pub fn user_has_access(account_id: T::AccountId, desired_access_level: u8) -> bool {
         match UsersNft::<T>::get(account_id) {
             Some(nft) => nft.1 >= desired_access_level,

@@ -89,10 +89,13 @@ parameter_types! {
     pub TestItemDeposit:  u64 = 1;
 }
 
+type CollectionId = u32;
+type ItemId = u32;
+
 impl pallet_uniques::Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type CollectionId = u32;
-    type ItemId = u32;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
     type Currency = Balances;
     type ForceOrigin = frame_system::EnsureRoot<u32>;
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u32>>;
@@ -112,6 +115,8 @@ impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type ForceOrigin = frame_system::EnsureRoot<u32>;
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u32>>;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
     type WeightInfo = ();
 }
 

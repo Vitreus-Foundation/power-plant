@@ -39,14 +39,14 @@ fn basic_setup_works() {
 fn basic_minting_should_work() {
     new_test_ext().execute_with(|| {
         let data = vec![0, 1, 3];
-        let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data.clone()).unwrap_or_default();
+        let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data).unwrap_or_default();
 
         assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 0, 1));
         assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, 1, metadata, 4));
         assert_eq!(get_user_nfts(), vec![(1, 1)]);
 
-        let data: Vec<u8> = vec![3, 2, 0];
-        let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data.clone()).unwrap_or_default();
+        let data = vec![3, 2, 0];
+        let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data).unwrap_or_default();
 
         assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, 4, metadata, 5));
         assert_eq!(get_user_nfts(), vec![(1, 1), (4, 2)]);
@@ -57,7 +57,7 @@ fn basic_minting_should_work() {
 fn user_has_access_test() {
     new_test_ext().execute_with(|| {
         let data = vec![0, 1, 3];
-        let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data.clone()).unwrap_or_default();
+        let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data).unwrap_or_default();
 
         assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 0, 1));
         assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, 1, metadata, 4));
