@@ -1,32 +1,32 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::tokens::{currency::Currency, WithdrawReasons, ExistenceRequirement};
+use frame_support::traits::tokens::{currency::Currency, ExistenceRequirement, WithdrawReasons};
 
 pub use pallet::*;
+pub(crate) use pallet_evm::{AddressMapping, OnChargeEVMTransaction};
 pub use pallet_transaction_payment::OnChargeTransaction;
-pub(crate) use pallet_evm::{OnChargeEVMTransaction, AddressMapping};
 
 use sp_core::{H160, U256};
-use sp_runtime::traits::{DispatchInfoOf, PostDispatchInfoOf, Zero, Get};
+use sp_runtime::traits::{DispatchInfoOf, Get, PostDispatchInfoOf, Zero};
 
+#[cfg(test)]
+pub(crate) mod mock;
 
-// #[cfg(test)]
-// pub(crate) mod mock;
-
-// #[cfg(test)]
-// mod tests;
+#[cfg(test)]
+mod tests;
 
 /// Fee type inferred from call info
 pub enum CallFee<Balance> {
     Custom(Balance),
     Stock,
     // The EVM fee is charged separately
-    EVM(Balance)
+    EVM(Balance),
 }
 
 /// Custom fee calculation for specified scenarios
 pub trait CustomFee<RuntimeCall, DispatchInfo, Balance, ConstantFee>
-    where ConstantFee: Get<Balance>
+where
+    ConstantFee: Get<Balance>,
 {
     fn dispatch_info_to_fee(
         runtime_call: &RuntimeCall,
@@ -45,12 +45,16 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
 
+    /// Pallet which implements fee withdrawal traits
     #[pallet::pallet]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
     pub trait Config:
-        frame_system::Config + pallet_transaction_payment::Config + pallet_assets::Config + pallet_evm::Config
+        frame_system::Config
+        + pallet_transaction_payment::Config
+        + pallet_assets::Config
+        + pallet_evm::Config
     {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -63,7 +67,7 @@ pub mod pallet {
             Self::RuntimeCall,
             DispatchInfoOf<Self::RuntimeCall>,
             BalanceOf<Self>,
-            Self::GetConstantFee
+            Self::GetConstantFee,
         >;
     }
 
@@ -100,21 +104,20 @@ pub mod pallet {
             let fee = match T::CustomFee::dispatch_info_to_fee(call, dispatch_info) {
                 CallFee::Custom(custom_fee) => custom_fee,
                 CallFee::EVM(_) => return Ok(None),
-                _ => fee
+                _ => fee,
             };
 
             CurrencyOf::<T>::withdraw(
                 who,
                 fee,
                 WithdrawReasons::FEE,
-                ExistenceRequirement::KeepAlive
-            ).map(|imbalance| {
-                Self::deposit_event(Event::<T>::EnergyFeePaid {
-                    who: who.clone(),
-                    amount: fee,
-                });
+                ExistenceRequirement::KeepAlive,
+            )
+            .map(|imbalance| {
+                Self::deposit_event(Event::<T>::EnergyFeePaid { who: who.clone(), amount: fee });
                 Some(imbalance)
-            }).map_err(|_| InvalidTransaction::Payment.into()) 
+            })
+            .map_err(|_| InvalidTransaction::Payment.into())
         }
 
         // TODO: make a refund for calls non-elligible for custom fee
@@ -134,7 +137,10 @@ pub mod pallet {
         // Kept type as Option to satisfy bound of Default
         type LiquidityInfo = Option<NegativeImbalanceOf<T>>;
 
-        fn withdraw_fee(who: &H160, fee: U256) -> Result<Self::LiquidityInfo, pallet_evm::Error<T>> {
+        fn withdraw_fee(
+            who: &H160,
+            fee: U256,
+        ) -> Result<Self::LiquidityInfo, pallet_evm::Error<T>> {
             if fee.is_zero() {
                 return Ok(None);
             }
@@ -146,14 +152,16 @@ pub mod pallet {
                 &account_id,
                 const_energy_fee,
                 WithdrawReasons::FEE,
-                ExistenceRequirement::KeepAlive
-            ).map(|imbalance| {
+                ExistenceRequirement::KeepAlive,
+            )
+            .map(|imbalance| {
                 Self::deposit_event(Event::<T>::EnergyFeePaid {
                     who: account_id,
                     amount: const_energy_fee,
                 });
                 Some(imbalance)
-            }).map_err(|_| pallet_evm::Error::<T>::BalanceLow)
+            })
+            .map_err(|_| pallet_evm::Error::<T>::BalanceLow)
         }
 
         fn correct_and_deposit_fee(
@@ -168,7 +176,6 @@ pub mod pallet {
         // TODO: handle EVM priority fee
         fn pay_priority_fee(_tip: Self::LiquidityInfo) {
             // Default Ethereum behaviour: issue the tip to the block author.
-            
         }
     }
 }

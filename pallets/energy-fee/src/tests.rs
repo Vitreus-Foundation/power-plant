@@ -2,40 +2,20 @@
 
 // use frame_support::pallet_prelude::*;
 use crate::mock::*;
-use crate::Config;
-use frame_support::{
-    assert_ok,
-    dispatch::DispatchInfo,
-    traits::Get,
-    weights::{Weight, WeightToFee},
-};
+use frame_support::{assert_ok, dispatch::DispatchInfo};
 use frame_system::mocking::MockUncheckedExtrinsic;
 use frame_system::weights::{SubstrateWeight as SystemWeight, WeightInfo as _};
 use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
+use pallet_evm::{Config as EVMConfig, GasWeightMapping, OnChargeEVMTransaction};
 use pallet_transaction_payment::OnChargeTransaction;
 use parity_scale_codec::Encode;
 
 type Extrinsic = MockUncheckedExtrinsic<Test>;
 
 #[test]
-fn weight_to_fee_works() {
-    new_test_ext().execute_with(|| {
-        assert_eq!(
-            EnergyFee::weight_to_fee(&Weight::from_parts(100_000_000_000, 0)),
-            1_000_000_000,
-        );
-        assert_eq!(EnergyFee::weight_to_fee(&Weight::from_parts(72_000_000, 0)), 1_000_000_000,);
-        assert_eq!(
-            EnergyFee::weight_to_fee(&Weight::from_parts(210_200_000_000, 0)),
-            1_000_000_000,
-        );
-    });
-}
-
-#[test]
 fn withdraw_fee_with_stock_coefficients_works() {
     new_test_ext().execute_with(|| {
-        let initial_energy_balance: Balance = Assets::balance(VNRG, ALICE);
+        let initial_energy_balance: Balance = BalancesVNRG::free_balance(ALICE);
 
         let system_remark_call: RuntimeCall =
             RuntimeCall::System(frame_system::Call::remark { remark: [1u8; 32].to_vec() });
@@ -57,7 +37,7 @@ fn withdraw_fee_with_stock_coefficients_works() {
         ));
 
         assert_eq!(
-            Assets::balance(VNRG, ALICE),
+            BalancesVNRG::free_balance(ALICE),
             initial_energy_balance.saturating_sub(computed_fee),
         );
     });
@@ -66,7 +46,7 @@ fn withdraw_fee_with_stock_coefficients_works() {
 #[test]
 fn withdraw_fee_with_custom_coefficients_works() {
     new_test_ext().execute_with(|| {
-        let initial_energy_balance: Balance = Assets::balance(VNRG, ALICE);
+        let initial_energy_balance: Balance = BalancesVNRG::free_balance(ALICE);
         let transfer_amount: Balance = 1_000_000_000;
 
         let assets_transfer_call: RuntimeCall =
@@ -92,10 +72,70 @@ fn withdraw_fee_with_custom_coefficients_works() {
             0,
         ));
 
-        let constant_fee = <Test as Config>::GetConstantEnergyFee::get();
+        let constant_fee = GetConstantEnergyFee::get();
 
         assert_eq!(
-            Assets::balance(VNRG, ALICE),
+            BalancesVNRG::free_balance(ALICE),
+            initial_energy_balance.saturating_sub(constant_fee),
+        );
+    });
+}
+
+#[test]
+fn withdraw_zero_fee_during_evm_extrinsic_call_works() {
+    new_test_ext().execute_with(|| {
+        let initial_energy_balance: Balance = BalancesVNRG::free_balance(ALICE);
+        let transfer_amount: Balance = 1_000_000_000;
+        let gas_limit: u64 = 1_000_000;
+
+        let evm_transfer_call: RuntimeCall = RuntimeCall::EVM(pallet_evm::Call::call {
+            source: ALICE.into(),
+            target: BOB.into(),
+            input: vec![],
+            value: transfer_amount.into(),
+            gas_limit: 1_000_000,
+            max_fee_per_gas: 1_000_000u128.into(),
+            max_priority_fee_per_gas: None,
+            nonce: None,
+            access_list: vec![],
+        });
+
+        let dispatch_info: DispatchInfo = DispatchInfo {
+            weight: <Test as EVMConfig>::GasWeightMapping::gas_to_weight(gas_limit, true),
+            ..Default::default()
+        };
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        assert_ok!(<EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &evm_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        ));
+
+        assert_eq!(BalancesVNRG::free_balance(ALICE), initial_energy_balance,);
+    });
+}
+
+#[test]
+fn evm_withdraw_fee_works() {
+    new_test_ext().execute_with(|| {
+        let initial_energy_balance: Balance = BalancesVNRG::free_balance(ALICE);
+
+        // fee equals arbitrary number since we don't take it into account
+        assert_ok!(<EnergyFee as OnChargeEVMTransaction<Test>>::withdraw_fee(
+            &ALICE.into(),
+            1_234_567_890.into(),
+        ));
+
+        let constant_fee = GetConstantEnergyFee::get();
+        assert_eq!(
+            BalancesVNRG::free_balance(ALICE),
             initial_energy_balance.saturating_sub(constant_fee),
         );
     });

@@ -1,41 +1,52 @@
 use crate as pallet_energy_fee;
-use crate::CustomFee;
-use frame_support::weights::{ConstantMultiplier, IdentityFee, WeightToFee};
+use crate::{CallFee, CustomFee};
+use fp_account::AccountId20;
+
+use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
+    pallet_prelude::Weight,
     parameter_types,
     traits::{AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
+use pallet_balances::{Instance1, Instance2};
+use pallet_ethereum::PostLogContent;
+use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::Compact;
 
-use sp_core::H256;
+use sp_core::{H256, U256};
 
 use sp_runtime::{
     traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup},
-    BuildStorage,
+    BuildStorage, Permill,
 };
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
-/// The AccountId alias in this test module.
-pub(crate) type AccountId = u64;
+pub(crate) type AccountId = AccountId20;
 pub(crate) type AssetId = u128;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 
 pub(crate) const VNRG: AssetId = 1;
-pub(crate) const ALICE: AccountId = 1;
-pub(crate) const BOB: AccountId = 2;
+pub(crate) const ALICE: AccountId = AccountId20([1u8; 20]);
+pub(crate) const BOB: AccountId = AccountId20([2u8; 20]);
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
     pub enum Test
     {
         System: frame_system,
-        Balances: pallet_balances,
+        BalancesVTRS: pallet_balances::<Instance1>,
+        BalancesVNRG: pallet_balances::<Instance2>,
         Assets: pallet_assets,
         TransactionPayment: pallet_transaction_payment,
         EnergyFee: pallet_energy_fee,
+        EVMChainId: pallet_evm_chain_id,
+        Timestamp: pallet_timestamp,
+        Ethereum: pallet_ethereum,
+        EVM: pallet_evm,
+        BaseFee: pallet_base_fee,
     }
 );
 
@@ -69,7 +80,23 @@ impl frame_system::Config for Test {
     type MaxConsumers = ConstU32<16>;
 }
 
-impl pallet_balances::Config for Test {
+impl pallet_balances::Config<Instance1> for Test {
+    type MaxLocks = ConstU32<1024>;
+    type MaxReserves = ();
+    type ReserveIdentifier = [u8; 8];
+    type Balance = Balance;
+    type RuntimeEvent = RuntimeEvent;
+    type DustRemoval = ();
+    type ExistentialDeposit = ConstU128<1>;
+    type AccountStore = System;
+    type WeightInfo = ();
+    type FreezeIdentifier = ();
+    type MaxFreezes = ();
+    type MaxHolds = ();
+    type RuntimeHoldReason = ();
+}
+
+impl pallet_balances::Config<Instance2> for Test {
     type MaxLocks = ConstU32<1024>;
     type MaxReserves = ();
     type ReserveIdentifier = [u8; 8];
@@ -87,23 +114,88 @@ impl pallet_balances::Config for Test {
 
 impl pallet_energy_fee::Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type Balanced = Assets;
-    type GetEnergyAssetId = GetVNRG;
-    type GetConstantEnergyFee = ConstU128<1_000_000_000>;
+    type Currency = BalancesVNRG;
+    type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
 }
 
-// We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
-impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance> for EnergyFee {
+impl pallet_timestamp::Config for Test {
+    type MinimumPeriod = ConstU64<1000>;
+    type Moment = u64;
+    type OnTimestampSet = ();
+    type WeightInfo = ();
+}
+
+impl pallet_evm_chain_id::Config for Test {}
+
+impl pallet_ethereum::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type StateRoot = pallet_ethereum::IntermediateStateRoot<Self>;
+    type PostLogContent = GetPostLogContent;
+    type ExtraDataLength = ConstU32<1000>;
+}
+
+pub struct BaseFeeThreshold;
+impl pallet_base_fee::BaseFeeThreshold for BaseFeeThreshold {
+    fn lower() -> Permill {
+        Permill::zero()
+    }
+    fn ideal() -> Permill {
+        Permill::from_parts(500_000)
+    }
+    fn upper() -> Permill {
+        Permill::from_parts(1_000_000)
+    }
+}
+
+parameter_types! {
+    pub DefaultBaseFeePerGas: U256 = U256::from(1_000_000_000);
+    pub DefaultElasticity: Permill = Permill::from_parts(125_000);
+}
+
+impl pallet_base_fee::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Threshold = BaseFeeThreshold;
+    type DefaultBaseFeePerGas = DefaultBaseFeePerGas;
+    type DefaultElasticity = DefaultElasticity;
+}
+
+impl pallet_evm::Config for Test {
+    type AddressMapping = IdentityAddressMapping;
+    type BlockGasLimit = BlockGasLimit;
+    type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
+    type CallOrigin = EnsureAccountId20;
+    type ChainId = EVMChainId;
+    type Currency = BalancesVTRS;
+    type Runner = pallet_evm::runner::stack::Runner<Self>;
+    type RuntimeEvent = RuntimeEvent;
+    type WeightPerGas = WeightPerGas;
+    type WithdrawOrigin = EnsureAccountId20;
+    type OnCreate = ();
+    type Timestamp = Timestamp;
+    type FeeCalculator = BaseFee;
+    type FindAuthor = ();
+    type GasLimitPovSizeRatio = ConstU64<1000>;
+    type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
+    type OnChargeTransaction = EnergyFee; //EVMCurrencyAdapter<Balances, ()>;
+    type PrecompilesType = ();
+    type PrecompilesValue = GetPrecompilesValue;
+    type WeightInfo = pallet_evm::weights::SubstrateWeight<Test>;
+}
+
+impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
+    for EnergyFee
+{
     fn dispatch_info_to_fee(
         runtime_call: &RuntimeCall,
-        dispatch_info: &DispatchInfoOf<RuntimeCall>,
-    ) -> Option<Balance> {
+        _dispatch_info: &DispatchInfoOf<RuntimeCall>,
+    ) -> CallFee<Balance> {
         match runtime_call {
-            RuntimeCall::Balances(..) | RuntimeCall::Assets(..) => {
-                Some(<Self as WeightToFee>::weight_to_fee(&dispatch_info.weight))
+            RuntimeCall::BalancesVTRS(..) | RuntimeCall::Assets(..) => {
+                CallFee::Custom(GetConstantEnergyFee::get())
             },
-            _ => None,
+            RuntimeCall::EVM(..) => CallFee::EVM(GetConstantEnergyFee::get()),
+            _ => CallFee::Stock,
         }
     }
 }
@@ -115,13 +207,18 @@ parameter_types! {
     pub const AssetsStringLimit: u32 = 50;
     pub const MetadataDepositBase: Balance = 0;
     pub const MetadataDepositPerByte: Balance = 0;
+    pub BlockGasLimit: U256 = U256::from(75_000_000);
+    pub const WeightPerGas: Weight = Weight::from_all(1_000_000);
+    pub const GetPostLogContent: PostLogContent = PostLogContent::BlockAndTxnHashes;
+    pub const GetPrecompilesValue: () = ();
+    pub const GetConstantEnergyFee: Balance = 1_000_000_000;
 }
 
 impl pallet_assets::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
     type AssetId = AssetId;
-    type Currency = Balances;
+    type Currency = BalancesVTRS;
     type ForceOrigin = EnsureRoot<AccountId>;
     type AssetDeposit = AssetDeposit;
     type AssetAccountDeposit = AssetAccountDeposit;
@@ -156,10 +253,8 @@ impl pallet_transaction_payment::Config for Test {
 pub fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
-    pallet_assets::GenesisConfig::<Test> {
-        assets: vec![(VNRG, ALICE, true, 1)],
-        metadata: vec![(VNRG, b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
-        accounts: vec![(VNRG, ALICE, 1_000_000_000_000)],
+    pallet_balances::GenesisConfig::<Test, Instance2> {
+        balances: vec![(ALICE, 1_000_000_000_000)],
     }
     .assimilate_storage(&mut t)
     .unwrap();

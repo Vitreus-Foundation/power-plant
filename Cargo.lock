@@ -5191,13 +5191,18 @@ dependencies = [
 name = "pallet-energy-fee"
 version = "0.1.0"
 dependencies = [
+ "ethereum-types",
+ "fp-account",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log",
  "pallet-assets",
  "pallet-balances",
+ "pallet-base-fee",
+ "pallet-ethereum",
  "pallet-evm",
+ "pallet-evm-chain-id",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "pallet-transaction-payment",
@@ -5213,7 +5218,6 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-utils",
- "vitreus-power-plant-runtime",
 ]
 
 [[package]]
