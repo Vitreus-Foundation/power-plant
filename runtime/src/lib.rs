@@ -395,13 +395,6 @@ impl pallet_session::historical::Config for Runtime {
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
 }
 
-impl pallet_nac_managing::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
-}
-
 impl pallet_utility::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type RuntimeCall = RuntimeCall;
@@ -596,10 +589,13 @@ parameter_types! {
     pub const MaxDeadlineDuration: BlockNumber = 12 * 30 * DAYS;
 }
 
+type CollectionId = u32;
+type ItemId = u32;
+
 impl pallet_uniques::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type CollectionId = u32;
-    type ItemId = u32;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
     type Currency = Balances;
     type ForceOrigin = frame_system::EnsureRoot<AccountId>;
     type CollectionDeposit = CollectionDeposit;
@@ -615,6 +611,15 @@ impl pallet_uniques::Config for Runtime {
     type Helper = ();
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
+}
+
+impl pallet_nac_managing::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
+    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
