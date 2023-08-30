@@ -352,14 +352,11 @@ fn testnet_genesis(
                 "VNRG".as_bytes().to_vec(),
                 18,
             )],
-            accounts: vec![
-                (VNRG::get(), alith(), INITIAL_ENERGY_BALANCE),
-                (VNRG::get(), baltathar(), INITIAL_ENERGY_BALANCE),
-                (VNRG::get(), charleth(), INITIAL_ENERGY_BALANCE),
-                (VNRG::get(), dorothy(), INITIAL_ENERGY_BALANCE),
-                (VNRG::get(), ethan(), INITIAL_ENERGY_BALANCE),
-                (VNRG::get(), faith(), INITIAL_ENERGY_BALANCE),
-            ],
+            accounts: endowed_accounts
+                .iter()
+                .cloned()
+                .map(|account| (VNRG::get(), account, INITIAL_ENERGY_BALANCE))
+                .collect(),
         },
         reputation: ReputationConfig {
             accounts: stakers
