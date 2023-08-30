@@ -70,6 +70,10 @@ pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
 mod precompiles;
+mod helpers {
+    pub mod runner;
+}
+
 use precompiles::VitreusPrecompiles;
 
 /// Type of block number.
@@ -99,7 +103,7 @@ pub type Energy = Balance;
 pub type Index = u32;
 
 /// A hash of some data used by the chain.
-pub type Hash = sp_core::H256;
+pub type Hash = H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem;
@@ -391,13 +395,17 @@ impl pallet_session::historical::Config for Runtime {
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
 }
 
+parameter_types! {
+    /// Denoting the index under which the NAC level lies in the NFT metadata.
+    pub const NacLevelIndex: usize = 2;
+}
+
 impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type ForceOrigin = frame_system::EnsureRoot<AccountId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type AddressMapping = IdentityAddressMapping;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
-    type Runner = pallet_evm::runner::stack::Runner<Self>;
+    type NacLevelIndex = NacLevelIndex;
 }
 
 impl pallet_utility::Config for Runtime {
@@ -667,7 +675,7 @@ impl pallet_evm::Config for Runtime {
     type CallOrigin = EnsureAccountId20;
     type ChainId = EVMChainId;
     type Currency = Balances;
-    type Runner = pallet_nac_managing::runner::NacRunner<Self>;
+    type Runner = helpers::runner::NacRunner<Self>;
     type RuntimeEvent = RuntimeEvent;
     type WeightPerGas = WeightPerGas;
     type WithdrawOrigin = EnsureAccountId20;

@@ -1,29 +1,30 @@
-use sp_std::{marker::PhantomData, vec::Vec};
-use sp_core::{H160, U256, H256};
-use pallet_evm::{Runner as EvmRunner, RunnerError, CallInfo, CreateInfo};
 use frame_support::pallet_prelude::Weight;
-use crate::{Config, pallet};
+use frame_support::traits::Currency;
+use pallet_evm::{runner::stack::Runner, AddressMapping};
+use pallet_evm::{CallInfo, CreateInfo, Runner as EvmRunner, RunnerError};
+use pallet_nac_managing;
+use sp_core::{H160, H256, U256};
+use sp_std::{marker::PhantomData, vec::Vec};
 
-pub struct NacRunner<T:Config> {
+pub struct NacRunner<T> {
     _marker: PhantomData<T>,
 }
 
-const VALIDATE_ACCESS_LEVEL: u8 = 1;
-const CREATE_ACCESS_LEVEL: u8 = 2;
-const CALL_ACCESS_LEVEL: u8 = 2;
+pub const VALIDATE_ACCESS_LEVEL: u8 = 1;
+pub const CREATE_ACCESS_LEVEL: u8 = 2;
+pub const CALL_ACCESS_LEVEL: u8 = 1;
 
-impl <T: Config> EvmRunner<T> for NacRunner<T> {
+impl <T> EvmRunner<T> for NacRunner<T>
+where
+    T: pallet_evm::Config + pallet_nac_managing::Config,
+    <<T as pallet_evm::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance: TryFrom<U256> + Into<U256>,
+{
     type Error = pallet_evm::Error<T>;
 
     fn validate(source: H160, target: Option<H160>, input: Vec<u8>, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, evm_config: &pallet_evm::EvmConfig) -> Result<(), RunnerError<Self::Error>> {
-        if !crate::Pallet::<T>::user_has_access(source.clone(), VALIDATE_ACCESS_LEVEL) {
-            return Err(RunnerError {
-                error: pallet::Error::<T>::NoPermissions.into(),
-                weight: weight_limit.unwrap_or_default(),
-            })
-        };
+        user_has_permission(source, weight_limit, VALIDATE_ACCESS_LEVEL)?;
 
-        <T as Config>::Runner::validate(
+        Runner::validate(
             source,
             target,
             input,
@@ -41,14 +42,9 @@ impl <T: Config> EvmRunner<T> for NacRunner<T> {
     }
 
     fn call(source: H160, target: H160, input: Vec<u8>, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CallInfo, RunnerError<Self::Error>> {
-        if !crate::Pallet::<T>::user_has_access(source.clone(), CALL_ACCESS_LEVEL) {
-            return Err(RunnerError {
-                error: pallet::Error::<T>::NoPermissions.into(),
-                weight: weight_limit.unwrap_or_default()
-            })
-        }
+        user_has_permission(source, weight_limit, CALL_ACCESS_LEVEL)?;
 
-        <T as Config>::Runner::call(
+        Runner::call(
             source,
             target,
             input,
@@ -67,14 +63,9 @@ impl <T: Config> EvmRunner<T> for NacRunner<T> {
     }
 
     fn create(source: H160, init: Vec<u8>, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CreateInfo, RunnerError<Self::Error>> {
-        if !crate::Pallet::<T>::user_has_access(source.clone(), CREATE_ACCESS_LEVEL) {
-            return Err(RunnerError {
-                error: pallet::Error::<T>::NoPermissions.into(),
-                weight: weight_limit.unwrap_or_default()
-            })
-        }
+        user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
 
-        <T as Config>::Runner::create(
+        Runner::create(
             source,
             init,
             value,
@@ -92,14 +83,9 @@ impl <T: Config> EvmRunner<T> for NacRunner<T> {
     }
 
     fn create2(source: H160, init: Vec<u8>, salt: H256, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CreateInfo, RunnerError<Self::Error>> {
-        if !crate::Pallet::<T>::user_has_access(source.clone(), CREATE_ACCESS_LEVEL) {
-            return Err(RunnerError {
-                error: pallet::Error::<T>::NoPermissions.into(),
-                weight: weight_limit.unwrap_or_default()
-            })
-        }
+        user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
 
-        <T as Config>::Runner::create2(
+        Runner::create2(
             source,
             init,
             salt,
@@ -116,4 +102,21 @@ impl <T: Config> EvmRunner<T> for NacRunner<T> {
             config
         )
     }
+}
+
+fn user_has_permission<T: pallet_evm::Config + pallet_nac_managing::Config>(
+    source: H160,
+    weight_limit: Option<Weight>,
+    access_level: u8,
+) -> Result<(), RunnerError<pallet_evm::Error<T>>> {
+    let account_id = <T as pallet_evm::Config>::AddressMapping::into_account_id(source);
+
+    if !pallet_nac_managing::Pallet::<T>::user_has_access(account_id, access_level) {
+        return Err(RunnerError {
+            error: pallet_evm::Error::Undefined,
+            weight: weight_limit.unwrap_or_default(),
+        });
+    };
+
+    Ok(())
 }

@@ -1,15 +1,15 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::{pallet_prelude::{BoundedVec, DispatchResult},
-                    traits::EnsureOriginWithArg, ensure};
+use frame_support::{
+    pallet_prelude::{BoundedVec, DispatchResult},
+    traits::{EnsureOriginWithArg, Get},
+};
+use frame_system::pallet_prelude::OriginFor;
 use sp_runtime::{traits::StaticLookup, traits::Zero};
 use sp_std::prelude::*;
-use frame_system::pallet_prelude::OriginFor;
-use sp_core::H160;
-use pallet_evm::AddressMapping;
 
-pub use weights::WeightInfo;
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 pub mod mock;
@@ -17,7 +17,6 @@ pub mod mock;
 mod tests;
 
 pub mod weights;
-pub mod runner;
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
@@ -30,10 +29,9 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_uniques::Config + pallet_evm::Config {
+    pub trait Config: frame_system::Config + pallet_uniques::Config {
         /// The overarching event type.
-        type RuntimeEvent: From<Event<Self>>
-            + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+        type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// The origin which may forcibly create or destroy an item or otherwise alter privileged
         /// attributes.
@@ -47,31 +45,34 @@ pub mod pallet {
             Success = Self::AccountId,
         >;
 
-        /// Mapping from address to AccountId.
-        type AddressMapping: AddressMapping<Self::AccountId>;
-
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
 
-        /// EVM Runner of transactions.
-        type Runner: pallet_evm::runner::Runner<Self, Error = pallet_evm::Error<Self>>;
+        /// NAC level index in NFT metadata.
+        type NacLevelIndex: Get<usize>;
     }
 
     /// The information about user NFTs and NAC levels.
     #[pallet::storage]
-    pub type UsersNft<T> = StorageMap<_, Blake2_128Concat, <T as frame_system::Config>::AccountId, (<T as pallet_uniques::Config>::ItemId, u8), OptionQuery>;
+    pub type UsersNft<T> = StorageMap<
+        _,
+        Blake2_128Concat,
+        <T as frame_system::Config>::AccountId,
+        (<T as pallet_uniques::Config>::ItemId, u8),
+        OptionQuery,
+    >;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        ///An item was minted.
+        /// An item was minted.
         ItemMinted {
             owner: T::AccountId,
             collection_id: T::CollectionId,
             item_id: T::ItemId,
             metadata: BoundedVec<u8, T::StringLimit>,
             verification_level: u8,
-        }
+        },
     }
 
     #[pallet::error]
@@ -79,9 +80,10 @@ pub mod pallet {
         /// The user already has a NFT.
         TokenAlreadyExists,
         /// The user hasn't permissions to transaction in EVM.
-        NoPermissions
+        NoPermissions,
+        /// Invalid metadata passed
+        InvalidMetadata,
     }
-
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
@@ -95,13 +97,7 @@ pub mod pallet {
             <T as Config>::ForceOrigin::ensure_origin(origin)?;
             let owner = T::Lookup::lookup(owner)?;
 
-            Self::do_create_collection(
-                collection.clone(),
-                owner.clone(),
-                owner.clone()
-            )?;
-
-            Ok(())
+            Self::do_create_collection(collection.clone(), owner.clone(), owner.clone())
         }
 
         #[pallet::call_index(1)]
@@ -111,20 +107,11 @@ pub mod pallet {
             collection: T::CollectionId,
             item: T::ItemId,
             data: BoundedVec<u8, T::StringLimit>,
-            verification_level: u8,
             owner: AccountIdLookupOf<T>,
         ) -> DispatchResult {
             let owner = T::Lookup::lookup(owner)?;
 
-            Self::do_mint(
-                origin,
-                collection,
-                item,
-                data,
-                verification_level,
-                owner)?;
-
-            Ok(())
+            Self::do_mint(origin, collection, item, data, owner)
         }
     }
 }
@@ -146,8 +133,8 @@ impl<T: Config> Pallet<T> {
             pallet_uniques::Event::Created {
                 collection: collection.clone(),
                 creator: owner.clone(),
-                owner: issuer.clone()
-            }
+                owner: issuer.clone(),
+            },
         )
     }
 
@@ -156,16 +143,13 @@ impl<T: Config> Pallet<T> {
         collection: T::CollectionId,
         item: T::ItemId,
         data: BoundedVec<u8, T::StringLimit>,
-        verification_level: u8,
-        owner: T::AccountId
+        owner: T::AccountId,
     ) -> DispatchResult {
-        ensure!(!UsersNft::<T>::get(&owner).is_some(), Error::<T>::TokenAlreadyExists);
-
         pallet_uniques::Pallet::<T>::do_mint(
             collection.clone(),
-            item.into(),
+            item,
             owner.clone(),
-            |_details| Ok(())
+            |_details| Ok(()),
         )?;
 
         let is_frozen = true;
@@ -173,11 +157,13 @@ impl<T: Config> Pallet<T> {
         pallet_uniques::Pallet::<T>::set_metadata(
             origin,
             collection.clone(),
-            item.clone(),
+            item,
             data.clone(),
-            is_frozen
+            is_frozen,
         )?;
 
+        let verification_level: u8 =
+            *data.get(T::NacLevelIndex::get()).ok_or(Error::<T>::InvalidMetadata)?;
         UsersNft::<T>::insert(&owner, (&item, &verification_level));
 
         Self::deposit_event(Event::ItemMinted {
@@ -191,21 +177,10 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
-    pub fn user_has_access(account_id: H160, desired_access_level: u8) -> bool {
-        let account_id = <T as Config>::AddressMapping::into_account_id(account_id);
-
+    pub fn user_has_access(account_id: T::AccountId, desired_access_level: u8) -> bool {
         match UsersNft::<T>::get(account_id) {
             Some(nft) => nft.1 >= desired_access_level,
-            None => false
-        }
-    }
-}
-
-impl<T> From<Error<T>> for pallet_evm::Error<T> {
-    fn from(error: Error<T>) -> Self {
-        match error {
-            Error::<T>::NoPermissions => pallet_evm::Error::TransactionMustComeFromEOA,
-            _ => pallet_evm::Error::Undefined,
+            None => false,
         }
     }
 }

@@ -23,12 +23,8 @@ use crate as pallet_nac_managing;
 use frame_support::{
     construct_runtime, parameter_types,
     traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
-    dispatch::Weight
 };
-use pallet_evm::{IdentityAddressMapping,
-                 FeeCalculator, EnsureAddressRoot,
-                 EnsureAddressNever, };
-use sp_core::{H256, U256};
+use sp_core::H256;
 use sp_runtime::{
     traits::{BlakeTwo256, IdentityLookup},
     BuildStorage,
@@ -37,15 +33,13 @@ use sp_runtime::{
 type Block = frame_system::mocking::MockBlock<Test>;
 
 construct_runtime!(
-	pub enum Test
-	{
-		System: frame_system,
-		Balances: pallet_balances,
-		NacManaging: pallet_nac_managing,
-        Evm: pallet_evm::{Event<T>},
+    pub enum Test
+    {
+        System: frame_system,
+        Balances: pallet_balances,
+        NacManaging: pallet_nac_managing,
         Uniques: pallet_uniques,
-        Timestamp: pallet_timestamp,
-	}
+    }
 );
 
 impl frame_system::Config for Test {
@@ -58,7 +52,7 @@ impl frame_system::Config for Test {
     type Nonce = u64;
     type Hash = H256;
     type Hashing = BlakeTwo256;
-    type AccountId = H160;
+    type AccountId = u32;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Block = Block;
     type BlockHashCount = ConstU64<250>;
@@ -90,39 +84,9 @@ impl pallet_balances::Config for Test {
     type MaxFreezes = ();
 }
 
-pub struct FixedGasPrice;
-impl FeeCalculator for FixedGasPrice {
-    fn min_gas_price() -> (U256, Weight) {
-        (10u128.into(), Weight::from_parts(7u64, 0))
-    }
-}
-
-impl pallet_evm::Config for Test {
-    type FeeCalculator = FixedGasPrice;
-    type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
-    type WeightPerGas = ();
-    type BlockHashMapping = pallet_evm::SubstrateBlockHashMapping<Self>;
-    type CallOrigin = EnsureAddressRoot<Self::AccountId>;
-    type WithdrawOrigin = EnsureAddressNever<Self::AccountId>;
-    type AddressMapping = IdentityAddressMapping;
-    type Currency = Balances;
-    type RuntimeEvent = RuntimeEvent;
-    type PrecompilesType = ();
-    type PrecompilesValue = ();
-    type ChainId = ();
-    type BlockGasLimit = ();
-    type Runner = runner::NacRunner<Self>;
-    type OnChargeTransaction = ();
-    type OnCreate = ();
-    type FindAuthor = ();
-    type GasLimitPovSizeRatio = ();
-    type Timestamp = Timestamp;
-    type WeightInfo = ();
-}
-
 parameter_types! {
-	pub TestCollectionDeposit:  u64 = 2;
-	pub TestItemDeposit:  u64 = 1;
+    pub TestCollectionDeposit:  u64 = 2;
+    pub TestItemDeposit:  u64 = 1;
 }
 
 impl pallet_uniques::Config for Test {
@@ -130,8 +94,8 @@ impl pallet_uniques::Config for Test {
     type CollectionId = u32;
     type ItemId = u32;
     type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<H160>;
-    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<H160>>;
+    type ForceOrigin = frame_system::EnsureRoot<u32>;
+    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u32>>;
     type Locker = ();
     type CollectionDeposit = TestCollectionDeposit;
     type ItemDeposit = TestItemDeposit;
@@ -145,22 +109,15 @@ impl pallet_uniques::Config for Test {
 }
 
 parameter_types! {
-		pub const MinimumPeriod: u64 = 5;
-	}
-impl pallet_timestamp::Config for Test {
-    type Moment = u64;
-    type OnTimestampSet = ();
-    type MinimumPeriod = MinimumPeriod;
-    type WeightInfo = ();
+    pub const NacLevelIndex: usize = 1;
 }
 
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type ForceOrigin = frame_system::EnsureRoot<H160>;
-    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<H160>>;
-    type AddressMapping = IdentityAddressMapping;
+    type ForceOrigin = frame_system::EnsureRoot<u32>;
+    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u32>>;
     type WeightInfo = ();
-    type Runner = pallet_evm::runner::stack::Runner<Self>;
+    type NacLevelIndex = NacLevelIndex;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
