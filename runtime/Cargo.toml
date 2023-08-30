@@ -46,6 +46,7 @@ pallet-authorship = { workspace = true }
 pallet-babe = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-energy-generation = { workspace = true }
+pallet-energy-fee = { workspace = true }
 pallet-grandpa = { workspace = true }
 pallet-im-online = { workspace = true }
 pallet-nac-managing = { workspace = true }
@@ -146,6 +147,7 @@ std = [
     "pallet-nac-managing/std",
     "pallet-reputation/std",
     "pallet-energy-generation/std",
+    "pallet-energy-fee/std",
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",

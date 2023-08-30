@@ -8,6 +8,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use pallet_energy_fee::{CallFee, CustomFee};
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_core::{
@@ -21,7 +22,7 @@ use sp_runtime::{
     traits::{
         self, BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Get, IdentifyAccount,
         IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf, SaturatedConversion,
-        UniqueSaturatedInto, Verify,
+        UniqueSaturatedInto, Verify, Zero,
     },
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -37,9 +38,14 @@ use frame_support::weights::constants::ParityDbWeight as RuntimeDbWeight;
 #[cfg(feature = "with-rocksdb-weights")]
 use frame_support::weights::constants::RocksDbWeight as RuntimeDbWeight;
 use frame_support::{
-    construct_runtime, parameter_types,
+    construct_runtime,
+    dispatch::GetDispatchInfo,
+    ensure, parameter_types,
     traits::{
-        AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, FindAuthor, Hooks, KeyOwnerProofSystem,
+        fungible::{Balanced, Credit, Debt, Inspect, ItemOf, Mutate},
+        tokens::{Fortitude, Precision, Preservation},
+        AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, Currency, ExistenceRequirement,
+        ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem, SignedImbalance,
     },
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
 };
@@ -47,14 +53,14 @@ use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
-use pallet_transaction_payment::CurrencyAdapter;
+use pallet_transaction_payment::{FeeDetails, InclusionFee};
 // Frontier
 use fp_account::EthereumSignature;
 use fp_evm::weight_per_gas;
 use fp_rpc::TransactionStatus;
 use pallet_ethereum::{Call::transact, PostLogContent, Transaction as EthereumTransaction};
 use pallet_evm::{
-    Account as EVMAccount, EVMCurrencyAdapter, EnsureAccountId20, FeeCalculator, GasWeightMapping,
+    Account as EVMAccount, EnsureAccountId20, FeeCalculator, GasWeightMapping,
     IdentityAddressMapping, Runner,
 };
 
@@ -628,11 +634,46 @@ parameter_types! {
 
 impl pallet_transaction_payment::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type OnChargeTransaction = CurrencyAdapter<Balances, ()>;
+    type OnChargeTransaction = EnergyFee;
     type OperationalFeeMultiplier = ConstU8<5>;
     type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = ();
+}
+
+parameter_types! {
+    pub const GetConstantEnergyFee: Balance = 1_000_000_000;
+}
+
+type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
+type EnergyDebt = Debt<AccountId, EnergyItem>;
+type EnergyCredit = Credit<AccountId, EnergyItem>;
+
+impl pallet_energy_fee::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = EnergyCurrency<EnergyItem, EnergyDebt, EnergyCredit>;
+    type GetConstantFee = GetConstantEnergyFee;
+    type CustomFee = EnergyFee;
+}
+
+// We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
+impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
+    for EnergyFee
+{
+    fn dispatch_info_to_fee(
+        runtime_call: &RuntimeCall,
+        _dispatch_info: &DispatchInfoOf<RuntimeCall>,
+    ) -> CallFee<Balance> {
+        match runtime_call {
+            RuntimeCall::Balances(..)
+            | RuntimeCall::Assets(..)
+            | RuntimeCall::Uniques(..)
+            | RuntimeCall::Reputation(..)
+            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(GetConstantEnergyFee::get()),
+            RuntimeCall::EVM(..) => CallFee::EVM(GetConstantEnergyFee::get()),
+            _ => CallFee::Stock,
+        }
+    }
 }
 
 impl pallet_sudo::Config for Runtime {
@@ -684,7 +725,7 @@ impl pallet_evm::Config for Runtime {
     type FindAuthor = FindAuthorTruncated<Babe>;
     type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
-    type OnChargeTransaction = EVMCurrencyAdapter<Balances, ()>;
+    type OnChargeTransaction = EnergyFee; //EVMCurrencyAdapter<Balances, ()>;
     type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
@@ -763,6 +804,7 @@ construct_runtime!(
         Authorship: pallet_authorship,
         ImOnline: pallet_im_online,
         EnergyGeneration: pallet_energy_generation,
+        EnergyFee: pallet_energy_fee,
         Offences: pallet_offences,
         Session: pallet_session,
         Utility: pallet_utility,
@@ -793,6 +835,126 @@ impl fp_rpc::ConvertTransaction<opaque::UncheckedExtrinsic> for TransactionConve
         let encoded = extrinsic.encode();
         opaque::UncheckedExtrinsic::decode(&mut &encoded[..])
             .expect("Encoded extrinsic is always valid")
+    }
+}
+
+/// Should not be used as plain Currency! Some methods are mocked, please proceed with caution
+/// Limited usage in OnChargeTransaction-like traits
+pub struct EnergyCurrency<T, D, C>(PhantomData<(T, D, C)>);
+
+impl Currency<AccountId> for EnergyCurrency<EnergyItem, EnergyDebt, EnergyCredit> {
+    type Balance = <EnergyItem as Inspect<AccountId>>::Balance;
+    type PositiveImbalance = EnergyDebt;
+    type NegativeImbalance = EnergyCredit;
+
+    fn total_balance(who: &AccountId) -> Self::Balance {
+        EnergyItem::total_balance(who)
+    }
+
+    fn can_slash(_who: &AccountId, _value: Self::Balance) -> bool {
+        false
+    }
+
+    fn total_issuance() -> Self::Balance {
+        EnergyItem::total_issuance()
+    }
+
+    fn minimum_balance() -> Self::Balance {
+        EnergyItem::minimum_balance()
+    }
+
+    fn burn(amount: Self::Balance) -> Self::PositiveImbalance {
+        EnergyItem::rescind(amount)
+    }
+
+    fn issue(amount: Self::Balance) -> Self::NegativeImbalance {
+        EnergyItem::issue(amount)
+    }
+
+    fn free_balance(who: &AccountId) -> Self::Balance {
+        EnergyItem::balance(who)
+    }
+
+    fn ensure_can_withdraw(
+        who: &AccountId,
+        amount: Self::Balance,
+        _reasons: frame_support::traits::WithdrawReasons,
+        new_balance: Self::Balance,
+    ) -> frame_support::pallet_prelude::DispatchResult {
+        if amount.is_zero() {
+            return Ok(());
+        }
+        ensure!(
+            new_balance >= Self::free_balance(who),
+            pallet_assets::Error::<Runtime>::BalanceLow
+        );
+        Ok(())
+    }
+
+    fn transfer(
+        source: &AccountId,
+        dest: &AccountId,
+        value: Self::Balance,
+        existence_requirement: frame_support::traits::ExistenceRequirement,
+    ) -> frame_support::pallet_prelude::DispatchResult {
+        let preservation = match existence_requirement {
+            ExistenceRequirement::AllowDeath => Preservation::Expendable,
+            ExistenceRequirement::KeepAlive => Preservation::Protect,
+        };
+        EnergyItem::transfer(source, dest, value, preservation).map(|_| ())
+    }
+
+    /// Does not do anything
+    fn slash(_who: &AccountId, _value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+        (Self::NegativeImbalance::default(), Self::Balance::default())
+    }
+
+    fn deposit_into_existing(
+        who: &AccountId,
+        value: Self::Balance,
+    ) -> Result<Self::PositiveImbalance, sp_runtime::DispatchError> {
+        EnergyItem::deposit(who, value, Precision::Exact)
+    }
+
+    /// Mocked, does not do anything
+    fn deposit_creating(_who: &AccountId, _value: Self::Balance) -> Self::PositiveImbalance {
+        Self::PositiveImbalance::default()
+    }
+
+    fn withdraw(
+        who: &AccountId,
+        value: Self::Balance,
+        _reasons: frame_support::traits::WithdrawReasons,
+        liveness: ExistenceRequirement,
+    ) -> Result<Self::NegativeImbalance, sp_runtime::DispatchError> {
+        let preservation = match liveness {
+            ExistenceRequirement::AllowDeath => Preservation::Expendable,
+            _ => Preservation::Protect,
+        };
+        EnergyItem::withdraw(who, value, Precision::Exact, preservation, Fortitude::Polite)
+    }
+
+    // TODO: implement this function
+    /// Mocked, does not do anything
+    fn make_free_balance_be(
+        _who: &AccountId,
+        _balance: Self::Balance,
+    ) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
+        SignedImbalance::zero()
+        // let current_balance = T::balance(who);
+        // if current_balance.is_zero() {
+        //     return SignedImbalance::Negative(Self::NegativeImbalance::default())
+        // }
+        // if current_balance > balance {
+        //     // Overflow is not possible since current_balance > balance
+        //     let value = current_balance - balance;
+        //     let imbalance = T::deposit(who, value, Precision::Exact);
+        //     SignedImbalance::Positive(imbalance)
+        // } else {
+        //     let value = balance - current_balance;
+        //     let imbalance = T::withdraw(who, value, Precision::Exact, Preservation::Preserve, Fortitude::Force);
+        //     SignedImbalance::Negative(imbalance)
+        // }
     }
 }
 
@@ -1226,14 +1388,42 @@ impl_runtime_apis! {
             uxt: <Block as BlockT>::Extrinsic,
             len: u32
         ) -> pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo<Balance> {
-            TransactionPayment::query_info(uxt, len)
+            let dispatch_info = <<Block as BlockT>::Extrinsic as GetDispatchInfo>::get_dispatch_info(&uxt);
+            let custom_fee = EnergyFee::dispatch_info_to_fee(uxt.call(), &dispatch_info);
+            let mut runtime_dispatch_info = TransactionPayment::query_info(uxt, len);
+
+            if let CallFee::Custom(custom_fee) | CallFee::EVM(custom_fee) = custom_fee {
+                runtime_dispatch_info.partial_fee = custom_fee;
+            }
+            runtime_dispatch_info
         }
 
         fn query_fee_details(
             uxt: <Block as BlockT>::Extrinsic,
             len: u32,
-        ) -> pallet_transaction_payment::FeeDetails<Balance> {
-            TransactionPayment::query_fee_details(uxt, len)
+        ) -> FeeDetails<Balance> {
+            let dispatch_info = <<Block as BlockT>::Extrinsic as GetDispatchInfo>::get_dispatch_info(&uxt);
+            let custom_fee = EnergyFee::dispatch_info_to_fee(uxt.call(), &dispatch_info);
+
+            let fee_details = TransactionPayment::query_fee_details(uxt, len);
+
+            match (custom_fee, fee_details) {
+                (
+                    CallFee::Custom(custom_fee),
+                    FeeDetails {
+                        inclusion_fee: Some(_),
+                        tip
+                }) => FeeDetails {
+                    inclusion_fee: Some(InclusionFee{
+                        base_fee: custom_fee,
+                        len_fee: 0,
+                        adjusted_weight_fee: 0,
+                    }),
+                    tip
+                },
+                (_, fee_details) => fee_details
+            }
+
         }
 
         fn query_weight_to_fee(weight: Weight) -> Balance {
