@@ -909,7 +909,7 @@ impl Currency<AccountId> for EnergyCurrency<EnergyItem, EnergyDebt, EnergyCredit
         _reasons: frame_support::traits::WithdrawReasons,
         _liveness: ExistenceRequirement,
     ) -> Result<Self::NegativeImbalance, sp_runtime::DispatchError> {
-        EnergyItem::withdraw(who, value, Precision::Exact, Preservation::Protect, Fortitude::Force)
+        EnergyItem::withdraw(who, value, Precision::Exact, Preservation::Protect, Fortitude::Polite)
     }
 
     // TODO: implement this function
