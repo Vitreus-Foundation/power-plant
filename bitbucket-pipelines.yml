@@ -7,6 +7,7 @@ pipelines:
     fix/*:
       - step:
           name: Build from fix/* branch pull request
+          size: 2x
           script:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
@@ -19,6 +20,7 @@ pipelines:
     feature/*:
       - step:
           name: Build from feature/* branch pull request
+          size: 2x
           script:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
@@ -31,6 +33,7 @@ pipelines:
     devops/*:
       - step:
           name: Build from devops/* branch pull request
+          size: 2x
           script:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
@@ -51,6 +54,7 @@ pipelines:
           steps:
             - step:
                 name: Build and Run Tests
+                size: 2x
                 script:
                   - rustup target add wasm32-unknown-unknown
                   - export RUSTFLAGS="-C strip=debuginfo"
@@ -103,6 +107,7 @@ pipelines:
     testnet:
       - step:
           name: Build and Run Tests
+          size: 2x
           script:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
