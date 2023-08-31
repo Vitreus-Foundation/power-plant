@@ -200,6 +200,11 @@ pub const MAXIMUM_BLOCK_WEIGHT: Weight =
     Weight::from_parts(WEIGHT_MILLISECS_PER_BLOCK * WEIGHT_REF_TIME_PER_MILLIS, u64::MAX);
 pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
 
+pub mod vtrs {
+    use super::*;
+    pub const UNITS: Balance = 1_000_000_000_000_000_000;
+}
+
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
     pub const BlockHashCount: BlockNumber = 256;
@@ -368,7 +373,7 @@ impl pallet_assets::Config for Runtime {
 
 parameter_types! {
     pub const AccumulationPeriod: BlockNumber = HOURS * 24;
-    pub const MaxAmount: Balance = 100;
+    pub const MaxAmount: Balance = 100 * vtrs::UNITS;
 }
 
 impl pallet_faucet::Config for Runtime {

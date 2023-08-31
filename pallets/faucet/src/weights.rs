@@ -42,13 +42,13 @@ pub trait WeightInfo {
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
     fn request_funds() -> Weight {
-        Weight::default()
+        Weight::zero()
     }
 }
 
 // For backwards compatibility and tests
 impl WeightInfo for () {
     fn request_funds() -> Weight {
-        Weight::default()
+        Weight::zero()
     }
 }
