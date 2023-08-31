@@ -76,7 +76,9 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         /// Requset some funds.
         #[pallet::call_index(0)]
-        #[pallet::weight(<T as Config>::WeightInfo::request_funds())]
+        #[pallet::weight(
+            (<T as Config>::WeightInfo::request_funds(), DispatchClass::Normal, Pays::No)
+            )]
         pub fn request_funds(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
