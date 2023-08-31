@@ -179,6 +179,7 @@ pub const EPOCH_DURATION_IN_SLOTS: u64 = {
 };
 
 // Time is measured by number of blocks.
+// 60_000 ms per minute / ms per block
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
