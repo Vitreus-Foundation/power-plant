@@ -13,8 +13,8 @@ pub(crate) type AccountId = u32;
 pub(crate) type Balance = u32;
 type Nonce = u32;
 
-pub const SECS_PER_BLOCK: u64 = 6000;
-pub const BLOCKS_PER_HOUR: BlockNumberFor<Test> = 60 * 60 * 1000 / SECS_PER_BLOCK;
+// minutes * seconds / 6 seconds per block
+pub const BLOCKS_PER_HOUR: BlockNumberFor<Test> = 60 * 60 / 6;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
