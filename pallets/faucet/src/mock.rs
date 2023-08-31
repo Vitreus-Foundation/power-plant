@@ -1,6 +1,6 @@
 use crate as pallet_faucet;
 use frame_support::parameter_types;
-use frame_support::traits::{ConstU16, Everything, ConstU32, ConstU64};
+use frame_support::traits::{ConstU16, ConstU32, ConstU64, Everything};
 use frame_system::pallet_prelude::*;
 use sp_core::H256;
 use sp_runtime::{
