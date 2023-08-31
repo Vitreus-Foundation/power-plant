@@ -1,13 +1,14 @@
 [workspace]
 members = [
     "node",
-    "pallets/energy-generation",
-    "pallets/reputation",
     "pallets/energy-fee",
+    "pallets/energy-generation",
+    "pallets/nac-managing",
+    "pallets/reputation",
+    "runtime",
     # "pallets/simple-staking",
     # "precompiles/balances-erc20",
     # "precompiles/utils",
-    "runtime",
 ]
 resolver = "2"
 
@@ -181,8 +182,9 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
 
-pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
+pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }
+pallet-nac-managing = { path = "pallets/nac-managing", default-features = false }
 pallet-reputation = { path = "pallets/reputation", default-features = false }
 pallet-simple-staking = { path = "pallets/simple-staking", default-features = false }
 
