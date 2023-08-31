@@ -1,6 +1,6 @@
 image: rust:1.71
 clone:
-  depth: full
+  depth: full 
 
 pipelines:
   pull-requests:
@@ -10,7 +10,7 @@ pipelines:
           script:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
-            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
@@ -22,7 +22,7 @@ pipelines:
           script:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
-            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
@@ -34,13 +34,13 @@ pipelines:
           script:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
-            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
             - cargo test --locked
 
-  branches:
+  branches:   
     develop:
       - step:
           name: First step
@@ -54,7 +54,7 @@ pipelines:
                 script:
                   - rustup target add wasm32-unknown-unknown
                   - export RUSTFLAGS="-C strip=debuginfo"
-                  - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq
+                  - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
                   - cargo build --locked
@@ -99,14 +99,14 @@ pipelines:
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d --build && docker system prune -a -f"
                   - ssh ${USERNAME}@${HOST3} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep second-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise DEVnet Second Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep second-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise DEVnet Second Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
-
+                  
     testnet:
       - step:
           name: Build and Run Tests
           script:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
-            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
@@ -143,3 +143,4 @@ pipelines:
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d --build && docker system prune -a -f"
                   - ssh ${USERNAME}@${HOST3} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep second-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Second Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep second-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Second Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  
