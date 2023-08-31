@@ -8,6 +8,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use crate::traits::TokenExchange;
 use pallet_energy_fee::{CallFee, CustomFee};
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
@@ -20,9 +21,9 @@ use sp_runtime::{
     curve::PiecewiseLinear,
     generic, impl_opaque_keys,
     traits::{
-        self, BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Get, IdentifyAccount,
-        IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf, SaturatedConversion,
-        UniqueSaturatedInto, Verify, Zero,
+        BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Extrinsic, Get,
+        IdentifyAccount, IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf,
+        SaturatedConversion, UniqueSaturatedInto, Verify, Zero,
     },
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -426,7 +427,7 @@ where
 {
     fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
         call: RuntimeCall,
-        public: <Signature as traits::Verify>::Signer,
+        public: <Signature as Verify>::Signer,
         account: AccountId,
         nonce: Index,
     ) -> Option<(RuntimeCall, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
@@ -626,11 +627,13 @@ impl pallet_transaction_payment::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
+    pub const EnergyExchangeRate: (Balance, Balance) = (2, 1);
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
 type EnergyDebt = Debt<AccountId, EnergyItem>;
 type EnergyCredit = Credit<AccountId, EnergyItem>;
+type EnergyExchange = crate::traits::Exchange<Balances, EnergyItem, EnergyExchangeRate>;
 
 impl pallet_energy_fee::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;

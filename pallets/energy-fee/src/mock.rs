@@ -1,5 +1,5 @@
 use crate as pallet_energy_fee;
-use crate::{CallFee, CustomFee};
+use crate::{CallFee, CustomFee, Exchange};
 use fp_account::AccountId20;
 
 use frame_support::weights::{ConstantMultiplier, IdentityFee};
@@ -52,6 +52,18 @@ frame_support::construct_runtime!(
 
 parameter_types! {
     pub const GetVNRG: AssetId = VNRG;
+    pub const AssetDeposit: Balance = 0;
+    pub const AssetAccountDeposit: Balance = 0;
+    pub const ApprovalDeposit: Balance = 0;
+    pub const AssetsStringLimit: u32 = 50;
+    pub const MetadataDepositBase: Balance = 0;
+    pub const MetadataDepositPerByte: Balance = 0;
+    pub BlockGasLimit: U256 = U256::from(75_000_000);
+    pub const WeightPerGas: Weight = Weight::from_all(1_000_000);
+    pub const GetPostLogContent: PostLogContent = PostLogContent::BlockAndTxnHashes;
+    pub const GetPrecompilesValue: () = ();
+    pub const GetConstantEnergyFee: Balance = 1_000_000_000;
+    pub const VTRSEnergyRate: (Balance, Balance) = (2, 1);
 }
 
 impl frame_system::Config for Test {
@@ -117,6 +129,9 @@ impl pallet_energy_fee::Config for Test {
     type Currency = BalancesVNRG;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
+    type FeeTokenBalanced = BalancesVNRG;
+    type MainTokenBalanced = BalancesVTRS;
+    type EnergyExchange = Exchange<BalancesVNRG, BalancesVTRS, VTRSEnergyRate>;
 }
 
 impl pallet_timestamp::Config for Test {
@@ -200,20 +215,6 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
     }
 }
 
-parameter_types! {
-    pub const AssetDeposit: Balance = 0;
-    pub const AssetAccountDeposit: Balance = 0;
-    pub const ApprovalDeposit: Balance = 0;
-    pub const AssetsStringLimit: u32 = 50;
-    pub const MetadataDepositBase: Balance = 0;
-    pub const MetadataDepositPerByte: Balance = 0;
-    pub BlockGasLimit: U256 = U256::from(75_000_000);
-    pub const WeightPerGas: Weight = Weight::from_all(1_000_000);
-    pub const GetPostLogContent: PostLogContent = PostLogContent::BlockAndTxnHashes;
-    pub const GetPrecompilesValue: () = ();
-    pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-}
-
 impl pallet_assets::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
@@ -250,11 +251,15 @@ impl pallet_transaction_payment::Config for Test {
     type FeeMultiplierUpdate = ();
 }
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
+pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
-    pallet_balances::GenesisConfig::<Test, Instance2> {
-        balances: vec![(ALICE, 1_000_000_000_000)],
+    pallet_balances::GenesisConfig::<Test, Instance2> { balances: vec![(ALICE, energy_balance)] }
+        .assimilate_storage(&mut t)
+        .unwrap();
+
+    pallet_balances::GenesisConfig::<Test, Instance1> {
+        balances: vec![(ALICE, 2_000_000_000_000)],
     }
     .assimilate_storage(&mut t)
     .unwrap();

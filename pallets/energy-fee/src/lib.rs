@@ -1,13 +1,18 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use frame_support::traits::tokens::{currency::Currency, ExistenceRequirement, WithdrawReasons};
+use frame_support::traits::tokens::{
+    currency::Currency, fungible::Balanced, ExistenceRequirement, WithdrawReasons,
+};
 
 pub use pallet::*;
 pub(crate) use pallet_evm::{AddressMapping, OnChargeEVMTransaction};
 pub use pallet_transaction_payment::OnChargeTransaction;
 
 use sp_core::{H160, U256};
-use sp_runtime::traits::{DispatchInfoOf, Get, PostDispatchInfoOf, Zero};
+use sp_runtime::{
+    traits::{DispatchInfoOf, Get, PostDispatchInfoOf, Zero},
+    transaction_validity::{InvalidTransaction, TransactionValidityError},
+};
 
 #[cfg(test)]
 pub(crate) mod mock;
@@ -15,23 +20,15 @@ pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod traits;
+pub use crate::traits::{CustomFee, Exchange, TokenExchange};
+
 /// Fee type inferred from call info
 pub enum CallFee<Balance> {
     Custom(Balance),
     Stock,
     // The EVM fee is charged separately
     EVM(Balance),
-}
-
-/// Custom fee calculation for specified scenarios
-pub trait CustomFee<RuntimeCall, DispatchInfo, Balance, ConstantFee>
-where
-    ConstantFee: Get<Balance>,
-{
-    fn dispatch_info_to_fee(
-        runtime_call: &RuntimeCall,
-        dispatch_info: &DispatchInfo,
-    ) -> CallFee<Balance>;
 }
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -43,7 +40,7 @@ type NegativeImbalanceOf<T> = <CurrencyOf<T> as Currency<AccountIdOf<T>>>::Negat
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
-    use frame_support::pallet_prelude::*;
+    use frame_support::{pallet_prelude::*, traits::fungible::Inspect};
 
     /// Pallet which implements fee withdrawal traits
     #[pallet::pallet]
@@ -69,6 +66,16 @@ pub mod pallet {
             BalanceOf<Self>,
             Self::GetConstantFee,
         >;
+        type FeeTokenBalanced: Balanced<Self::AccountId>
+            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
+        type MainTokenBalanced: Balanced<Self::AccountId>
+            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
+        type EnergyExchange: TokenExchange<
+            Self::AccountId,
+            Self::FeeTokenBalanced,
+            Self::MainTokenBalanced,
+            BalanceOf<Self>,
+        >;
     }
 
     #[pallet::event]
@@ -93,20 +100,16 @@ pub mod pallet {
                 return Ok(None);
             }
 
-            // The fee won't be charged yet in case of EVM call so we check in advance
-            // even though possible withdrawal errors are handled afterwards
-            let const_energy_fee = T::GetConstantFee::get();
-            ensure!(
-                CurrencyOf::<T>::free_balance(who) > const_energy_fee,
-                TransactionValidityError::Invalid(InvalidTransaction::Payment)
-            );
-
             let fee = match T::CustomFee::dispatch_info_to_fee(call, dispatch_info) {
                 CallFee::Custom(custom_fee) => custom_fee,
-                CallFee::EVM(_) => return Ok(None),
+                CallFee::EVM(custom_fee) => {
+                    Self::on_low_balance_exchange(who, custom_fee)?;
+                    return Ok(None);
+                },
                 _ => fee,
             };
 
+            Self::on_low_balance_exchange(who, fee)?;
             CurrencyOf::<T>::withdraw(
                 who,
                 fee,
@@ -148,6 +151,9 @@ pub mod pallet {
             let const_energy_fee = T::GetConstantFee::get();
             let account_id = <T as pallet_evm::Config>::AddressMapping::into_account_id(*who);
 
+            Self::on_low_balance_exchange(&account_id, const_energy_fee)
+                .map_err(|_| pallet_evm::Error::<T>::BalanceLow)?;
+
             CurrencyOf::<T>::withdraw(
                 &account_id,
                 const_energy_fee,
@@ -176,6 +182,22 @@ pub mod pallet {
         // TODO: handle EVM priority fee
         fn pay_priority_fee(_tip: Self::LiquidityInfo) {
             // Default Ethereum behaviour: issue the tip to the block author.
+        }
+    }
+}
+
+impl<T: Config> Pallet<T> {
+    fn on_low_balance_exchange(
+        who: &T::AccountId,
+        amount: BalanceOf<T>,
+    ) -> Result<(), TransactionValidityError> {
+        let current_balance = CurrencyOf::<T>::free_balance(who);
+        if current_balance < amount {
+            T::EnergyExchange::exchange_from_output(who, amount - current_balance)
+                .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))
+                .map(|_| ())
+        } else {
+            Ok(())
         }
     }
 }
