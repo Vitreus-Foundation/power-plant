@@ -116,9 +116,8 @@ pub mod pallet {
                 _ => fee,
             };
 
-            Self::on_low_balance_exchange(who, fee).map_err(|_| {
-                TransactionValidityError::Invalid(InvalidTransaction::Payment)
-            })?;
+            Self::on_low_balance_exchange(who, fee)
+                .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
 
             T::FeeTokenBalanced::withdraw(
                 who,

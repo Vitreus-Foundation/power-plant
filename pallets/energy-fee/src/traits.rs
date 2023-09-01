@@ -1,12 +1,10 @@
 use crate::CallFee;
 use frame_support::traits::{
     fungible::{Balanced, Inspect},
-    tokens::{Balance, Preservation, Precision, Fortitude},
+    tokens::{Balance, Fortitude, Precision, Preservation},
     Get,
 };
-use sp_arithmetic::{
-    per_things::Rounding, ArithmeticError,
-};
+use sp_arithmetic::{per_things::Rounding, ArithmeticError};
 use sp_runtime::DispatchError;
 use sp_std::marker::PhantomData;
 
@@ -73,11 +71,7 @@ where
             Preservation::Protect,
             Fortitude::Polite,
         )?;
-        let _ = TargetToken::deposit(
-            who,
-            amount_out,
-            Precision::Exact,
-        )?;
+        let _ = TargetToken::deposit(who, amount_out, Precision::Exact)?;
         Ok(amount_out)
     }
 }

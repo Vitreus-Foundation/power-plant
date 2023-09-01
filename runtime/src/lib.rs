@@ -42,9 +42,8 @@ use frame_support::{
     dispatch::GetDispatchInfo,
     parameter_types,
     traits::{
-        fungible::ItemOf,
-        AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8,
-        ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
+        fungible::ItemOf, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall,
+        FindAuthor, Hooks, KeyOwnerProofSystem,
     },
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
 };
