@@ -13,7 +13,7 @@ use sp_runtime::Perbill;
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
+    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
     EVMConfig, EnableManualSeal, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
     MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix,
     SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
@@ -116,8 +116,6 @@ fn properties() -> Properties {
     properties.insert("ss58Format".into(), SS58Prefix::get().into());
     properties
 }
-
-const UNITS: Balance = 1_000_000_000_000_000_000;
 
 pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
     let wasm_binary = WASM_BINARY.expect("WASM not available");
@@ -255,7 +253,7 @@ fn testnet_genesis(
         });
 
     // stakers: all validators and nominators.
-    const ENDOWMENT: Balance = 1_000_000 * UNITS;
+    const ENDOWMENT: Balance = 1_000_000 * vtrs::UNITS;
     const STASH: Balance = ENDOWMENT / 1_000_000;
     let mut rng = rand::thread_rng();
     let stakers = initial_validators

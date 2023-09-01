@@ -20,9 +20,9 @@ use sp_runtime::{
     curve::PiecewiseLinear,
     generic, impl_opaque_keys,
     traits::{
-        self, BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Get, IdentifyAccount,
-        IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf, SaturatedConversion,
-        UniqueSaturatedInto, Verify, Zero,
+        BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Extrinsic, Get,
+        IdentifyAccount, IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf,
+        SaturatedConversion, UniqueSaturatedInto, Verify,
     },
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -40,12 +40,10 @@ use frame_support::weights::constants::RocksDbWeight as RuntimeDbWeight;
 use frame_support::{
     construct_runtime,
     dispatch::GetDispatchInfo,
-    ensure, parameter_types,
+    parameter_types,
     traits::{
-        fungible::{Balanced, Credit, Debt, Inspect, ItemOf, Mutate},
-        tokens::{Fortitude, Precision, Preservation},
-        AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, Currency, ExistenceRequirement,
-        ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem, SignedImbalance,
+        fungible::ItemOf, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall,
+        FindAuthor, Hooks, KeyOwnerProofSystem,
     },
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
 };
@@ -114,6 +112,9 @@ pub type Hash = H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem;
 
+/// Asset ID.
+pub type AssetId = u128;
+
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
@@ -179,6 +180,7 @@ pub const EPOCH_DURATION_IN_SLOTS: u64 = {
 };
 
 // Time is measured by number of blocks.
+// 60_000 ms per minute / ms per block
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
@@ -195,6 +197,11 @@ pub const WEIGHT_MILLISECS_PER_BLOCK: u64 = 2000;
 pub const MAXIMUM_BLOCK_WEIGHT: Weight =
     Weight::from_parts(WEIGHT_MILLISECS_PER_BLOCK * WEIGHT_REF_TIME_PER_MILLIS, u64::MAX);
 pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
+
+pub mod vtrs {
+    use super::*;
+    pub const UNITS: Balance = 1_000_000_000_000_000_000;
+}
 
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
@@ -330,8 +337,6 @@ impl pallet_balances::Config for Runtime {
     type MaxHolds = ();
 }
 
-pub type AssetId = u128;
-
 parameter_types! {
     pub const AssetDeposit: Balance = 100; // The deposit required to create an asset
     pub const AssetAccountDeposit: Balance = 10;
@@ -362,6 +367,18 @@ impl pallet_assets::Config for Runtime {
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime_benchmarks")]
     type BenchmarkHelper = ();
+}
+
+parameter_types! {
+    pub const AccumulationPeriod: BlockNumber = HOURS * 24;
+    pub const MaxAmount: Balance = 100 * vtrs::UNITS;
+}
+
+impl pallet_faucet::Config for Runtime {
+    type AccumulationPeriod = AccumulationPeriod;
+    type MaxAmount = MaxAmount;
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
 }
 
 impl pallet_claiming::Config for Runtime {
@@ -438,10 +455,10 @@ where
 {
     fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
         call: RuntimeCall,
-        public: <Signature as traits::Verify>::Signer,
+        public: <Signature as Verify>::Signer,
         account: AccountId,
         nonce: Index,
-    ) -> Option<(RuntimeCall, <UncheckedExtrinsic as traits::Extrinsic>::SignaturePayload)> {
+    ) -> Option<(RuntimeCall, <UncheckedExtrinsic as Extrinsic>::SignaturePayload)> {
         let tip = 0;
         // take the biggest period possible.
         let period =
@@ -610,7 +627,7 @@ impl pallet_uniques::Config for Runtime {
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type Currency = Balances;
-    type ForceOrigin = EnsureRoot<AccountId>;
+    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
     type CollectionDeposit = CollectionDeposit;
     type ItemDeposit = ItemDeposit;
     type MetadataDepositBase = MetadataDepositBase;
@@ -650,17 +667,21 @@ impl pallet_transaction_payment::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
+    /// 1 VTRS = 1/1_000_000_000 VNRG
+    pub const EnergyExchangeRate: (Balance, Balance) = (1, 1_000_000_000);
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
-type EnergyDebt = Debt<AccountId, EnergyItem>;
-type EnergyCredit = Credit<AccountId, EnergyItem>;
+type EnergyExchange = pallet_energy_fee::Exchange<Balances, EnergyItem, EnergyExchangeRate>;
 
 impl pallet_energy_fee::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type Currency = EnergyCurrency<EnergyItem, EnergyDebt, EnergyCredit>;
+    type FeeTokenBalanced = EnergyItem;
+    type MainTokenBalanced = Balances;
+    type EnergyExchange = EnergyExchange;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
+    type EnergyRate = EnergyExchangeRate;
 }
 
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
@@ -795,6 +816,7 @@ construct_runtime!(
         Babe: pallet_babe,
         Grandpa: pallet_grandpa,
         Balances: pallet_balances,
+        Faucet: pallet_faucet,
         Assets: pallet_assets,
         TransactionPayment: pallet_transaction_payment,
         Sudo: pallet_sudo,
@@ -805,7 +827,6 @@ construct_runtime!(
         Ethereum: pallet_ethereum,
         HotfixSufficients: pallet_hotfix_sufficients,
         Uniques: pallet_uniques,
-        Claiming: pallet_claiming,
         Reputation: pallet_reputation,
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
@@ -843,126 +864,6 @@ impl fp_rpc::ConvertTransaction<opaque::UncheckedExtrinsic> for TransactionConve
         let encoded = extrinsic.encode();
         opaque::UncheckedExtrinsic::decode(&mut &encoded[..])
             .expect("Encoded extrinsic is always valid")
-    }
-}
-
-/// Should not be used as plain Currency! Some methods are mocked, please proceed with caution
-/// Limited usage in OnChargeTransaction-like traits
-pub struct EnergyCurrency<T, D, C>(PhantomData<(T, D, C)>);
-
-impl Currency<AccountId> for EnergyCurrency<EnergyItem, EnergyDebt, EnergyCredit> {
-    type Balance = <EnergyItem as Inspect<AccountId>>::Balance;
-    type PositiveImbalance = EnergyDebt;
-    type NegativeImbalance = EnergyCredit;
-
-    fn total_balance(who: &AccountId) -> Self::Balance {
-        EnergyItem::total_balance(who)
-    }
-
-    fn can_slash(_who: &AccountId, _value: Self::Balance) -> bool {
-        false
-    }
-
-    fn total_issuance() -> Self::Balance {
-        EnergyItem::total_issuance()
-    }
-
-    fn minimum_balance() -> Self::Balance {
-        EnergyItem::minimum_balance()
-    }
-
-    fn burn(amount: Self::Balance) -> Self::PositiveImbalance {
-        EnergyItem::rescind(amount)
-    }
-
-    fn issue(amount: Self::Balance) -> Self::NegativeImbalance {
-        EnergyItem::issue(amount)
-    }
-
-    fn free_balance(who: &AccountId) -> Self::Balance {
-        EnergyItem::balance(who)
-    }
-
-    fn ensure_can_withdraw(
-        who: &AccountId,
-        amount: Self::Balance,
-        _reasons: frame_support::traits::WithdrawReasons,
-        new_balance: Self::Balance,
-    ) -> frame_support::pallet_prelude::DispatchResult {
-        if amount.is_zero() {
-            return Ok(());
-        }
-        ensure!(
-            new_balance >= Self::free_balance(who),
-            pallet_assets::Error::<Runtime>::BalanceLow
-        );
-        Ok(())
-    }
-
-    fn transfer(
-        source: &AccountId,
-        dest: &AccountId,
-        value: Self::Balance,
-        existence_requirement: frame_support::traits::ExistenceRequirement,
-    ) -> frame_support::pallet_prelude::DispatchResult {
-        let preservation = match existence_requirement {
-            ExistenceRequirement::AllowDeath => Preservation::Expendable,
-            ExistenceRequirement::KeepAlive => Preservation::Protect,
-        };
-        EnergyItem::transfer(source, dest, value, preservation).map(|_| ())
-    }
-
-    /// Does not do anything
-    fn slash(_who: &AccountId, _value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
-        (Self::NegativeImbalance::default(), Self::Balance::default())
-    }
-
-    fn deposit_into_existing(
-        who: &AccountId,
-        value: Self::Balance,
-    ) -> Result<Self::PositiveImbalance, sp_runtime::DispatchError> {
-        EnergyItem::deposit(who, value, Precision::Exact)
-    }
-
-    /// Mocked, does not do anything
-    fn deposit_creating(_who: &AccountId, _value: Self::Balance) -> Self::PositiveImbalance {
-        Self::PositiveImbalance::default()
-    }
-
-    fn withdraw(
-        who: &AccountId,
-        value: Self::Balance,
-        _reasons: frame_support::traits::WithdrawReasons,
-        liveness: ExistenceRequirement,
-    ) -> Result<Self::NegativeImbalance, sp_runtime::DispatchError> {
-        let preservation = match liveness {
-            ExistenceRequirement::AllowDeath => Preservation::Expendable,
-            _ => Preservation::Protect,
-        };
-        EnergyItem::withdraw(who, value, Precision::Exact, preservation, Fortitude::Polite)
-    }
-
-    // TODO: implement this function
-    /// Mocked, does not do anything
-    fn make_free_balance_be(
-        _who: &AccountId,
-        _balance: Self::Balance,
-    ) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
-        SignedImbalance::zero()
-        // let current_balance = T::balance(who);
-        // if current_balance.is_zero() {
-        //     return SignedImbalance::Negative(Self::NegativeImbalance::default())
-        // }
-        // if current_balance > balance {
-        //     // Overflow is not possible since current_balance > balance
-        //     let value = current_balance - balance;
-        //     let imbalance = T::deposit(who, value, Precision::Exact);
-        //     SignedImbalance::Positive(imbalance)
-        // } else {
-        //     let value = balance - current_balance;
-        //     let imbalance = T::withdraw(who, value, Precision::Exact, Preservation::Preserve, Fortitude::Force);
-        //     SignedImbalance::Negative(imbalance)
-        // }
     }
 }
 

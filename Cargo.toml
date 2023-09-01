@@ -4,6 +4,7 @@ members = [
     "pallets/claiming",
     "pallets/energy-fee",
     "pallets/energy-generation",
+    "pallets/faucet",
     "pallets/nac-managing",
     "pallets/reputation",
     "runtime",
@@ -90,6 +91,7 @@ sc-utils = { git = "https://github.com/paritytech/substrate", branch = "polkadot
 # Substrate Primitive
 sp-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-block-builder = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
@@ -186,6 +188,7 @@ vitreus-power-plant-runtime = { path = "runtime", default-features = false }
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
 pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }
+pallet-faucet = { path = "pallets/faucet", default-features = false }
 pallet-nac-managing = { path = "pallets/nac-managing", default-features = false }
 pallet-reputation = { path = "pallets/reputation", default-features = false }
 pallet-simple-staking = { path = "pallets/simple-staking", default-features = false }

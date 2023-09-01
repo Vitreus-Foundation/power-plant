@@ -1,7 +1,8 @@
 use crate as pallet_energy_fee;
-use crate::{CallFee, CustomFee};
+use crate::{CallFee, CustomFee, Exchange};
 use fp_account::AccountId20;
 
+use frame_support::traits::fungible::ItemOf;
 use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
     pallet_prelude::Weight,
@@ -9,7 +10,6 @@ use frame_support::{
     traits::{AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
-use pallet_balances::{Instance1, Instance2};
 use pallet_ethereum::PostLogContent;
 use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::Compact;
@@ -17,7 +17,7 @@ use parity_scale_codec::Compact;
 use sp_core::{H256, U256};
 
 use sp_runtime::{
-    traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup},
+    traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup, Zero},
     BuildStorage, Permill,
 };
 
@@ -27,6 +27,7 @@ pub(crate) type AccountId = AccountId20;
 pub(crate) type AssetId = u128;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
+pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
 
 pub(crate) const VNRG: AssetId = 1;
 pub(crate) const ALICE: AccountId = AccountId20([1u8; 20]);
@@ -37,8 +38,7 @@ frame_support::construct_runtime!(
     pub enum Test
     {
         System: frame_system,
-        BalancesVTRS: pallet_balances::<Instance1>,
-        BalancesVNRG: pallet_balances::<Instance2>,
+        BalancesVTRS: pallet_balances,
         Assets: pallet_assets,
         TransactionPayment: pallet_transaction_payment,
         EnergyFee: pallet_energy_fee,
@@ -52,6 +52,18 @@ frame_support::construct_runtime!(
 
 parameter_types! {
     pub const GetVNRG: AssetId = VNRG;
+    pub const AssetDeposit: Balance = 0;
+    pub const AssetAccountDeposit: Balance = 0;
+    pub const ApprovalDeposit: Balance = 0;
+    pub const AssetsStringLimit: u32 = 50;
+    pub const MetadataDepositBase: Balance = 0;
+    pub const MetadataDepositPerByte: Balance = 0;
+    pub BlockGasLimit: U256 = U256::from(75_000_000);
+    pub const WeightPerGas: Weight = Weight::from_all(1_000_000);
+    pub const GetPostLogContent: PostLogContent = PostLogContent::BlockAndTxnHashes;
+    pub const GetPrecompilesValue: () = ();
+    pub const GetConstantEnergyFee: Balance = 1_000_000_000;
+    pub const VTRSEnergyRate: (Balance, Balance) = (2, 1);
 }
 
 impl frame_system::Config for Test {
@@ -80,23 +92,7 @@ impl frame_system::Config for Test {
     type MaxConsumers = ConstU32<16>;
 }
 
-impl pallet_balances::Config<Instance1> for Test {
-    type MaxLocks = ConstU32<1024>;
-    type MaxReserves = ();
-    type ReserveIdentifier = [u8; 8];
-    type Balance = Balance;
-    type RuntimeEvent = RuntimeEvent;
-    type DustRemoval = ();
-    type ExistentialDeposit = ConstU128<1>;
-    type AccountStore = System;
-    type WeightInfo = ();
-    type FreezeIdentifier = ();
-    type MaxFreezes = ();
-    type MaxHolds = ();
-    type RuntimeHoldReason = ();
-}
-
-impl pallet_balances::Config<Instance2> for Test {
+impl pallet_balances::Config for Test {
     type MaxLocks = ConstU32<1024>;
     type MaxReserves = ();
     type ReserveIdentifier = [u8; 8];
@@ -114,9 +110,12 @@ impl pallet_balances::Config<Instance2> for Test {
 
 impl pallet_energy_fee::Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type Currency = BalancesVNRG;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
+    type FeeTokenBalanced = BalancesVNRG;
+    type MainTokenBalanced = BalancesVTRS;
+    type EnergyExchange = Exchange<BalancesVTRS, BalancesVNRG, VTRSEnergyRate>;
+    type EnergyRate = VTRSEnergyRate;
 }
 
 impl pallet_timestamp::Config for Test {
@@ -200,20 +199,6 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
     }
 }
 
-parameter_types! {
-    pub const AssetDeposit: Balance = 0;
-    pub const AssetAccountDeposit: Balance = 0;
-    pub const ApprovalDeposit: Balance = 0;
-    pub const AssetsStringLimit: u32 = 50;
-    pub const MetadataDepositBase: Balance = 0;
-    pub const MetadataDepositPerByte: Balance = 0;
-    pub BlockGasLimit: U256 = U256::from(75_000_000);
-    pub const WeightPerGas: Weight = Weight::from_all(1_000_000);
-    pub const GetPostLogContent: PostLogContent = PostLogContent::BlockAndTxnHashes;
-    pub const GetPrecompilesValue: () = ();
-    pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-}
-
 impl pallet_assets::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
@@ -250,14 +235,29 @@ impl pallet_transaction_payment::Config for Test {
     type FeeMultiplierUpdate = ();
 }
 // Build genesis storage according to the mock runtime.
-pub fn new_test_ext() -> sp_io::TestExternalities {
+pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
-    pallet_balances::GenesisConfig::<Test, Instance2> {
-        balances: vec![(ALICE, 1_000_000_000_000)],
+    let alice_account = if !energy_balance.is_zero() {
+        vec![(GetVNRG::get(), ALICE, energy_balance)]
+    } else {
+        vec![]
+    };
+
+    pallet_assets::GenesisConfig::<Test> {
+        accounts: vec![(GetVNRG::get(), BOB, 1000)]
+            .into_iter()
+            .chain(alice_account.into_iter())
+            .collect(),
+        assets: vec![(GetVNRG::get(), BOB, true, 1)],
+        metadata: vec![(GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
     }
     .assimilate_storage(&mut t)
     .unwrap();
+
+    pallet_balances::GenesisConfig::<Test> { balances: vec![(ALICE, 2_000_000_000_000)] }
+        .assimilate_storage(&mut t)
+        .unwrap();
 
     t.into()
 }
