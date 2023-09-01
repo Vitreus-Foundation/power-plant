@@ -112,6 +112,9 @@ pub type Hash = H256;
 /// Digest item type.
 pub type DigestItem = generic::DigestItem;
 
+/// Asset ID.
+pub type AssetId = u128;
+
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
 /// of data like extrinsics, allowing for them to continue syncing the network through upgrades
@@ -177,6 +180,7 @@ pub const EPOCH_DURATION_IN_SLOTS: u64 = {
 };
 
 // Time is measured by number of blocks.
+// 60_000 ms per minute / ms per block
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
@@ -193,6 +197,11 @@ pub const WEIGHT_MILLISECS_PER_BLOCK: u64 = 2000;
 pub const MAXIMUM_BLOCK_WEIGHT: Weight =
     Weight::from_parts(WEIGHT_MILLISECS_PER_BLOCK * WEIGHT_REF_TIME_PER_MILLIS, u64::MAX);
 pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
+
+pub mod vtrs {
+    use super::*;
+    pub const UNITS: Balance = 1_000_000_000_000_000_000;
+}
 
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
@@ -328,8 +337,6 @@ impl pallet_balances::Config for Runtime {
     type MaxHolds = ();
 }
 
-pub type AssetId = u128;
-
 parameter_types! {
     pub const AssetDeposit: Balance = 100; // The deposit required to create an asset
     pub const AssetAccountDeposit: Balance = 10;
@@ -360,6 +367,18 @@ impl pallet_assets::Config for Runtime {
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime_benchmarks")]
     type BenchmarkHelper = ();
+}
+
+parameter_types! {
+    pub const AccumulationPeriod: BlockNumber = HOURS * 24;
+    pub const MaxAmount: Balance = 100 * vtrs::UNITS;
+}
+
+impl pallet_faucet::Config for Runtime {
+    type AccumulationPeriod = AccumulationPeriod;
+    type MaxAmount = MaxAmount;
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
 }
 
 use pallet_reputation::REPUTATION_POINTS_PER_DAY;
@@ -790,6 +809,7 @@ construct_runtime!(
         Babe: pallet_babe,
         Grandpa: pallet_grandpa,
         Balances: pallet_balances,
+        Faucet: pallet_faucet,
         Assets: pallet_assets,
         TransactionPayment: pallet_transaction_payment,
         Sudo: pallet_sudo,
