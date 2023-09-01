@@ -1,20 +1,17 @@
-//! This pallet holds the NAC - NFTs with granted access level of the user.
-//! It uses `pallet_uniques` under the hood.
-//!
-//! It's supposed there is a single collection holding all the NACs. The level is a `u8` value
-//! stored in the NAC's metadata.
-
+//! The pallet provides a simple claiming mechanism.
+//! Allows claiming tokens immediately on the user's account without additional confirmations.
+//! The origin should be signed.
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-use frame_support::{
-        dispatch::DispatchResultWithPostInfo,
-        pallet_prelude::*,
-        traits::{Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, ReservableCurrency},
-    };
-use frame_system::ensure_root;
 use crate::weights::WeightInfo;
+use frame_support::{
+    dispatch::DispatchResultWithPostInfo,
+    pallet_prelude::*,
+    traits::{Currency, EnsureOrigin, ExistenceRequirement::KeepAlive, ReservableCurrency},
+};
+use frame_system::ensure_root;
 
 pub use pallet::*;
 
@@ -34,7 +31,7 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_balances::Config {
+    pub trait Config: frame_system::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -58,7 +55,7 @@ pub mod pallet {
             /// To whom the tokens were claimed.
             account_id: T::AccountId,
             /// Number of tokens.
-            amount: <T as pallet_balances::Config>::Balance,
+            amount: <T::Currency as Currency<T::AccountId>>::Balance,
         },
 
         /// Tokens was assigned to account (by root).
@@ -66,7 +63,7 @@ pub mod pallet {
             /// To whom the tokens were assigned.
             account_id: T::AccountId,
             /// Number of tokens.
-            amount: <T as pallet_balances::Config>::Balance,
+            amount: <T::Currency as Currency<T::AccountId>>::Balance,
         },
     }
 
@@ -84,13 +81,11 @@ pub mod pallet {
         pub fn assign_token_amount(
             origin: OriginFor<T>,
             account_id: T::AccountId,
-            amount: T::Balance,
+            amount: <T::Currency as Currency<T::AccountId>>::Balance,
         ) -> DispatchResultWithPostInfo {
             T::AdminOrigin::try_origin(origin).map(|_| ()).or_else(ensure_root)?;
 
-            let _ =
-                <pallet_balances::Pallet<T> as Currency<_>>::deposit_creating(&account_id, amount);
-
+            <T::Currency as Currency<T::AccountId>>::deposit_creating(&account_id, amount);
 
             Self::deposit_event(Event::TokenAssigned { account_id, amount });
 
@@ -103,7 +98,7 @@ pub mod pallet {
         pub fn claim(
             origin: OriginFor<T>,
             account_id: T::AccountId,
-            amount: T::Balance,
+            amount: <T::Currency as Currency<T::AccountId>>::Balance,
         ) -> DispatchResultWithPostInfo {
             let who = ensure_signed(origin)?;
 
@@ -120,16 +115,9 @@ impl<T: Config> Pallet<T> {
     fn process_claim(
         who: T::AccountId,
         account_id: &T::AccountId,
-        amount: T::Balance,
+        amount: <T::Currency as Currency<T::AccountId>>::Balance,
     ) -> DispatchResult {
-        <pallet_balances::Pallet<T> as Currency<_>>::transfer(
-            &who,
-            account_id,
-            amount,
-            KeepAlive,
-        )?;
-
+        <T::Currency as Currency<T::AccountId>>::transfer(&who, account_id, amount, KeepAlive)?;
         Ok(())
     }
 }
-
