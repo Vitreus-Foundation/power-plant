@@ -359,6 +359,13 @@ impl pallet_assets::Config for Runtime {
     type BenchmarkHelper = ();
 }
 
+impl pallet_claiming::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type AdminOrigin = EnsureRoot<AccountId>;
+    type Currency = Balances;
+    type WeightInfo = ();
+}
+
 use pallet_reputation::REPUTATION_POINTS_PER_DAY;
 
 impl pallet_reputation::Config for Runtime {
@@ -595,7 +602,7 @@ impl pallet_uniques::Config for Runtime {
     type CollectionId = u32;
     type ItemId = u32;
     type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+    type ForceOrigin = EnsureRoot<AccountId>;
     type CollectionDeposit = CollectionDeposit;
     type ItemDeposit = ItemDeposit;
     type MetadataDepositBase = MetadataDepositBase;
@@ -781,6 +788,7 @@ construct_runtime!(
         Ethereum: pallet_ethereum,
         HotfixSufficients: pallet_hotfix_sufficients,
         Uniques: pallet_uniques,
+        Claiming: pallet_claiming,
         Reputation: pallet_reputation,
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.

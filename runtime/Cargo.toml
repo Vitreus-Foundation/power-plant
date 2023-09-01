@@ -45,6 +45,7 @@ pallet-assets = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-babe = { workspace = true }
 pallet-balances = { workspace = true }
+pallet-claiming = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-grandpa = { workspace = true }
@@ -143,7 +144,7 @@ std = [
     "pallet-evm-precompile-sha3fips/std",
     "pallet-evm-precompile-simple/std",
     "pallet-hotfix-sufficients/std",
-
+    "pallet-claiming/std",
     "pallet-reputation/std",
     "pallet-energy-generation/std",
     "pallet-energy-fee/std",
