@@ -172,7 +172,7 @@ pub fn devnet_config() -> ChainSpec {
         "Devnet",
         // ID
         "devnet",
-        ChainType::Custom("Devnet".into()),
+        ChainType::Custom("Devnet".to_string()),
         move || {
             testnet_genesis(
                 wasm_binary,
@@ -216,6 +216,42 @@ pub fn local_testnet_config() -> ChainSpec {
                 alith(),
                 // Pre-funded accounts
                 vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
+                // Initial Validators
+                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+                vec![],
+                SS58Prefix::get() as u64,
+            )
+        },
+        // Bootnodes
+        vec![],
+        // Telemetry
+        None,
+        // Protocol ID
+        None,
+        None,
+        // Properties
+        Some(properties()),
+        // Extensions
+        None,
+    )
+}
+
+pub fn testnet_config() -> ChainSpec {
+    let wasm_binary = WASM_BINARY.expect("WASM not available");
+
+    ChainSpec::from_genesis(
+        // Name
+        "Testnet",
+        // ID
+        "testnet",
+        ChainType::Custom("Testnet".to_string()),
+        move || {
+            testnet_genesis(
+                wasm_binary,
+                // Sudo account
+                alith(),
+                // Pre-funded accounts
+                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
