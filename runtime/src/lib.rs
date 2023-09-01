@@ -68,6 +68,7 @@ use pallet_evm::{
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
 pub use pallet_energy_generation::StakerStatus;
+pub use pallet_nac_managing;
 pub use pallet_reputation::ReputationPoint;
 
 // A few exports that help ease life for downstream crates.
@@ -76,6 +77,10 @@ pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
 mod precompiles;
+mod helpers {
+    pub mod runner;
+}
+
 use precompiles::VitreusPrecompiles;
 
 /// Type of block number.
@@ -105,7 +110,7 @@ pub type Energy = Balance;
 pub type Index = u32;
 
 /// A hash of some data used by the chain.
-pub type Hash = sp_core::H256;
+pub type Hash = H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem;
@@ -205,6 +210,8 @@ parameter_types! {
 // Configure FRAME pallets to include in runtime.
 
 impl frame_system::Config for Runtime {
+    /// The ubiquitous event type.
+    type RuntimeEvent = RuntimeEvent;
     /// The basic call filter to use in dispatchable.
     type BaseCallFilter = frame_support::traits::Everything;
     /// Block & extrinsics weights: base values and limits.
@@ -216,7 +223,6 @@ impl frame_system::Config for Runtime {
     /// The aggregated dispatch type that is available for extrinsics.
     type RuntimeCall = RuntimeCall;
     type Nonce = Nonce;
-    type Block = Block;
     /// The type for hashing blocks and tries.
     type Hash = Hash;
     /// The hashing algorithm used.
@@ -225,8 +231,7 @@ impl frame_system::Config for Runtime {
     type AccountId = AccountId;
     /// The lookup mechanism to get account ID from whatever is passed in dispatchers.
     type Lookup = IdentityLookup<AccountId>;
-    /// The ubiquitous event type.
-    type RuntimeEvent = RuntimeEvent;
+    type Block = Block;
     /// Maximum number of block number to block hash mappings to keep (oldest pruned first).
     type BlockHashCount = BlockHashCount;
     /// The weight of database operations that the runtime can invoke.
@@ -591,10 +596,13 @@ parameter_types! {
     pub const MaxDeadlineDuration: BlockNumber = 12 * 30 * DAYS;
 }
 
+type CollectionId = u32;
+type ItemId = u32;
+
 impl pallet_uniques::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type CollectionId = u32;
-    type ItemId = u32;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
     type Currency = Balances;
     type ForceOrigin = frame_system::EnsureRoot<AccountId>;
     type CollectionDeposit = CollectionDeposit;
@@ -610,6 +618,15 @@ impl pallet_uniques::Config for Runtime {
     type Helper = ();
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
+}
+
+impl pallet_nac_managing::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
+    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -701,7 +718,7 @@ impl pallet_evm::Config for Runtime {
     type CallOrigin = EnsureAccountId20;
     type ChainId = EVMChainId;
     type Currency = Balances;
-    type Runner = pallet_evm::runner::stack::Runner<Self>;
+    type Runner = helpers::runner::NacRunner<Self>;
     type RuntimeEvent = RuntimeEvent;
     type WeightPerGas = WeightPerGas;
     type WithdrawOrigin = EnsureAccountId20;
@@ -795,6 +812,7 @@ construct_runtime!(
         Session: pallet_session,
         Utility: pallet_utility,
         Historical: pallet_session::historical,
+        NacManaging: pallet_nac_managing,
     }
 );
 
