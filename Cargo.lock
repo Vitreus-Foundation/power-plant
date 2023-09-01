@@ -5171,6 +5171,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-claiming"
+version = "0.1.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-dynamic-fee"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech/frontier?branch=polkadot-v1.0.0#b520b749eb90df15177144dbece3fbd3622a2b19"
@@ -10166,6 +10181,7 @@ dependencies = [
  "pallet-babe",
  "pallet-balances",
  "pallet-base-fee",
+ "pallet-claiming",
  "pallet-dynamic-fee",
  "pallet-energy-fee",
  "pallet-energy-generation",

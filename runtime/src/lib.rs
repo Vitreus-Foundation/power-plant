@@ -677,6 +677,13 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyRate = EnergyExchangeRate;
 }
 
+impl pallet_claiming::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type AdminOrigin = EnsureRoot<AccountId>;
+    type Currency = Balances;
+    type WeightInfo = ();
+}
+
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
 impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
     for EnergyFee
@@ -821,6 +828,7 @@ construct_runtime!(
         HotfixSufficients: pallet_hotfix_sufficients,
         Uniques: pallet_uniques,
         Reputation: pallet_reputation,
+        Claiming: pallet_claiming,
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
         Authorship: pallet_authorship,
