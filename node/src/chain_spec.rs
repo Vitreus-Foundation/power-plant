@@ -55,6 +55,27 @@ fn faith() -> AccountId {
     AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d"))
 }
 
+
+fn goliath() -> AccountId {
+    AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
+}
+//
+// # Heath:
+// - Address: 0x931f3600a299fd9B24cEfB3BfF79388D19804BeA
+// - PrivKey: 0x0d6dcaaef49272a5411896be8ad16c01c35d6f8c18873387b71fbc734759b0ab
+//
+// # Ida:
+// - Address: 0xC41C5F1123ECCd5ce233578B2e7ebd5693869d73
+// - PrivKey: 0x4c42532034540267bf568198ccec4cb822a025da542861fcb146a5fab6433ff8
+//
+// # Judith:
+// - Address: 0x2898FE7a42Be376C8BC7AF536A940F7Fd5aDd423
+// - PrivKey: 0x94c49300a58d576011096bcb006aa06f5a91b34b4383891e8029c21dc39fbb8b
+//
+// # Gerald:
+// - Address: 0x6Be02d1d3665660d22FF9624b7BE0551ee1Ac91b
+// - PrivKey: 0x99b3c12287537e38c90a9219d4cb074a89a16e9cdb20bf85728ebd97c343e342
+
 const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
@@ -133,7 +154,7 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
                     // Sudo account
                     alith(),
                     // Pre-funded accounts
-                    vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
+                    vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
                     // Initial Validators
                     vec![authority_keys_from_seed("Alice")],
                     vec![],
@@ -173,7 +194,7 @@ pub fn devnet_config() -> ChainSpec {
                 // Sudo account
                 alith(),
                 // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
+                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
@@ -209,7 +230,7 @@ pub fn local_testnet_config() -> ChainSpec {
                 // Sudo account
                 alith(),
                 // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
+                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],

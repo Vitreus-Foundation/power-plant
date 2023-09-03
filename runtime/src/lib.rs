@@ -192,13 +192,19 @@ pub fn native_version() -> sp_version::NativeVersion {
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-/// We allow for 2000ms of compute with a 6 second average block time.
+/// We allow for 2000ms of compute with a 3 second average block time.
 pub const WEIGHT_MILLISECS_PER_BLOCK: u64 = 2000;
 pub const MAXIMUM_BLOCK_WEIGHT: Weight =
     Weight::from_parts(WEIGHT_MILLISECS_PER_BLOCK * WEIGHT_REF_TIME_PER_MILLIS, u64::MAX);
+// 5 mb
 pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
 
 pub mod vtrs {
+    use super::*;
+    pub const UNITS: Balance = 1_000_000_000_000_000_000;
+}
+
+pub mod vnrg {
     use super::*;
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
 }
@@ -771,7 +777,8 @@ impl pallet_ethereum::Config for Runtime {
 }
 
 parameter_types! {
-    pub BoundDivision: U256 = U256::from(1024);
+    // as we have constant fee, we set it to 1
+    pub BoundDivision: U256 = U256::from(1);
 }
 
 impl pallet_dynamic_fee::Config for Runtime {
@@ -779,17 +786,18 @@ impl pallet_dynamic_fee::Config for Runtime {
 }
 
 parameter_types! {
-    pub DefaultBaseFeePerGas: U256 = U256::from(1_000_000_000);
-    pub DefaultElasticity: Permill = Permill::from_parts(125_000);
+    // the minimum amount of gas that a transaction must pay to be included in a block
+    pub DefaultBaseFeePerGas: U256 = U256::from(GetConstantEnergyFee::get());
+    pub DefaultElasticity: Permill = Permill::from_parts(1_000_000);
 }
 
 pub struct BaseFeeThreshold;
 impl pallet_base_fee::BaseFeeThreshold for BaseFeeThreshold {
     fn lower() -> Permill {
-        Permill::zero()
+        Permill::from_parts(1_000_000)
     }
     fn ideal() -> Permill {
-        Permill::from_parts(500_000)
+        Permill::from_parts(1_000_000)
     }
     fn upper() -> Permill {
         Permill::from_parts(1_000_000)
