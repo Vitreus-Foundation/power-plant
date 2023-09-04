@@ -58,9 +58,10 @@ use fp_evm::weight_per_gas;
 use fp_rpc::TransactionStatus;
 use pallet_ethereum::{Call::transact, PostLogContent, Transaction as EthereumTransaction};
 use pallet_evm::{
-    Account as EVMAccount, EnsureAccountId20, FeeCalculator, GasWeightMapping,
+    Account as EVMAccount, AddressMapping, EnsureAccountId20, FeeCalculator, GasWeightMapping,
     IdentityAddressMapping, Runner,
 };
+use sp_runtime::transaction_validity::InvalidTransaction;
 
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
@@ -192,13 +193,19 @@ pub fn native_version() -> sp_version::NativeVersion {
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-/// We allow for 2000ms of compute with a 6 second average block time.
+/// We allow for 2000ms of compute with a 3 second average block time.
 pub const WEIGHT_MILLISECS_PER_BLOCK: u64 = 2000;
 pub const MAXIMUM_BLOCK_WEIGHT: Weight =
     Weight::from_parts(WEIGHT_MILLISECS_PER_BLOCK * WEIGHT_REF_TIME_PER_MILLIS, u64::MAX);
+// 5 mb
 pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
 
 pub mod vtrs {
+    use super::*;
+    pub const UNITS: Balance = 1_000_000_000_000_000_000;
+}
+
+pub mod vnrg {
     use super::*;
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
 }
@@ -698,7 +705,9 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
             | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(GetConstantEnergyFee::get()),
-            RuntimeCall::EVM(..) => CallFee::EVM(GetConstantEnergyFee::get()),
+            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => {
+                CallFee::EVM(GetConstantEnergyFee::get())
+            },
             _ => CallFee::Stock,
         }
     }
@@ -733,7 +742,12 @@ parameter_types! {
     pub BlockGasLimit: U256 = U256::from(BLOCK_GAS_LIMIT);
     pub const GasLimitPovSizeRatio: u64 = BLOCK_GAS_LIMIT.saturating_div(MAX_POV_SIZE);
     pub PrecompilesValue: VitreusPrecompiles<Runtime> = VitreusPrecompiles::<_>::new();
-    pub WeightPerGas: Weight = Weight::from_parts(weight_per_gas(BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK), 0);
+    pub WeightPerGas: Weight =
+        Weight::from_parts(weight_per_gas(
+                BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK
+                ),
+            0,
+        );
 }
 
 impl pallet_evm::Config for Runtime {
@@ -771,7 +785,8 @@ impl pallet_ethereum::Config for Runtime {
 }
 
 parameter_types! {
-    pub BoundDivision: U256 = U256::from(1024);
+    // as we have constant fee, we set it to 1
+    pub BoundDivision: U256 = U256::from(1);
 }
 
 impl pallet_dynamic_fee::Config for Runtime {
@@ -779,17 +794,18 @@ impl pallet_dynamic_fee::Config for Runtime {
 }
 
 parameter_types! {
-    pub DefaultBaseFeePerGas: U256 = U256::from(1_000_000_000);
-    pub DefaultElasticity: Permill = Permill::from_parts(125_000);
+    // the minimum amount of gas that a transaction must pay to be included in a block
+    pub DefaultBaseFeePerGas: U256 = U256::from(GetConstantEnergyFee::get());
+    pub DefaultElasticity: Permill = Permill::from_parts(1_000_000);
 }
 
 pub struct BaseFeeThreshold;
 impl pallet_base_fee::BaseFeeThreshold for BaseFeeThreshold {
     fn lower() -> Permill {
-        Permill::zero()
+        Permill::from_parts(1_000_000)
     }
     fn ideal() -> Permill {
-        Permill::from_parts(500_000)
+        Permill::from_parts(1_000_000)
     }
     fn upper() -> Permill {
         Permill::from_parts(1_000_000)
@@ -906,6 +922,9 @@ pub type Executive = frame_executive::Executive<
     AllPalletsWithSystem,
 >;
 
+// user doesn't have NAC to dispatch transaction
+const ACCESS_RESTRICTED: u8 = u8::MAX;
+
 impl fp_self_contained::SelfContainedCall for RuntimeCall {
     type SignedInfo = H160;
 
@@ -930,7 +949,16 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         len: usize,
     ) -> Option<TransactionValidity> {
         match self {
-            RuntimeCall::Ethereum(call) => call.validate_self_contained(info, dispatch_info, len),
+            RuntimeCall::Ethereum(call) => {
+                let account_id =
+                    <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
+
+                if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
+                    return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
+                };
+
+                call.validate_self_contained(info, dispatch_info, len)
+            },
             _ => None,
         }
     }

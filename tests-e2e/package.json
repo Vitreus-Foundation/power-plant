@@ -6,6 +6,7 @@
     "@polkadot/api": "^10.9.1",
     "@polkadot/util-crypto": "^12.3.2",
     "eip55": "^2.1.1",
+    "ethers": "^6.7.1",
     "web3-eth-abi": "^4.0.1",
     "web3-utils": "^4.0.1",
     "web3x": "^4.0.6"
