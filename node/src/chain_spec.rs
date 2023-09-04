@@ -55,7 +55,6 @@ fn faith() -> AccountId {
     AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d"))
 }
 
-
 fn goliath() -> AccountId {
     AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
 }
