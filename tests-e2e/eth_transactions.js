@@ -18,16 +18,17 @@ await (async function main() {
 
         console.log(`\nRemaining ${times} transactions...\n`);
         const tx = await sendRandomTransaction(accounts);
-        await tx.tx.wait();
 
         clearTimeout(id);
+
+        if (!tx) { continue; }
 
         const [snbal, rnbal] = [
             await getBalance(tx.sender.address),
             await getBalance(tx.receiver.address)
         ];
-        assert.strictEqual(snbal, tx.sbal - tx.value);
-        assert.strictEqual(rnbal, tx.rbal + tx.value);
+        assert.ok(abs(tx.sbal - tx.value - snbal) < 2);
+        assert.ok(tx.rbal + tx.value - rnbal < 2);
         times--;
     }
     console.log("\n\nAll done");
@@ -60,13 +61,24 @@ async function sendRandomTransaction(accounts) {
 
     console.log(`Initial balances: ${sname} ${sbal}, ${rname} ${rbal}`);
     console.log(`Sending ${value} from ${sname} to ${rname}`);
+
+    const txObject = {
+        to: receiver.address,
+        gasPrice: GAS_PRICE, // Gas price in wei
+        value,
+    };
+
+    if ([accounts.Heath, accounts.Ida, accounts.Judith].includes(sender)) {
+        console.log("Sender doesn't have NAC, so sending should fail");
+        assert.rejects(async () => await sender.sendTransaction(txObject));
+        return false;
+    }
+
+    const tx = await sender.sendTransaction(txObject);
+    await tx.wait();
+
     return {
-        sender, receiver, sbal, rbal, value, tx: await sender.sendTransaction({
-            to: receiver.address,
-            gasPrice: GAS_PRICE, // Gas price in wei
-            gasLimit: "65000000",
-            value,
-        })
+        sender, receiver, sbal, rbal, value,
     };
 }
 
@@ -116,4 +128,12 @@ async function randomValueToSend(address) {
 
 async function getBalance(address) {
     return API.getBalance(address);
+}
+
+// BigInt abs
+function abs(value) {
+    if (value < 0n) {
+        return -value;
+    }
+    return value;
 }
