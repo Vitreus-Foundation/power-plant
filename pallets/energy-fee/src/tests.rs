@@ -9,7 +9,7 @@ use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
 use pallet_evm::{Config as EVMConfig, GasWeightMapping, OnChargeEVMTransaction};
 use pallet_transaction_payment::OnChargeTransaction;
 use parity_scale_codec::Encode;
-use sp_arithmetic::{MultiplyRational, Rounding};
+use sp_runtime::FixedPointNumber;
 
 type Extrinsic = MockUncheckedExtrinsic<Test>;
 
@@ -152,7 +152,6 @@ fn evm_withdraw_fee_works() {
 fn vtrs_exchange_during_withdraw_evm_fee_works() {
     new_test_ext(2).execute_with(|| {
         let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
-        let (num, denom) = VTRSEnergyRate::get();
 
         // fee equals arbitrary number since we don't take it into account
         assert!(<EnergyFee as OnChargeEVMTransaction<Test>>::withdraw_fee(
@@ -162,8 +161,8 @@ fn vtrs_exchange_during_withdraw_evm_fee_works() {
         .is_ok());
 
         let constant_fee = GetConstantEnergyFee::get() - 1;
-        let vtrs_fee = constant_fee
-            .multiply_rational(denom, num, Rounding::Up)
+        let vtrs_fee = VNRG_TO_VTRS_RATE
+            .checked_mul_int(constant_fee)
             .expect("Expected to calculate missing fee in VTRS");
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);
         assert_eq!(BalancesVNRG::balance(&ALICE), 1,);
@@ -174,7 +173,6 @@ fn vtrs_exchange_during_withdraw_evm_fee_works() {
 fn vtrs_exchange_during_withdraw_fee_with_stock_coefficients_works() {
     new_test_ext(0).execute_with(|| {
         let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
-        let (num, denom) = VTRSEnergyRate::get();
 
         let system_remark_call: RuntimeCall =
             RuntimeCall::System(frame_system::Call::remark { remark: [1u8; 32].to_vec() });
@@ -196,9 +194,11 @@ fn vtrs_exchange_during_withdraw_fee_with_stock_coefficients_works() {
         )
         .is_ok());
 
-        let vtrs_fee = computed_fee
-            .multiply_rational(denom, num, Rounding::Up)
-            .expect("Expected to calculate fee in VTRS");
+        // We add 1 since VNRG is sufficient and account must have existential
+        // balance
+        let vtrs_fee = VNRG_TO_VTRS_RATE
+            .checked_mul_int(computed_fee + 1)
+            .expect("Expected to calculate missing fee in VTRS");
 
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);
     });

@@ -8,7 +8,6 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use pallet_energy_fee::{CallFee, CustomFee};
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_core::{
@@ -48,6 +47,10 @@ use frame_support::{
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
+use pallet_energy_fee::{
+    traits::{AssetsBalancesConverter, NativeExchange},
+    CallFee, CustomFee,
+};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -639,14 +642,26 @@ impl pallet_transaction_payment::Config for Runtime {
     type FeeMultiplierUpdate = ();
 }
 
+impl pallet_asset_rate::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type CreateOrigin = EnsureRoot<AccountId>;
+    type RemoveOrigin = EnsureRoot<AccountId>;
+    type UpdateOrigin = EnsureRoot<AccountId>;
+    type AssetId = AssetId;
+    type Currency = Balances;
+    type Balance = Balance;
+    type WeightInfo = pallet_asset_rate::weights::SubstrateWeight<Runtime>;
+    #[cfg(feature = "runtime-benchmarks")]
+    type AssetKindFactory = ();
+}
+
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-    /// 1 VTRS = 1/1_000_000_000 VNRG
-    pub const EnergyExchangeRate: (Balance, Balance) = (1, 1_000_000_000);
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
-type EnergyExchange = pallet_energy_fee::Exchange<Balances, EnergyItem, EnergyExchangeRate>;
+type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
+type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
 impl pallet_energy_fee::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
@@ -655,7 +670,7 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyExchange = EnergyExchange;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
-    type EnergyRate = EnergyExchangeRate;
+    type EnergyAssetId = VNRG;
 }
 
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
@@ -791,6 +806,7 @@ construct_runtime!(
         Grandpa: pallet_grandpa,
         Balances: pallet_balances,
         Assets: pallet_assets,
+        AssetRate: pallet_asset_rate,
         TransactionPayment: pallet_transaction_payment,
         Sudo: pallet_sudo,
         BaseFee: pallet_base_fee,
