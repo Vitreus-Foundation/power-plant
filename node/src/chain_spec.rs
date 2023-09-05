@@ -1,5 +1,3 @@
-use std::{collections::BTreeMap, str::FromStr};
-
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 // Substrate
@@ -7,7 +5,7 @@ use sc_chain_spec::{ChainType, Properties};
 use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
-use sp_core::{storage::Storage, Pair, Public, H160, U256};
+use sp_core::{storage::Storage, Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
@@ -22,42 +20,11 @@ use vitreus_power_plant_runtime::{
 
 const INITIAL_NAC_COLLECTION_ID: u32 = 0;
 
-// The URL for the telemetry server.
-// const STAGING_TELEMETRY_URL: &str = "wss://telemetry.polkadot.io/submit/";
-
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
 
 /// Specialized `ChainSpec` for development.
 pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt>;
-
-fn alith() -> AccountId {
-    AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"))
-}
-
-fn baltathar() -> AccountId {
-    AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0"))
-}
-
-fn charleth() -> AccountId {
-    AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc"))
-}
-
-fn dorothy() -> AccountId {
-    AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9"))
-}
-
-fn ethan() -> AccountId {
-    AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB"))
-}
-
-fn faith() -> AccountId {
-    AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d"))
-}
-
-fn goliath() -> AccountId {
-    AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
-}
 
 const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 /// 10^9 with 18 decimals
@@ -83,47 +50,11 @@ impl sp_runtime::BuildStorage for DevGenesisExt {
     }
 }
 
-/// Generate a crypto pair from seed.
-pub fn get_from_seed<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-    TPublic::Pair::from_string(&format!("//{}", seed), None)
-        .expect("static values are valid; qed")
-        .public()
-}
-
-type AccountPublic = <Signature as Verify>::Signer;
-
-/// Generate an account ID from seed.
-pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
-where
-    AccountPublic: From<<TPublic::Pair as Pair>::Public>,
-{
-    AccountPublic::from(get_from_seed::<TPublic>(seed)).into_account()
-}
-
-fn session_keys(babe: BabeId, grandpa: GrandpaId, im_online: ImOnlineId) -> opaque::SessionKeys {
-    opaque::SessionKeys { babe, grandpa, im_online }
-}
-
-/// Generate a Babe authority key.
-pub fn authority_keys_from_seed(s: &str) -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
-    (
-        get_account_id_from_seed::<ecdsa::Public>(&format!("{}//stash", s)),
-        get_account_id_from_seed::<ecdsa::Public>(s),
-        get_from_seed::<BabeId>(s),
-        get_from_seed::<GrandpaId>(s),
-        get_from_seed::<ImOnlineId>(s),
-    )
-}
-
-fn properties() -> Properties {
-    let mut properties = Properties::new();
-    properties.insert("tokenSymbol".into(), "VTRS".into());
-    properties.insert("tokenDecimals".into(), 18.into());
-    properties.insert("ss58Format".into(), SS58Prefix::get().into());
-    properties
-}
+const UNITS: Balance = 1_000_000_000_000_000_000;
 
 pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
+    use devnet_keys::*;
+
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
     DevChainSpec::from_genesis(
@@ -165,6 +96,8 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
 }
 
 pub fn devnet_config() -> ChainSpec {
+    use devnet_keys::*;
+
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
     ChainSpec::from_genesis(
@@ -201,6 +134,8 @@ pub fn devnet_config() -> ChainSpec {
 }
 
 pub fn local_testnet_config() -> ChainSpec {
+    use devnet_keys::*;
+
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
     ChainSpec::from_genesis(
@@ -237,6 +172,8 @@ pub fn local_testnet_config() -> ChainSpec {
 }
 
 pub fn testnet_config() -> ChainSpec {
+    use testnet_keys::*;
+
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
     ChainSpec::from_genesis(
@@ -249,11 +186,11 @@ pub fn testnet_config() -> ChainSpec {
             testnet_genesis(
                 wasm_binary,
                 // Sudo account
-                alith(),
+                stefania(),
                 // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
+                vec![stefania(), valya(), zina(), nina(), galya(), raya(), lyuba()],
                 // Initial Validators
-                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+                vec![valya_validator_keys(), zina_validator_keys(), nina_validator_keys()],
                 vec![],
                 SS58Prefix::get() as u64,
             )
@@ -337,52 +274,7 @@ fn testnet_genesis(
 
         // EVM compatibility
         evm_chain_id: EVMChainIdConfig { chain_id, ..Default::default() },
-        evm: EVMConfig {
-            accounts: {
-                let mut map = BTreeMap::new();
-                map.insert(
-                    // H160 address of Alice dev account
-                    // Derived from SS58 (42 prefix) address
-                    // SS58: 5GrwvaEF5zXb26Fz9rcQpDWS57CtERHpNehXCPcNoHGKutQY
-                    // hex: 0xd43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d
-                    // Using the full hex key, truncating to the first 20 bytes (the first 40 hex chars)
-                    H160::from_str("d43593c715fdd31c61141abd04a99fd6822c8558")
-                        .expect("internal H160 is valid; qed"),
-                    fp_evm::GenesisAccount {
-                        balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
-                            .expect("internal U256 is valid; qed"),
-                        code: Default::default(),
-                        nonce: Default::default(),
-                        storage: Default::default(),
-                    },
-                );
-                map.insert(
-                    // H160 address of CI test runner account
-                    H160::from_str("6be02d1d3665660d22ff9624b7be0551ee1ac91b")
-                        .expect("internal H160 is valid; qed"),
-                    fp_evm::GenesisAccount {
-                        balance: U256::from_str("0xffffffffffffffffffffffffffffffff")
-                            .expect("internal U256 is valid; qed"),
-                        code: Default::default(),
-                        nonce: Default::default(),
-                        storage: Default::default(),
-                    },
-                );
-                map.insert(
-                    // H160 address for benchmark usage
-                    H160::from_str("1000000000000000000000000000000000000001")
-                        .expect("internal H160 is valid; qed"),
-                    fp_evm::GenesisAccount {
-                        nonce: U256::from(1),
-                        balance: U256::from(1_000_000_000_000_000_000_000_000u128),
-                        storage: Default::default(),
-                        code: vec![0x00],
-                    },
-                );
-                map
-            },
-            ..Default::default()
-        },
+        evm: Default::default(),
         ethereum: Default::default(),
         energy_fee: EnergyFeeConfig {
             initial_energy_rate: INITIAL_ENERGY_RATE,
@@ -391,7 +283,7 @@ fn testnet_genesis(
         dynamic_fee: Default::default(),
         base_fee: Default::default(),
         assets: AssetsConfig {
-            assets: vec![(VNRG::get(), alith(), true, 1)],
+            assets: vec![(VNRG::get(), root_key, true, 1)],
             metadata: vec![(
                 VNRG::get(),
                 "Energy".as_bytes().to_vec(),
@@ -435,4 +327,161 @@ fn testnet_genesis(
         },
         im_online: ImOnlineConfig { keys: vec![] },
     }
+}
+
+mod devnet_keys {
+    use super::*;
+
+    pub(super) fn alith() -> AccountId {
+        AccountId::from(hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"))
+    }
+
+    pub(super) fn baltathar() -> AccountId {
+        AccountId::from(hex!("3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0"))
+    }
+
+    pub(super) fn charleth() -> AccountId {
+        AccountId::from(hex!("798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc"))
+    }
+
+    pub(super) fn dorothy() -> AccountId {
+        AccountId::from(hex!("773539d4Ac0e786233D90A233654ccEE26a613D9"))
+    }
+
+    pub(super) fn ethan() -> AccountId {
+        AccountId::from(hex!("Ff64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB"))
+    }
+
+    pub(super) fn faith() -> AccountId {
+        AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d"))
+    }
+
+    pub fn authority_keys_from_seed(
+        s: &str,
+    ) -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+        (
+            get_account_id_from_seed::<ecdsa::Public>(&format!("{}//stash", s)),
+            get_account_id_from_seed::<ecdsa::Public>(s),
+            derive_dev::<BabeId>(s),
+            derive_dev::<GrandpaId>(s),
+            derive_dev::<ImOnlineId>(s),
+        )
+    }
+    /// Generate a crypto pair.
+    pub fn derive_dev<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
+        TPublic::Pair::from_string(&format!("//{}", seed), None)
+            .expect("static values are valid; qed")
+            .public()
+    }
+
+    type AccountPublic = <Signature as Verify>::Signer;
+
+    /// Generate an account ID from seed.
+    pub fn get_account_id_from_seed<TPublic: Public>(seed: &str) -> AccountId
+    where
+        AccountPublic: From<<TPublic::Pair as Pair>::Public>,
+    {
+        AccountPublic::from(derive_dev::<TPublic>(seed)).into_account()
+    }
+}
+
+mod testnet_keys {
+    use super::*;
+
+    pub(super) fn stefania() -> AccountId {
+        AccountId::from(hex!("0F92eb04a6c829A850106B7a5EFdEfFA3e12ff9A"))
+    }
+
+    pub(super) fn valya() -> AccountId {
+        AccountId::from(hex!("6ee40c68188132A8Eb06bA5A3f4A9CFaDf1AF342"))
+    }
+
+    pub(super) fn zina() -> AccountId {
+        AccountId::from(hex!("416B1da2C7242A796C12c0641676C7E35a04597D"))
+    }
+
+    pub(super) fn nina() -> AccountId {
+        AccountId::from(hex!("cF994FD2E08eb3e9A584080f3606B1434B5CcADF"))
+    }
+
+    pub(super) fn galya() -> AccountId {
+        AccountId::from(hex!("675D18406cc184E6CC322a12F5e2b156394E0f5a"))
+    }
+
+    pub(super) fn raya() -> AccountId {
+        AccountId::from(hex!("D939d4FC9f7777Ac31F2cb419da896e645c47289"))
+    }
+
+    pub(super) fn lyuba() -> AccountId {
+        AccountId::from(hex!("D2d0C6bc8F13D89C69de3f19bed306dE60Ef2Efc"))
+    }
+
+    pub(super) fn valya_validator_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+        (
+            AccountId::from(hex!("7eb27fE7e7eac00F8294D085c2058F6c84DA58E4")), // Stash
+            valya(),
+            sp_core::sr25519::Public(hex!(
+                "164be205541f9afd3a4f2743e53f32f6c708801a8ea4d172a841bbe80fb8896c"
+            ))
+            .into(),
+            sp_core::ed25519::Public(hex!(
+                "51fd2b964631392aa13abfa0cb7bcf42ec7cbc215e2cc437d8ca6314b488cf41"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "021f199e2a8b3e25d0a2f078225f48e876f9ae028ab904e803d115e749a01d0c"
+            ))
+            .into(),
+        )
+    }
+
+    pub(super) fn zina_validator_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+        (
+            AccountId::from(hex!("7eb27fE7e7eac00F8294D085c2058F6c84DA58E4")), // Stash
+            zina(),
+            sp_core::sr25519::Public(hex!(
+                "e8bcd01c18e37e45b2c42710ba51845d8b35406fa5a7f5feb99aed0decca4408"
+            ))
+            .into(),
+            sp_core::ed25519::Public(hex!(
+                "ca8f73db4af15312b4cbb297cc60279c8478dd32f2ff261f46c7dfdd27f2ff24"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "76e56e0927cb620d35ac306117ba233bd19565a7d8fc7a573e2ab66bad93d13f"
+            ))
+            .into(),
+        )
+    }
+
+    pub(super) fn nina_validator_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+        (
+            AccountId::from(hex!("F10713631180c6D825a17650258E8cC8b62161e4")), // Stash
+            nina(),
+            sp_core::sr25519::Public(hex!(
+                "e65beb63ed80dfc2de0d5c0a7e945306eaddfbe8ef69a1186d7299e84d8fff18"
+            ))
+            .into(),
+            sp_core::ed25519::Public(hex!(
+                "043d568913ea8c6e8f51bb634b7e6d1545b22506499ca5472bb9e3bc47b5e6d6"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "e8b78cd8499b36e69fe55993565b0453998cfe1ada6e4cbd0d1f43343751fc43"
+            ))
+            .into(),
+        )
+    }
+}
+
+fn session_keys(babe: BabeId, grandpa: GrandpaId, im_online: ImOnlineId) -> opaque::SessionKeys {
+    opaque::SessionKeys { babe, grandpa, im_online }
+}
+
+fn properties() -> Properties {
+    let mut properties = Properties::new();
+    properties.insert("tokenSymbol".into(), "VTRS".into());
+    properties.insert("tokenDecimals".into(), 18.into());
+    properties.insert("ss58Format".into(), SS58Prefix::get().into());
+    properties
 }

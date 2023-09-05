@@ -8,6 +8,9 @@
 
 .DS_Store
 
+.env
+testnet_keys_envs
+
 # direnv files
 .envrc
 .direnv
