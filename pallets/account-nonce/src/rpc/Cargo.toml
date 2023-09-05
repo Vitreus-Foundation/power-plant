@@ -1,0 +1,27 @@
+[package]
+name = "pallet-account-nonce-rpc"
+version = "0.1.0"
+authors = ["Innowise FinTech Team"]
+edition = "2021"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+parity-scale-codec = { workspace = true }
+
+jsonrpsee = { version = "0.16.2", features = ["server", "macros"] }
+
+sp-api = { workspace = true }
+sp-blockchain = { workspace = true }
+sp-runtime = { workspace = true }
+
+pallet-account-nonce-runtime-api = { path = "./runtime-api", default-features = false }
+
+[features]
+default = ["std"]
+std = [
+    "sp-api/std",
+    "sp-runtime/std",
+    "pallet-account-nonce-runtime-api/std"
+]

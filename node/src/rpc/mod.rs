@@ -100,6 +100,7 @@ where
     C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
     C::Api: sc_consensus_babe::BabeApi<Block>,
+    C::Api: pallet_account_nonce_rpc::NonceRuntimeApi<Block, AccountId, Nonce>,
     C: BlockchainEvents<Block> + 'static,
     C: HeaderBackend<Block>
         + HeaderMetadata<Block, Error = BlockChainError>
@@ -110,6 +111,7 @@ where
     CT: fp_rpc::ConvertTransaction<<Block as BlockT>::Extrinsic> + Send + Sync + 'static,
     SC: sp_consensus::SelectChain<Block> + 'static,
 {
+    use pallet_account_nonce_rpc::{NoncePallet, NonceApiServer};
     use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiServer};
     use sc_consensus_babe_rpc::{Babe, BabeApiServer};
     use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
@@ -130,7 +132,7 @@ where
 
     io.merge(System::new(client.clone(), pool, deny_unsafe).into_rpc())?;
     io.merge(TransactionPayment::new(client.clone()).into_rpc())?;
-    io.merge(Babe::new(client, worker_handle, keystore, select_chain, deny_unsafe).into_rpc())?;
+    io.merge(Babe::new(client.clone(), worker_handle, keystore, select_chain, deny_unsafe).into_rpc())?;
     io.merge(
         Grandpa::new(
             subscription_executor,
@@ -141,6 +143,7 @@ where
         )
         .into_rpc(),
     )?;
+    io.merge(NoncePallet::new(client).into_rpc())?;
 
     if let Some(command_sink) = command_sink {
         io.merge(

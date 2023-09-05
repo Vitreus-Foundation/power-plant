@@ -41,6 +41,8 @@ frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
 frame-system-rpc-runtime-api = { workspace = true }
 pallet-assets = { workspace = true }
+pallet-account-nonce = { workspace = true }
+pallet-account-nonce-runtime-api = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-babe = { workspace = true }
 pallet-balances = { workspace = true }
@@ -118,6 +120,8 @@ std = [
     "frame-system-rpc-runtime-api/std",
     "frame-system-benchmarking?/std",
     "pallet-assets/std",
+    "pallet-account-nonce/std",
+    "pallet-account-nonce-runtime-api/std",
     "pallet-authorship/std",
     "pallet-babe/std",
     "pallet-balances/std",

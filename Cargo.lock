@@ -5089,6 +5089,60 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-account-nonce"
+version = "0.1.0"
+dependencies = [
+ "ethereum-types",
+ "fp-account",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-base-fee",
+ "pallet-ethereum",
+ "pallet-evm",
+ "pallet-evm-chain-id",
+ "pallet-staking-reward-curve",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "rand_chacha 0.2.2",
+ "scale-info",
+ "serde",
+ "smallvec",
+ "sp-application-crypto",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-tracing",
+ "substrate-test-utils",
+]
+
+[[package]]
+name = "pallet-account-nonce-rpc"
+version = "0.1.0"
+dependencies = [
+ "jsonrpsee",
+ "pallet-account-nonce-runtime-api",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+]
+
+[[package]]
+name = "pallet-account-nonce-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+]
+
+[[package]]
 name = "pallet-assets"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech/substrate?branch=polkadot-v1.0.0#948fbd2fd1233dc26dbb9f9bbc1d2cca2c03945d"
@@ -10104,6 +10158,8 @@ dependencies = [
  "hex-literal 0.3.4",
  "jsonrpsee",
  "log",
+ "pallet-account-nonce-rpc",
+ "pallet-account-nonce-runtime-api",
  "pallet-energy-generation",
  "pallet-reputation",
  "pallet-transaction-payment",
@@ -10176,6 +10232,8 @@ dependencies = [
  "libsecp256k1",
  "log",
  "num_enum",
+ "pallet-account-nonce",
+ "pallet-account-nonce-runtime-api",
  "pallet-assets",
  "pallet-authorship",
  "pallet-babe",

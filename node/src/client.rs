@@ -2,7 +2,7 @@
 use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch, NativeVersion};
 use sp_runtime::traits::BlakeTwo256;
 // Local
-use vitreus_power_plant_runtime::{opaque::Block, AccountId, Balance, Index};
+use vitreus_power_plant_runtime::{opaque::Block, AccountId, Balance, Index, Nonce};
 
 use crate::eth::EthCompatRuntimeApiCollection;
 
@@ -42,6 +42,7 @@ pub trait BaseRuntimeApiCollection:
     + sp_offchain::OffchainWorkerApi<Block>
     + sp_session::SessionKeys<Block>
     + sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>
+    + pallet_account_nonce_runtime_api::NonceApi<Block, AccountId, Nonce>
 where
     <Self as sp_api::ApiExt<Block>>::StateBackend: sp_api::StateBackend<BlakeTwo256>,
 {
@@ -54,7 +55,8 @@ where
         + sp_block_builder::BlockBuilder<Block>
         + sp_offchain::OffchainWorkerApi<Block>
         + sp_session::SessionKeys<Block>
-        + sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>,
+        + sp_transaction_pool::runtime_api::TaggedTransactionQueue<Block>
+        + pallet_account_nonce_runtime_api::NonceApi<Block, AccountId, Nonce>,
     <Self as sp_api::ApiExt<Block>>::StateBackend: sp_api::StateBackend<BlakeTwo256>,
 {
 }
@@ -67,6 +69,7 @@ pub trait RuntimeApiCollection:
     + sp_consensus_grandpa::GrandpaApi<Block>
     + frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index>
     + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance>
+    + pallet_account_nonce_runtime_api::NonceApi<Block, AccountId, Nonce>
 where
     <Self as sp_api::ApiExt<Block>>::StateBackend: sp_api::StateBackend<BlakeTwo256>,
 {
@@ -79,7 +82,8 @@ where
         + sp_consensus_babe::BabeApi<Block>
         + sp_consensus_grandpa::GrandpaApi<Block>
         + frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index>
-        + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance>,
+        + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance>
+        + pallet_account_nonce_runtime_api::NonceApi<Block, AccountId, Nonce>,
     <Self as sp_api::ApiExt<Block>>::StateBackend: sp_api::StateBackend<BlakeTwo256>,
 {
 }

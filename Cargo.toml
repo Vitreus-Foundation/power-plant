@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "node",
+    "pallets/account-nonce",
     "pallets/claiming",
     "pallets/energy-fee",
     "pallets/energy-generation",
@@ -185,6 +186,9 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
 
+pallet-account-nonce-runtime-api = { path = "pallets/account-nonce/src/rpc/runtime-api", default-features = false }
+pallet-account-nonce-rpc = { path = "pallets/account-nonce/src/rpc", default-features = false }
+pallet-account-nonce = { path = "pallets/account-nonce", default-features = false }
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
 pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }

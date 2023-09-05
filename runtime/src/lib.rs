@@ -645,6 +645,10 @@ impl pallet_nac_managing::Config for Runtime {
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
 }
 
+impl pallet_account_nonce::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+}
+
 parameter_types! {
     pub const TransactionByteFee: Balance = 1;
 }
@@ -829,7 +833,8 @@ construct_runtime!(
         Uniques: pallet_uniques,
         Reputation: pallet_reputation,
         Claiming: pallet_claiming,
-        // Authorship must be before session in order to note author in the correct session and era
+        AccountNonce: pallet_account_nonce,
+        // Authorship must be beforea session in order to note author in the correct session and era
         // for im-online and staking.
         Authorship: pallet_authorship,
         ImOnline: pallet_im_online,
@@ -1036,12 +1041,6 @@ impl_runtime_apis! {
     impl sp_offchain::OffchainWorkerApi<Block> for Runtime {
         fn offchain_worker(header: &<Block as BlockT>::Header) {
             Executive::offchain_worker(header)
-        }
-    }
-
-    impl frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index> for Runtime {
-        fn account_nonce(account: AccountId) -> Index {
-            System::account_nonce(account)
         }
     }
 
@@ -1402,6 +1401,23 @@ impl_runtime_apis! {
                 equivocation_proof,
                 key_owner_proof,
             )
+        }
+    }
+
+    impl pallet_account_nonce_runtime_api::NonceApi<Block, AccountId, Nonce> for Runtime {
+        fn get_nonce_by_account_id(account_id: AccountId) -> Nonce {
+            // todo()
+            123_u32
+        }
+
+        fn set_nonce_value(account_id: AccountId, nonce: Nonce) -> bool {
+            // todo()
+            true
+        }
+
+        fn increment(account_id: AccountId) -> bool {
+            // todo()
+            true
         }
     }
 
