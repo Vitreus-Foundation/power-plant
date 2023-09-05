@@ -9,11 +9,11 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
 use sp_core::{storage::Storage, Pair, Public, H160, U256};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use sp_runtime::{Perbill, FixedU128};
+use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
+    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
     EVMConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
     ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig,
     SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
@@ -53,6 +53,10 @@ fn ethan() -> AccountId {
 
 fn faith() -> AccountId {
     AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d"))
+}
+
+fn goliath() -> AccountId {
+    AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
 }
 
 const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
@@ -119,8 +123,6 @@ fn properties() -> Properties {
     properties
 }
 
-const UNITS: Balance = 1_000_000_000_000_000_000;
-
 pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -137,7 +139,7 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
                     // Sudo account
                     alith(),
                     // Pre-funded accounts
-                    vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
+                    vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
                     // Initial Validators
                     vec![authority_keys_from_seed("Alice")],
                     vec![],
@@ -177,7 +179,7 @@ pub fn devnet_config() -> ChainSpec {
                 // Sudo account
                 alith(),
                 // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
+                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
@@ -213,7 +215,7 @@ pub fn local_testnet_config() -> ChainSpec {
                 // Sudo account
                 alith(),
                 // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith()],
+                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
@@ -257,7 +259,7 @@ fn testnet_genesis(
         });
 
     // stakers: all validators and nominators.
-    const ENDOWMENT: Balance = 1_000_000 * UNITS;
+    const ENDOWMENT: Balance = 1_000_000 * vtrs::UNITS;
     const STASH: Balance = ENDOWMENT / 1_000_000;
     let mut rng = rand::thread_rng();
     let stakers = initial_validators

@@ -61,9 +61,10 @@ use fp_evm::weight_per_gas;
 use fp_rpc::TransactionStatus;
 use pallet_ethereum::{Call::transact, PostLogContent, Transaction as EthereumTransaction};
 use pallet_evm::{
-    Account as EVMAccount, EnsureAccountId20, FeeCalculator, GasWeightMapping,
+    Account as EVMAccount, AddressMapping, EnsureAccountId20, FeeCalculator, GasWeightMapping,
     IdentityAddressMapping, Runner,
 };
+use sp_runtime::transaction_validity::InvalidTransaction;
 
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
@@ -114,6 +115,9 @@ pub type Hash = H256;
 
 /// Digest item type.
 pub type DigestItem = generic::DigestItem;
+
+/// Asset ID.
+pub type AssetId = u128;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -180,6 +184,7 @@ pub const EPOCH_DURATION_IN_SLOTS: u64 = {
 };
 
 // Time is measured by number of blocks.
+// 60_000 ms per minute / ms per block
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
@@ -191,11 +196,22 @@ pub fn native_version() -> sp_version::NativeVersion {
 }
 
 const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
-/// We allow for 2000ms of compute with a 6 second average block time.
+/// We allow for 2000ms of compute with a 3 second average block time.
 pub const WEIGHT_MILLISECS_PER_BLOCK: u64 = 2000;
 pub const MAXIMUM_BLOCK_WEIGHT: Weight =
     Weight::from_parts(WEIGHT_MILLISECS_PER_BLOCK * WEIGHT_REF_TIME_PER_MILLIS, u64::MAX);
+// 5 mb
 pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
+
+pub mod vtrs {
+    use super::*;
+    pub const UNITS: Balance = 1_000_000_000_000_000_000;
+}
+
+pub mod vnrg {
+    use super::*;
+    pub const UNITS: Balance = 1_000_000_000_000_000_000;
+}
 
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
@@ -331,8 +347,6 @@ impl pallet_balances::Config for Runtime {
     type MaxHolds = ();
 }
 
-pub type AssetId = u128;
-
 parameter_types! {
     pub const AssetDeposit: Balance = 100; // The deposit required to create an asset
     pub const AssetAccountDeposit: Balance = 10;
@@ -363,6 +377,18 @@ impl pallet_assets::Config for Runtime {
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime_benchmarks")]
     type BenchmarkHelper = ();
+}
+
+parameter_types! {
+    pub const AccumulationPeriod: BlockNumber = HOURS * 24;
+    pub const MaxAmount: Balance = 100 * vtrs::UNITS;
+}
+
+impl pallet_faucet::Config for Runtime {
+    type AccumulationPeriod = AccumulationPeriod;
+    type MaxAmount = MaxAmount;
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
 }
 
 use pallet_reputation::REPUTATION_POINTS_PER_DAY;
@@ -673,6 +699,13 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyAssetId = VNRG;
 }
 
+impl pallet_claiming::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type AdminOrigin = EnsureRoot<AccountId>;
+    type Currency = Balances;
+    type WeightInfo = ();
+}
+
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
 impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
     for EnergyFee
@@ -687,7 +720,9 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
             | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(GetConstantEnergyFee::get()),
-            RuntimeCall::EVM(..) => CallFee::EVM(GetConstantEnergyFee::get()),
+            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => {
+                CallFee::EVM(GetConstantEnergyFee::get())
+            },
             _ => CallFee::Stock,
         }
     }
@@ -722,7 +757,12 @@ parameter_types! {
     pub BlockGasLimit: U256 = U256::from(BLOCK_GAS_LIMIT);
     pub const GasLimitPovSizeRatio: u64 = BLOCK_GAS_LIMIT.saturating_div(MAX_POV_SIZE);
     pub PrecompilesValue: VitreusPrecompiles<Runtime> = VitreusPrecompiles::<_>::new();
-    pub WeightPerGas: Weight = Weight::from_parts(weight_per_gas(BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK), 0);
+    pub WeightPerGas: Weight =
+        Weight::from_parts(weight_per_gas(
+                BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK
+                ),
+            0,
+        );
 }
 
 impl pallet_evm::Config for Runtime {
@@ -760,7 +800,8 @@ impl pallet_ethereum::Config for Runtime {
 }
 
 parameter_types! {
-    pub BoundDivision: U256 = U256::from(1024);
+    // as we have constant fee, we set it to 1
+    pub BoundDivision: U256 = U256::from(1);
 }
 
 impl pallet_dynamic_fee::Config for Runtime {
@@ -768,17 +809,18 @@ impl pallet_dynamic_fee::Config for Runtime {
 }
 
 parameter_types! {
-    pub DefaultBaseFeePerGas: U256 = U256::from(1_000_000_000);
-    pub DefaultElasticity: Permill = Permill::from_parts(125_000);
+    // the minimum amount of gas that a transaction must pay to be included in a block
+    pub DefaultBaseFeePerGas: U256 = U256::from(GetConstantEnergyFee::get());
+    pub DefaultElasticity: Permill = Permill::from_parts(1_000_000);
 }
 
 pub struct BaseFeeThreshold;
 impl pallet_base_fee::BaseFeeThreshold for BaseFeeThreshold {
     fn lower() -> Permill {
-        Permill::zero()
+        Permill::from_parts(1_000_000)
     }
     fn ideal() -> Permill {
-        Permill::from_parts(500_000)
+        Permill::from_parts(1_000_000)
     }
     fn upper() -> Permill {
         Permill::from_parts(1_000_000)
@@ -805,6 +847,7 @@ construct_runtime!(
         Babe: pallet_babe,
         Grandpa: pallet_grandpa,
         Balances: pallet_balances,
+        Faucet: pallet_faucet,
         Assets: pallet_assets,
         AssetRate: pallet_asset_rate,
         TransactionPayment: pallet_transaction_payment,
@@ -817,6 +860,7 @@ construct_runtime!(
         HotfixSufficients: pallet_hotfix_sufficients,
         Uniques: pallet_uniques,
         Reputation: pallet_reputation,
+        Claiming: pallet_claiming,
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
         Authorship: pallet_authorship,
@@ -894,6 +938,9 @@ pub type Executive = frame_executive::Executive<
     AllPalletsWithSystem,
 >;
 
+// user doesn't have NAC to dispatch transaction
+const ACCESS_RESTRICTED: u8 = u8::MAX;
+
 impl fp_self_contained::SelfContainedCall for RuntimeCall {
     type SignedInfo = H160;
 
@@ -918,7 +965,16 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         len: usize,
     ) -> Option<TransactionValidity> {
         match self {
-            RuntimeCall::Ethereum(call) => call.validate_self_contained(info, dispatch_info, len),
+            RuntimeCall::Ethereum(call) => {
+                let account_id =
+                    <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
+
+                if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
+                    return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
+                };
+
+                call.validate_self_contained(info, dispatch_info, len)
+            },
             _ => None,
         }
     }
