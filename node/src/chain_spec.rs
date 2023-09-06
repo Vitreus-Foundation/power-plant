@@ -12,10 +12,10 @@ use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
-    EVMConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
-    ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig,
-    SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
-    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
+    MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix,
+    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 const INITIAL_NAC_COLLECTION_ID: u32 = 0;
@@ -49,8 +49,6 @@ impl sp_runtime::BuildStorage for DevGenesisExt {
         self.genesis_config.assimilate_storage(storage)
     }
 }
-
-const UNITS: Balance = 1_000_000_000_000_000_000;
 
 pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
     use devnet_keys::*;
@@ -354,6 +352,10 @@ mod devnet_keys {
 
     pub(super) fn faith() -> AccountId {
         AccountId::from(hex!("C0F0f4ab324C46e55D02D0033343B4Be8A55532d"))
+    }
+
+    pub(super) fn goliath() -> AccountId {
+        AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
     }
 
     pub fn authority_keys_from_seed(
