@@ -12,10 +12,11 @@ use frame_support::{
     traits::EnsureOriginWithArg,
 };
 use frame_system::pallet_prelude::OriginFor;
+pub use pallet::*;
+use parity_scale_codec::Encode;
+use sp_runtime::traits::{BlakeTwo256, Hash};
 use sp_runtime::{traits::StaticLookup, traits::Zero};
 use sp_std::prelude::*;
-
-pub use pallet::*;
 pub use weights::WeightInfo;
 
 #[cfg(test)]
@@ -57,7 +58,7 @@ pub mod pallet {
             + Parameter
             + MaxEncodedLen
             + Copy
-            + From<u32>
+            + From<u64>
             + Into<<Self as pallet_uniques::Config>::ItemId>;
 
         /// The origin which may forcibly create or destroy an item or otherwise alter privileged
@@ -133,13 +134,14 @@ pub mod pallet {
         pub fn mint(
             origin: OriginFor<T>,
             collection: <T as Config>::CollectionId,
-            item: <T as Config>::ItemId,
             data: BoundedVec<u8, T::StringLimit>,
             owner: AccountIdLookupOf<T>,
         ) -> DispatchResult {
             let owner = T::Lookup::lookup(owner)?;
 
-            Self::do_mint(origin, collection, item, data, owner)
+            let item_id = Self::create_unique_item_id(123, &owner);
+
+            Self::do_mint(origin, collection, item_id, data, owner)
         }
     }
 
@@ -166,7 +168,7 @@ pub mod pallet {
                     Pallet::<T>::do_mint(
                         frame_system::RawOrigin::Signed(owner.clone()).into(),
                         *collection,
-                        (n as u32).into(),
+                        (n as u64).into(),
                         metadata,
                         account.clone(),
                     )
@@ -230,6 +232,27 @@ impl<T: Config> Pallet<T> {
         Self::deposit_event(Event::NacLevelSet { owner, item_id: item, verification_level });
 
         Ok(())
+    }
+
+    /// Generate uniq ItemId using block_number, token_owner and extrinsic_index
+    pub fn create_unique_item_id(
+        extrinsic_index: u32,
+        owner: &T::AccountId,
+    ) -> <T as Config>::ItemId {
+        let block_number = frame_system::Pallet::<T>::block_number();
+        let mut unique_number = Vec::new();
+
+        unique_number.extend_from_slice(&block_number.encode());
+        unique_number.extend_from_slice(&extrinsic_index.to_le_bytes());
+        unique_number.extend_from_slice(owner.encode().as_ref());
+
+        let hash = BlakeTwo256::hash(&unique_number);
+        let mut item_id: u64 = 0;
+        for i in 0..8 {
+            item_id |= (hash[i] as u64) << (i * 8);
+        }
+
+        <T as Config>::ItemId::from(item_id)
     }
 
     /// Check whether the account has the level.

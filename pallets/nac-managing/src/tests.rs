@@ -21,7 +21,7 @@ use crate::{mock::*, *};
 use frame_support::assert_ok;
 use frame_support::pallet_prelude::ConstU32;
 
-fn get_user_nfts() -> Vec<(u32, u8)> {
+fn get_user_nfts() -> Vec<(u64, u8)> {
     let nfts: Vec<_> = UsersNft::<Test>::iter()
         .map(|(_account_id, (item_id, level))| (item_id, level))
         .collect();
@@ -42,14 +42,14 @@ fn basic_minting_should_work() {
         let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data).unwrap_or_default();
 
         assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 0, 1));
-        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, 1, metadata, 4));
-        assert_eq!(get_user_nfts(), vec![(1, 1)]);
+        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, metadata, 4));
+        assert_eq!(get_user_nfts().len(), 1);
 
         let data = vec![3, 2, 0];
         let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data).unwrap_or_default();
 
-        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, 4, metadata, 5));
-        assert_eq!(get_user_nfts(), vec![(1, 1), (4, 2)]);
+        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, metadata, 5));
+        assert_eq!(get_user_nfts().len(), 2);
     });
 }
 
@@ -60,8 +60,8 @@ fn user_has_access_test() {
         let metadata = BoundedVec::<u8, ConstU32<50>>::try_from(data).unwrap_or_default();
 
         assert_ok!(NacManaging::create_collection(RuntimeOrigin::root(), 0, 1));
-        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, 1, metadata, 4));
-        assert_eq!(get_user_nfts(), vec![(1, 1)]);
+        assert_ok!(NacManaging::mint(RuntimeOrigin::signed(1), 0, metadata, 4));
+        assert_eq!(get_user_nfts().len(), 1);
 
         assert_eq!(NacManaging::user_has_access(4, 2), false);
         assert_eq!(NacManaging::user_has_access(4, 1), true);
