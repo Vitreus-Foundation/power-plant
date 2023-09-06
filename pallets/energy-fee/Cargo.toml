@@ -13,6 +13,7 @@ frame-support = { workspace = true }
 frame-system = { workspace = true }
 log = { workspace = true }
 pallet-assets = { workspace = true }
+pallet-asset-rate = { workspace = true }
 pallet-evm = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 parity-scale-codec = { workspace = true }

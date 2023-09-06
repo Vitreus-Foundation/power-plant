@@ -9,15 +9,15 @@ use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
 use sp_core::{storage::Storage, Pair, Public, H160, U256};
 use sp_runtime::traits::{IdentifyAccount, Verify};
-use sp_runtime::Perbill;
+use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
-    EVMConfig, EnableManualSeal, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix,
-    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    EVMConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
+    ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig,
+    SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
+    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 const INITIAL_NAC_COLLECTION_ID: u32 = 0;
@@ -60,6 +60,8 @@ fn goliath() -> AccountId {
 }
 
 const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
+/// 10^9 with 18 decimals
+const INITIAL_ENERGY_RATE: FixedU128 = FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
 
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
 #[derive(Serialize, Deserialize)]
@@ -346,6 +348,10 @@ fn testnet_genesis(
             ..Default::default()
         },
         ethereum: Default::default(),
+        energy_fee: EnergyFeeConfig {
+            initial_energy_rate: INITIAL_ENERGY_RATE,
+            ..Default::default()
+        },
         dynamic_fee: Default::default(),
         base_fee: Default::default(),
         assets: AssetsConfig {

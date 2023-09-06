@@ -1,10 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+use frame_support::dispatch::RawOrigin;
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
     tokens::{Fortitude, Precision, Preservation},
 };
 pub use pallet::*;
+use pallet_asset_rate::Pallet as AssetRatePallet;
 pub(crate) use pallet_evm::{AddressMapping, OnChargeEVMTransaction};
 pub use pallet_transaction_payment::OnChargeTransaction;
 
@@ -41,6 +43,7 @@ pub enum CallFee<Balance> {
 pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
+    use sp_arithmetic::FixedU128;
 
     /// Pallet which implements fee withdrawal traits
     #[pallet::pallet]
@@ -50,7 +53,7 @@ pub mod pallet {
     pub trait Config:
         frame_system::Config
         + pallet_transaction_payment::Config
-        + pallet_assets::Config
+        + pallet_asset_rate::Config
         + pallet_evm::Config
     {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
@@ -78,9 +81,8 @@ pub mod pallet {
             Self::FeeTokenBalanced,
             Self::Balance,
         >;
-        /// Energy exchange rate (1 Main token = `EnergyRate.0`/`EnergyRate.1` Fee token)
-        #[pallet::constant]
-        type EnergyRate: Get<(Self::Balance, Self::Balance)>;
+        /// Used for initializing the pallet
+        type EnergyAssetId: Get<Self::AssetId>;
     }
 
     #[pallet::event]
@@ -88,6 +90,24 @@ pub mod pallet {
     pub enum Event<T: Config> {
         /// Energy fee is paid to execute transaction [who, fee amount]
         EnergyFeePaid { who: T::AccountId, amount: T::Balance },
+    }
+
+    #[pallet::genesis_config]
+    #[derive(frame_support::DefaultNoBound)]
+    pub struct GenesisConfig<T: Config> {
+        pub initial_energy_rate: FixedU128,
+        pub _config: PhantomData<T>,
+    }
+
+    #[pallet::genesis_build]
+    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+        fn build(&self) {
+            let _ = AssetRatePallet::<T>::create(
+                RawOrigin::Root.into(),
+                T::EnergyAssetId::get(),
+                self.initial_energy_rate,
+            );
+        }
     }
 
     impl<T: Config> OnChargeTransaction<T> for Pallet<T> {

@@ -1,13 +1,20 @@
 use crate::CallFee;
 use frame_support::traits::{
     fungible::{Balanced, Inspect},
-    tokens::{Balance, Fortitude, Precision, Preservation},
+    tokens::{
+        Balance, ConversionFromAssetBalance, ConversionToAssetBalance, Fortitude, Precision,
+        Preservation,
+    },
     Get,
 };
+use pallet_asset_rate::{Config as AssetRateConfig, Error as AssetRateError};
 use sp_arithmetic::{per_things::Rounding, ArithmeticError};
-use sp_runtime::DispatchError;
+use sp_runtime::{DispatchError, FixedPointNumber};
 use sp_std::marker::PhantomData;
 
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+type AssetIdOf<T> = <T as AssetRateConfig>::AssetId;
+type BalanceOf<T> = <<T as AssetRateConfig>::Currency as Inspect<AccountIdOf<T>>>::Balance;
 /// Custom fee calculation for specified scenarios
 pub trait CustomFee<RuntimeCall, DispatchInfo, Balance, ConstantFee>
 where
@@ -73,6 +80,73 @@ where
         )?;
         let _ = TargetToken::deposit(who, amount_out, Precision::Exact)?;
         Ok(amount_out)
+    }
+}
+
+pub struct AssetsBalancesConverter<T, P>(PhantomData<(T, P)>);
+
+impl<T: AssetRateConfig, P> ConversionFromAssetBalance<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>>
+    for AssetsBalancesConverter<T, P>
+where
+    P: ConversionFromAssetBalance<
+        BalanceOf<T>,
+        AssetIdOf<T>,
+        BalanceOf<T>,
+        Error = AssetRateError<T>,
+    >,
+{
+    type Error = AssetRateError<T>;
+
+    fn from_asset_balance(
+        balance: BalanceOf<T>,
+        asset_id: AssetIdOf<T>,
+    ) -> Result<BalanceOf<T>, Self::Error> {
+        P::from_asset_balance(balance, asset_id)
+    }
+}
+
+impl<T: AssetRateConfig, P> ConversionToAssetBalance<BalanceOf<T>, AssetIdOf<T>, BalanceOf<T>>
+    for AssetsBalancesConverter<T, P>
+where
+    P: ConversionFromAssetBalance<
+        BalanceOf<T>,
+        AssetIdOf<T>,
+        BalanceOf<T>,
+        Error = AssetRateError<T>,
+    >,
+{
+    type Error = AssetRateError<T>;
+
+    fn to_asset_balance(
+        balance: BalanceOf<T>,
+        asset_id: AssetIdOf<T>,
+    ) -> Result<BalanceOf<T>, Self::Error> {
+        let rate = pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id)
+            .ok_or(Self::Error::UnknownAssetId)?;
+        Ok(rate.saturating_div_int(balance))
+    }
+}
+
+pub struct NativeExchange<AssetId, SourceToken, TargetToken, Rate, GetAssetId>(
+    PhantomData<(AssetId, SourceToken, TargetToken, Rate, GetAssetId)>,
+);
+
+impl<AC, AS, TT, ST, B, G, R> TokenExchange<AC, ST, TT, B> for NativeExchange<AS, ST, TT, R, G>
+where
+    TT: Balanced<AC> + Inspect<AC, Balance = B>,
+    ST: Balanced<AC> + Inspect<AC, Balance = B>,
+    B: Balance,
+    G: Get<AS>,
+    R: ConversionFromAssetBalance<B, AS, B> + ConversionToAssetBalance<B, AS, B>,
+{
+    fn convert_from_input(amount: B) -> Option<B> {
+        let asset_id = G::get();
+        R::to_asset_balance(amount, asset_id).ok()
+    }
+
+    fn convert_from_output(amount: B) -> Option<B> {
+        let asset_id = G::get();
+        R::from_asset_balance(amount, asset_id).ok()
     }
 }
 

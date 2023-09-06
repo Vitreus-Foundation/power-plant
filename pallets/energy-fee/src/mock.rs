@@ -1,5 +1,6 @@
 use crate as pallet_energy_fee;
-use crate::{CallFee, CustomFee, Exchange};
+use crate::traits::{AssetsBalancesConverter, NativeExchange};
+use crate::{CallFee, CustomFee};
 use fp_account::AccountId20;
 
 use frame_support::traits::fungible::ItemOf;
@@ -14,6 +15,7 @@ use pallet_ethereum::PostLogContent;
 use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::Compact;
 
+use sp_arithmetic::FixedU128;
 use sp_core::{H256, U256};
 
 use sp_runtime::{
@@ -28,10 +30,17 @@ pub(crate) type AssetId = u128;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
+pub(crate) type EnergyRate = AssetsBalancesConverter<Test, AssetRate>;
 
 pub(crate) const VNRG: AssetId = 1;
 pub(crate) const ALICE: AccountId = AccountId20([1u8; 20]);
 pub(crate) const BOB: AccountId = AccountId20([2u8; 20]);
+
+/// 10^9 with 18 decimals
+/// 1 VNRG = VNRG_TO_VTRS_RATE VTRS
+pub(crate) const VNRG_TO_VTRS_RATE: FixedU128 =
+    FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
+pub(crate) const VNRG_INITIAL_BALANCE: u128 = 2_000_000_000_000_000_000_000_000_000;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -42,6 +51,7 @@ frame_support::construct_runtime!(
         Assets: pallet_assets,
         TransactionPayment: pallet_transaction_payment,
         EnergyFee: pallet_energy_fee,
+        AssetRate: pallet_asset_rate,
         EVMChainId: pallet_evm_chain_id,
         Timestamp: pallet_timestamp,
         Ethereum: pallet_ethereum,
@@ -63,7 +73,6 @@ parameter_types! {
     pub const GetPostLogContent: PostLogContent = PostLogContent::BlockAndTxnHashes;
     pub const GetPrecompilesValue: () = ();
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-    pub const VTRSEnergyRate: (Balance, Balance) = (2, 1);
 }
 
 impl frame_system::Config for Test {
@@ -108,14 +117,27 @@ impl pallet_balances::Config for Test {
     type RuntimeHoldReason = ();
 }
 
+impl pallet_asset_rate::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type CreateOrigin = EnsureRoot<AccountId>;
+    type RemoveOrigin = EnsureRoot<AccountId>;
+    type UpdateOrigin = EnsureRoot<AccountId>;
+    type AssetId = AssetId;
+    type Currency = BalancesVTRS;
+    type Balance = Balance;
+    type WeightInfo = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type AssetKindFactory = ();
+}
+
 impl pallet_energy_fee::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type FeeTokenBalanced = BalancesVNRG;
     type MainTokenBalanced = BalancesVTRS;
-    type EnergyExchange = Exchange<BalancesVTRS, BalancesVNRG, VTRSEnergyRate>;
-    type EnergyRate = VTRSEnergyRate;
+    type EnergyExchange = NativeExchange<AssetId, BalancesVTRS, BalancesVNRG, EnergyRate, GetVNRG>;
+    type EnergyAssetId = GetVNRG;
 }
 
 impl pallet_timestamp::Config for Test {
@@ -255,9 +277,16 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     .assimilate_storage(&mut t)
     .unwrap();
 
-    pallet_balances::GenesisConfig::<Test> { balances: vec![(ALICE, 2_000_000_000_000)] }
+    pallet_balances::GenesisConfig::<Test> { balances: vec![(ALICE, VNRG_INITIAL_BALANCE)] }
         .assimilate_storage(&mut t)
         .unwrap();
+
+    pallet_energy_fee::GenesisConfig::<Test> {
+        initial_energy_rate: VNRG_TO_VTRS_RATE,
+        ..Default::default()
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
 
     t.into()
 }
