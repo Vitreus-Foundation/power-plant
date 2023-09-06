@@ -133,16 +133,16 @@ pub fn devnet_config() -> ChainSpec {
     )
 }
 
-pub fn local_testnet_config() -> ChainSpec {
+pub fn localnet_config() -> ChainSpec {
     use devnet_keys::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
     ChainSpec::from_genesis(
         // Name
-        "Local Testnet",
+        "Localnet",
         // ID
-        "local_testnet",
+        "localnet",
         ChainType::Local,
         move || {
             testnet_genesis(
@@ -188,7 +188,7 @@ pub fn testnet_config() -> ChainSpec {
                 // Sudo account
                 stefania(),
                 // Pre-funded accounts
-                vec![stefania(), valya(), zina(), nina(), galya(), raya(), lyuba()],
+                vec![stefania(), galya(), raya(), lyuba()],
                 // Initial Validators
                 vec![valya_validator_keys(), zina_validator_keys(), nina_validator_keys()],
                 vec![],
@@ -437,7 +437,7 @@ mod testnet_keys {
 
     pub(super) fn zina_validator_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
         (
-            AccountId::from(hex!("7eb27fE7e7eac00F8294D085c2058F6c84DA58E4")), // Stash
+            AccountId::from(hex!("a4bc9609540342f2e5429141e610a84117aa4d98")), // Stash
             zina(),
             sp_core::sr25519::Public(hex!(
                 "e8bcd01c18e37e45b2c42710ba51845d8b35406fa5a7f5feb99aed0decca4408"
@@ -448,7 +448,7 @@ mod testnet_keys {
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
-                "76e56e0927cb620d35ac306117ba233bd19565a7d8fc7a573e2ab66bad93d13f"
+                "ca8f73db4af15312b4cbb297cc60279c8478dd32f2ff261f46c7dfdd27f2ff24"
             ))
             .into(),
         )

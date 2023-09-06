@@ -35,12 +35,11 @@ generate_session_keys() {
         echo "# BABE"
         generate_session_key babe sr25519
         printf "\n"
-        echo "# IMON (I'm Online)"
-        generate_session_key imon sr25519
-        printf "\n"
         echo "# GRAN (GRANDPA)"
         generate_session_key imon ed25519
-
+        printf "\n"
+        echo "# IMON (I'm Online)"
+        generate_session_key imon sr25519
         printf "\n"
     done
 }

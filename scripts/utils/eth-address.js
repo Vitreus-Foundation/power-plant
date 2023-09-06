@@ -1,4 +1,4 @@
-// this tool generates ethereum key paur from a subkey mnemonic.
+// generate ethereum key pair from a subkey mnemonic
 
 import { Keyring } from "@polkadot/keyring";
 import crypto from "@polkadot/util-crypto";
