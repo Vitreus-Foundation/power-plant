@@ -23,7 +23,7 @@ usage() {
     echo "\t<envs_file> contains the environment variables with session keys"
     printf "\n\033[31m"
     echo "The envs file should contain the variables:"
-    echo "\t<GALYA, NINA, ZINA>_<PRIVATE, PUBLIC>_<BABE, GRAN, IMON>" 
+    echo "\t<VALIDATOR1, VALIDATOR2, VALIDATOR3>_<PRIVATE, PUBLIC>_<BABE, GRAN, IMON>" 
     printf "\033[0m\n"
 }
 
@@ -174,9 +174,9 @@ check_availability "http://localhost:9944"
 check_availability "http://localhost:9955"
 check_availability "http://localhost:9966"
 
-add_session_keys "VALYA" "http://localhost:9944"
-add_session_keys "ZINA" "http://localhost:9955"
-add_session_keys "NINA" "http://localhost:9966"
+add_session_keys "VALIDATOR1" "http://localhost:9944"
+add_session_keys "VALIDATOR2" "http://localhost:9955"
+add_session_keys "VALIDATOR3" "http://localhost:9966"
 
 # restart the network to make the keys effective
 stop_network

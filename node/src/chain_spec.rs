@@ -184,11 +184,11 @@ pub fn testnet_config() -> ChainSpec {
             testnet_genesis(
                 wasm_binary,
                 // Sudo account
-                stefania(),
+                root(),
                 // Pre-funded accounts
-                vec![stefania(), galya(), raya(), lyuba()],
+                vec![root(), account_1(), account_2(), account_3()],
                 // Initial Validators
-                vec![valya_validator_keys(), zina_validator_keys(), nina_validator_keys()],
+                vec![validator_1_keys(), validator_2_keys(), validator_3_keys()],
                 vec![],
                 SS58Prefix::get() as u64,
             )
@@ -390,86 +390,86 @@ mod devnet_keys {
 mod testnet_keys {
     use super::*;
 
-    pub(super) fn stefania() -> AccountId {
-        AccountId::from(hex!("0F92eb04a6c829A850106B7a5EFdEfFA3e12ff9A"))
+    pub(super) fn root() -> AccountId {
+        AccountId::from(hex!("2F8CF06C0c21CA40eC4006d35C01B92a63d15d66"))
     }
 
-    pub(super) fn valya() -> AccountId {
-        AccountId::from(hex!("6ee40c68188132A8Eb06bA5A3f4A9CFaDf1AF342"))
+    pub(super) fn validator_1() -> AccountId {
+        AccountId::from(hex!("BE2839a4F6fadCdc651151b307568FC8daEB670D"))
     }
 
-    pub(super) fn zina() -> AccountId {
-        AccountId::from(hex!("416B1da2C7242A796C12c0641676C7E35a04597D"))
+    pub(super) fn validator_2() -> AccountId {
+        AccountId::from(hex!("3862660d31edcF2e84fB5c551768a84ac7259bfb"))
     }
 
-    pub(super) fn nina() -> AccountId {
-        AccountId::from(hex!("cF994FD2E08eb3e9A584080f3606B1434B5CcADF"))
+    pub(super) fn validator_3() -> AccountId {
+        AccountId::from(hex!("A4A86AD2cC74A7f289Eb9921CF805e22eB2Bb2BF"))
     }
 
-    pub(super) fn galya() -> AccountId {
-        AccountId::from(hex!("675D18406cc184E6CC322a12F5e2b156394E0f5a"))
+    pub(super) fn account_1() -> AccountId {
+        AccountId::from(hex!("624B523D1d80B7527e4444F5dbBE37A43df8819b"))
     }
 
-    pub(super) fn raya() -> AccountId {
-        AccountId::from(hex!("D939d4FC9f7777Ac31F2cb419da896e645c47289"))
+    pub(super) fn account_2() -> AccountId {
+        AccountId::from(hex!("156C92352EEcA66E54B755D63538C911fF3D6d3E"))
     }
 
-    pub(super) fn lyuba() -> AccountId {
-        AccountId::from(hex!("D2d0C6bc8F13D89C69de3f19bed306dE60Ef2Efc"))
+    pub(super) fn account_3() -> AccountId {
+        AccountId::from(hex!("E0E337F0753CB3099B17c6Af6D3E7C41e99FF83D"))
     }
 
-    pub(super) fn valya_validator_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_1_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
         (
-            AccountId::from(hex!("7eb27fE7e7eac00F8294D085c2058F6c84DA58E4")), // Stash
-            valya(),
+            AccountId::from(hex!("784e69Feba8a2FCCc938A722D5a66E9EbfA3A14A")), // Stash
+            validator_1(),
             sp_core::sr25519::Public(hex!(
-                "164be205541f9afd3a4f2743e53f32f6c708801a8ea4d172a841bbe80fb8896c"
+                "f29f3491dc2baf6ffeffd01702a1b5289519c00a229d41544edc357d0355db51"
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "51fd2b964631392aa13abfa0cb7bcf42ec7cbc215e2cc437d8ca6314b488cf41"
+                "488c73604a3da26d8f2547c71869d8a78542b008b55fc50bdea72751e702d142"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
-                "021f199e2a8b3e25d0a2f078225f48e876f9ae028ab904e803d115e749a01d0c"
+                "408300338038bb359afc7f32a0622d3be520988b5a89c3af5af0272e6745de5e"
             ))
             .into(),
         )
     }
 
-    pub(super) fn zina_validator_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_2_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
         (
-            AccountId::from(hex!("a4bc9609540342f2e5429141e610a84117aa4d98")), // Stash
-            zina(),
+            AccountId::from(hex!("309753d1BAc45489B9C4BdDEf28963d862AdCb13")), // Stash
+            validator_2(),
             sp_core::sr25519::Public(hex!(
-                "e8bcd01c18e37e45b2c42710ba51845d8b35406fa5a7f5feb99aed0decca4408"
+                "80b57a74ddb35163ada69d61022d518cdad36eb63f766a04f9d2db35da28052f"
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "ca8f73db4af15312b4cbb297cc60279c8478dd32f2ff261f46c7dfdd27f2ff24"
+                "735fa995b62b01c3ffc05f752a2fa708a46147dec40af60a7b3d5eeeb67c1415"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
-                "ca8f73db4af15312b4cbb297cc60279c8478dd32f2ff261f46c7dfdd27f2ff24"
+                "527844f460f369100ca67a1fa084b9a29b71d984cd90479ce5bcd7efb74bde1c"
             ))
             .into(),
         )
     }
 
-    pub(super) fn nina_validator_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_3_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
         (
-            AccountId::from(hex!("F10713631180c6D825a17650258E8cC8b62161e4")), // Stash
-            nina(),
+            AccountId::from(hex!("A6543B65DD9cFA7e324AF616A339D3c1a13fa685")), // Stash
+            validator_3(),
             sp_core::sr25519::Public(hex!(
-                "e65beb63ed80dfc2de0d5c0a7e945306eaddfbe8ef69a1186d7299e84d8fff18"
+                "c2335d394c89693254fb1a323dc74d9c1a14f43ad3292081b331930f9fa8d072"
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "043d568913ea8c6e8f51bb634b7e6d1545b22506499ca5472bb9e3bc47b5e6d6"
+                "7290d1a791f03dcc5b789d16b09c3ea586789931167339fba079bdb4c9f64c75"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
-                "e8b78cd8499b36e69fe55993565b0453998cfe1ada6e4cbd0d1f43343751fc43"
+                "3e99fe54593eeaf568029ec4989106286fd3384fc9c7b723d0e60bc3c3c02479"
             ))
             .into(),
         )

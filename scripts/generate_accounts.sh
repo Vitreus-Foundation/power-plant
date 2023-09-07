@@ -58,5 +58,5 @@ generate_session_key() {
 
 check_args
 print_mnemonic
-generate_accounts "Stefania Valya Valya//stash Zina Zina//stash Nina Nina//stash Galya Raya Lyuba"
-generate_session_keys "Valya Zina Nina"
+generate_accounts "root validator1 validator1//stash validator2 validator2//stash validator3 validator3//stash account1 account2 account3"
+generate_session_keys "validator1 validator2 validator3"
