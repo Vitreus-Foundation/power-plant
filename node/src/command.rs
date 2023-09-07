@@ -61,8 +61,9 @@ impl SubstrateCli for Cli {
                 let enable_manual_seal = self.sealing.map(|_| true);
                 Box::new(chain_spec::development_config(enable_manual_seal))
             },
-            "" | "local" => Box::new(chain_spec::local_testnet_config()),
             "devnet" => Box::new(chain_spec::devnet_config()),
+            "" | "localnet" => Box::new(chain_spec::localnet_config()),
+            "testnet" => Box::new(chain_spec::testnet_config()),
             path => {
                 Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?)
             },
