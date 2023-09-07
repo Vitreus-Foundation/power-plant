@@ -246,6 +246,7 @@ impl<T: Config> Pallet<T> {
         unique_number.extend_from_slice(&extrinsic_index.to_le_bytes());
         unique_number.extend_from_slice(owner.encode().as_ref());
 
+        // Combine the bytes of the hash into a u64 by bitwise OR (|) and left shifts (<<).
         let hash = BlakeTwo256::hash(&unique_number);
         let mut item_id: u64 = 0;
         for i in 0..8 {
