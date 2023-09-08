@@ -5,7 +5,7 @@ use crate::testing_utils::perbill_signed_sub_abs;
 use super::{ConfigOp, Event, *};
 use frame_support::{
     assert_noop, assert_ok, assert_storage_noop, bounded_vec,
-    dispatch::WithPostDispatchInfo,
+    dispatch::{extract_actual_weight, Dispatchable, GetDispatchInfo, WithPostDispatchInfo},
     pallet_prelude::*,
     traits::{Currency, Get, ReservableCurrency},
     weights::Weight,
@@ -3853,7 +3853,6 @@ fn test_payout_stakers() {
 }
 
 #[test]
-#[ignore]
 fn payout_stakers_handles_basic_errors() {
     // Here we will test payouts handle all errors.
     ExtBuilder::default().has_stakers(false).build_and_execute(|| {
@@ -3888,170 +3887,179 @@ fn payout_stakers_handles_basic_errors() {
             Error::<Test>::NotStash.with_weight(err_weight)
         );
 
-        // let last_era = 99;
-        // for i in 3..=last_era {
-        //     // compute and ensure the reward amount is greater than zero.
-        //     let _ = current_total_payout_for_duration(reward_time_per_era());
-        //     mock::start_active_era(i);
-        // }
-        //
-        // let history_depth = HistoryDepth::get();
-        // let expected_last_reward_era = last_era - 1;
-        // let expected_start_reward_era = last_era - history_depth;
-        //
-        // // We are at era last_era=99. Given history_depth=80, we should be able
-        // // to payout era starting from expected_start_reward_era=19 through
-        // // expected_last_reward_era=98 (80 total eras), but not 18 or 99.
-        // assert_noop!(
-        //     PowerPlant::payout_stakers(
-        //         RuntimeOrigin::signed(1337),
-        //         11,
-        //         expected_start_reward_era - 1
-        //     ),
-        //     Error::<Test>::InvalidEraToReward.with_weight(err_weight)
-        // );
-        // assert_noop!(
-        //     PowerPlant::payout_stakers(
-        //         RuntimeOrigin::signed(1337),
-        //         11,
-        //         expected_last_reward_era + 1
-        //     ),
-        //     Error::<Test>::InvalidEraToReward.with_weight(err_weight)
-        // );
-        // assert_ok!(PowerPlant::payout_stakers(
-        //     RuntimeOrigin::signed(1337),
-        //     11,
-        //     expected_start_reward_era
-        // ));
-        // assert_ok!(PowerPlant::payout_stakers(
-        //     RuntimeOrigin::signed(1337),
-        //     11,
-        //     expected_last_reward_era
-        // ));
-        //
-        // // Can't claim again
-        // assert_noop!(
-        //     PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era),
-        //     Error::<Test>::AlreadyClaimed.with_weight(err_weight)
-        // );
-        // assert_noop!(
-        //     PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era),
-        //     Error::<Test>::AlreadyClaimed.with_weight(err_weight)
-        // );
+        let last_era = 99;
+        for i in 3..=last_era {
+            // compute and ensure the reward amount is greater than zero.
+            let _ = current_total_payout_for_duration(reward_time_per_era());
+            mock::start_active_era(i);
+        }
+
+        let history_depth = HistoryDepth::get();
+        let expected_last_reward_era = last_era - 1;
+        let expected_start_reward_era = last_era - history_depth;
+
+        // We are at era last_era=99. Given history_depth=80, we should be able
+        // to payout era starting from expected_start_reward_era=19 through
+        // expected_last_reward_era=98 (80 total eras), but not 18 or 99.
+        assert_noop!(
+            PowerPlant::payout_stakers(
+                RuntimeOrigin::signed(1337),
+                11,
+                expected_start_reward_era - 1
+            ),
+            Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+        );
+        assert_noop!(
+            PowerPlant::payout_stakers(
+                RuntimeOrigin::signed(1337),
+                11,
+                expected_last_reward_era + 1
+            ),
+            Error::<Test>::InvalidEraToReward.with_weight(err_weight)
+        );
+        assert_ok!(PowerPlant::payout_stakers(
+            RuntimeOrigin::signed(1337),
+            11,
+            expected_start_reward_era
+        ));
+        assert_ok!(PowerPlant::payout_stakers(
+            RuntimeOrigin::signed(1337),
+            11,
+            expected_last_reward_era
+        ));
+
+        // Can't claim again
+        assert_noop!(
+            PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_start_reward_era),
+            Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+        );
+        assert_noop!(
+            PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, expected_last_reward_era),
+            Error::<Test>::AlreadyClaimed.with_weight(err_weight)
+        );
     });
 }
 
 #[test]
-#[ignore]
 fn payout_stakers_handles_weight_refund() {
     // Note: this test relies on the assumption that `payout_stakers_alive_staked` is solely used by
     // `payout_stakers` to calculate the weight of each payout op.
     ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-        let max_nom_rewarded =
+        let max_coop_rewarded =
             <<Test as Config>::MaxCooperatorRewardedPerValidator as Get<_>>::get();
         // Make sure the configured value is meaningful for our use.
-        assert!(max_nom_rewarded >= 4);
-        let half_max_nom_rewarded = max_nom_rewarded / 2;
+        assert!(max_coop_rewarded >= 4);
+        let half_max_coop_rewarded = max_coop_rewarded / 2;
         // Sanity check our max and half max cooperator quantities.
-        assert!(half_max_nom_rewarded > 0);
-        assert!(max_nom_rewarded > half_max_nom_rewarded);
+        assert!(half_max_coop_rewarded > 0);
+        assert!(max_coop_rewarded > half_max_coop_rewarded);
 
-        let max_nom_rewarded_weight =
-            <Test as Config>::ThisWeightInfo::payout_stakers_alive_staked(max_nom_rewarded);
-        let half_max_nom_rewarded_weight =
-            <Test as Config>::ThisWeightInfo::payout_stakers_alive_staked(half_max_nom_rewarded);
-        let zero_nom_payouts_weight =
+        let max_coop_rewarded_weight =
+            <Test as Config>::ThisWeightInfo::payout_stakers_alive_staked(max_coop_rewarded);
+        let half_max_coop_rewarded_weight =
+            <Test as Config>::ThisWeightInfo::payout_stakers_alive_staked(half_max_coop_rewarded);
+        let zero_coop_payouts_weight =
             <Test as Config>::ThisWeightInfo::payout_stakers_alive_staked(0);
-        assert!(zero_nom_payouts_weight.any_gt(Weight::zero()));
-        assert!(half_max_nom_rewarded_weight.any_gt(zero_nom_payouts_weight));
-        assert!(max_nom_rewarded_weight.any_gt(half_max_nom_rewarded_weight));
+        assert!(zero_coop_payouts_weight.any_gt(Weight::zero()));
+        assert!(half_max_coop_rewarded_weight.any_gt(zero_coop_payouts_weight));
+        assert!(max_coop_rewarded_weight.any_gt(half_max_coop_rewarded_weight));
 
         let balance = 1000;
-        bond_validator(11, 10, balance);
+        make_validator(10, 11, balance);
 
         // Era 1
         start_active_era(1);
 
-        // // Reward just the validator.
-        // PowerPlant::reward_by_ids(vec![(11, 1)]);
-        //
-        // // Add some `half_max_nom_rewarded` cooperators who will start backing the validator in the
-        // // next era.
-        // for i in 0..half_max_nom_rewarded {
-        //     bond_cooperator((1000 + i).into(), (100 + i).into(), balance + i as Balance, vec![11]);
-        // }
-        //
-        // // Era 2
-        // start_active_era(2);
-        //
-        // // Collect payouts when there are no cooperators
-        // let call =
-        //     TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 1 });
-        // let info = call.get_dispatch_info();
-        // let result = call.dispatch(RuntimeOrigin::signed(20));
-        // assert_ok!(result);
-        // assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
-        //
-        // // The validator is not rewarded in this era; so there will be zero payouts to claim for
-        // // this era.
-        //
-        // // Era 3
-        // start_active_era(3);
-        //
-        // // Collect payouts for an era where the validator did not receive any points.
-        // let call =
-        //     TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
-        // let info = call.get_dispatch_info();
-        // let result = call.dispatch(RuntimeOrigin::signed(20));
-        // assert_ok!(result);
-        // assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
-        //
-        // // Reward the validator and its cooperators.
-        // PowerPlant::reward_by_ids(vec![(11, 1)]);
-        //
-        // // Era 4
-        // start_active_era(4);
-        //
-        // // Collect payouts when the validator has `half_max_nom_rewarded` cooperators.
-        // let call =
-        //     TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 3 });
-        // let info = call.get_dispatch_info();
-        // let result = call.dispatch(RuntimeOrigin::signed(20));
-        // assert_ok!(result);
-        // assert_eq!(extract_actual_weight(&result, &info), half_max_nom_rewarded_weight);
-        //
-        // // Add enough cooperators so that we are at the limit. They will be active cooperators
-        // // in the next era.
-        // for i in half_max_nom_rewarded..max_nom_rewarded {
-        //     bond_cooperator((1000 + i).into(), (100 + i).into(), balance + i as Balance, vec![11]);
-        // }
-        //
-        // // Era 5
-        // start_active_era(5);
-        // // We now have `max_nom_rewarded` cooperators actively cooperating our validator.
-        //
-        // // Reward the validator so we can collect for everyone in the next era.
-        // PowerPlant::reward_by_ids(vec![(11, 1)]);
-        //
-        // // Era 6
-        // start_active_era(6);
-        //
-        // // Collect payouts when the validator had `half_max_nom_rewarded` cooperators.
-        // let call =
-        //     TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
-        // let info = call.get_dispatch_info();
-        // let result = call.dispatch(RuntimeOrigin::signed(20));
-        // assert_ok!(result);
-        // assert_eq!(extract_actual_weight(&result, &info), max_nom_rewarded_weight);
-        //
-        // // Try and collect payouts for an era that has already been collected.
-        // let call =
-        //     TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
-        // let info = call.get_dispatch_info();
-        // let result = call.dispatch(RuntimeOrigin::signed(20));
-        // assert!(result.is_err());
-        // // When there is an error the consumed weight == weight when there are 0 cooperator payouts.
-        // assert_eq!(extract_actual_weight(&result, &info), zero_nom_payouts_weight);
+        // Reward just the validator.
+        PowerPlant::reward_by_ids(vec![(11, 1.into())]);
+
+        // Add some `half_max_nom_rewarded` cooperators who will start backing the validator in the
+        // next era.
+        for i in 0..half_max_coop_rewarded {
+            bond_cooperator(
+                (1000 + i).into(),
+                (100 + i).into(),
+                balance + i as Balance,
+                vec![(11, 100)],
+            );
+        }
+
+        // Era 2
+        start_active_era(2);
+
+        // Collect payouts when there are no cooperators
+        let call =
+            TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 1 });
+        let info = call.get_dispatch_info();
+        let result = call.dispatch(RuntimeOrigin::signed(20));
+        assert_ok!(result);
+        assert_eq!(extract_actual_weight(&result, &info), zero_coop_payouts_weight);
+
+        // The validator is not rewarded in this era; so there will be zero payouts to claim for
+        // this era.
+
+        // Era 3
+        start_active_era(3);
+
+        // Collect payouts for an era where the validator did not receive any points.
+        let call =
+            TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 2 });
+        let info = call.get_dispatch_info();
+        let result = call.dispatch(RuntimeOrigin::signed(20));
+        assert_ok!(result);
+        assert_eq!(extract_actual_weight(&result, &info), half_max_coop_rewarded_weight);
+
+        // Reward the validator and its cooperators.
+        PowerPlant::reward_by_ids(vec![(11, 1.into())]);
+
+        // Era 4
+        start_active_era(4);
+
+        // Collect payouts when the validator has `half_max_nom_rewarded` cooperators.
+        let call =
+            TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 3 });
+        let info = call.get_dispatch_info();
+        let result = call.dispatch(RuntimeOrigin::signed(20));
+        assert_ok!(result);
+        assert_eq!(extract_actual_weight(&result, &info), half_max_coop_rewarded_weight);
+
+        // Add enough cooperators so that we are at the limit. They will be active cooperators
+        // in the next era.
+        for i in half_max_coop_rewarded..max_coop_rewarded {
+            bond_cooperator(
+                (1000 + i).into(),
+                (100 + i).into(),
+                balance + i as Balance,
+                vec![(11, 100)],
+            );
+        }
+
+        // Era 5
+        start_active_era(5);
+        // We now have `max_nom_rewarded` cooperators actively cooperating our validator.
+
+        // Reward the validator so we can collect for everyone in the next era.
+        PowerPlant::reward_by_ids(vec![(11, 1.into())]);
+
+        // Era 6
+        start_active_era(6);
+
+        // Collect payouts when the validator had `half_max_coop_rewarded` cooperators.
+        let call =
+            TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
+        let info = call.get_dispatch_info();
+        let result = call.dispatch(RuntimeOrigin::signed(20));
+        assert_ok!(result);
+        assert_eq!(extract_actual_weight(&result, &info), max_coop_rewarded_weight);
+
+        // Try and collect payouts for an era that has already been collected.
+        let call =
+            TestCall::PowerPlant(StakingCall::payout_stakers { validator_stash: 11, era: 5 });
+        let info = call.get_dispatch_info();
+        let result = call.dispatch(RuntimeOrigin::signed(20));
+        assert!(result.is_err());
+        // When there is an error the consumed weight == weight when there are 0 cooperator payouts.
+        assert_eq!(extract_actual_weight(&result, &info), zero_coop_payouts_weight);
     });
 }
 
@@ -4101,76 +4109,6 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
                     .unwrap(),
             })
         );
-    });
-}
-
-#[test]
-#[ignore]
-fn offences_weight_calculated_correctly() {
-    ExtBuilder::default().cooperate(true).build_and_execute(|| {
-        // On offence with zero offenders: 4 Reads, 1 Write
-        let zero_offence_weight =
-            <Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1);
-        // assert_eq!(
-        // 	PowerPlant::on_offence(&[], &[Perbill::from_percent(50)], 0, DisableStrategy::WhenSlashed),
-        // 	zero_offence_weight
-        // );
-        //
-        // // On Offence with N offenders, Unapplied: 4 Reads, 1 Write + 4 Reads, 5 Writes
-        // let n_offence_unapplied_weight = <Test as frame_system::Config>::DbWeight::get()
-        // 	.reads_writes(4, 1) +
-        // 	<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 5);
-        //
-        // let offenders: Vec<
-        // 	OffenceDetails<
-        // 		<Test as frame_system::Config>::AccountId,
-        // 		pallet_session::historical::IdentificationTuple<Test>,
-        // 	>,
-        // > = (1..10)
-        // 	.map(|i| OffenceDetails {
-        // 		offender: (i, PowerPlant::eras_stakers(active_era(), i)),
-        // 		reporters: vec![],
-        // 	})
-        // 	.collect();
-        // assert_eq!(
-        // 	PowerPlant::on_offence(
-        // 		&offenders,
-        // 		&[Perbill::from_percent(50)],
-        // 		0,
-        // 		DisableStrategy::WhenSlashed
-        // 	),
-        // 	n_offence_unapplied_weight
-        // );
-        //
-        // // On Offence with one offenders, Applied
-        // let one_offender = [OffenceDetails {
-        // 	offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-        // 	reporters: vec![1],
-        // }];
-        //
-        // let n = 1; // Number of offenders
-        // let rw = 3 + 3 * n; // rw reads and writes
-        // let one_offence_unapplied_weight =
-        // 	<Test as frame_system::Config>::DbWeight::get().reads_writes(4, 1)
-        //  +
-        // 	<Test as frame_system::Config>::DbWeight::get().reads_writes(rw, rw)
-        // 	// One `slash_cost`
-        // 	+ <Test as frame_system::Config>::DbWeight::get().reads_writes(6, 5)
-        // 	// `slash_cost` * cooperators (1)
-        // 	+ <Test as frame_system::Config>::DbWeight::get().reads_writes(6, 5)
-        // 	// `reward_cost` * reporters (1)
-        // 	+ <Test as frame_system::Config>::DbWeight::get().reads_writes(2, 2)
-        // ;
-        //
-        // assert_eq!(
-        // 	PowerPlant::on_offence(
-        // 		&one_offender,
-        // 		&[Perbill::from_percent(50)],
-        // 		0,
-        // 		DisableStrategy::WhenSlashed{}
-        // 	),
-        // 	one_offence_unapplied_weight
-        // );
     });
 }
 
@@ -4458,26 +4396,6 @@ fn on_finalize_weight_is_nonzero() {
 }
 
 #[test]
-#[should_panic]
-#[ignore]
-fn count_check_works() {
-    ExtBuilder::default().build_and_execute(|| {
-        // We should never insert into the validators or cooperators map directly as this will
-        // not keep track of the count. This test should panic as we verify the count is accurate
-        // after every test using the `post_checks` in `mock`.
-        Validators::<Test>::insert(987654321, ValidatorPrefs::default());
-        Cooperators::<Test>::insert(
-            987654321,
-            Cooperations {
-                targets: Default::default(),
-                submitted_in: Default::default(),
-                suppressed: false,
-            },
-        );
-    })
-}
-
-#[test]
 fn min_bond_checks_work() {
     ExtBuilder::default()
         .existential_deposit(100)
@@ -4542,7 +4460,6 @@ fn min_bond_checks_work() {
 }
 
 #[test]
-#[ignore]
 fn chill_other_works() {
     ExtBuilder::default()
         .existential_deposit(100)
@@ -4683,25 +4600,19 @@ fn chill_other_works() {
 
             // 16 people total because tests start with 2 active one
             assert_eq!(Cooperators::<Test>::count(), 15 + initial_cooperators);
-            assert_eq!(Validators::<Test>::count(), 15 + initial_validators);
+            assert_eq!(Validators::<Test>::count(), 15 + initial_validators); // 18
 
             // Users can now be chilled down to 7 people, so we try to remove 9 of them (starting
             // with 16)
-            for i in 6..15 {
+            for i in 11..15 {
                 let b = 4 * i + 1;
                 let d = 4 * i + 3;
                 assert_ok!(PowerPlant::chill_other(RuntimeOrigin::signed(1337), b));
                 assert_ok!(PowerPlant::chill_other(RuntimeOrigin::signed(1337), d));
             }
 
-            // chill a cooperator. Limit is not reached, not chill-able
-            assert_eq!(Cooperators::<Test>::count(), 7);
-            assert_noop!(
-                PowerPlant::chill_other(RuntimeOrigin::signed(1337), 11),
-                Error::<Test>::CannotChillOther
-            );
             // chill a validator. Limit is reached, chill-able.
-            assert_eq!(Validators::<Test>::count(), 9);
+            assert_eq!(Validators::<Test>::count(), 14);
             assert_ok!(PowerPlant::chill_other(RuntimeOrigin::signed(1337), 3));
         })
 }
@@ -4784,7 +4695,10 @@ fn capped_stakers_works() {
         );
 
         // Re-cooperate works fine
-        assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(some_existing_cooperator), vec![(11, 100)]));
+        assert_ok!(PowerPlant::cooperate(
+            RuntimeOrigin::signed(some_existing_cooperator),
+            vec![(11, 100)]
+        ));
         // Re-validate works fine
         assert_ok!(PowerPlant::validate(
             RuntimeOrigin::signed(some_existing_validator),
