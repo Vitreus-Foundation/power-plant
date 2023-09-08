@@ -623,7 +623,7 @@ parameter_types! {
 }
 
 type CollectionId = u32;
-type ItemId = u32;
+type ItemId = u64;
 
 impl pallet_uniques::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
