@@ -1,0 +1,10 @@
+{
+    "jsonrpc":"2.0",
+    "id":1,
+    "method":"author_insertKey",
+    "params": [
+        "gran",
+        "bottom drive obey lake curtain smoke basket hold race lonely fit walk//Dorothy",
+        "0xa80ea2763948b78fcf0f84f5f138b523a94525a66558e5c1f9af8510bf4a4ab9"
+    ]
+}

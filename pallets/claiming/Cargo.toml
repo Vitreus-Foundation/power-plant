@@ -1,0 +1,35 @@
+[package]
+name = "pallet-claiming"
+version = "0.1.0"
+authors = ["Innowise FinTech Team"]
+edition = "2021"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+sp-runtime = { workspace = true }
+parity-scale-codec = { workspace = true }
+scale-info = { workspace = true }
+frame-benchmarking = { workspace = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+
+[dev-dependencies]
+sp-core = { workspace = true }
+pallet-balances = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
+
+[features]
+default = ["std"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+std = [
+    "frame-benchmarking/std",
+    "frame-support/std",
+    "frame-system/std",
+    "parity-scale-codec/std",
+    "pallet-balances/std",
+]
+try-runtime = [ "frame-support/try-runtime" ]

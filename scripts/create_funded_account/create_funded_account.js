@@ -22,7 +22,7 @@ await (async function main() {
 })();
 
 
-async function parseArgs() {
+function parseArgs() {
     if (process.argv.length < 4) {
         console.error("Usage: node create_funded_account.js <ws-rpc-api-url> <amount>");
         return;

@@ -1,10 +1,50 @@
-image: rust:1.70
+image: rust:1.71
 clone:
   depth: full 
 
 pipelines:
+  pull-requests:
+    fix/*:
+      - step:
+          name: Build from fix/* branch pull request
+          size: 2x
+          script:
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo fmt -- --check
+            - cargo clippy -- -D warnings
+            - cargo build --locked
+            - cargo test --locked
+
+    feature/*:
+      - step:
+          name: Build from feature/* branch pull request
+          size: 2x
+          script:
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo fmt -- --check
+            - cargo clippy -- -D warnings
+            - cargo build --locked
+            - cargo test --locked
+
+    devops/*:
+      - step:
+          name: Build from devops/* branch pull request
+          size: 2x
+          script:
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo fmt -- --check
+            - cargo clippy -- -D warnings
+            - cargo build --locked
+            - cargo test --locked
+
   branches:   
-    testnet:
+    develop:
       - step:
           name: First step
           script:
@@ -13,32 +53,139 @@ pipelines:
       - parallel:
           steps:
             - step:
+                name: Build and Run Tests
+                size: 2x
+                script:
+                  - rustup target add wasm32-unknown-unknown
+                  - export RUSTFLAGS="-C strip=debuginfo"
+                  - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+                  - cargo fmt -- --check
+                  - cargo clippy -- -D warnings
+                  - cargo build --locked
+                  - cargo test --locked
+
+            - step:
+                name: inno DEVnet bootnode
+                image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
+                deployment: dev
+                script:
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d --build && docker system prune -a -f"
+                  - ssh ${USERNAME}@${HOST1} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep boot-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise DEVnet Boot Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep boot-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise DEVnet Boot Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+
+            - step:
+                name: inno DEVnet archive
+                image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
+                deployment: dev-archive
+                script:
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-archive-${ENV}.yml up -d --build && docker system prune -a -f"
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise DEVnet Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise DEVnet Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+
+            - step:
+                name: inno DEVnet node1
+                image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
+                deployment: dev2
+                script:
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose1-${ENV}.yml down || true && docker compose -f ./dev-ops/compose1-${ENV}.yml up -d --build && docker system prune -a -f"
+                  - ssh ${USERNAME}@${HOST2} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep first-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise DEVnet First Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep first-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise DEVnet First Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+
+            - step:
+                name: inno DEVnet node2
+                image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
+                deployment: dev3
+                script:
+                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d --build && docker system prune -a -f"
+                  - ssh ${USERNAME}@${HOST3} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep second-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise DEVnet Second Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep second-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise DEVnet Second Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  
+    testnet:
+      - step:
+          name: First step
+          script:
+            - echo "Hello"
+#           name: Build and Run Tests
+#           size: 2x
+#           script:
+#             - rustup target add wasm32-unknown-unknown
+#             - export RUSTFLAGS="-C strip=debuginfo"
+#             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+#             - cargo build --locked
+#             - cargo test --locked
+# #            - cargo test --locked -- --include-ignored
+#             - cargo fmt -- --check
+#             - cargo clippy -- -D warnings
+
+      - parallel:
+          steps:
+            - step:
+                name: Build and Run Tests
+                size: 2x
+                trigger: manual
+                script:
+                  - rustup target add wasm32-unknown-unknown
+                  - export RUSTFLAGS="-C strip=debuginfo"
+                  - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+                  - cargo build --locked
+                  - cargo test --locked
+      #            - cargo test --locked -- --include-ignored
+                  - cargo fmt -- --check
+                  - cargo clippy -- -D warnings
+
+            - step:
                 name: inno testnet bootnode
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
                 trigger: manual
-                deployment: testnet1
+                deployment: testnet-bootnode
                 script:
+                  - envsubst < .env.example > tmp.out
+                  - scp tmp.out ${USERNAME}@${HOST1}:/vitreus/${PRJNAME}/.env
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f compose-boot.yml down || true && docker compose -f compose-boot.yml up -d --build && docker system prune -a -f"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d --build"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d"
                   - ssh ${USERNAME}@${HOST1} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep boot-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Boot Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep boot-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Boot Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
-                name: inno testnet instance1
+                name: inno testnet archive
+                image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
+                deployment: testnet-archive
+                script:
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-archive-${ENV}.yml up -d --build"
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+
+            - step:
+                name: inno testnet node1
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
                 trigger: manual
                 deployment: testnet2
                 script:
+                  - envsubst < .env.example > tmp.out
+                  - scp tmp.out ${USERNAME}@${HOST2}:/vitreus/${PRJNAME}/.env
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f compose1.yml down || true && docker compose -f compose1.yml up -d --build && docker system prune -a -f"
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose1-${ENV}.yml down || true && docker compose -f ./dev-ops/compose1-${ENV}.yml up -d --build"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose1-${ENV}.yml down || true && docker compose -f ./dev-ops/compose1-${ENV}.yml up -d"
                   - ssh ${USERNAME}@${HOST2} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep first-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet First Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep first-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet First Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
-                name: inno testnet instance2
+                name: inno testnet node2
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
                 trigger: manual
                 deployment: testnet3
                 script:
+                  - envsubst < .env.example > tmp.out
+                  - scp tmp.out ${USERNAME}@${HOST3}:/vitreus/${PRJNAME}/.env
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f compose2.yml down || true && docker compose -f compose2.yml up -d --build && docker system prune -a -f"
+                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d --build"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
+                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d"
                   - ssh ${USERNAME}@${HOST3} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep second-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Second Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep second-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Second Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
                   

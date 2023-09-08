@@ -3,7 +3,7 @@ version: "3.3"
 services:
   vitreus_power_plant:
     build:
-      context: .
+      context: ..
       dockerfile: Dockerfile
     image: vitreus_power_plant
     networks:
@@ -12,17 +12,18 @@ services:
   boot_node:
     image: vitreus_power_plant
     container_name: power-plant-boot-node
+    restart: always
     depends_on:
       - vitreus_power_plant
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/alice
-      --chain dev
+      --chain devnet
       --alice
       --port 30333
       --rpc-port 9944
       --unsafe-rpc-external
-      --node-key c12b6d18942f5ee8528c8e2baf4e147b5c5c18710926ea492d09cbd9f6c9f82a
+      --node-key 0000000000000000000000000000000000000000000000000000000000000001
       --validator
       --prometheus-external
       --rpc-cors all

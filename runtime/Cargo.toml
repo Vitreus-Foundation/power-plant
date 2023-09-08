@@ -40,17 +40,22 @@ frame-support = { workspace = true }
 frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
 frame-system-rpc-runtime-api = { workspace = true }
-pallet-staking-reward-curve = { workspace = true }
 pallet-assets = { workspace = true }
+pallet-asset-rate = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-babe = { workspace = true }
 pallet-balances = { workspace = true }
+pallet-claiming = { workspace = true }
 pallet-energy-generation = { workspace = true }
+pallet-energy-fee = { workspace = true }
+pallet-faucet = { workspace = true }
 pallet-grandpa = { workspace = true }
 pallet-im-online = { workspace = true }
+pallet-nac-managing = { workspace = true }
 pallet-offences = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-session = { workspace = true }
+pallet-staking-reward-curve = { workspace = true }
 pallet-sudo = { workspace = true }
 pallet-timestamp = { workspace = true }
 pallet-transaction-payment = { workspace = true }
@@ -117,6 +122,7 @@ std = [
     "pallet-authorship/std",
     "pallet-babe/std",
     "pallet-balances/std",
+    "pallet-faucet/std",
     "pallet-grandpa/std",
     "pallet-im-online/std",
     "pallet-offences/std",
@@ -142,9 +148,11 @@ std = [
     "pallet-evm-precompile-sha3fips/std",
     "pallet-evm-precompile-simple/std",
     "pallet-hotfix-sufficients/std",
-
+    "pallet-claiming/std",
+    "pallet-nac-managing/std",
     "pallet-reputation/std",
     "pallet-energy-generation/std",
+    "pallet-energy-fee/std",
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
