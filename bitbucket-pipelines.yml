@@ -147,7 +147,7 @@ pipelines:
                   - scp tmp.out ${USERNAME}@${HOST1}:/vitreus/${PRJNAME}/.env
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d"
                   - ssh ${USERNAME}@${HOST1} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep boot-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Boot Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep boot-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Boot Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
@@ -171,7 +171,7 @@ pipelines:
                   - scp tmp.out ${USERNAME}@${HOST2}:/vitreus/${PRJNAME}/.env
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose1-${ENV}.yml down || true && docker compose -f ./dev-ops/compose1-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose1-${ENV}.yml down || true && docker compose -f ./dev-ops/compose1-${ENV}.yml up -d"
                   - ssh ${USERNAME}@${HOST2} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep first-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet First Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep first-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet First Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
@@ -185,7 +185,7 @@ pipelines:
                   - scp tmp.out ${USERNAME}@${HOST3}:/vitreus/${PRJNAME}/.env
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
+                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && ./dev-ops/add-session-keys.sh .env VALIDATOR_ localhost:9944 | rm -f .env"
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d"
                   - ssh ${USERNAME}@${HOST3} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep second-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Second Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep second-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Second Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
                   
