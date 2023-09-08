@@ -12,6 +12,7 @@ services:
   first_node:
     image: vitreus_power_plant
     container_name: power-plant-first-node
+    restart: always
     depends_on:
       - vitreus_power_plant
     command: >

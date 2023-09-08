@@ -12,29 +12,35 @@ services:
   boot_node:
     image: vitreus_power_plant
     container_name: power-plant-boot-node
+    restart: always
     depends_on:
       - vitreus_power_plant
+    volumes:
+      - node_data:/tmp/node
     command: >
       ./target/release/vitreus-power-plant-node
-      --base-path /tmp/alice
-      --chain local
-      --alice
+      --base-path /tmp/node
+      --chain testnet
       --port 30333
       --rpc-port 9944
       --unsafe-rpc-external
-      --node-key c12b6d18942f5ee8528c8e2baf4e147b5c5c18710926ea492d09cbd9f6c9f82a
+      --node-key bf4912e408a4cf864623e8f01c4e74f3cf61f7863129d65a8df47d007fe00f22
       --validator
       --prometheus-external
       --rpc-cors all
       --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 9"
+      -lwarn
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
-      - "0.0.0.0:9933:9933/tcp"
       - "0.0.0.0:9944:9944/tcp"
       - "127.0.0.1:9615:9615/tcp"
     networks:
       - vitreus_power_plant_network
+
+volumes:
+  node_data:
+    driver: local
 
 networks:
   vitreus_power_plant_network:

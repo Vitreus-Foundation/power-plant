@@ -15,26 +15,33 @@ services:
     restart: always
     depends_on:
       - vitreus_power_plant
+    volumes:
+      - node_data:/tmp/node
     command: >
       ./target/release/vitreus-power-plant-node
-      --chain devnet
-      --name dev-archive
+      --base-path /tmp/node
+      --chain testnet
+      --name testnet-archive
       --port 30333
       --rpc-port 9944
       --unsafe-rpc-external
       --prometheus-external
-      --bootnodes /ip4/140.82.46.161/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp
+      --bootnodes /ip4/45.77.100.209/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
       --rpc-cors all
       --state-pruning archive
       --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 0"
+      -lwarn
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
-      - "0.0.0.0:9933:9933/tcp"
       - "0.0.0.0:9944:9944/tcp"
-      - "127.0.0.1:9615:9615/tcp"
+      - "0.0.0.0:9615:9615/tcp"
     networks:
       - vitreus_power_plant-network
+
+volumes:
+  node_data:
+    driver: local
 
 networks:
   vitreus_power_plant-network:
