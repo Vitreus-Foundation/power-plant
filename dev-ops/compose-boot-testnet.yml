@@ -21,9 +21,10 @@ services:
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
       --chain testnet
+      --name testnet-bootnode
       --port 30333
       --rpc-port 9944
-      --unsafe-rpc-external
+      --rpc-external
       --node-key bf4912e408a4cf864623e8f01c4e74f3cf61f7863129d65a8df47d007fe00f22
       --validator
       --prometheus-external
@@ -33,7 +34,7 @@ services:
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
-      - "0.0.0.0:9944:9944/tcp"
+      - "127.0.0.1:9944:9944/tcp"
       - "127.0.0.1:9615:9615/tcp"
     networks:
       - vitreus_power_plant_network

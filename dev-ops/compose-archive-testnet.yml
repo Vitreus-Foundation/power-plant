@@ -24,7 +24,7 @@ services:
       --name testnet-archive
       --port 30333
       --rpc-port 9944
-      --unsafe-rpc-external
+      --rpc-external
       --prometheus-external
       --bootnodes /ip4/45.77.100.209/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
       --rpc-cors all
