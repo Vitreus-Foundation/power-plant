@@ -24,7 +24,6 @@ services:
       --name testnet-val2
       --port 30333
       --rpc-port 9944
-      --unsafe-rpc-external
       --node-key 18c78063e4bba1dc1077ce4013de211f170fa8bbedc3906de373aa7c997b587c
       --validator
       --prometheus-external
