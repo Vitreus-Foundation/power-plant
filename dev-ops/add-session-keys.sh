@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # adds session keys to the node
 # it's supposed that node is already built and running
 
