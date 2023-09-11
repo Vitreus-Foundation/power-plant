@@ -162,6 +162,16 @@ pipelines:
                   - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
+                name: inno testnet archive-2
+                image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
+                deployment: testnet-archive-2
+                script:
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-archive-2-${ENV}.yml up -d --build"
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Second Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Second Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+
+            - step:
                 name: inno testnet node1
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
                 trigger: manual
