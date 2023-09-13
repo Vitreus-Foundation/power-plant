@@ -342,7 +342,7 @@ pub mod pallet {
         _,
         Twox64Concat,
         T::AccountId,
-        // if the pallet wouldn't ask us to implement MaxEncodedLen for everything, we could you
+        // if the pallet wouldn't ask us to implement MaxEncodedLen for everything, we could use
         // BTreeSet instead, but
         BoundedBTreeSet<T::AccountId, ConstU32<{ u32::MAX }>>,
     >;
