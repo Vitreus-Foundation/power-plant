@@ -3697,16 +3697,15 @@ fn test_max_cooperator_rewarded_per_validator_and_cant_steal_someone_else_reward
 }
 
 #[test]
-#[ignore]
 fn test_payout_stakers() {
     // Test that payout_stakers work in general, including that only the top
     // `T::MaxCooperatorRewardedPerValidator` cooperators are rewarded.
     ExtBuilder::default().has_stakers(false).build_and_execute(|| {
         let balance = 1000;
         // Track the exposure of the validator and all cooperators.
-        let mut total_exposure = balance;
+        // let mut total_exposure = balance;
         // Track the exposure of the validator and the cooperators that will get paid out.
-        let mut payout_exposure = balance;
+        // let mut payout_exposure = balance;
         // Create a validator:
         make_validator(10, 11, balance);
         assert_eq!(Validators::<Test>::count(), 1);
@@ -3715,20 +3714,21 @@ fn test_payout_stakers() {
         for i in 0..100 {
             let bond_amount = balance + i as Balance;
             bond_cooperator(1000 + i, 100 + i, bond_amount, vec![(11, bond_amount)]);
-            total_exposure += bond_amount;
-            if i <= 64 {
-                payout_exposure += bond_amount;
-            };
         }
 
         mock::start_active_era(1);
         let exposure = PowerPlant::eras_stakers(1, 11);
-        dbg!(exposure.total, exposure.own, exposure.others.len(), total_exposure);
-        let payout_exposure_part = Perbill::from_rational(payout_exposure, total_exposure);
+        let mut payout_part = Perbill::from_rational(exposure.own, exposure.total);
+
+        for coop in &exposure.others[36..] { // only top value coops are rewarded
+            let coop_part = Perbill::from_rational(coop.value, exposure.total);
+            payout_part = payout_part + coop_part;
+        }
+
         PowerPlant::reward_by_ids(vec![(11, 1.into())]);
         // compute and ensure the reward amount is greater than zero.
         let payout = current_total_payout_for_duration(reward_time_per_era());
-        let actual_paid_out = payout_exposure_part * payout;
+        let actual_paid_out = payout_part * payout;
 
         mock::start_active_era(2);
 
@@ -3738,117 +3738,117 @@ fn test_payout_stakers() {
         assert_eq_error_rate!(
             Assets::total_supply(VNRG::get()),
             pre_payout_total_issuance + actual_paid_out,
-            1
+            2
         );
-        // assert!(RewardOnUnbalanceWasCalled::get());
-        //
-        // // Bottom 64 cooperators of validator 11 automatically paid out, including the validator
-        // // Validator payout goes to controller.
-        // assert!(Balances::free_balance(&10) > balance);
-        // for i in 0..64 {
-        //     assert!(Balances::free_balance(&(100 + i)) > balance + i as Balance);
-        // }
-        // // The top 36 do not
-        // for i in 64..100 {
-        //     assert_eq!(Balances::free_balance(&(100 + i)), balance + i as Balance);
-        // }
-        //
-        // // We track rewards in `claimed_rewards` vec
-        // assert_eq!(
-        //     PowerPlant::ledger(&10),
-        //     Some(StakingLedger {
-        //         stash: 11,
-        //         total: 1000,
-        //         active: 1000,
-        //         unlocking: Default::default(),
-        //         claimed_rewards: bounded_vec![1]
-        //     })
-        // );
-        //
-        // for i in 3..16 {
-        //     PowerPlant::reward_by_ids(vec![(11, 1)]);
-        //
-        //     // compute and ensure the reward amount is greater than zero.
-        //     let payout = current_total_payout_for_duration(reward_time_per_era());
-        //     let actual_paid_out = payout_exposure_part * payout;
-        //     let pre_payout_total_issuance = Balances::total_issuance();
-        //
-        //     mock::start_active_era(i);
-        //     RewardOnUnbalanceWasCalled::set(false);
-        //     assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, i - 1));
-        //     assert_eq_error_rate!(
-        //         Balances::total_issuance(),
-        //         pre_payout_total_issuance + actual_paid_out,
-        //         1
-        //     );
-        //     assert!(RewardOnUnbalanceWasCalled::get());
-        // }
-        //
-        // // We track rewards in `claimed_rewards` vec
-        // assert_eq!(
-        //     PowerPlant::ledger(&10),
-        //     Some(StakingLedger {
-        //         stash: 11,
-        //         total: 1000,
-        //         active: 1000,
-        //         unlocking: Default::default(),
-        //         claimed_rewards: (1..=14).collect::<Vec<_>>().try_into().unwrap()
-        //     })
-        // );
-        //
-        // let last_era = 99;
-        // let history_depth = HistoryDepth::get();
-        // let expected_last_reward_era = last_era - 1;
-        // let expected_start_reward_era = last_era - history_depth;
-        // for i in 16..=last_era {
-        //     PowerPlant::reward_by_ids(vec![(11, 1)]);
-        //     // compute and ensure the reward amount is greater than zero.
-        //     let _ = current_total_payout_for_duration(reward_time_per_era());
-        //     mock::start_active_era(i);
-        // }
-        //
-        // // We clean it up as history passes
-        // assert_ok!(PowerPlant::payout_stakers(
-        //     RuntimeOrigin::signed(1337),
-        //     11,
-        //     expected_start_reward_era
-        // ));
-        // assert_ok!(PowerPlant::payout_stakers(
-        //     RuntimeOrigin::signed(1337),
-        //     11,
-        //     expected_last_reward_era
-        // ));
-        // assert_eq!(
-        //     PowerPlant::ledger(&10),
-        //     Some(StakingLedger {
-        //         stash: 11,
-        //         total: 1000,
-        //         active: 1000,
-        //         unlocking: Default::default(),
-        //         claimed_rewards: bounded_vec![expected_start_reward_era, expected_last_reward_era]
-        //     })
-        // );
-        //
-        // // Out of order claims works.
-        // assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 69));
-        // assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 23));
-        // assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 42));
-        // assert_eq!(
-        //     PowerPlant::ledger(&10),
-        //     Some(StakingLedger {
-        //         stash: 11,
-        //         total: 1000,
-        //         active: 1000,
-        //         unlocking: Default::default(),
-        //         claimed_rewards: bounded_vec![
-        //             expected_start_reward_era,
-        //             23,
-        //             42,
-        //             69,
-        //             expected_last_reward_era
-        //         ]
-        //     })
-        // );
+        assert!(RewardOnUnbalanceWasCalled::get());
+
+        // Top 64 cooperators of validator 11 automatically paid out, including the validator
+        // Validator payout goes to controller.
+        assert!(Assets::balance(VNRG::get(), &10) > 0);
+        for i in 36..100 {
+            assert!(Assets::balance(VNRG::get(), &(100 + i)) > 0);
+        }
+        // The bottom 36 do not
+        for i in 0..36 {
+            assert_eq!(Assets::balance(VNRG::get(), &(100 + i)), 0);
+        }
+
+        // We track rewards in `claimed_rewards` vec
+        assert_eq!(
+            PowerPlant::ledger(&10),
+            Some(StakingLedger {
+                stash: 11,
+                total: 1000,
+                active: 1000,
+                unlocking: Default::default(),
+                claimed_rewards: bounded_vec![1]
+            })
+        );
+
+        for i in 3..16 {
+            PowerPlant::reward_by_ids(vec![(11, 1.into())]);
+
+            // compute and ensure the reward amount is greater than zero.
+            let payout = current_total_payout_for_duration(reward_time_per_era());
+            let actual_paid_out = payout_part * payout;
+            let pre_payout_total_issuance = Assets::total_supply(VNRG::get());
+
+            mock::start_active_era(i);
+            RewardOnUnbalanceWasCalled::set(false);
+            assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, i - 1));
+            assert_eq_error_rate!(
+                Assets::total_supply(VNRG::get()),
+                pre_payout_total_issuance + actual_paid_out,
+                2
+            );
+            assert!(RewardOnUnbalanceWasCalled::get());
+        }
+
+        // We track rewards in `claimed_rewards` vec
+        assert_eq!(
+            PowerPlant::ledger(&10),
+            Some(StakingLedger {
+                stash: 11,
+                total: 1000,
+                active: 1000,
+                unlocking: Default::default(),
+                claimed_rewards: (1..=14).collect::<Vec<_>>().try_into().unwrap()
+            })
+        );
+
+        let last_era = 99;
+        let history_depth = HistoryDepth::get();
+        let expected_last_reward_era = last_era - 1;
+        let expected_start_reward_era = last_era - history_depth;
+        for i in 16..=last_era {
+            PowerPlant::reward_by_ids(vec![(11, 1.into())]);
+            // compute and ensure the reward amount is greater than zero.
+            let _ = current_total_payout_for_duration(reward_time_per_era());
+            mock::start_active_era(i);
+        }
+
+        // We clean it up as history passes
+        assert_ok!(PowerPlant::payout_stakers(
+            RuntimeOrigin::signed(1337),
+            11,
+            expected_start_reward_era
+        ));
+        assert_ok!(PowerPlant::payout_stakers(
+            RuntimeOrigin::signed(1337),
+            11,
+            expected_last_reward_era
+        ));
+        assert_eq!(
+            PowerPlant::ledger(&10),
+            Some(StakingLedger {
+                stash: 11,
+                total: 1000,
+                active: 1000,
+                unlocking: Default::default(),
+                claimed_rewards: bounded_vec![expected_start_reward_era, expected_last_reward_era]
+            })
+        );
+
+        // Out of order claims works.
+        assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 69));
+        assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 23));
+        assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 42));
+        assert_eq!(
+            PowerPlant::ledger(&10),
+            Some(StakingLedger {
+                stash: 11,
+                total: 1000,
+                active: 1000,
+                unlocking: Default::default(),
+                claimed_rewards: bounded_vec![
+                    expected_start_reward_era,
+                    23,
+                    42,
+                    69,
+                    expected_last_reward_era
+                ]
+            })
+        );
     });
 }
 
@@ -4618,7 +4618,6 @@ fn chill_other_works() {
 }
 
 #[test]
-#[ignore]
 fn capped_stakers_works() {
     ExtBuilder::default().build_and_execute(|| {
         let validator_count = Validators::<Test>::count();
@@ -4638,59 +4637,54 @@ fn capped_stakers_works() {
             ConfigOp::Remove,
         ));
 
+        let validators_offset = 10_000_000;
         // can create `max - validator_count` validators
         let mut some_existing_validator = AccountId::default();
         for i in 0..max - validator_count {
-            // FIXME replace it with make_validator?
-            let (_, controller, _) = testing_utils::create_stash_controller::<Test>(
-                i + 10_000_000,
-                100,
-                RewardDestination::Controller,
-            )
-            .unwrap();
-
-            assert_ok!(PowerPlant::validate(
-                RuntimeOrigin::signed(controller),
-                ValidatorPrefs::default()
-            ));
+            let controller = i as AccountId * 2 + validators_offset;
+            let stash = controller + 1;
+            make_validator(controller, stash, 1000);
             some_existing_validator = controller;
         }
 
         // but no more
-        let (_, last_validator, _) = testing_utils::create_stash_controller::<Test>(
-            1337,
-            100,
-            RewardDestination::Controller,
-        )
-        .unwrap();
+        bond(some_existing_validator + 2, some_existing_validator + 1, 1000);
+        assert_ok!(Reputation::force_set_points(
+            RuntimeOrigin::root(),
+            some_existing_validator + 1,
+            CollaborativeValidatorReputationThreshold::get()
+        ));
+        assert_ok!(Reputation::force_set_points(
+            RuntimeOrigin::root(),
+            some_existing_validator + 2,
+            CollaborativeValidatorReputationThreshold::get()
+        ));
 
         assert_noop!(
-            PowerPlant::validate(RuntimeOrigin::signed(last_validator), ValidatorPrefs::default()),
+            PowerPlant::validate(
+                RuntimeOrigin::signed(some_existing_validator + 1),
+                ValidatorPrefs::default()
+            ),
             Error::<Test>::TooManyValidators,
         );
 
+        let cooperators_offset = 20_000_000;
         // same with cooperators
         let mut some_existing_cooperator = AccountId::default();
         for i in 0..max - cooperator_count {
-            let (_, controller, _) = testing_utils::create_stash_controller::<Test>(
-                i + 20_000_000,
-                100,
-                RewardDestination::Controller,
-            )
-            .unwrap();
-            assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(controller), vec![(11, 100)]));
+            let controller = i as AccountId * 2 + cooperators_offset;
+            let stash = i as AccountId * 2 + 1 + cooperators_offset;
+            bond_cooperator(stash, controller, 1000, vec![(11, 100)]);
             some_existing_cooperator = controller;
         }
 
         // one more is too many
-        let (_, last_cooperator, _) = testing_utils::create_stash_controller::<Test>(
-            30_000_000,
-            100,
-            RewardDestination::Controller,
-        )
-        .unwrap();
+        bond(some_existing_cooperator + 2, some_existing_cooperator + 1, 1000);
         assert_noop!(
-            PowerPlant::cooperate(RuntimeOrigin::signed(last_cooperator), vec![(11, 100)]),
+            PowerPlant::cooperate(
+                RuntimeOrigin::signed(some_existing_cooperator + 1),
+                vec![(11, 100)]
+            ),
             Error::<Test>::TooManyCooperators
         );
 
@@ -4715,9 +4709,12 @@ fn capped_stakers_works() {
             ConfigOp::Noop,
             ConfigOp::Noop,
         ));
-        assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(last_cooperator), vec![(11, 100)]));
+        assert_ok!(PowerPlant::cooperate(
+            RuntimeOrigin::signed(some_existing_cooperator),
+            vec![(11, 100)]
+        ));
         assert_ok!(PowerPlant::validate(
-            RuntimeOrigin::signed(last_validator),
+            RuntimeOrigin::signed(some_existing_validator),
             ValidatorPrefs::default()
         ));
     })

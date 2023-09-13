@@ -635,16 +635,6 @@ pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
     ));
 }
 
-pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
-    bond(stash, ctrl, val);
-    assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(ctrl), ValidatorPrefs::default()));
-    assert_ok!(Session::set_keys(
-        RuntimeOrigin::signed(ctrl),
-        SessionKeys { other: ctrl.into() },
-        vec![]
-    ));
-}
-
 pub(crate) fn bond_cooperator(
     stash: AccountId,
     ctrl: AccountId,
