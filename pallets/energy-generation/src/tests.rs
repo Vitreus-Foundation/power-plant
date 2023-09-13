@@ -3720,7 +3720,8 @@ fn test_payout_stakers() {
         let exposure = PowerPlant::eras_stakers(1, 11);
         let mut payout_part = Perbill::from_rational(exposure.own, exposure.total);
 
-        for coop in &exposure.others[36..] { // only top value coops are rewarded
+        for coop in &exposure.others[36..] {
+            // only top value coops are rewarded
             let coop_part = Perbill::from_rational(coop.value, exposure.total);
             payout_part = payout_part + coop_part;
         }

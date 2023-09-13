@@ -140,7 +140,7 @@ impl<T: Config> Pallet<T> {
             Error::<T>::InvalidEraToReward
                 .with_weight(T::ThisWeightInfo::payout_stakers_alive_staked(0))
         );
-        
+
         let current_era = CurrentEra::<T>::get().ok_or_else(|| {
             Error::<T>::InvalidEraToReward
                 .with_weight(T::ThisWeightInfo::payout_stakers_alive_staked(0))
