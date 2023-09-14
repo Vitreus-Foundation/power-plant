@@ -1,5 +1,10 @@
 #!/bin/sh
 # runs localnet
+# there will be 3 nodes:
+# 1. alice validator and bootnode
+# 2. bob validator
+# 3. a node without pre-loaded keyrings with `--validator` flag and the base
+# path /tmp/vitreus/use_node/
 
 node=./target/debug/vitreus-power-plant-node
 

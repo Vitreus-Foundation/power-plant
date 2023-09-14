@@ -1,7 +1,6 @@
 //! Test utilities
 
 #![allow(unused_imports)]
-#![allow(dead_code)] // TODO remove it after deploy!
 
 use crate::{self as energy_generation, *};
 use frame_support::{
@@ -636,16 +635,6 @@ pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
     ));
 }
 
-pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
-    bond(stash, ctrl, val);
-    assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(ctrl), ValidatorPrefs::default()));
-    assert_ok!(Session::set_keys(
-        RuntimeOrigin::signed(ctrl),
-        SessionKeys { other: ctrl.into() },
-        vec![]
-    ));
-}
-
 pub(crate) fn bond_cooperator(
     stash: AccountId,
     ctrl: AccountId,
@@ -718,6 +707,33 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 
     assert!(payout > 0);
     payout
+}
+
+pub(crate) fn make_validator(controller: AccountId, stash: AccountId, balance: Balance) {
+    assert_ok!(Reputation::force_set_points(
+        RuntimeOrigin::root(),
+        controller,
+        CollaborativeValidatorReputationThreshold::get()
+    ));
+
+    assert_ok!(Reputation::force_set_points(
+        RuntimeOrigin::root(),
+        stash,
+        CollaborativeValidatorReputationThreshold::get()
+    ));
+
+    bond(stash, controller, balance);
+
+    assert_ok!(PowerPlant::validate(
+        RuntimeOrigin::signed(controller),
+        ValidatorPrefs::default_collaborative()
+    ));
+
+    assert_ok!(Session::set_keys(
+        RuntimeOrigin::signed(controller),
+        SessionKeys { other: controller.into() },
+        vec![]
+    ));
 }
 
 /// Time it takes to finish a session.
