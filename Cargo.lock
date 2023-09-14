@@ -5516,13 +5516,11 @@ dependencies = [
 name = "pallet-nac-managing"
 version = "0.1.0"
 dependencies = [
- "enumflags2",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
  "pallet-nfts",
- "pallet-nfts-runtime-api",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
