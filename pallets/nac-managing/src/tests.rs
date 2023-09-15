@@ -18,8 +18,8 @@
 //! Tests for Nac-managing pallet.
 
 use crate::{mock::*, *};
-use frame_support::{assert_err, assert_ok};
 use frame_support::pallet_prelude::ConstU32;
+use frame_support::{assert_err, assert_ok};
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
 
@@ -38,8 +38,20 @@ fn basic_minting_should_work() {
 
         assert_ok!(NacManaging::create_collection(account(1)));
 
-        assert_ok!(NacManaging::do_mint(RuntimeOrigin::signed(account(1)), collection_id, item_id, account(1)));
-        assert_ok!(NacManaging::update_nft_info(RuntimeOrigin::signed(account(1)), collection_id, item_id, metadata, nac_level, account(1)));
+        assert_ok!(NacManaging::do_mint(
+            RuntimeOrigin::signed(account(1)),
+            collection_id,
+            item_id,
+            account(1)
+        ));
+        assert_ok!(NacManaging::update_nft_info(
+            RuntimeOrigin::signed(account(1)),
+            collection_id,
+            item_id,
+            metadata,
+            nac_level,
+            account(1)
+        ));
 
         assert_eq!(NacManaging::get_nac_level(&account(1)), Some((nac_level, 123)));
     });
@@ -56,16 +68,38 @@ fn update_metadata_and_nac_level_test() {
 
         assert_ok!(NacManaging::create_collection(account(1)));
 
-        assert_ok!(NacManaging::do_mint(RuntimeOrigin::signed(account(1)), collection_id, item_id, account(1)));
-        assert_ok!(NacManaging::update_nft_info(RuntimeOrigin::signed(account(1)), collection_id, item_id, metadata.clone(), nac_level, account(1)));
+        assert_ok!(NacManaging::do_mint(
+            RuntimeOrigin::signed(account(1)),
+            collection_id,
+            item_id,
+            account(1)
+        ));
+        assert_ok!(NacManaging::update_nft_info(
+            RuntimeOrigin::signed(account(1)),
+            collection_id,
+            item_id,
+            metadata.clone(),
+            nac_level,
+            account(1)
+        ));
 
         assert_eq!(NacManaging::get_nac_level(&account(1)), Some((nac_level, 123)));
 
         let new_nac_level = 10_u8;
-        assert_ok!(NacManaging::update_nft(RuntimeOrigin::signed(account(1)), metadata.clone(), Some(new_nac_level), account(1)));
+        assert_ok!(NacManaging::update_nft(
+            RuntimeOrigin::signed(account(1)),
+            metadata.clone(),
+            Some(new_nac_level),
+            account(1)
+        ));
         assert_eq!(NacManaging::get_nac_level(&account(1)), Some((new_nac_level, 123)));
 
-        assert_ok!(NacManaging::update_nft(RuntimeOrigin::signed(account(1)), metadata, None, account(1)));
+        assert_ok!(NacManaging::update_nft(
+            RuntimeOrigin::signed(account(1)),
+            metadata,
+            None,
+            account(1)
+        ));
         assert_eq!(NacManaging::get_nac_level(&account(1)), Some((new_nac_level, 123)));
     });
 }
@@ -81,11 +115,26 @@ fn check_nac_level_test() {
 
         assert_ok!(NacManaging::create_collection(account(1)));
 
-        assert_ok!(NacManaging::do_mint(RuntimeOrigin::signed(account(1)), collection_id, item_id, account(1)));
-        assert_ok!(NacManaging::update_nft_info(RuntimeOrigin::signed(account(1)), collection_id, item_id, metadata.clone(), nac_level, account(1)));
+        assert_ok!(NacManaging::do_mint(
+            RuntimeOrigin::signed(account(1)),
+            collection_id,
+            item_id,
+            account(1)
+        ));
+        assert_ok!(NacManaging::update_nft_info(
+            RuntimeOrigin::signed(account(1)),
+            collection_id,
+            item_id,
+            metadata.clone(),
+            nac_level,
+            account(1)
+        ));
 
         assert_ok!(NacManaging::check_nac_level(RuntimeOrigin::root(), account(1)));
-        assert_err!(NacManaging::check_nac_level(RuntimeOrigin::root(), account(2)), Error::<Test>::NftNotFound);
+        assert_err!(
+            NacManaging::check_nac_level(RuntimeOrigin::root(), account(2)),
+            Error::<Test>::NftNotFound
+        );
     });
 }
 
@@ -100,8 +149,20 @@ fn user_has_access_test() {
 
         assert_ok!(NacManaging::create_collection(account(1)));
 
-        assert_ok!(NacManaging::do_mint(RuntimeOrigin::signed(account(1)), collection_id, item_id, account(1)));
-        assert_ok!(NacManaging::update_nft_info(RuntimeOrigin::signed(account(1)), collection_id, item_id, metadata.clone(), nac_level, account(1)));
+        assert_ok!(NacManaging::do_mint(
+            RuntimeOrigin::signed(account(1)),
+            collection_id,
+            item_id,
+            account(1)
+        ));
+        assert_ok!(NacManaging::update_nft_info(
+            RuntimeOrigin::signed(account(1)),
+            collection_id,
+            item_id,
+            metadata.clone(),
+            nac_level,
+            account(1)
+        ));
 
         assert_eq!(NacManaging::user_has_access(account(1), 2), true);
         assert_eq!(NacManaging::user_has_access(account(1), 5), true);

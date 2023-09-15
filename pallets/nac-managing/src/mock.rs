@@ -26,7 +26,7 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-    traits::{BlakeTwo256, IdentityLookup, Verify, IdentifyAccount},
+    traits::{BlakeTwo256, IdentifyAccount, IdentityLookup, Verify},
     BuildStorage, MultiSignature,
 };
 

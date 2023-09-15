@@ -8,13 +8,13 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use frame_support::traits::tokens::nonfungibles_v2::Inspect;
 use parity_scale_codec::{Compact, Decode, Encode};
-use sp_api::{impl_runtime_apis};
+use sp_api::impl_runtime_apis;
 use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use frame_support::traits::tokens::nonfungibles_v2::Inspect;
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -37,10 +37,16 @@ use sp_version::RuntimeVersion;
 use frame_support::weights::constants::ParityDbWeight as RuntimeDbWeight;
 #[cfg(feature = "with-rocksdb-weights")]
 use frame_support::weights::constants::RocksDbWeight as RuntimeDbWeight;
-use frame_support::{construct_runtime, dispatch::GetDispatchInfo, parameter_types, traits::{
-    fungible::ItemOf, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall,
-    FindAuthor, Hooks, KeyOwnerProofSystem,
-}, weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight}};
+use frame_support::{
+    construct_runtime,
+    dispatch::GetDispatchInfo,
+    parameter_types,
+    traits::{
+        fungible::ItemOf, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall,
+        FindAuthor, Hooks, KeyOwnerProofSystem,
+    },
+    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
+};
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_energy_fee::{
     traits::{AssetsBalancesConverter, NativeExchange},
@@ -59,8 +65,8 @@ use pallet_evm::{
     Account as EVMAccount, AddressMapping, EnsureAccountId20, FeeCalculator, GasWeightMapping,
     IdentityAddressMapping, Runner,
 };
-use sp_runtime::transaction_validity::InvalidTransaction;
 use pallet_nfts::PalletFeatures;
+use sp_runtime::transaction_validity::InvalidTransaction;
 
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
@@ -291,7 +297,6 @@ impl pallet_babe::Config for Runtime {
     type EquivocationReportSystem =
         pallet_babe::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
-
 
 impl pallet_grandpa::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
@@ -1424,48 +1429,48 @@ impl_runtime_apis! {
     }
 
     impl pallet_nfts_runtime_api::NftsApi<Block, AccountId, u32, u32> for Runtime {
-		fn owner(collection: u32, item: u32) -> Option<AccountId> {
-			<Nfts as Inspect<AccountId>>::owner(&collection, &item)
-		}
+        fn owner(collection: u32, item: u32) -> Option<AccountId> {
+            <Nfts as Inspect<AccountId>>::owner(&collection, &item)
+        }
 
-		fn collection_owner(collection: u32) -> Option<AccountId> {
-			<Nfts as Inspect<AccountId>>::collection_owner(&collection)
-		}
+        fn collection_owner(collection: u32) -> Option<AccountId> {
+            <Nfts as Inspect<AccountId>>::collection_owner(&collection)
+        }
 
-		fn attribute(
-			collection: u32,
-			item: u32,
-			key: Vec<u8>,
-		) -> Option<Vec<u8>> {
-			<Nfts as Inspect<AccountId>>::attribute(&collection, &item, &key)
-		}
+        fn attribute(
+            collection: u32,
+            item: u32,
+            key: Vec<u8>,
+        ) -> Option<Vec<u8>> {
+            <Nfts as Inspect<AccountId>>::attribute(&collection, &item, &key)
+        }
 
-		fn custom_attribute(
-			account: AccountId,
-			collection: u32,
-			item: u32,
-			key: Vec<u8>,
-		) -> Option<Vec<u8>> {
-			<Nfts as Inspect<AccountId>>::custom_attribute(
-				&account,
-				&collection,
-				&item,
-				&key,
-			)
-		}
+        fn custom_attribute(
+            account: AccountId,
+            collection: u32,
+            item: u32,
+            key: Vec<u8>,
+        ) -> Option<Vec<u8>> {
+            <Nfts as Inspect<AccountId>>::custom_attribute(
+                &account,
+                &collection,
+                &item,
+                &key,
+            )
+        }
 
-		fn system_attribute(
-			collection: u32,
-			item: u32,
-			key: Vec<u8>,
-		) -> Option<Vec<u8>> {
-			<Nfts as Inspect<AccountId>>::system_attribute(&collection, &item, &key)
-		}
+        fn system_attribute(
+            collection: u32,
+            item: u32,
+            key: Vec<u8>,
+        ) -> Option<Vec<u8>> {
+            <Nfts as Inspect<AccountId>>::system_attribute(&collection, &item, &key)
+        }
 
-		fn collection_attribute(collection: u32, key: Vec<u8>) -> Option<Vec<u8>> {
-			<Nfts as Inspect<AccountId>>::collection_attribute(&collection, &key)
-		}
-	}
+        fn collection_attribute(collection: u32, key: Vec<u8>) -> Option<Vec<u8>> {
+            <Nfts as Inspect<AccountId>>::collection_attribute(&collection, &key)
+        }
+    }
 
     impl sp_session::SessionKeys<Block> for Runtime {
         fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
