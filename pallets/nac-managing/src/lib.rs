@@ -202,14 +202,8 @@ pub mod pallet {
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             for owner in self.owners.iter() {
-                let collection_settings = Pallet::<T>::collection_config_from_disabled_settings();
-
-                pallet_nfts::Pallet::<T>::force_create(
-                    frame_system::RawOrigin::Root.into(),
-                    T::Lookup::unlookup(owner.clone()),
-                    collection_settings
-                )
-                    .expect("Cannot create collection");
+                Pallet::<T>::create_collection(owner.clone())
+                    .expect("Cannot create a collection");
 
                 // Get collection Id.
                 let collection_id: <T as Config>::CollectionId = <T as pallet_nfts::Config>::CollectionId::initial_value().into();
@@ -319,7 +313,20 @@ impl<T: Config> Pallet<T> {
         <T as Config>::ItemId::from(item_id)
     }
 
-    /// Create a new collection
+    /// Create a new collection.
+    pub fn create_collection(
+        owner: T::AccountId
+    ) -> DispatchResult {
+        let collection_settings = Self::collection_config_from_disabled_settings();
+
+        pallet_nfts::Pallet::<T>::force_create(
+            frame_system::RawOrigin::Root.into(),
+            T::Lookup::unlookup(owner.clone()),
+            collection_settings
+        )
+    }
+
+    /// Create a new collection config.
     pub fn collection_config_from_disabled_settings() -> CollectionConfigFor<T> {
         CollectionConfig {
             settings: CollectionSettings::from_disabled(CollectionSetting::DepositRequired.into()),
