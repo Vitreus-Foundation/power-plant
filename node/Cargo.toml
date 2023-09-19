@@ -93,6 +93,7 @@ vitreus-power-plant-runtime = { workspace = true, features = ["default"] }
 
 pallet-energy-generation = { workspace = true }
 pallet-reputation = { workspace = true }
+pallet-nfts-runtime-api = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }
