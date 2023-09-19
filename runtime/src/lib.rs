@@ -680,7 +680,7 @@ impl pallet_uniques::Config for Runtime {
 }
 
 parameter_types! {
-    pub const NFTCollectionId: CollectionId = 0;
+    pub const NftCollectionId: CollectionId = 0;
 }
 
 impl pallet_nac_managing::Config for Runtime {
@@ -690,7 +690,7 @@ impl pallet_nac_managing::Config for Runtime {
     type ForceOrigin = EnsureRoot<AccountId>;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
     type Nfts = Nfts;
-    type NFTCollectionId = NFTCollectionId;
+    type NftCollectionId = NftCollectionId;
 }
 
 parameter_types! {

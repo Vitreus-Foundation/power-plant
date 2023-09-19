@@ -87,14 +87,14 @@ pub mod pallet {
         type WeightInfo: WeightInfo;
 
         /// NFT Collection ID.
-        type NFTCollectionId: Get<<Self as Config>::CollectionId>;
+        type NftCollectionId: Get<<Self as Config>::CollectionId>;
     }
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// NFT was minted.
-        NFTMinted {
+        NftMinted {
             /// Who gets the NAC.
             owner: AccountIdLookupOf<T>,
             /// The NAC unique ID.
@@ -102,7 +102,7 @@ pub mod pallet {
         },
 
         /// NFT metadata and attributes were updated.
-        NFTUpdated {
+        NftUpdated {
             /// Whose NFT.
             owner: AccountIdLookupOf<T>,
             /// The NAC level.
@@ -144,7 +144,7 @@ pub mod pallet {
         ) -> DispatchResult {
             let account_id = T::Lookup::lookup(owner.clone())?;
             let item_id = Self::create_unique_item_id(135, &account_id);
-            let collection = T::NFTCollectionId::get();
+            let collection = T::NftCollectionId::get();
 
             if Self::get_nac_level(&account_id).is_some() {
                 return Err(Error::<T>::NftAlreadyExist)?;
@@ -164,7 +164,7 @@ pub mod pallet {
             owner: AccountIdLookupOf<T>,
         ) -> DispatchResult {
             let account_id = T::Lookup::lookup(owner.clone())?;
-            let collection = T::NFTCollectionId::get();
+            let collection = T::NftCollectionId::get();
             let nac_level: u8;
 
             let item_id = match Self::get_nac_level(&account_id) {
@@ -257,7 +257,7 @@ impl<T: Config> Pallet<T> {
             item_config,
         )?;
 
-        Self::deposit_event(Event::NFTMinted { owner, item_id });
+        Self::deposit_event(Event::NftMinted { owner, item_id });
         Ok(())
     }
 
@@ -291,7 +291,7 @@ impl<T: Config> Pallet<T> {
             nac,
         )?;
 
-        Self::deposit_event(Event::NFTUpdated { owner, nac_level, metadata: data });
+        Self::deposit_event(Event::NftUpdated { owner, nac_level, metadata: data });
 
         Ok(())
     }
@@ -348,7 +348,7 @@ impl<T: Config> Pallet<T> {
 
     /// Get NAC level.
     pub fn get_nac_level(account_id: &T::AccountId) -> Option<(u8, <T as Config>::ItemId)> {
-        let collection_id = T::NFTCollectionId::get();
+        let collection_id = T::NftCollectionId::get();
 
         if let Some((keys, _)) =
             pallet_nfts::Account::<T>::iter_prefix((&account_id, &collection_id.into())).next()
