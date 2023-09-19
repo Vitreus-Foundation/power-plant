@@ -125,7 +125,7 @@ impl pallet_nfts::Config for Test {
 }
 
 parameter_types! {
-    pub const NFTCollectionId: CollectionId = 0;
+    pub const NftCollectionId: CollectionId = 0;
 }
 
 impl Config for Test {
@@ -135,7 +135,7 @@ impl Config for Test {
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type WeightInfo = ();
-    type NFTCollectionId = NFTCollectionId;
+    type NftCollectionId = NftCollectionId;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
