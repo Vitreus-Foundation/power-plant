@@ -737,10 +737,18 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyAssetId = VNRG;
 }
 
+parameter_types! {
+    pub const ProofLimit: u32 = 2048;
+}
+
+impl pallet_atomic_swap::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type SwapAction = pallet_atomic_swap::BalanceSwapAction<Self::AccountId, Balances>;
+    type ProofLimit = ProofLimit;
+}
+
 impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type AdminOrigin = EnsureRoot<AccountId>;
-    type Currency = Balances;
     type WeightInfo = ();
 }
 
@@ -899,6 +907,7 @@ construct_runtime!(
         Uniques: pallet_uniques,
         Nfts: pallet_nfts,
         Reputation: pallet_reputation,
+        AtomicSwap: pallet_atomic_swap,
         Claiming: pallet_claiming,
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
