@@ -3,7 +3,7 @@
 use frame_support::dispatch::RawOrigin;
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
-    tokens::{Fortitude, Precision, Preservation},
+    tokens::{Fortitude, Imbalance, Precision, Preservation},
 };
 pub use pallet::*;
 use pallet_asset_rate::Pallet as AssetRatePallet;
@@ -27,6 +27,7 @@ pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod extension;
 pub mod traits;
 pub use crate::traits::{CustomFee, Exchange, TokenExchange};
 
@@ -42,7 +43,12 @@ pub enum CallFee<Balance> {
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
-    use frame_support::pallet_prelude::*;
+    use frame_support::{
+        pallet_prelude::{OptionQuery, ValueQuery, *},
+        traits::Hooks,
+        weights::Weight,
+    };
+    use frame_system::pallet_prelude::*;
     use sp_arithmetic::FixedU128;
 
     /// Pallet which implements fee withdrawal traits
@@ -85,6 +91,18 @@ pub mod pallet {
         type EnergyAssetId: Get<Self::AssetId>;
     }
 
+    // #[pallet::storage]
+    // #[pallet::getter(fn fee_multiplier)]
+    // pub type FeeMultiplier<T> = StorageValue<_, u32, OptionQuery>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn burned_energy)]
+    pub type BurnedEnergy<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn burned_energy_threshold)]
+    pub type BurnedEnergyThreshold<T: Config> = StorageValue<_, T::Balance, OptionQuery>;
+
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
@@ -107,6 +125,14 @@ pub mod pallet {
                 T::EnergyAssetId::get(),
                 self.initial_energy_rate,
             );
+        }
+    }
+
+    #[pallet::hooks]
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
+            BurnedEnergy::<T>::put(T::Balance::zero());
+            T::DbWeight::get().writes(1)
         }
     }
 
@@ -139,7 +165,7 @@ pub mod pallet {
             Self::on_low_balance_exchange(who, fee)
                 .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
 
-            T::FeeTokenBalanced::withdraw(
+            let imbalance = T::FeeTokenBalanced::withdraw(
                 who,
                 fee,
                 Precision::Exact,
@@ -148,9 +174,12 @@ pub mod pallet {
             )
             .map(|imbalance| {
                 Self::deposit_event(Event::<T>::EnergyFeePaid { who: who.clone(), amount: fee });
-                Some(imbalance)
+                imbalance
             })
-            .map_err(|_| InvalidTransaction::Payment.into())
+            .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+            Self::update_burned_energy(imbalance.peek())
+                .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+            Ok(Some(imbalance))
         }
 
         // TODO: make a refund for calls non-elligible for custom fee
@@ -184,7 +213,7 @@ pub mod pallet {
             Self::on_low_balance_exchange(&account_id, const_energy_fee)
                 .map_err(|_| pallet_evm::Error::<T>::BalanceLow)?;
 
-            T::FeeTokenBalanced::withdraw(
+            let imbalance = T::FeeTokenBalanced::withdraw(
                 &account_id,
                 const_energy_fee,
                 Precision::Exact,
@@ -196,9 +225,12 @@ pub mod pallet {
                     who: account_id,
                     amount: const_energy_fee,
                 });
-                Some(imbalance)
+                imbalance
             })
-            .map_err(|_| pallet_evm::Error::<T>::BalanceLow)
+            .map_err(|_| pallet_evm::Error::<T>::BalanceLow)?;
+            Self::update_burned_energy(imbalance.peek())
+                .map_err(|_| pallet_evm::Error::<T>::FeeOverflow)?;
+            Ok(Some(imbalance))
         }
 
         fn correct_and_deposit_fee(
@@ -240,6 +272,28 @@ impl<T: Config> Pallet<T> {
             T::EnergyExchange::exchange_from_output(who, missing_balance).map(|_| ())
         } else {
             Ok(())
+        }
+    }
+
+    fn update_burned_energy(amount: T::Balance) -> Result<(), DispatchError> {
+        BurnedEnergy::<T>::mutate(|current_burned| {
+            *current_burned =
+                current_burned.checked_add(&amount).ok_or(DispatchError::Arithmetic(Overflow))?;
+            Ok(())
+        })
+    }
+
+    fn validate_call_fee(
+        fee_amount: <Self as OnChargeTransaction<T>>::Balance,
+    ) -> Result<(), DispatchError> {
+        let attempted_burned = Self::burned_energy()
+            .checked_add(&fee_amount)
+            .ok_or(DispatchError::Arithmetic(Overflow))?;
+        let threshold = Self::burned_energy_threshold();
+        match threshold {
+            Some(threshold) if attempted_burned <= threshold => Ok(()),
+            None => Ok(()),
+            _ => Err(DispatchError::Exhausted),
         }
     }
 }
