@@ -1,7 +1,8 @@
 //! Tests for the module.
 
 // use frame_support::pallet_prelude::*;
-use crate::mock::*;
+use crate::{mock::*, CheckEnergyFee, BurnedEnergyThreshold, BurnedEnergy};
+use frame_support::traits::Hooks;
 use frame_support::{dispatch::DispatchInfo, traits::fungible::Inspect};
 use frame_system::mocking::MockUncheckedExtrinsic;
 use frame_system::weights::{SubstrateWeight as SystemWeight, WeightInfo as _};
@@ -9,11 +10,14 @@ use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
 use pallet_evm::{Config as EVMConfig, GasWeightMapping, OnChargeEVMTransaction};
 use pallet_transaction_payment::OnChargeTransaction;
 use parity_scale_codec::Encode;
-use sp_runtime::FixedPointNumber;
+use sp_runtime::transaction_validity::{TransactionValidityError, InvalidTransaction};
+use sp_runtime::{FixedPointNumber, traits::SignedExtension};
 
 type Extrinsic = MockUncheckedExtrinsic<Test>;
 
 const INITIAL_ENERGY_BALANCE: Balance = 1_000_000_000_000;
+
+// TODO: replace numeric constants with named constants and define all of them in mock
 
 #[test]
 fn withdraw_fee_with_stock_coefficients_works() {
@@ -83,6 +87,11 @@ fn withdraw_fee_with_custom_coefficients_works() {
             BalancesVNRG::balance(&ALICE),
             initial_energy_balance.saturating_sub(constant_fee),
         );
+
+        assert_eq!(
+            BurnedEnergy::<Test>::get(),
+            constant_fee
+        )
     });
 }
 
@@ -145,6 +154,11 @@ fn evm_withdraw_fee_works() {
             BalancesVNRG::balance(&ALICE),
             initial_energy_balance.saturating_sub(constant_fee),
         );
+
+        assert_eq!(
+            BurnedEnergy::<Test>::get(),
+            constant_fee
+        )
     });
 }
 
@@ -201,5 +215,54 @@ fn vtrs_exchange_during_withdraw_fee_with_stock_coefficients_works() {
             .expect("Expected to calculate missing fee in VTRS");
 
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);
+    });
+}
+
+#[test]
+fn check_energy_fee_works() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        BurnedEnergyThreshold::<Test>::put(1_000_000_001);
+        let transfer_amount: Balance = 1_000_000_000;
+
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+        let dispatch_info: DispatchInfo =
+            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+        let extrinsic_len: usize = 1000;
+
+        let extension: CheckEnergyFee<Test> = CheckEnergyFee::new();
+        assert!(extension.clone().pre_dispatch(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            extrinsic_len
+        ).is_ok());
+
+        BurnedEnergyThreshold::<Test>::put(999_999_999);
+        assert_eq!(
+            extension.pre_dispatch(
+                &ALICE,
+                &assets_transfer_call,
+                &dispatch_info,
+                extrinsic_len
+            ),
+            Err(TransactionValidityError::Invalid(InvalidTransaction::ExhaustsResources))
+        );
+    });
+}
+
+#[test]
+fn reset_burned_energy_on_init_works() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        BurnedEnergy::<Test>::put(1_234_567_890);
+        EnergyFee::on_initialize(1);
+        assert_eq!(
+            BurnedEnergy::<Test>::get(),
+            0
+        );
     });
 }
