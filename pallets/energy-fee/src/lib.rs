@@ -1,5 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
+pub use crate::traits::{CustomFee, Exchange, TokenExchange};
 use frame_support::dispatch::RawOrigin;
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
@@ -8,7 +9,7 @@ use frame_support::traits::{
 pub use pallet::*;
 use pallet_asset_rate::Pallet as AssetRatePallet;
 pub(crate) use pallet_evm::{AddressMapping, OnChargeEVMTransaction};
-pub use pallet_transaction_payment::OnChargeTransaction;
+pub use pallet_transaction_payment::{Config as TransactionPaymentConfig, OnChargeTransaction};
 
 use sp_arithmetic::{
     traits::CheckedAdd,
@@ -29,7 +30,8 @@ mod tests;
 
 pub mod extension;
 pub mod traits;
-pub use crate::traits::{CustomFee, Exchange, TokenExchange};
+
+pub(crate) type BalanceOf<T> = <T as pallet_asset_rate::Config>::Balance;
 
 /// Fee type inferred from call info
 pub enum CallFee<Balance> {
@@ -65,27 +67,27 @@ pub mod pallet {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
         /// Get constant fee value
-        type GetConstantFee: Get<Self::Balance>;
+        type GetConstantFee: Get<BalanceOf<Self>>;
         /// Calculates custom fee for selected pallets/extrinsics/execution scenarios
         type CustomFee: CustomFee<
             Self::RuntimeCall,
             DispatchInfoOf<Self::RuntimeCall>,
-            Self::Balance,
+            BalanceOf<Self>,
             Self::GetConstantFee,
         >;
         /// Fee token manipulation traits
         type FeeTokenBalanced: Balanced<Self::AccountId>
-            + Inspect<Self::AccountId, Balance = Self::Balance>;
+            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
         /// Chain currency (main token) manipulation traits
         type MainTokenBalanced: Balanced<Self::AccountId>
-            + Inspect<Self::AccountId, Balance = Self::Balance>;
+            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
         /// Exchange main token -> fee token
         /// Could not be used for fee token -> main token exchange
         type EnergyExchange: TokenExchange<
             Self::AccountId,
             Self::MainTokenBalanced,
             Self::FeeTokenBalanced,
-            Self::Balance,
+            BalanceOf<Self>,
         >;
         /// Used for initializing the pallet
         type EnergyAssetId: Get<Self::AssetId>;
@@ -97,17 +99,17 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn burned_energy)]
-    pub type BurnedEnergy<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+    pub type BurnedEnergy<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
     #[pallet::storage]
     #[pallet::getter(fn burned_energy_threshold)]
-    pub type BurnedEnergyThreshold<T: Config> = StorageValue<_, T::Balance, OptionQuery>;
+    pub type BurnedEnergyThreshold<T: Config> = StorageValue<_, BalanceOf<T>, OptionQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// Energy fee is paid to execute transaction [who, fee amount]
-        EnergyFeePaid { who: T::AccountId, amount: T::Balance },
+        EnergyFeePaid { who: T::AccountId, amount: BalanceOf<T> },
     }
 
     #[pallet::genesis_config]
@@ -131,13 +133,13 @@ pub mod pallet {
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
         fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
-            BurnedEnergy::<T>::put(T::Balance::zero());
+            BurnedEnergy::<T>::put(BalanceOf::<T>::zero());
             T::DbWeight::get().writes(1)
         }
     }
 
     impl<T: Config> OnChargeTransaction<T> for Pallet<T> {
-        type Balance = T::Balance;
+        type Balance = BalanceOf<T>;
         type LiquidityInfo = Option<Credit<T::AccountId, T::FeeTokenBalanced>>;
 
         fn withdraw_fee(
@@ -255,14 +257,14 @@ impl<T: Config> Pallet<T> {
     /// `T::EnergyExchange`
     fn on_low_balance_exchange(
         who: &T::AccountId,
-        amount: T::Balance,
+        amount: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
         let current_balance =
             T::FeeTokenBalanced::reducible_balance(who, Preservation::Protect, Fortitude::Force);
         let minimum_amount = current_balance
             .is_zero()
             .then(T::FeeTokenBalanced::minimum_balance)
-            .unwrap_or(T::Balance::zero());
+            .unwrap_or(BalanceOf::<T>::zero());
         if current_balance < amount {
             let missing_balance = amount
                 .checked_add(&minimum_amount)
@@ -275,7 +277,7 @@ impl<T: Config> Pallet<T> {
         }
     }
 
-    fn update_burned_energy(amount: T::Balance) -> Result<(), DispatchError> {
+    fn update_burned_energy(amount: BalanceOf<T>) -> Result<(), DispatchError> {
         BurnedEnergy::<T>::mutate(|current_burned| {
             *current_burned =
                 current_burned.checked_add(&amount).ok_or(DispatchError::Arithmetic(Overflow))?;
@@ -283,9 +285,7 @@ impl<T: Config> Pallet<T> {
         })
     }
 
-    fn validate_call_fee(
-        fee_amount: <Self as OnChargeTransaction<T>>::Balance,
-    ) -> Result<(), DispatchError> {
+    fn validate_call_fee(fee_amount: BalanceOf<T>) -> Result<(), DispatchError> {
         let attempted_burned = Self::burned_energy()
             .checked_add(&fee_amount)
             .ok_or(DispatchError::Arithmetic(Overflow))?;

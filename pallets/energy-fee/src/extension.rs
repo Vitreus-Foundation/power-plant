@@ -1,10 +1,13 @@
-use crate::{CallFee, Config, CustomFee, Pallet};
-use frame_support::dispatch::fmt::Debug;
+use crate::{BalanceOf, CallFee, Config, CustomFee, Pallet};
+use frame_support::dispatch::{fmt::Debug, DispatchInfo, Dispatchable};
+use pallet_transaction_payment::{
+    Config as TransactionPaymentConfig, OnChargeTransaction, Pallet as TransactionPaymentPallet,
+};
 use parity_scale_codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{DispatchInfoOf, SignedExtension},
-    transaction_validity::TransactionValidityError,
+    transaction_validity::{InvalidTransaction, TransactionValidityError},
 };
 use sp_std::marker::PhantomData;
 
@@ -25,8 +28,11 @@ impl<T: Config> CheckEnergyFee<T> {
     }
 }
 
-impl<T: Config + Send + Sync + pallet_transaction_payment::Config> SignedExtension
-    for CheckEnergyFee<T>
+impl<T: Config + Send + Sync> SignedExtension for CheckEnergyFee<T>
+where
+    T::RuntimeCall: Dispatchable<Info = DispatchInfo>,
+    <T as TransactionPaymentConfig>::OnChargeTransaction:
+        OnChargeTransaction<T, Balance = BalanceOf<T>>,
 {
     type AdditionalSigned = ();
     type Call = T::RuntimeCall;
@@ -38,21 +44,21 @@ impl<T: Config + Send + Sync + pallet_transaction_payment::Config> SignedExtensi
         Ok(())
     }
 
+    // TODO: allow sudo calls in case of energy overflow
     fn pre_dispatch(
         self,
-        who: &Self::AccountId,
+        _who: &Self::AccountId,
         call: &Self::Call,
         info: &DispatchInfoOf<Self::Call>,
         len: usize,
     ) -> Result<Self::Pre, TransactionValidityError> {
         let fee = match T::CustomFee::dispatch_info_to_fee(call, info) {
             CallFee::Custom(custom_fee) | CallFee::EVM(custom_fee) => custom_fee,
-            _ => {
-                pallet_transaction_payment::Pallet::<T>::compute_fee(len as u32, info, 0u32.into())
-            },
+            _ => TransactionPaymentPallet::<T>::compute_fee(len as u32, info, 0u32.into()),
         };
-        Pallet::<T>::validate_call_fee(fee)
-            .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::ExhaustsResources));
+        Pallet::<T>::validate_call_fee(fee).map_err(|_| {
+            TransactionValidityError::Invalid(InvalidTransaction::ExhaustsResources)
+        })?;
         Ok(())
     }
 }
