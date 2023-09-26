@@ -1,7 +1,7 @@
 //! Tests for the module.
 
 // use frame_support::pallet_prelude::*;
-use crate::{mock::*, CheckEnergyFee, BurnedEnergyThreshold, BurnedEnergy};
+use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee};
 use frame_support::traits::Hooks;
 use frame_support::{dispatch::DispatchInfo, traits::fungible::Inspect};
 use frame_system::mocking::MockUncheckedExtrinsic;
@@ -10,8 +10,8 @@ use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
 use pallet_evm::{Config as EVMConfig, GasWeightMapping, OnChargeEVMTransaction};
 use pallet_transaction_payment::OnChargeTransaction;
 use parity_scale_codec::Encode;
-use sp_runtime::transaction_validity::{TransactionValidityError, InvalidTransaction};
-use sp_runtime::{FixedPointNumber, traits::SignedExtension};
+use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
+use sp_runtime::{traits::SignedExtension, FixedPointNumber};
 
 type Extrinsic = MockUncheckedExtrinsic<Test>;
 
@@ -88,10 +88,7 @@ fn withdraw_fee_with_custom_coefficients_works() {
             initial_energy_balance.saturating_sub(constant_fee),
         );
 
-        assert_eq!(
-            BurnedEnergy::<Test>::get(),
-            constant_fee
-        )
+        assert_eq!(BurnedEnergy::<Test>::get(), constant_fee)
     });
 }
 
@@ -155,10 +152,7 @@ fn evm_withdraw_fee_works() {
             initial_energy_balance.saturating_sub(constant_fee),
         );
 
-        assert_eq!(
-            BurnedEnergy::<Test>::get(),
-            constant_fee
-        )
+        assert_eq!(BurnedEnergy::<Test>::get(), constant_fee)
     });
 }
 
@@ -235,21 +229,14 @@ fn check_energy_fee_works() {
         let extrinsic_len: usize = 1000;
 
         let extension: CheckEnergyFee<Test> = CheckEnergyFee::new();
-        assert!(extension.clone().pre_dispatch(
-            &ALICE,
-            &assets_transfer_call,
-            &dispatch_info,
-            extrinsic_len
-        ).is_ok());
+        assert!(extension
+            .clone()
+            .pre_dispatch(&ALICE, &assets_transfer_call, &dispatch_info, extrinsic_len)
+            .is_ok());
 
         BurnedEnergyThreshold::<Test>::put(999_999_999);
         assert_eq!(
-            extension.pre_dispatch(
-                &ALICE,
-                &assets_transfer_call,
-                &dispatch_info,
-                extrinsic_len
-            ),
+            extension.pre_dispatch(&ALICE, &assets_transfer_call, &dispatch_info, extrinsic_len),
             Err(TransactionValidityError::Invalid(InvalidTransaction::ExhaustsResources))
         );
     });
@@ -260,9 +247,6 @@ fn reset_burned_energy_on_init_works() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
         BurnedEnergy::<Test>::put(1_234_567_890);
         EnergyFee::on_initialize(1);
-        assert_eq!(
-            BurnedEnergy::<Test>::get(),
-            0
-        );
+        assert_eq!(BurnedEnergy::<Test>::get(), 0);
     });
 }

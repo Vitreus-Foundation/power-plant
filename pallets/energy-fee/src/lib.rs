@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-pub use crate::traits::{CustomFee, Exchange, TokenExchange};
 pub use crate::extension::CheckEnergyFee;
+pub use crate::traits::{CustomFee, Exchange, TokenExchange};
 use frame_support::dispatch::RawOrigin;
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
