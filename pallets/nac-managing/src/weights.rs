@@ -25,36 +25,48 @@ use core::marker::PhantomData;
 
 /// Weight functions needed for `pallet-nac-managing`.
 pub trait WeightInfo {
-    fn create_collection() -> Weight;
     fn mint() -> Weight;
+    fn update_nft() -> Weight;
+    fn check_nac_level() -> Weight;
 }
 
 pub struct SubstrateWeight<T>(PhantomData<T>);
 impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
-    fn create_collection() -> Weight {
-        Weight::from_parts(15_273_000, 3643)
-            .saturating_add(T::DbWeight::get().reads(1_u64))
-            .saturating_add(T::DbWeight::get().writes(2_u64))
-    }
-
     fn mint() -> Weight {
         Weight::from_parts(38_924_000, 3643)
             .saturating_add(T::DbWeight::get().reads(3_u64))
             .saturating_add(T::DbWeight::get().writes(3_u64))
     }
+
+    fn update_nft() -> Weight {
+        Weight::from_parts(38_924_000, 3643)
+            .saturating_add(T::DbWeight::get().reads(3_u64))
+            .saturating_add(T::DbWeight::get().reads(3_u64))
+    }
+
+    fn check_nac_level() -> Weight {
+        Weight::from_parts(38_924_000, 3643)
+            .saturating_add(T::DbWeight::get().reads(3_u64))
+            .saturating_add(T::DbWeight::get().reads(3_u64))
+    }
 }
 
 impl WeightInfo for () {
-    fn create_collection() -> Weight {
-        Weight::from_parts(15_273_000, 3643)
-            .saturating_add(RocksDbWeight::get().reads(1_u64))
-            .saturating_add(RocksDbWeight::get().writes(2_u64))
-    }
-
     fn mint() -> Weight {
         Weight::from_parts(38_924_000, 3643)
             .saturating_add(RocksDbWeight::get().reads(3_u64))
             .saturating_add(RocksDbWeight::get().writes(3_u64))
     }
-}
 
+    fn update_nft() -> Weight {
+        Weight::from_parts(38_924_000, 3643)
+            .saturating_add(RocksDbWeight::get().reads(3_u64))
+            .saturating_add(RocksDbWeight::get().writes(3_u64))
+    }
+
+    fn check_nac_level() -> Weight {
+        Weight::from_parts(38_924_000, 3643)
+            .saturating_add(RocksDbWeight::get().reads(3_u64))
+            .saturating_add(RocksDbWeight::get().writes(3_u64))
+    }
+}

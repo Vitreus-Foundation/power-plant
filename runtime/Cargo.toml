@@ -42,6 +42,7 @@ frame-system-benchmarking = { workspace = true, optional = true }
 frame-system-rpc-runtime-api = { workspace = true }
 pallet-assets = { workspace = true }
 pallet-asset-rate = { workspace = true }
+pallet-atomic-swap = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-babe = { workspace = true }
 pallet-balances = { workspace = true }
@@ -52,6 +53,8 @@ pallet-faucet = { workspace = true }
 pallet-grandpa = { workspace = true }
 pallet-im-online = { workspace = true }
 pallet-nac-managing = { workspace = true }
+pallet-nfts = { workspace = true }
+pallet-nfts-runtime-api = { workspace = true }
 pallet-offences = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-session = { workspace = true }
@@ -131,6 +134,8 @@ std = [
     "pallet-timestamp/std",
     "pallet-transaction-payment-rpc-runtime-api/std",
     "pallet-transaction-payment/std",
+    "pallet-nfts/std",
+    "pallet-nfts-runtime-api/std",
     "pallet-uniques/std",
     "pallet-utility/std",
     # Frontier

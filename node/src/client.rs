@@ -67,6 +67,7 @@ pub trait RuntimeApiCollection:
     + sp_consensus_grandpa::GrandpaApi<Block>
     + frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index>
     + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance>
+    + pallet_nfts_runtime_api::NftsApi<Block, AccountId, u32, u32>
 where
     <Self as sp_api::ApiExt<Block>>::StateBackend: sp_api::StateBackend<BlakeTwo256>,
 {
@@ -79,7 +80,8 @@ where
         + sp_consensus_babe::BabeApi<Block>
         + sp_consensus_grandpa::GrandpaApi<Block>
         + frame_system_rpc_runtime_api::AccountNonceApi<Block, AccountId, Index>
-        + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance>,
+        + pallet_transaction_payment_rpc_runtime_api::TransactionPaymentApi<Block, Balance>
+        + pallet_nfts_runtime_api::NftsApi<Block, AccountId, u32, u32>,
     <Self as sp_api::ApiExt<Block>>::StateBackend: sp_api::StateBackend<BlakeTwo256>,
 {
 }
