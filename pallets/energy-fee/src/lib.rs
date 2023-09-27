@@ -29,6 +29,9 @@ pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
+
 pub mod extension;
 pub mod traits;
 
@@ -48,7 +51,7 @@ pub mod pallet {
     use super::*;
     use frame_support::{
         pallet_prelude::{OptionQuery, ValueQuery, *},
-        traits::Hooks,
+        traits::{Hooks, EnsureOrigin},
         weights::Weight,
     };
     use frame_system::pallet_prelude::*;
@@ -67,6 +70,8 @@ pub mod pallet {
     {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+        /// Defines who can manage parameters of this pallet
+        type ManageOrigin: EnsureOrigin<Self::RuntimeOrigin>;
         /// Get constant fee value
         type GetConstantFee: Get<BalanceOf<Self>>;
         /// Calculates custom fee for selected pallets/extrinsics/execution scenarios
@@ -109,8 +114,10 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// Energy fee is paid to execute transaction [who, fee amount]
+        /// Energy fee is paid to execute transaction [who, fee_amount]
         EnergyFeePaid { who: T::AccountId, amount: BalanceOf<T> },
+        /// The burned energy threshold was updated [new_threshold]
+        BurnedEnergyThresholdUpdated { new_threshold: BalanceOf<T> },
     }
 
     #[pallet::genesis_config]
@@ -136,6 +143,22 @@ pub mod pallet {
         fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
             BurnedEnergy::<T>::put(BalanceOf::<T>::zero());
             T::DbWeight::get().writes(1)
+        }
+    }
+
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {
+        #[pallet::call_index(0)]
+        // #[pallet::weight(<T as Config>::WeightInfo::create_collection())]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
+        pub fn update_burned_energy_threshold(
+            origin: OriginFor<T>,
+            new_threshold: BalanceOf<T>,
+        ) -> DispatchResultWithPostInfo {
+            T::ManageOrigin::ensure_origin(origin)?;
+            BurnedEnergyThreshold::<T>::put(new_threshold);
+            Self::deposit_event(Event::<T>::BurnedEnergyThresholdUpdated { new_threshold });
+            Ok(().into())
         }
     }
 
