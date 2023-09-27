@@ -4,15 +4,15 @@
 use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event};
 use frame_support::traits::Hooks;
 use frame_support::{dispatch::DispatchInfo, traits::fungible::Inspect};
-use frame_system::RawOrigin;
 use frame_system::mocking::MockUncheckedExtrinsic;
 use frame_system::weights::{SubstrateWeight as SystemWeight, WeightInfo as _};
+use frame_system::RawOrigin;
 use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
 use pallet_evm::{Config as EVMConfig, GasWeightMapping, OnChargeEVMTransaction};
 use pallet_transaction_payment::OnChargeTransaction;
 use parity_scale_codec::Encode;
 use sp_runtime::transaction_validity::{InvalidTransaction, TransactionValidityError};
-use sp_runtime::{traits::SignedExtension, FixedPointNumber, DispatchError};
+use sp_runtime::{traits::SignedExtension, DispatchError, FixedPointNumber};
 
 type Extrinsic = MockUncheckedExtrinsic<Test>;
 
@@ -51,7 +51,9 @@ fn withdraw_fee_with_stock_coefficients_works() {
             initial_energy_balance.saturating_sub(computed_fee),
         );
 
-        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: computed_fee }.into());
+        System::assert_has_event(
+            Event::<Test>::EnergyFeePaid { who: ALICE, amount: computed_fee }.into(),
+        );
     });
 }
 
@@ -94,7 +96,9 @@ fn withdraw_fee_with_custom_coefficients_works() {
         );
 
         assert_eq!(BurnedEnergy::<Test>::get(), constant_fee);
-        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into());
+        System::assert_has_event(
+            Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into(),
+        );
     });
 }
 
@@ -161,7 +165,9 @@ fn evm_withdraw_fee_works() {
         );
 
         assert_eq!(BurnedEnergy::<Test>::get(), constant_fee);
-        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into());
+        System::assert_has_event(
+            Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into(),
+        );
     });
 }
 
@@ -184,7 +190,9 @@ fn vtrs_exchange_during_withdraw_evm_fee_works() {
             .expect("Expected to calculate missing fee in VTRS");
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);
         assert_eq!(BalancesVNRG::balance(&ALICE), 1,);
-        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: GetConstantEnergyFee::get() }.into());
+        System::assert_has_event(
+            Event::<Test>::EnergyFeePaid { who: ALICE, amount: GetConstantEnergyFee::get() }.into(),
+        );
     });
 }
 
@@ -279,12 +287,12 @@ fn update_burned_energy_threshold_works() {
             ),
             Err(DispatchError::BadOrigin.into())
         );
-        EnergyFee::update_burned_energy_threshold(
-            RawOrigin::Root.into(),
-            new_threshold
-        ).expect("Expected to set a new burned energy threshold");
+        EnergyFee::update_burned_energy_threshold(RawOrigin::Root.into(), new_threshold)
+            .expect("Expected to set a new burned energy threshold");
 
-        System::assert_last_event(Event::<Test>::BurnedEnergyThresholdUpdated { new_threshold }.into());
+        System::assert_last_event(
+            Event::<Test>::BurnedEnergyThresholdUpdated { new_threshold }.into(),
+        );
 
         assert_eq!(EnergyFee::burned_energy_threshold(), Some(new_threshold));
     });

@@ -51,7 +51,7 @@ pub mod pallet {
     use super::*;
     use frame_support::{
         pallet_prelude::{OptionQuery, ValueQuery, *},
-        traits::{Hooks, EnsureOrigin},
+        traits::{EnsureOrigin, Hooks},
         weights::Weight,
     };
     use frame_system::pallet_prelude::*;
@@ -149,7 +149,6 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         #[pallet::call_index(0)]
-        // #[pallet::weight(<T as Config>::WeightInfo::create_collection())]
         #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn update_burned_energy_threshold(
             origin: OriginFor<T>,
