@@ -126,12 +126,11 @@ impl pallet_asset_rate::Config for Test {
     type Currency = BalancesVTRS;
     type Balance = Balance;
     type WeightInfo = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type AssetKindFactory = ();
 }
 
 impl pallet_energy_fee::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type ManageOrigin = EnsureRoot<AccountId>;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type FeeTokenBalanced = BalancesVNRG;
@@ -240,8 +239,6 @@ impl pallet_assets::Config for Test {
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type CallbackHandle = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
 }
 
 parameter_types! {
