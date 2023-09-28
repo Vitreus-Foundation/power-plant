@@ -1,3 +1,5 @@
+#![allow(clippy::new_without_default)]
+
 use crate::{BalanceOf, CallFee, Config, CustomFee, Pallet};
 use frame_support::dispatch::{fmt::Debug, DispatchInfo, Dispatchable};
 use pallet_transaction_payment::{

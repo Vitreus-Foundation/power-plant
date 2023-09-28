@@ -50,7 +50,7 @@ pub enum CallFee<Balance> {
 pub mod pallet {
     use super::*;
     use frame_support::{
-        pallet_prelude::{OptionQuery, ValueQuery, *},
+        pallet_prelude::*,
         traits::{EnsureOrigin, Hooks},
         weights::Weight,
     };
