@@ -40,7 +40,7 @@ pub(crate) const BOB: AccountId = AccountId20([2u8; 20]);
 /// 1 VNRG = VNRG_TO_VTRS_RATE VTRS
 pub(crate) const VNRG_TO_VTRS_RATE: FixedU128 =
     FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
-pub(crate) const VNRG_INITIAL_BALANCE: u128 = 2_000_000_000_000_000_000_000_000_000;
+pub(crate) const VTRS_INITIAL_BALANCE: u128 = 2_000_000_000_000_000_000_000_000_000;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -263,20 +263,22 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
         vec![]
     };
 
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![(ALICE, VTRS_INITIAL_BALANCE), (BOB, VTRS_INITIAL_BALANCE)],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+
     pallet_assets::GenesisConfig::<Test> {
         accounts: vec![(GetVNRG::get(), BOB, 1000)]
             .into_iter()
             .chain(alice_account.into_iter())
             .collect(),
-        assets: vec![(GetVNRG::get(), BOB, true, 1)],
+        assets: vec![(GetVNRG::get(), BOB, false, 1)],
         metadata: vec![(GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
     }
     .assimilate_storage(&mut t)
     .unwrap();
-
-    pallet_balances::GenesisConfig::<Test> { balances: vec![(ALICE, VNRG_INITIAL_BALANCE)] }
-        .assimilate_storage(&mut t)
-        .unwrap();
 
     pallet_energy_fee::GenesisConfig::<Test> {
         initial_energy_rate: VNRG_TO_VTRS_RATE,

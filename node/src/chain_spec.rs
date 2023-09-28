@@ -279,7 +279,7 @@ fn testnet_genesis(
         dynamic_fee: Default::default(),
         base_fee: Default::default(),
         assets: AssetsConfig {
-            assets: vec![(VNRG::get(), root_key, true, 1)],
+            assets: vec![(VNRG::get(), root_key, false, 1)],
             metadata: vec![(
                 VNRG::get(),
                 "Energy".as_bytes().to_vec(),
