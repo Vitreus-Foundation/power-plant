@@ -99,10 +99,6 @@ pub mod pallet {
         type EnergyAssetId: Get<Self::AssetId>;
     }
 
-    // #[pallet::storage]
-    // #[pallet::getter(fn fee_multiplier)]
-    // pub type FeeMultiplier<T> = StorageValue<_, u32, OptionQuery>;
-
     #[pallet::storage]
     #[pallet::getter(fn burned_energy)]
     pub type BurnedEnergy<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
@@ -194,7 +190,7 @@ pub mod pallet {
                 who,
                 fee,
                 Precision::Exact,
-                Preservation::Protect,
+                Preservation::Expendable,
                 Fortitude::Force,
             )
             .map(|imbalance| {
@@ -242,7 +238,7 @@ pub mod pallet {
                 &account_id,
                 const_energy_fee,
                 Precision::Exact,
-                Preservation::Protect,
+                Preservation::Expendable,
                 Fortitude::Force,
             )
             .map(|imbalance| {
@@ -283,15 +279,9 @@ impl<T: Config> Pallet<T> {
         amount: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
         let current_balance =
-            T::FeeTokenBalanced::reducible_balance(who, Preservation::Protect, Fortitude::Force);
-        let minimum_amount = current_balance
-            .is_zero()
-            .then(T::FeeTokenBalanced::minimum_balance)
-            .unwrap_or(BalanceOf::<T>::zero());
+            T::FeeTokenBalanced::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
         if current_balance < amount {
             let missing_balance = amount
-                .checked_add(&minimum_amount)
-                .ok_or(DispatchError::Arithmetic(Overflow))?
                 .checked_sub(&current_balance)
                 .ok_or(DispatchError::Arithmetic(Underflow))?; // sanity check
             T::EnergyExchange::exchange_from_output(who, missing_balance).map(|_| ())
