@@ -18,8 +18,6 @@ use vitreus_power_plant_runtime::{
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
-const INITIAL_NAC_COLLECTION_ID: u32 = 0;
-
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
 pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
 
@@ -281,7 +279,7 @@ fn testnet_genesis(
         dynamic_fee: Default::default(),
         base_fee: Default::default(),
         assets: AssetsConfig {
-            assets: vec![(VNRG::get(), root_key, true, 1)],
+            assets: vec![(VNRG::get(), root_key, false, 1)],
             metadata: vec![(
                 VNRG::get(),
                 "Energy".as_bytes().to_vec(),
@@ -307,7 +305,7 @@ fn testnet_genesis(
         },
         nac_managing: NacManagingConfig {
             accounts: endowed_accounts.iter().map(|x| (*x, 1)).collect(),
-            collections: vec![(INITIAL_NAC_COLLECTION_ID, root_key)],
+            owners: vec![root_key],
         },
         session: SessionConfig {
             keys: initial_validators

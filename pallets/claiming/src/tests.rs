@@ -18,23 +18,23 @@
 //! Tests for claiming pallet.
 
 use crate::mock::*;
-use frame_support::{assert_err, assert_ok};
-use sp_runtime::{DispatchError::BadOrigin, TokenError::FundsUnavailable};
+use frame_support::assert_ok;
+use pallet_atomic_swap::BalanceSwapAction;
+use sp_core::H256;
 
-#[test]
-fn assigning_tokens_test() {
-    new_test_ext().execute_with(|| {
-        assert_ok!(Claiming::assign_token_amount(RuntimeOrigin::root(), 1, 10000));
-        assert_err!(Claiming::assign_token_amount(RuntimeOrigin::signed(1), 1, 10000), BadOrigin);
-    });
-}
+const A: u64 = 1;
+const B: u64 = 2;
 
 #[test]
 fn user_has_access_test() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Claiming::assign_token_amount(RuntimeOrigin::root(), 1, 10000));
-        assert_ok!(Claiming::claim(RuntimeOrigin::signed(1), 2, 5000));
-        assert_err!(Claiming::claim(RuntimeOrigin::signed(4), 3, 1000), FundsUnavailable);
-        assert_err!(Claiming::claim(RuntimeOrigin::signed(1), 4, 6000), FundsUnavailable);
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::signed(A),
+            B,
+            BalanceSwapAction::new(50),
+            H256::random()
+        ));
+        assert_eq!(Balances::free_balance(A), 50);
+        assert_eq!(Balances::free_balance(B), 250);
     });
 }
