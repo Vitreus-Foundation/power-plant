@@ -1,3 +1,4 @@
+//! Pallet implementation (dispatchables and storages).
 use crate::weights::*;
 use crate::{ReputationPoint, ReputationRecord};
 pub use impls::*;
@@ -137,6 +138,7 @@ pub mod pallet {
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
+        /// Accounts with preset reputation.
         pub accounts: Vec<(T::AccountId, ReputationRecord)>,
     }
 
