@@ -1,8 +1,10 @@
 [workspace]
 members = [
     "node",
+    "node/eth-rpc-server",
     "pallets/claiming",
     "pallets/energy-fee",
+    # "pallets/energy-fee/runtime-api",
     "pallets/energy-generation",
     "pallets/faucet",
     "pallets/nac-managing",
