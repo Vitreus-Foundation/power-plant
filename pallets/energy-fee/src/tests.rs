@@ -173,7 +173,7 @@ fn evm_withdraw_fee_works() {
 
 #[test]
 fn vtrs_exchange_during_withdraw_evm_fee_works() {
-    new_test_ext(2).execute_with(|| {
+    new_test_ext(0).execute_with(|| {
         System::set_block_number(1);
         let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
 
@@ -184,12 +184,12 @@ fn vtrs_exchange_during_withdraw_evm_fee_works() {
         )
         .is_ok());
 
-        let constant_fee = GetConstantEnergyFee::get() - 1;
+        let constant_fee = GetConstantEnergyFee::get();
         let vtrs_fee = VNRG_TO_VTRS_RATE
             .checked_mul_int(constant_fee)
             .expect("Expected to calculate missing fee in VTRS");
-        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);
-        assert_eq!(BalancesVNRG::balance(&ALICE), 1,);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee));
+        assert_eq!(BalancesVNRG::balance(&ALICE), 0);
         System::assert_has_event(
             Event::<Test>::EnergyFeePaid { who: ALICE, amount: GetConstantEnergyFee::get() }.into(),
         );
@@ -224,7 +224,7 @@ fn vtrs_exchange_during_withdraw_fee_with_stock_coefficients_works() {
         // We add 1 since VNRG is sufficient and account must have existential
         // balance
         let vtrs_fee = VNRG_TO_VTRS_RATE
-            .checked_mul_int(computed_fee + 1)
+            .checked_mul_int(computed_fee)
             .expect("Expected to calculate missing fee in VTRS");
 
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);

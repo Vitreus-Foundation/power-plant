@@ -90,6 +90,16 @@ pub mod pallet {
         type NftCollectionId: Get<<Self as Config>::CollectionId>;
     }
 
+    /// Temp storage: the information about user NFTs and NAC levels.
+    #[pallet::storage]
+    pub type UsersNft<T> = StorageMap<
+        _,
+        Blake2_128Concat,
+        <T as frame_system::Config>::AccountId,
+        (<T as Config>::ItemId, u8),
+        OptionQuery,
+    >;
+
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
@@ -290,6 +300,9 @@ impl<T: Config> Pallet<T> {
             key,
             nac,
         )?;
+
+        // Temporary solution to save NFT id and NAC level by user.
+        UsersNft::<T>::insert(T::Lookup::lookup(owner.clone())?, (&item, &nac_level));
 
         Self::deposit_event(Event::NftUpdated { owner, nac_level, metadata: data });
 
