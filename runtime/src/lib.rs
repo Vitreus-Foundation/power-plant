@@ -826,7 +826,7 @@ impl pallet_evm::Config for Runtime {
     type WithdrawOrigin = EnsureAccountId20;
     type OnCreate = ();
     type Timestamp = Timestamp;
-    type FeeCalculator = BaseFee;
+    type FeeCalculator = ();
     type FindAuthor = FindAuthorTruncated<Babe>;
     type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
