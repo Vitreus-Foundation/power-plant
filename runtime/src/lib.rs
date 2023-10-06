@@ -52,7 +52,6 @@ use pallet_energy_fee::{
     traits::{AssetsBalancesConverter, NativeExchange},
     CallFee, CustomFee,
 };
-use energy_fee_runtime_api::{CallRequest, EnergyFeeAPI};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
