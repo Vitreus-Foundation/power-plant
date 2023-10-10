@@ -96,6 +96,7 @@ pallet-reputation = { workspace = true }
 pallet-nfts-runtime-api = { workspace = true }
 
 eth-rpc-server = { path = "./eth-rpc-server" }
+energy-fee-rpc = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

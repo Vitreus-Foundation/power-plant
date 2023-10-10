@@ -49,6 +49,7 @@ pallet-balances = { workspace = true }
 pallet-claiming = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-energy-fee = { workspace = true }
+energy-fee-runtime-api = { workspace = true }
 pallet-faucet = { workspace = true }
 pallet-grandpa = { workspace = true }
 pallet-im-online = { workspace = true }
@@ -158,6 +159,7 @@ std = [
     "pallet-reputation/std",
     "pallet-energy-generation/std",
     "pallet-energy-fee/std",
+    "energy-fee-runtime-api/std",
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
