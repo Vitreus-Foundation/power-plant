@@ -1925,12 +1925,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "energy-fee-rpc"
+version = "0.1.0"
+dependencies = [
+ "energy-fee-runtime-api",
+ "ethereum-types",
+ "fc-rpc-core",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "energy-fee-runtime-api"
 version = "0.1.0"
 dependencies = [
  "ethereum",
  "ethereum-types",
- "fc-rpc-core",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10252,6 +10266,7 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "clap",
+ "energy-fee-rpc",
  "eth-rpc-server",
  "fc-cli",
  "fc-consensus",

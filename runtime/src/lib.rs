@@ -33,6 +33,7 @@ use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 // Substrate FRAME
+use energy_fee_runtime_api::CallRequest;
 #[cfg(feature = "with-paritydb-weights")]
 use frame_support::weights::constants::ParityDbWeight as RuntimeDbWeight;
 #[cfg(feature = "with-rocksdb-weights")]
@@ -1571,6 +1572,73 @@ impl_runtime_apis! {
             // defined our key owner proof type as a bottom type (i.e. a type
             // with no values).
             None
+        }
+    }
+
+    impl energy_fee_runtime_api::EnergyFeeApi<Block> for Runtime {
+        fn estimate_gas(request: CallRequest) -> U256 {
+            let CallRequest {
+                from,
+                to,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                gas,
+                value,
+                data,
+                nonce,
+                access_list,
+                ..
+            } = request;
+            let call = match data {
+                Some(data) => {
+                    let from = from.unwrap_or_default();
+                    let to = to.unwrap_or_default();
+                    let value = value.unwrap_or_else(U256::zero);
+                    let gas_limit = gas.unwrap_or_else(|| U256::from(21000)).low_u64(); // default gas limit to 21000
+                    let max_fee_per_gas = max_fee_per_gas.unwrap_or_else(U256::zero);
+                    let max_priority_fee_per_gas = max_priority_fee_per_gas;
+                    let nonce = nonce;
+                    let access_list = access_list.unwrap_or_default();
+                    let access_list_converted = access_list.into_iter()
+                        .map(|item| (item.address, item.storage_keys))
+                        .collect();
+
+                    RuntimeCall::EVM(pallet_evm::Call::call {
+                        source: from,
+                        target: to,
+                        input: data.into_inner(),
+                        value,
+                        gas_limit,
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
+                        nonce,
+                        access_list: access_list_converted,
+                    })
+                },
+                None => {
+                    match (from, to, value) {
+                        (_, Some(to), Some(value)) => {
+                            let value_converted = Balance::from(value.low_u128());  // Adjust this conversion as necessary
+
+                            RuntimeCall::Balances(pallet_balances::Call::transfer {
+                                dest: to.into(),
+                                value: value_converted,
+                            })
+                        },
+                        _ => return GetConstantEnergyFee::get().into(),
+                    }
+                }
+            };
+            let dispatch_info = call.get_dispatch_info();
+
+            match EnergyFee::dispatch_info_to_fee(
+                &call,
+                &dispatch_info
+            ) {
+                CallFee::Custom(fee) => fee,
+                CallFee::EVM(fee) => fee,
+                CallFee::Stock => TransactionPayment::weight_to_fee(dispatch_info.weight)
+            }.into()
         }
     }
 
