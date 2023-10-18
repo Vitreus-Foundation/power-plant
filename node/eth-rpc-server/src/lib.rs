@@ -415,7 +415,7 @@ where
     // ########################################################################
 
     fn gas_price(&self) -> RpcResult<U256> {
-        self.gas_price()
+        Ok(U256::zero())
     }
 
     async fn fee_history(

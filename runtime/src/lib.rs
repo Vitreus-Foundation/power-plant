@@ -799,6 +799,13 @@ impl<F: FindAuthor<u32>> FindAuthor<H160> for FindAuthorTruncated<F> {
     }
 }
 
+pub struct FixedFeeCalculator;
+impl FeeCalculator for FixedFeeCalculator {
+    fn min_gas_price() -> (U256, Weight) {
+        (U256::one(), Weight::zero())
+    }
+}
+
 const BLOCK_GAS_LIMIT: u64 = 75_000_000;
 const MAX_POV_SIZE: u64 = 5 * 1024 * 1024;
 
@@ -827,7 +834,7 @@ impl pallet_evm::Config for Runtime {
     type WithdrawOrigin = EnsureAccountId20;
     type OnCreate = ();
     type Timestamp = Timestamp;
-    type FeeCalculator = ();
+    type FeeCalculator = FixedFeeCalculator;
     type FindAuthor = FindAuthorTruncated<Babe>;
     type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
