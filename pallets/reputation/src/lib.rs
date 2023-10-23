@@ -12,7 +12,7 @@
 //! accounts>x points rewards.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![warn(clippy::all)]
+#![warn(clippy::all, clippy::pedantic)]
 #![warn(missing_docs)]
 
 use core::ops::{Deref, DerefMut};
@@ -36,7 +36,8 @@ pub mod weights;
 
 /// The number of reputation points per block is the basic amount of reputation, which is used to
 /// calculate everything else.
-pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(90);
+pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(12);
+
 /// The number of reputation points per 24 hours.
 ///
 /// Given that a slot duration is 3000 ms per block (for BABE), we have 60_000 / 3000 blocks per
@@ -45,6 +46,30 @@ pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(90);
 /// REPUTATION_POINTS_PER_BLOCK * 20 blocks/minute * 60 minutes * 24 hours
 pub const REPUTATION_POINTS_PER_DAY: ReputationPoint =
     ReputationPoint(REPUTATION_POINTS_PER_BLOCK.0 * 10 * 60 * 24);
+
+/// The number of repputation points per 30 days.
+pub const REPUTATION_POINTS_PER_MONTH: ReputationPoint =
+    ReputationPoint(REPUTATION_POINTS_PER_DAY.0 * 30);
+
+/// The number of repputation points per 12 months.
+pub const REPUTATION_POINTS_PER_YEAR: ReputationPoint =
+    ReputationPoint(REPUTATION_POINTS_PER_MONTH.0 * 12);
+
+/// `c` in reputation ranking formula.
+pub const CURVATURE: f64 = 1.6;
+
+/// `N` in block authoring rewards formula.
+pub const NORMAL: f64 = 2.0;
+
+/// We use U3 in formula.
+pub const ULTRAMODERN_3_POINTS: ReputationPoint =
+    ReputationPoint((REPUTATION_POINTS_PER_YEAR.0 as f64 * NORMAL) as u64);
+
+/// Total ranks per U3.
+pub const RANKS_PER_U3: u8 = 9;
+
+/// The number of ranks per tier.
+pub const RANKS_PER_TIER: u8 = 3;
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, Decode, Default, Encode, Eq, MaxEncodedLen, PartialEq, TypeInfo)]
@@ -58,30 +83,8 @@ pub struct Reputation {
 impl Reputation {
     /// Update reputation with given points.
     pub fn update(&mut self, new_points: ReputationPoint) {
-        self.tier = self.tier_from_points(new_points);
+        self.tier = ReputationTier::with_rank_relative_to(&self.tier, new_points);
         self.points = new_points;
-    }
-
-    fn tier_from_points(&self, new_points: ReputationPoint) -> Option<ReputationTier> {
-        self.tier
-            .and_then(|tier| match new_points.0 {
-                p if p < 2000 => None,
-                p if p < 4000 => Some(ReputationTier::VanguardZero),
-                p if p <= 60_000 && tier >= ReputationTier::TrailblazerZero => {
-                    Some(new_points.into())
-                },
-                p if p < 250_000 && tier >= ReputationTier::TrailblazerZero => {
-                    Some(ReputationTier::TrailblazerZero)
-                },
-                p if p <= 630_000 && tier >= ReputationTier::UltramodernZero => {
-                    Some(new_points.into())
-                },
-                p if p < 2_000_000 && tier >= ReputationTier::UltramodernZero => {
-                    Some(ReputationTier::UltramodernZero)
-                },
-                _ => Some(new_points.into()),
-            })
-            .or_else(|| if new_points.0 >= 2000 { Some(new_points.into()) } else { None })
     }
 
     /// Get the `ReputationTier`.
@@ -98,65 +101,123 @@ impl Reputation {
 impl From<u64> for Reputation {
     fn from(points: u64) -> Self {
         let points = ReputationPoint(points);
-        Self { tier: Some(ReputationTier::from(points)), points }
+        Self { tier: Some(ReputationTier::from_rank(points.rank())), points }
     }
 }
 
-/// The reputation score levels (as per the whitepaper).
+/// The reputation score levels (as per the research).
+#[allow(missing_docs)]
 #[derive(
     Clone, Copy, Debug, Decode, Encode, Eq, MaxEncodedLen, Ord, PartialEq, PartialOrd, TypeInfo,
 )]
 pub enum ReputationTier {
-    /// This is the lowest level which a user can truly be considered for randomized selection of
-    /// validation. This status is lost should a user fall below a score of 2,000.
-    VanguardZero,
-    /// This is the default level which all users start at, if a users score drops below 4,000, they
-    /// are demoted.
-    VanguardOne,
-    /// This rank is achieved after successfully reaching a score of 50,000.
-    VanguardTwo,
-    /// This rank is achieved after successfully reaching a score of 125,000.
-    VanguardThree,
-    /// This rank is the lowest level which a user is considered in this tier. This rank overlaps
-    /// with Support 3, but is only accessible during demotion events. This rank is lost should a
-    /// user fall to a score of 60,000
-    TrailblazerZero,
-    /// This rank is achieved after successfully reaching a score of 250,000.
-    TrailblazerOne,
-    /// This rank is achieved after successfully reaching a score of 580,000.
-    TrailblazerTwo,
-    /// This rank is achieved after successfully reaching a score of 1,000,000.
-    TrailblazerThree,
-    /// This is the lowest level which a user is considered in this tier. This rank overlaps with
-    /// Relay 3, but is only accessible during demotion events. This rank is lost should a user fall
-    /// to a score of 630,000
-    UltramodernZero,
-    /// This rank is achieved after successfully reaching a score of 2,000,000.
-    UltramodernOne,
-    /// This rank is achieved after successfully reaching a score of 4,250,000.
-    UltramodernTwo,
-    /// This rank is achieved after successfully reaching a score of 9,000,000.
-    UltramodernThree,
+    Vanguard(u8),
+    Trailblazer(u8),
+    Ultramodern(u8),
 }
 
-impl From<ReputationPoint> for ReputationTier {
-    fn from(points: ReputationPoint) -> Self {
-        match points.0 {
-            p if p < 4000 => Self::VanguardZero,
-            p if p < 50_000 => Self::VanguardOne,
-            p if p < 125_000 => Self::VanguardTwo,
-            p if p < 250_000 => Self::VanguardThree,
-            // this one is used in slashes only
-            // p if p < 250_000 => Self::TrailblazerZero,
-            p if p < 580_000 => Self::TrailblazerOne,
-            p if p < 1_000_000 => Self::TrailblazerTwo,
-            p if p < 2_000_000 => Self::TrailblazerThree,
-            // this one is used in slashes only
-            // p if p < 250_000 => Self::UltramodelZero,
-            p if p < 4_250_000 => Self::UltramodernOne,
-            p if p < 9_000_000 => Self::UltramodernTwo,
-            p if p >= 9_000_000 => Self::UltramodernThree,
-            _ => unreachable!("Reputation points are always positive"),
+impl ReputationTier {
+    /// Init tier from rank.
+    pub fn from_rank(rank: u8) -> Self {
+        match rank {
+            r if r <= RANKS_PER_TIER => Self::Vanguard(rank),
+            r if r > RANKS_PER_TIER && r <= RANKS_PER_TIER * 2 => {
+                Self::Trailblazer(rank - RANKS_PER_TIER)
+            },
+            _ => Self::Ultramodern(rank - RANKS_PER_TIER * 2),
+        }
+    }
+
+    /// Get the rank.
+    pub fn rank(&self) -> u8 {
+        let offset = self.tier_index().saturating_mul(RANKS_PER_TIER);
+        self.relative_rank().saturating_add(offset)
+    }
+
+    /// Get the rank relative to the tier (i.e. Vanguard, Trailblazer or Ultramodern)
+    pub fn relative_rank(&self) -> u8 {
+        match self {
+            Self::Vanguard(rank) => *rank,
+            Self::Trailblazer(rank) => *rank,
+            Self::Ultramodern(rank) => *rank,
+        }
+    }
+
+    /// Vanguard - 0, Trailblazer - 1, Ultramodern - 2
+    pub fn tier_index(&self) -> u8 {
+        match self {
+            Self::Vanguard(_) => 0,
+            Self::Trailblazer(_) => 1,
+            Self::Ultramodern(_) => 2,
+        }
+    }
+
+    /// Init tier with rank relative to the given tier.
+    ///
+    /// If tier felt lower than **Vanguard 0**, it return `None`.
+    pub fn with_rank_relative_to(
+        relative_to: &Option<Self>,
+        new_points: ReputationPoint,
+    ) -> Option<Self> {
+        let new_rank = new_points.rank();
+
+        if relative_to.is_none() {
+            if new_rank > 0 {
+                return Some(Self::from_rank(new_rank));
+            }
+
+            return None;
+        }
+
+        let relative_to = relative_to.unwrap();
+
+        if new_rank == relative_to.rank() {
+            return Some(relative_to.clone());
+        }
+
+        let lower_index = relative_to.tier_index().saturating_sub(1);
+        let middle_rank = (RANKS_PER_TIER as f64 / 2.0).ceil() as u8;
+        let zero_threshold = ReputationPoint::from_rank(lower_index + middle_rank);
+
+        if relative_to.relative_rank() == 0 {
+            if new_points <= zero_threshold {
+                if lower_index == 0 && lower_index == relative_to.tier_index() {
+                    return None;
+                }
+
+                return Some(Self::from_rank(lower_index + middle_rank));
+            }
+        }
+
+        if new_rank < relative_to.rank() {
+            if new_points <= zero_threshold {
+                if lower_index == 0 && lower_index == relative_to.tier_index() {
+                    return None;
+                }
+
+                return Some(Self::from_rank(lower_index + middle_rank));
+            }
+
+            let first_rank_points =
+                ReputationPoint::from_rank(relative_to.tier_index() * RANKS_PER_TIER);
+
+            if new_points < first_rank_points {
+                return Some(Self::with_zero_rank(relative_to.tier_index()));
+            }
+        }
+
+        Some(Self::from_rank(new_rank))
+    }
+
+    /// Init tier with zero rank.
+    ///
+    /// The argument is the index of the tier (Vanguard, Trailblazer or Ultramodern).
+    pub fn with_zero_rank(tier_index: u8) -> Self {
+        match tier_index {
+            0 => Self::Vanguard(0),
+            1 => Self::Trailblazer(0),
+            2 => Self::Ultramodern(0),
+            _ => unreachable!("There are only 3 tiers"),
         }
     }
 }
@@ -224,25 +285,38 @@ impl From<ReputationPoint> for ReputationRecord {
 /// The reputation points type.
 #[derive(
     Clone,
-    Debug,
-    Default,
     Copy,
-    serde::Deserialize,
-    serde::Serialize,
-    Encode,
+    Debug,
     Decode,
-    PartialEq,
+    Default,
+    Encode,
     Eq,
     MaxEncodedLen,
+    PartialEq,
+    PartialOrd,
     TypeInfo,
+    serde::Deserialize,
+    serde::Serialize,
 )]
 #[scale_info(skip_type_params(T))]
 pub struct ReputationPoint(pub u64);
 
 impl ReputationPoint {
+    /// Init reputation points from rank.
+    pub fn from_rank(rank: u8) -> Self {
+        ReputationPoint(ULTRAMODERN_3_POINTS.0 * (rank as u64 / RANKS_PER_U3 as u64).pow(2))
+    }
+
     /// Create new reputation points.
     pub const fn new(points: u64) -> Self {
         Self(points)
+    }
+
+    /// The corresponding reputation rank.
+    pub fn rank(&self) -> u8 {
+        return (RANKS_PER_U3 as f64
+            * ((self.0 / ULTRAMODERN_3_POINTS.0) as f64).powf(1.0 / CURVATURE))
+        .min(u8::MAX as f64) as u8;
     }
 }
 
