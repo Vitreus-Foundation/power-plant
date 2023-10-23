@@ -15,11 +15,12 @@
 #![warn(clippy::all, clippy::pedantic)]
 #![warn(missing_docs)]
 
-use core::ops::{Deref, DerefMut};
+use core::ops::{Deref, DerefMut, Range};
 
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::traits::SaturatedConversion;
+use sp_std::cell::OnceCell;
 
 pub use pallet::*;
 
@@ -70,6 +71,8 @@ pub const RANKS_PER_U3: u8 = 9;
 
 /// The number of ranks per tier.
 pub const RANKS_PER_TIER: u8 = 3;
+
+const RANKS: OnceCell<[Range<u64>; u8::MAX as usize]> = OnceCell::new();
 
 #[allow(missing_docs)]
 #[derive(Clone, Debug, Decode, Default, Encode, Eq, MaxEncodedLen, PartialEq, TypeInfo)]
@@ -179,6 +182,10 @@ impl ReputationTier {
         let middle_rank = (RANKS_PER_TIER as f64 / 2.0).ceil() as u8;
         let zero_threshold = ReputationPoint::from_rank(lower_index + middle_rank);
 
+        if lower_index == 0 && new_rank == 0 {
+            return None;
+        }
+
         if relative_to.relative_rank() == 0 {
             if new_points <= zero_threshold {
                 if lower_index == 0 && lower_index == relative_to.tier_index() {
@@ -190,14 +197,6 @@ impl ReputationTier {
         }
 
         if new_rank < relative_to.rank() {
-            if new_points <= zero_threshold {
-                if lower_index == 0 && lower_index == relative_to.tier_index() {
-                    return None;
-                }
-
-                return Some(Self::from_rank(lower_index + middle_rank));
-            }
-
             let first_rank_points =
                 ReputationPoint::from_rank(relative_to.tier_index() * RANKS_PER_TIER);
 
@@ -302,21 +301,41 @@ impl From<ReputationPoint> for ReputationRecord {
 pub struct ReputationPoint(pub u64);
 
 impl ReputationPoint {
-    /// Init reputation points from rank.
-    pub fn from_rank(rank: u8) -> Self {
-        ReputationPoint(ULTRAMODERN_3_POINTS.0 * (rank as u64 / RANKS_PER_U3 as u64).pow(2))
-    }
-
     /// Create new reputation points.
     pub const fn new(points: u64) -> Self {
         Self(points)
     }
 
+    /// Init reputation points from rank.
+    pub fn from_rank(rank: u8) -> Self {
+        ReputationPoint(
+            (ULTRAMODERN_3_POINTS.0 as f64 * (rank as f64 / RANKS_PER_U3 as f64).powf(CURVATURE))
+                as u64,
+        )
+    }
+
     /// The corresponding reputation rank.
     pub fn rank(&self) -> u8 {
-        return (RANKS_PER_U3 as f64
-            * ((self.0 / ULTRAMODERN_3_POINTS.0) as f64).powf(1.0 / CURVATURE))
-        .min(u8::MAX as f64) as u8;
+        RANKS
+            .get_or_init(|| {
+                let mut res = [(0, 0); u8::MAX as usize];
+                for n in 1..res.len() {
+                    res[n - 1].1 = ReputationPoint::from_rank(n as u8).0;
+                    res[n] = (ReputationPoint::from_rank(n as u8).0, 0);
+                }
+                res.last_mut().unwrap().1 = u64::MAX;
+                res.map(|v| v.0..v.1)
+            })
+            .binary_search_by(|v| {
+                if v.contains(&self.0) {
+                    core::cmp::Ordering::Equal
+                } else if self.0 < v.start {
+                    core::cmp::Ordering::Greater
+                } else {
+                    core::cmp::Ordering::Less
+                }
+            })
+            .unwrap_or(u8::MAX as usize) as u8
     }
 }
 

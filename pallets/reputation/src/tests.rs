@@ -1,6 +1,6 @@
 use crate::{
-    mock::*, Error, Event, Reputation, ReputationRecord, ReputationTier,
-    REPUTATION_POINTS_PER_BLOCK,
+    mock::*, Error, Event, Reputation, ReputationPoint, ReputationRecord, ReputationTier,
+    RANKS_PER_TIER, REPUTATION_POINTS_PER_BLOCK,
 };
 use frame_support::{assert_noop, assert_ok};
 
@@ -120,66 +120,55 @@ fn can_update_points_for_account() {
 
 #[test]
 fn tier_correct() {
+    use ReputationTier::*;
+
     let mut reputation = Reputation::default();
 
-    reputation.update(1999.into());
-    assert_eq!(reputation.rank, None);
-    reputation.update(2000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::VanguardZero));
-    reputation.update(4000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::VanguardOne));
+    reputation.update(0.into());
+    assert_eq!(reputation.tier, None);
 
-    // falling below 2000 should remove the tier
-    reputation.update(1999.into());
-    assert_eq!(reputation.rank, None);
+    for n in 1..=RANKS_PER_TIER {
+        // Vanguard
+        reputation.update(ReputationPoint::from_rank(n));
+        assert_eq!(reputation.tier, Some(Vanguard(n)));
+        reputation.update((*ReputationPoint::from_rank(n) - 1).into());
+        if n == 1 {
+            assert_eq!(reputation.tier, None);
+        } else {
+            assert_eq!(reputation.tier, Some(Vanguard(n - 1)));
+        }
+        reputation.update(0.into());
 
-    reputation.update(60_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::VanguardTwo));
+        // Trailblazer
+        reputation.update(ReputationPoint::from_rank(RANKS_PER_TIER + n));
+        assert_eq!(reputation.tier, Some(Trailblazer(n)));
+        reputation.update((*ReputationPoint::from_rank(RANKS_PER_TIER + n) - 1).into());
+        if n == 1 {
+            assert_eq!(reputation.tier, Some(Vanguard(RANKS_PER_TIER)));
+        } else {
+            assert_eq!(reputation.tier, Some(Trailblazer(n - 1)));
+        }
+        reputation.update(0.into());
 
-    reputation.update(125_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::VanguardThree));
+        // Ultramodern
+        reputation.update(ReputationPoint::from_rank(RANKS_PER_TIER * 2 + n));
+        assert_eq!(reputation.tier, Some(Ultramodern(n)));
+        reputation.update((*ReputationPoint::from_rank(RANKS_PER_TIER * 2 + n) - 1).into());
+        if n == 1 {
+            assert_eq!(reputation.tier, Some(Trailblazer(RANKS_PER_TIER)));
+        } else {
+            assert_eq!(reputation.tier, Some(Ultramodern(n - 1)));
+        }
+        reputation.update(0.into());
+    }
 
-    reputation.update(250_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::TrailblazerOne));
-
-    // still trailblazer
-    reputation.update(125_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::TrailblazerZero));
-
-    reputation.update(60_001.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::TrailblazerZero));
-
-    // not anymore
-    reputation.update(60_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::VanguardTwo));
-
-    // --
-    reputation.update(1_000_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::TrailblazerThree));
-
-    reputation.update(630_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::TrailblazerTwo));
-
-    reputation.update(2_000_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::UltramodernOne));
-
-    reputation.update(2_000_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::UltramodernOne));
-
-    // still ultramodern
-    reputation.update(1_000_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::UltramodernZero));
-
-    reputation.update(630_001.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::UltramodernZero));
-
-    // not anymore
-    reputation.update(630_000.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::TrailblazerTwo));
-
-    // --
     reputation.update(u64::MAX.into());
-    assert_eq!(reputation.rank, Some(ReputationTier::UltramodernThree));
+    assert_eq!(reputation.tier, Some(Ultramodern(u8::MAX - RANKS_PER_TIER * 2)));
+}
+
+#[test]
+fn zero_tiers_work() {
+    todo!();
 }
 
 fn user() -> u64 {
