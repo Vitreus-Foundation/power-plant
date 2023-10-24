@@ -12,7 +12,7 @@
 //! accounts>x points rewards.
 
 #![cfg_attr(not(feature = "std"), no_std)]
-#![warn(clippy::all, clippy::pedantic)]
+#![warn(clippy::all)]
 #![warn(missing_docs)]
 
 use core::ops::{Deref, DerefMut, Range};
@@ -20,7 +20,7 @@ use core::ops::{Deref, DerefMut, Range};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::traits::SaturatedConversion;
-use sp_std::cell::OnceCell;
+use sp_std::sync::OnceLock;
 
 pub use pallet::*;
 
@@ -72,7 +72,7 @@ pub const RANKS_PER_U3: u8 = 9;
 /// The number of ranks per tier.
 pub const RANKS_PER_TIER: u8 = 3;
 
-const RANKS: OnceCell<[Range<u64>; u8::MAX as usize]> = OnceCell::new();
+static RANKS: OnceLock<[Range<u64>; u8::MAX as usize]> = OnceLock::new();
 
 /// The reputation type has the amount of reputation (called `points`) and when it was updated.
 #[derive(
@@ -279,7 +279,7 @@ impl ReputationTier {
         let relative_to = match relative_to {
             Some(r) => {
                 if new_rank == r.rank() {
-                    return relative_to.clone();
+                    return *relative_to;
                 }
                 r
             },
@@ -290,14 +290,12 @@ impl ReputationTier {
         let middle_rank = (RANKS_PER_TIER as f64 / 2.0).ceil() as u8;
         let zero_threshold = ReputationPoint::from_rank(lower_index + middle_rank);
 
-        if relative_to.relative_rank() == 0 {
-            if new_points <= zero_threshold {
-                if lower_index == 0 && lower_index == relative_to.tier_index() {
-                    return None;
-                }
-
-                return Self::try_from_rank(lower_index + middle_rank);
+        if relative_to.relative_rank() == 0 && new_points <= zero_threshold {
+            if lower_index == 0 && lower_index == relative_to.tier_index() {
+                return None;
             }
+
+            return Self::try_from_rank(lower_index + middle_rank);
         }
 
         if new_rank < relative_to.rank() {
@@ -353,8 +351,8 @@ impl ReputationPoint {
     /// Init reputation points from rank.
     pub fn from_rank(rank: u8) -> Self {
         ReputationPoint(
-            (ULTRAMODERN_3_POINTS.0 as f64 * (rank as f64 / RANKS_PER_U3 as f64).powf(CURVATURE))
-                as u64,
+            (ULTRAMODERN_3_POINTS.0 as f64
+                * (f64::from(rank) / f64::from(RANKS_PER_U3)).powf(CURVATURE)) as u64,
         )
     }
 

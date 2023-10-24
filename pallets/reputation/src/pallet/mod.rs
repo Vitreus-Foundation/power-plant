@@ -9,6 +9,9 @@ mod impls;
 #[allow(clippy::module_inception)]
 #[frame_support::pallet]
 pub mod pallet {
+    // because substrate's macros won't allow us to add docs in some places
+    #![allow(missing_docs)]
+
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
