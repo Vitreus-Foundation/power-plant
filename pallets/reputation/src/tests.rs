@@ -168,7 +168,36 @@ fn tier_correct() {
 
 #[test]
 fn zero_tiers_work() {
-    todo!();
+    use ReputationTier::*;
+    let mut reputation = Reputation::default();
+
+    reputation.update(ReputationPoint::from_rank(4));
+    assert_eq!(reputation.tier, Some(Trailblazer(1)));
+
+    // when it falls, it has 0-rank
+    reputation.update(ReputationPoint::from_rank(3));
+    assert_eq!(reputation.tier, Some(Trailblazer(0)));
+
+    reputation.update((*ReputationPoint::from_rank(2) + 1).into());
+    assert_eq!(reputation.tier, Some(Trailblazer(0)));
+
+    reputation.update(ReputationPoint::from_rank(2));
+    assert_eq!(reputation.tier, Some(Vanguard(2)));
+
+    reputation.update(ReputationPoint::from_rank(8));
+    assert_eq!(reputation.tier, Some(Ultramodern(2)));
+
+    reputation.update(ReputationPoint::from_rank(7));
+    assert_eq!(reputation.tier, Some(Ultramodern(1)));
+
+    reputation.update(ReputationPoint::from_rank(6));
+    assert_eq!(reputation.tier, Some(Ultramodern(0)));
+    
+    // but in case of reputation increase it's not
+    let mut reputation_growing = Reputation::default();
+
+    reputation_growing.update(ReputationPoint::from_rank(3));
+    assert_eq!(reputation_growing.tier, Some(Vanguard(3)));
 }
 
 fn user() -> u64 {

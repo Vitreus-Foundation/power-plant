@@ -157,34 +157,30 @@ impl ReputationTier {
 
     /// Init tier with rank relative to the given tier.
     ///
-    /// If tier felt lower than **Vanguard 0**, it return `None`.
+    /// If tier felt lower than **Vanguard 1**, it'll return `None`.
     pub fn with_rank_relative_to(
         relative_to: &Option<Self>,
         new_points: ReputationPoint,
     ) -> Option<Self> {
         let new_rank = new_points.rank();
 
-        if relative_to.is_none() {
-            if new_rank > 0 {
-                return Some(Self::from_rank(new_rank));
-            }
-
+        if new_rank == 0 {
             return None;
         }
 
-        let relative_to = relative_to.unwrap();
-
-        if new_rank == relative_to.rank() {
-            return Some(relative_to.clone());
-        }
+        let relative_to = match relative_to {
+            Some(r) => {
+                if new_rank == r.rank() {
+                    return relative_to.clone();
+                }
+                r
+            },
+            None => return Some(Self::from_rank(new_rank)),
+        };
 
         let lower_index = relative_to.tier_index().saturating_sub(1);
         let middle_rank = (RANKS_PER_TIER as f64 / 2.0).ceil() as u8;
         let zero_threshold = ReputationPoint::from_rank(lower_index + middle_rank);
-
-        if lower_index == 0 && new_rank == 0 {
-            return None;
-        }
 
         if relative_to.relative_rank() == 0 {
             if new_points <= zero_threshold {
@@ -198,7 +194,7 @@ impl ReputationTier {
 
         if new_rank < relative_to.rank() {
             let first_rank_points =
-                ReputationPoint::from_rank(relative_to.tier_index() * RANKS_PER_TIER);
+                ReputationPoint::from_rank(relative_to.tier_index() * RANKS_PER_TIER + 1);
 
             if new_points < first_rank_points {
                 return Some(Self::with_zero_rank(relative_to.tier_index()));
