@@ -15,7 +15,7 @@ fn can_set_points_forcefuly() {
         assert_ok!(ReputationPallet::force_set_points(RuntimeOrigin::root(), account, points));
         assert_eq!(
             ReputationPallet::reputation(account),
-            Some(ReputationRecord { points, updated: block_number })
+            Some(ReputationRecord { reputation: points.into(), updated: block_number })
         );
         System::assert_last_event(Event::ReputationSetForcibly { account, points }.into());
     });
@@ -49,7 +49,7 @@ fn can_encrease_points() {
         let new_points = *points + (block_number - 1) * *REPUTATION_POINTS_PER_BLOCK;
         assert_eq!(
             ReputationPallet::reputation(account),
-            Some(ReputationRecord { points: new_points.into(), updated: block_number })
+            Some(ReputationRecord { reputation: new_points.into(), updated: block_number })
         );
         System::assert_last_event(Event::ReputationIncreased { account, points }.into());
     });
@@ -83,7 +83,7 @@ fn can_slash() {
         let new_points = (block_number - 1) * *REPUTATION_POINTS_PER_BLOCK - *points;
         assert_eq!(
             ReputationPallet::reputation(account),
-            Some(ReputationRecord { points: new_points.into(), updated: block_number })
+            Some(ReputationRecord { reputation: new_points.into(), updated: block_number })
         );
         System::assert_last_event(Event::ReputationSlashed { account, points }.into());
     });
@@ -110,7 +110,7 @@ fn can_update_points_for_account() {
         let new_points = (block_number - 1) * *REPUTATION_POINTS_PER_BLOCK;
         assert_eq!(
             ReputationPallet::reputation(account),
-            Some(ReputationRecord { points: new_points.into(), updated: block_number })
+            Some(ReputationRecord { reputation: new_points.into(), updated: block_number })
         );
         System::assert_last_event(
             Event::ReputationUpdated { account, points: new_points.into() }.into(),
@@ -123,43 +123,48 @@ fn tier_correct() {
     use ReputationTier::*;
 
     let mut reputation = Reputation::default();
-
     reputation.update(0.into());
     assert_eq!(reputation.tier, None);
 
     for n in 1..=RANKS_PER_TIER {
         // Vanguard
+        let mut reputation = Reputation::default();
         reputation.update(ReputationPoint::from_rank(n));
         assert_eq!(reputation.tier, Some(Vanguard(n)));
+
+        let mut reputation = Reputation::default();
         reputation.update((*ReputationPoint::from_rank(n) - 1).into());
         if n == 1 {
             assert_eq!(reputation.tier, None);
         } else {
             assert_eq!(reputation.tier, Some(Vanguard(n - 1)));
         }
-        reputation.update(0.into());
 
         // Trailblazer
+        let mut reputation = Reputation::default();
         reputation.update(ReputationPoint::from_rank(RANKS_PER_TIER + n));
         assert_eq!(reputation.tier, Some(Trailblazer(n)));
+
+        let mut reputation = Reputation::default();
         reputation.update((*ReputationPoint::from_rank(RANKS_PER_TIER + n) - 1).into());
         if n == 1 {
             assert_eq!(reputation.tier, Some(Vanguard(RANKS_PER_TIER)));
         } else {
             assert_eq!(reputation.tier, Some(Trailblazer(n - 1)));
         }
-        reputation.update(0.into());
 
         // Ultramodern
+        let mut reputation = Reputation::default();
         reputation.update(ReputationPoint::from_rank(RANKS_PER_TIER * 2 + n));
         assert_eq!(reputation.tier, Some(Ultramodern(n)));
+
+        let mut reputation = Reputation::default();
         reputation.update((*ReputationPoint::from_rank(RANKS_PER_TIER * 2 + n) - 1).into());
         if n == 1 {
             assert_eq!(reputation.tier, Some(Trailblazer(RANKS_PER_TIER)));
         } else {
             assert_eq!(reputation.tier, Some(Ultramodern(n - 1)));
         }
-        reputation.update(0.into());
     }
 
     reputation.update(u64::MAX.into());
@@ -181,6 +186,12 @@ fn zero_tiers_work() {
     reputation.update((*ReputationPoint::from_rank(2) + 1).into());
     assert_eq!(reputation.tier, Some(Trailblazer(0)));
 
+    reputation.update(ReputationPoint::from_rank(3));
+    assert_eq!(reputation.tier, Some(Trailblazer(0)));
+
+    reputation.update(ReputationPoint::from_rank(4));
+    assert_eq!(reputation.tier, Some(Trailblazer(1)));
+
     reputation.update(ReputationPoint::from_rank(2));
     assert_eq!(reputation.tier, Some(Vanguard(2)));
 
@@ -192,12 +203,33 @@ fn zero_tiers_work() {
 
     reputation.update(ReputationPoint::from_rank(6));
     assert_eq!(reputation.tier, Some(Ultramodern(0)));
-    
-    // but in case of reputation increase it's not
-    let mut reputation_growing = Reputation::default();
 
-    reputation_growing.update(ReputationPoint::from_rank(3));
-    assert_eq!(reputation_growing.tier, Some(Vanguard(3)));
+    // but in case of reputation increase it's not
+    let mut reputation = Reputation::default();
+
+    reputation.update(ReputationPoint::from_rank(3));
+    assert_eq!(reputation.tier, Some(Vanguard(3)));
+}
+
+#[test]
+fn increase_reputation_works() {
+    let mut reputation = Reputation::default();
+    let init_rep = reputation.points;
+
+    reputation.increase(999.into());
+
+    assert_eq!(*reputation.points, *init_rep + 999);
+}
+
+#[test]
+fn decrease_reputation_works() {
+    let mut reputation = Reputation::default();
+    reputation.update(1000.into());
+    let init_rep = reputation.points;
+
+    reputation.decrease(333.into());
+
+    assert_eq!(*reputation.points, *init_rep - 333);
 }
 
 fn user() -> u64 {

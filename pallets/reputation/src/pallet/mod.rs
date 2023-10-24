@@ -76,7 +76,10 @@ pub mod pallet {
             ensure_root(origin)?;
             let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
 
-            <AccountReputation<T>>::insert(&account, ReputationRecord { points, updated });
+            <AccountReputation<T>>::insert(
+                &account,
+                ReputationRecord { reputation: points.into(), updated },
+            );
 
             Self::deposit_event(Event::ReputationSetForcibly { account, points });
 
@@ -122,12 +125,12 @@ pub mod pallet {
         pub fn update_points(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             let now = <frame_system::Pallet<T>>::block_number().saturated_into();
-            let mut rep = <AccountReputation<T>>::get(&account)
+            let mut record = <AccountReputation<T>>::get(&account)
                 .unwrap_or_else(|| ReputationRecord::with_blocknumber(now));
-            rep.update_with_block_number(now);
-            let points = rep.points;
+            record.update_with_block_number(now);
+            let points = record.reputation.points;
 
-            <AccountReputation<T>>::insert(&account, rep);
+            <AccountReputation<T>>::insert(&account, record);
 
             Self::deposit_event(Event::ReputationUpdated { account, points });
 

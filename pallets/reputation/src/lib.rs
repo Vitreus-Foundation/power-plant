@@ -74,8 +74,80 @@ pub const RANKS_PER_TIER: u8 = 3;
 
 const RANKS: OnceCell<[Range<u64>; u8::MAX as usize]> = OnceCell::new();
 
+/// The reputation type has the amount of reputation (called `points`) and when it was updated.
+#[derive(
+    Clone,
+    Encode,
+    Decode,
+    serde::Deserialize,
+    serde::Serialize,
+    PartialEq,
+    Eq,
+    MaxEncodedLen,
+    TypeInfo,
+)]
+#[cfg_attr(test, derive(Debug))]
+#[scale_info(skip_type_params(T))]
+// we use `T: Config`, instead of `T: UniqueSaturatedInfo`, because `UniqueSaturationInto` would
+// require `Config` anyway.
+pub struct ReputationRecord {
+    /// The amount of reputation.
+    pub reputation: Reputation,
+    /// When the reputation was updated.
+    pub updated: u64,
+}
+
+impl ReputationRecord {
+    /// Create a new reputation with the given block number.
+    pub fn with_blocknumber(updated: u64) -> Self {
+        Self { reputation: Default::default(), updated }
+    }
+
+    /// Create a new reputation with the current block number.
+    ///
+    /// Shouldn't be called outside of externalities context.
+    pub fn with_now<T: pallet::Config>() -> Self {
+        Self::with_blocknumber(frame_system::Pallet::<T>::block_number().saturated_into())
+    }
+
+    /// Update the reputation points for the range between `Self::updated` and `block_number`.
+    pub fn update_with_block_number(&mut self, block_number: u64) {
+        let reward = Self::calculate(self.updated, block_number);
+        self.reputation.increase(reward.into());
+        self.updated = block_number;
+    }
+
+    /// Calculate reputation points for the range between `start` and `end` blocks.
+    pub fn calculate(start: u64, end: u64) -> u64 {
+        if end < start {
+            return 0;
+        }
+
+        let difference = end - start;
+        crate::REPUTATION_POINTS_PER_BLOCK.saturating_mul(difference.saturated_into())
+    }
+}
+
+impl From<ReputationPoint> for ReputationRecord {
+    fn from(points: ReputationPoint) -> Self {
+        Self { reputation: points.into(), updated: 0 }
+    }
+}
+
 #[allow(missing_docs)]
-#[derive(Clone, Debug, Decode, Default, Encode, Eq, MaxEncodedLen, PartialEq, TypeInfo)]
+#[derive(
+    Clone,
+    Debug,
+    Decode,
+    Default,
+    Encode,
+    Eq,
+    MaxEncodedLen,
+    PartialEq,
+    TypeInfo,
+    serde::Deserialize,
+    serde::Serialize,
+)]
 pub struct Reputation {
     /// The reputation tier.
     tier: Option<ReputationTier>,
@@ -84,6 +156,18 @@ pub struct Reputation {
 }
 
 impl Reputation {
+    /// Increase reputation by the given amount of points.
+    pub fn increase(&mut self, points: ReputationPoint) {
+        let new_points = self.points.saturating_add(*points).into();
+        self.update(new_points);
+    }
+
+    /// Decrease reputation by the given amount of points.
+    pub fn decrease(&mut self, points: ReputationPoint) {
+        let new_points = self.points.saturating_sub(*points).into();
+        self.update(new_points);
+    }
+
     /// Update reputation with given points.
     pub fn update(&mut self, new_points: ReputationPoint) {
         self.tier = ReputationTier::with_rank_relative_to(&self.tier, new_points);
@@ -101,17 +185,35 @@ impl Reputation {
     }
 }
 
+impl From<ReputationPoint> for Reputation {
+    fn from(points: ReputationPoint) -> Self {
+        Self { tier: ReputationTier::try_from_rank(points.rank()), points }
+    }
+}
+
 impl From<u64> for Reputation {
     fn from(points: u64) -> Self {
         let points = ReputationPoint(points);
-        Self { tier: Some(ReputationTier::from_rank(points.rank())), points }
+        Self { tier: ReputationTier::try_from_rank(points.rank()), points }
     }
 }
 
 /// The reputation score levels (as per the research).
 #[allow(missing_docs)]
 #[derive(
-    Clone, Copy, Debug, Decode, Encode, Eq, MaxEncodedLen, Ord, PartialEq, PartialOrd, TypeInfo,
+    Clone,
+    Copy,
+    Debug,
+    Decode,
+    Encode,
+    Eq,
+    MaxEncodedLen,
+    Ord,
+    PartialEq,
+    PartialOrd,
+    TypeInfo,
+    serde::Deserialize,
+    serde::Serialize,
 )]
 pub enum ReputationTier {
     Vanguard(u8),
@@ -121,14 +223,20 @@ pub enum ReputationTier {
 
 impl ReputationTier {
     /// Init tier from rank.
-    pub fn from_rank(rank: u8) -> Self {
-        match rank {
+    ///
+    /// If the rank is 0, returns `None`.
+    pub fn try_from_rank(rank: u8) -> Option<Self> {
+        if rank == 0 {
+            return None;
+        }
+
+        Some(match rank {
             r if r <= RANKS_PER_TIER => Self::Vanguard(rank),
             r if r > RANKS_PER_TIER && r <= RANKS_PER_TIER * 2 => {
                 Self::Trailblazer(rank - RANKS_PER_TIER)
             },
             _ => Self::Ultramodern(rank - RANKS_PER_TIER * 2),
-        }
+        })
     }
 
     /// Get the rank.
@@ -175,7 +283,7 @@ impl ReputationTier {
                 }
                 r
             },
-            None => return Some(Self::from_rank(new_rank)),
+            None => return Self::try_from_rank(new_rank),
         };
 
         let lower_index = relative_to.tier_index().saturating_sub(1);
@@ -188,7 +296,7 @@ impl ReputationTier {
                     return None;
                 }
 
-                return Some(Self::from_rank(lower_index + middle_rank));
+                return Self::try_from_rank(lower_index + middle_rank);
             }
         }
 
@@ -196,12 +304,12 @@ impl ReputationTier {
             let first_rank_points =
                 ReputationPoint::from_rank(relative_to.tier_index() * RANKS_PER_TIER + 1);
 
-            if new_points < first_rank_points {
+            if new_points < first_rank_points && new_points > zero_threshold {
                 return Some(Self::with_zero_rank(relative_to.tier_index()));
             }
         }
 
-        Some(Self::from_rank(new_rank))
+        Self::try_from_rank(new_rank)
     }
 
     /// Init tier with zero rank.
@@ -214,66 +322,6 @@ impl ReputationTier {
             2 => Self::Ultramodern(0),
             _ => unreachable!("There are only 3 tiers"),
         }
-    }
-}
-
-/// The reputation type has the amount of reputation (called `points`) and when it was updated.
-#[derive(
-    Clone,
-    Encode,
-    Decode,
-    serde::Deserialize,
-    serde::Serialize,
-    PartialEq,
-    Eq,
-    MaxEncodedLen,
-    TypeInfo,
-)]
-#[cfg_attr(test, derive(Debug))]
-#[scale_info(skip_type_params(T))]
-// we use `T: Config`, instead of `T: UniqueSaturatedInfo`, because `UniqueSaturationInto` would
-// require `Config` anyway.
-pub struct ReputationRecord {
-    /// The amount of reputation.
-    pub points: ReputationPoint,
-    /// When the reputation was updated.
-    pub updated: u64,
-}
-
-impl ReputationRecord {
-    /// Create a new reputation with the given block number.
-    pub fn with_blocknumber(updated: u64) -> Self {
-        Self { points: ReputationPoint(0), updated }
-    }
-
-    /// Create a new reputation with the current block number.
-    ///
-    /// Shouldn't be called outside of externalities context.
-    pub fn with_now<T: pallet::Config>() -> Self {
-        Self::with_blocknumber(frame_system::Pallet::<T>::block_number().saturated_into())
-    }
-
-    /// Update the reputation points for the range between `Self::updated` and `block_number`.
-    pub fn update_with_block_number(&mut self, block_number: u64) {
-        let reward = Self::calculate(self.updated, block_number);
-        *self.points = self.points.saturating_add(reward);
-        self.updated = block_number;
-    }
-
-    /// Calculate reputation points for the range between `start` and `end` blocks.
-    pub fn calculate(start: u64, end: u64) -> u64 {
-        if end < start {
-            return 0;
-        }
-
-        let difference = end - start;
-        crate::REPUTATION_POINTS_PER_BLOCK.saturating_mul(difference.saturated_into())
-    }
-}
-
-impl From<ReputationPoint> for ReputationRecord {
-    fn from(points: ReputationPoint) -> Self {
-        Self { points, updated: 0 }
     }
 }
 

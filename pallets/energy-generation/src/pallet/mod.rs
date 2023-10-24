@@ -29,7 +29,7 @@ use frame_support::{
     weights::Weight,
 };
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-use pallet_reputation::{ReputationPoint, ReputationRecord};
+use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, CheckedSub, SaturatedConversion, StaticLookup, Zero},
     ArithmeticError, Perbill, Percent,
@@ -222,12 +222,12 @@ pub mod pallet {
 
         /// The minimum reputation to be a validator.
         #[pallet::constant]
-        type ValidatorReputationThreshold: Get<ReputationPoint>;
+        type ValidatorReputationTier: Get<ReputationTier>;
 
         /// The minimum reputation to be able to expose your account in the staking marketplace for
         /// collaborative staking.
         #[pallet::constant]
-        type CollaborativeValidatorReputationThreshold: Get<ReputationPoint>;
+        type CollaborativeValidatorReputationTier: Get<ReputationTier>;
 
         /// Some parameters of the benchmarking.
         type BenchmarkingConfig: BenchmarkingConfig;
