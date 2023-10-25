@@ -39,7 +39,11 @@ impl<T: Config> Pallet<T> {
     /// Checks if the account has enough reputation to be a validator.
     pub fn is_legit_for_validator(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {
-            Some(reputation) => *reputation.points >= *T::ValidatorReputationThreshold::get(),
+            Some(record) => record
+                .reputation
+                .tier()
+                .map(|tier| tier >= T::ValidatorReputationTier::get())
+                .unwrap_or(false),
             None => false,
         }
     }
@@ -47,9 +51,11 @@ impl<T: Config> Pallet<T> {
     /// Check if the account has enough reputation for collaborative staking.
     pub fn is_legit_for_collab(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {
-            Some(reputation) => {
-                *reputation.points >= *T::CollaborativeValidatorReputationThreshold::get()
-            },
+            Some(record) => record
+                .reputation
+                .tier()
+                .map(|tier| tier >= T::CollaborativeValidatorReputationTier::get())
+                .unwrap_or(false),
             None => false,
         }
     }
@@ -70,10 +76,10 @@ impl<T: Config> Pallet<T> {
 
     pub(crate) fn check_reputation_cooperator(validator: &T::AccountId, cooperator: &T::AccountId) {
         let prefs = Self::validators(validator);
-        let rep = pallet_reputation::AccountReputation::<T>::get(cooperator)
+        let record = pallet_reputation::AccountReputation::<T>::get(cooperator)
             .unwrap_or_else(ReputationRecord::with_now::<T>);
 
-        if *prefs.min_coop_reputation > *rep.points {
+        if prefs.min_coop_reputation > record.reputation {
             Self::chill_stash(cooperator);
         }
     }
@@ -440,23 +446,10 @@ impl<T: Config> Pallet<T> {
             battery_slot_cap,
         );
 
-        let energy_per_reputation_point = T::EnergyPerReputationPoint::calculate_energy_rate(
-            staked,
-            issuance,
-            core_nodes_num,
-            battery_slot_cap,
-        );
-
         <ErasEnergyPerStakeCurrency<T>>::insert(era_index, energy_per_stake_currency);
         Self::deposit_event(Event::<T>::EraEnergyPerStakeCurrencySet {
             era_index,
             energy_rate: energy_per_stake_currency,
-        });
-
-        <ErasEnergyPerReputaionPoint<T>>::insert(era_index, energy_per_reputation_point);
-        Self::deposit_event(Event::<T>::EraEnergyPerReputationPointSet {
-            era_index,
-            energy_rate: energy_per_reputation_point,
         });
     }
 
@@ -599,10 +592,9 @@ impl<T: Config> Pallet<T> {
                                 .and_then(|collab| collab.targets.get(&validator).cloned())
                             {
                                 Some(value) => {
-                                    let reputation =
-                                        pallet_reputation::Pallet::<T>::reputation(&who)
-                                            .unwrap_or_else(ReputationRecord::with_now::<T>);
-                                    if *reputation.points >= *prefs.min_coop_reputation {
+                                    let record = pallet_reputation::Pallet::<T>::reputation(&who)
+                                        .unwrap_or_else(ReputationRecord::with_now::<T>);
+                                    if record.reputation >= prefs.min_coop_reputation {
                                         Some(IndividualExposure { who, value })
                                     } else {
                                         None
@@ -699,8 +691,7 @@ impl<T: Config> Pallet<T> {
             active_era,
         );
         for slash in era_slashes {
-            let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
-            slashing::apply_slash::<T>(slash, slash_era)?;
+            slashing::apply_slash::<T>(slash)?;
         }
 
         Ok(())
@@ -1002,7 +993,7 @@ where
                 unapplied.reporters = details.reporters.clone();
                 if slash_defer_duration == 0 {
                     // Apply right away.
-                    if let Err(e) = slashing::apply_slash::<T>(unapplied, slash_era) {
+                    if let Err(e) = slashing::apply_slash::<T>(unapplied) {
                         frame_support::print(format!("failed to apply slash: {:?}", e).as_str());
                     }
                     {
