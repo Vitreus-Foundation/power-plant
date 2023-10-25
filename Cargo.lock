@@ -1925,6 +1925,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "energy-fee-rpc"
+version = "0.1.0"
+dependencies = [
+ "energy-fee-runtime-api",
+ "ethereum-types",
+ "fc-rpc-core",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "energy-fee-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "ethereum",
+ "ethereum-types",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "enum-as-inner"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2000,6 +2029,28 @@ checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
 dependencies = [
  "cc",
  "libc",
+]
+
+[[package]]
+name = "eth-rpc-server"
+version = "0.1.0"
+dependencies = [
+ "ethereum",
+ "ethereum-types",
+ "fc-rpc",
+ "fc-rpc-core",
+ "fp-rpc",
+ "jsonrpsee",
+ "rustc-hex",
+ "sc-client-api",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "serde",
+ "serde_json",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-runtime",
 ]
 
 [[package]]
@@ -10215,6 +10266,8 @@ version = "0.0.0"
 dependencies = [
  "async-trait",
  "clap",
+ "energy-fee-rpc",
+ "eth-rpc-server",
  "fc-cli",
  "fc-consensus",
  "fc-db",
@@ -10294,6 +10347,7 @@ dependencies = [
 name = "vitreus-power-plant-runtime"
 version = "0.0.0"
 dependencies = [
+ "energy-fee-runtime-api",
  "fp-account",
  "fp-evm",
  "fp-rpc",

@@ -107,9 +107,10 @@ where
     A: ChainApi<Block = B> + 'static,
     CT: ConvertTransaction<<B as BlockT>::Extrinsic> + Send + Sync + 'static,
 {
+    use eth_rpc_server::EthApiServer;
     use fc_rpc::{
-        Eth, EthApiServer, EthDevSigner, EthFilter, EthFilterApiServer, EthPubSub,
-        EthPubSubApiServer, EthSigner, Net, NetApiServer, Web3, Web3ApiServer,
+        Eth, EthDevSigner, EthFilter, EthFilterApiServer, EthPubSub, EthPubSubApiServer, EthSigner,
+        Net, NetApiServer, Web3, Web3ApiServer,
     };
     #[cfg(feature = "txpool")]
     use fc_rpc::{TxPool, TxPoolApiServer};
