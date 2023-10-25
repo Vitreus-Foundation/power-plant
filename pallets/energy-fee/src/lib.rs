@@ -2,7 +2,7 @@
 
 pub use crate::extension::CheckEnergyFee;
 pub use crate::traits::{CustomFee, Exchange, TokenExchange};
-use frame_support::dispatch::RawOrigin;
+use frame_support::dispatch::{DispatchClass, RawOrigin};
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
     tokens::{Fortitude, Imbalance, Precision, Preservation},
@@ -10,7 +10,9 @@ use frame_support::traits::{
 pub use pallet::*;
 use pallet_asset_rate::Pallet as AssetRatePallet;
 pub(crate) use pallet_evm::{AddressMapping, OnChargeEVMTransaction};
-pub use pallet_transaction_payment::{Config as TransactionPaymentConfig, OnChargeTransaction};
+pub use pallet_transaction_payment::{
+    Config as TransactionPaymentConfig, Multiplier, MultiplierUpdate, OnChargeTransaction,
+};
 
 use sp_arithmetic::{
     traits::CheckedAdd,
@@ -18,9 +20,9 @@ use sp_arithmetic::{
 };
 use sp_core::{H160, U256};
 use sp_runtime::{
-    traits::{CheckedSub, DispatchInfoOf, Get, PostDispatchInfoOf, Zero},
+    traits::{CheckedSub, Convert, DispatchInfoOf, Get, PostDispatchInfoOf, Zero},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
-    DispatchError,
+    DispatchError, Perbill, Perquintill,
 };
 
 #[cfg(test)]
@@ -50,12 +52,12 @@ pub enum CallFee<Balance> {
 pub mod pallet {
     use super::*;
     use frame_support::{
-        pallet_prelude::*,
+        pallet_prelude::{OptionQuery, ValueQuery, *},
         traits::{EnsureOrigin, Hooks},
         weights::Weight,
     };
     use frame_system::pallet_prelude::*;
-    use sp_arithmetic::FixedU128;
+    use sp_arithmetic::{traits::One, FixedU128};
 
     /// Pallet which implements fee withdrawal traits
     #[pallet::pallet]
@@ -107,6 +109,26 @@ pub mod pallet {
     #[pallet::getter(fn burned_energy_threshold)]
     pub type BurnedEnergyThreshold<T: Config> = StorageValue<_, BalanceOf<T>, OptionQuery>;
 
+    #[pallet::type_value]
+    pub fn DefaultBlockFullnessThreshold<T: Config>() -> Perquintill {
+        Perquintill::one()
+    }
+
+    #[pallet::storage]
+    #[pallet::getter(fn block_fullness_threshold)]
+    pub type BlockFullnessThreshold<T: Config> =
+        StorageValue<_, Perquintill, ValueQuery, DefaultBlockFullnessThreshold<T>>;
+
+    #[pallet::type_value]
+    pub fn DefaultFeeMultiplier<T: Config>() -> Multiplier {
+        Multiplier::one()
+    }
+
+    #[pallet::storage]
+    #[pallet::getter(fn upper_fee_multiplier)]
+    pub type UpperFeeMultiplier<T: Config> =
+        StorageValue<_, Multiplier, ValueQuery, DefaultFeeMultiplier<T>>;
+
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
@@ -114,6 +136,10 @@ pub mod pallet {
         EnergyFeePaid { who: T::AccountId, amount: BalanceOf<T> },
         /// The burned energy threshold was updated [new_threshold]
         BurnedEnergyThresholdUpdated { new_threshold: BalanceOf<T> },
+        ///
+        BlockFullnessThresholdUpdated { new_threshold: Perquintill },
+        ///
+        UpperFeeMultiplierUpdated { new_multiplier: Multiplier },
     }
 
     #[pallet::genesis_config]
@@ -153,6 +179,30 @@ pub mod pallet {
             T::ManageOrigin::ensure_origin(origin)?;
             BurnedEnergyThreshold::<T>::put(new_threshold);
             Self::deposit_event(Event::<T>::BurnedEnergyThresholdUpdated { new_threshold });
+            Ok(().into())
+        }
+
+        #[pallet::call_index(1)]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
+        pub fn update_block_fullness_threshold(
+            origin: OriginFor<T>,
+            new_threshold: Perquintill,
+        ) -> DispatchResultWithPostInfo {
+            T::ManageOrigin::ensure_origin(origin)?;
+            BlockFullnessThreshold::<T>::put(new_threshold);
+            Self::deposit_event(Event::<T>::BlockFullnessThresholdUpdated { new_threshold });
+            Ok(().into())
+        }
+
+        #[pallet::call_index(2)]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
+        pub fn update_upper_fee_multiplier(
+            origin: OriginFor<T>,
+            new_multiplier: Multiplier,
+        ) -> DispatchResultWithPostInfo {
+            T::ManageOrigin::ensure_origin(origin)?;
+            UpperFeeMultiplier::<T>::put(new_multiplier);
+            Self::deposit_event(Event::<T>::UpperFeeMultiplierUpdated { new_multiplier });
             Ok(().into())
         }
     }
@@ -308,5 +358,78 @@ impl<T: Config> Pallet<T> {
             None => Ok(()),
             _ => Err(DispatchError::Exhausted),
         }
+    }
+}
+
+impl<T: Config> Convert<Multiplier, Multiplier> for Pallet<T> {
+    fn convert(_previous: Multiplier) -> Multiplier {
+        let min_multiplier = DefaultFeeMultiplier::<T>::get();
+        let max_multiplier = Self::upper_fee_multiplier();
+
+        let weights = T::BlockWeights::get();
+        // the computed ratio is only among the normal class.
+        let normal_max_weight =
+            weights.get(DispatchClass::Normal).max_total.unwrap_or(weights.max_block);
+        let current_block_weight = <frame_system::Pallet<T>>::block_weight();
+        let normal_block_weight =
+            current_block_weight.get(DispatchClass::Normal).min(normal_max_weight);
+
+        // Normalize dimensions so they can be compared. Ensure (defensive) max weight is non-zero.
+        let normalized_ref_time = Perbill::from_rational(
+            normal_block_weight.ref_time(),
+            normal_max_weight.ref_time().max(1),
+        );
+        let normalized_proof_size = Perbill::from_rational(
+            normal_block_weight.proof_size(),
+            normal_max_weight.proof_size().max(1),
+        );
+
+        // Pick the limiting dimension. If the proof size is the limiting dimension, then the
+        // multiplier is adjusted by the proof size. Otherwise, it is adjusted by the ref time.
+        let (normal_limiting_dimension, max_limiting_dimension) =
+            if normalized_ref_time < normalized_proof_size {
+                (normal_block_weight.proof_size(), normal_max_weight.proof_size())
+            } else {
+                (normal_block_weight.ref_time(), normal_max_weight.ref_time())
+            };
+
+        let block_fullness_threshold = Self::block_fullness_threshold();
+
+        let threshold_weight = (block_fullness_threshold * max_limiting_dimension) as u128;
+        let block_weight = normal_limiting_dimension as u128;
+
+        if threshold_weight <= block_weight {
+            max_multiplier
+        } else {
+            min_multiplier
+        }
+    }
+}
+
+impl<T: Config> MultiplierUpdate for Pallet<T> {
+    fn min() -> Multiplier {
+        // Minimal possible value of Multiplier type.
+        // Do not confuse with a standard multiplier value.
+        // Used for integrity tests in TransactionPayment pallet.
+        Default::default()
+    }
+    fn max() -> Multiplier {
+        // Maximal possible value of Multiplier type.
+        // Do not confuse with an upper multiplier value.
+        // Used for integrity tests in TransactionPayment pallet.
+        <Multiplier as sp_runtime::traits::Bounded>::max_value()
+    }
+    fn target() -> Perquintill {
+        Self::block_fullness_threshold()
+    }
+
+    fn variability() -> Multiplier {
+        // It seems that this function isn't used anywhere
+        // Moreover, variability factor is not variance or any such term.
+        // It is associated with a particular formula for multiplier
+        // calculation, so I can't find a reasonable way to
+        // define it in terms of simple switching between low and
+        // high multiplier.
+        Default::default()
     }
 }

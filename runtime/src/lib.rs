@@ -27,7 +27,7 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, Perbill, Permill,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Permill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{marker::PhantomData, prelude::*};
@@ -84,6 +84,8 @@ mod precompiles;
 mod helpers {
     pub mod runner;
 }
+#[cfg(test)]
+mod tests;
 
 use precompiles::VitreusPrecompiles;
 
@@ -705,7 +707,7 @@ impl pallet_transaction_payment::Config for Runtime {
     type OperationalFeeMultiplier = ConstU8<5>;
     type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
-    type FeeMultiplierUpdate = ();
+    type FeeMultiplierUpdate = EnergyFee;
 }
 
 impl pallet_asset_rate::Config for Runtime {
@@ -763,15 +765,15 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         runtime_call: &RuntimeCall,
         _dispatch_info: &DispatchInfoOf<RuntimeCall>,
     ) -> CallFee<Balance> {
+        let next_multiplier = TransactionPayment::next_fee_multiplier();
+        let default_fee = next_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
         match runtime_call {
             RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(GetConstantEnergyFee::get()),
-            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => {
-                CallFee::EVM(GetConstantEnergyFee::get())
-            },
+            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(default_fee),
+            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(default_fee),
             _ => CallFee::Stock,
         }
     }
