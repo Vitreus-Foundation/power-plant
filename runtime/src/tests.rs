@@ -33,9 +33,6 @@ fn fee_multiplier_update_works() {
             .unwrap();
         let block_weight_a = max_block_weight/2;
         System::set_block_consumed_resources(block_weight_a, 0);
-        // println!("block weight: {:#?}", System::block_weight());
-        // println!("del");
-        // println!("max block weight: {:#?}", );
 
         TransactionPayment::on_finalize(1);
         assert_eq!(TransactionPayment::next_fee_multiplier(), DefaultFeeMultiplier::<Runtime>::get());

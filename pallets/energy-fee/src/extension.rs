@@ -49,7 +49,6 @@ where
         Ok(())
     }
 
-    // TODO: allow sudo calls in case of energy overflow
     fn pre_dispatch(
         self,
         _who: &Self::AccountId,
