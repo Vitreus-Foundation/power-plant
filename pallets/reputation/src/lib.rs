@@ -187,6 +187,12 @@ impl Reputation {
     }
 }
 
+impl From<ReputationTier> for Reputation {
+    fn from(tier: ReputationTier) -> Self {
+        Self { tier: Some(tier), points: ReputationPoint::from_rank(tier.rank()) }
+    }
+}
+
 impl From<ReputationPoint> for Reputation {
     fn from(points: ReputationPoint) -> Self {
         Self { tier: ReputationTier::try_from_rank(points.rank()), points }
@@ -381,6 +387,12 @@ impl ReputationPoint {
                 }
             })
             .unwrap_or(u8::MAX as usize) as u8
+    }
+}
+
+impl From<ReputationTier> for ReputationPoint {
+    fn from(tier: ReputationTier) -> Self {
+        Self::from_rank(tier.rank())
     }
 }
 

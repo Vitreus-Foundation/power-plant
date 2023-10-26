@@ -12,7 +12,7 @@ use frame_support::{
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use pallet_reputation::ReputationRecord;
+use pallet_reputation::{ReputationRecord, ReputationTier};
 use parity_scale_codec::Compact;
 use sp_core::H256;
 
@@ -80,7 +80,7 @@ frame_support::construct_runtime!(
         Authorship: pallet_authorship,
         Balances: pallet_balances,
         Historical: pallet_session::historical,
-        Reputation: pallet_reputation,
+        ReputationPallet: pallet_reputation,
         Session: pallet_session,
         PowerPlant: energy_generation,
         System: frame_system,
@@ -125,8 +125,8 @@ impl frame_system::Config for Test {
     type Version = ();
     type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = Reputation;
-    type OnKilledAccount = Reputation;
+    type OnNewAccount = ReputationPallet;
+    type OnKilledAccount = ReputationPallet;
     type SystemWeightInfo = ();
     type SS58Prefix = ();
     type OnSetCode = ();
@@ -264,10 +264,8 @@ parameter_types! {
     pub static RewardOnUnbalanceWasCalled: bool = false;
     pub static LedgerSlashPerEra: (StakeOf<Test>, BTreeMap<EraIndex, StakeOf<Test>>) = (Zero::zero(), BTreeMap::new());
     pub static MaxWinners: u32 = 100;
-    // it takes a month to become a validator from 0
-    pub static ValidatorReputationThreshold: ReputationPoint = (*pallet_reputation::REPUTATION_POINTS_PER_DAY * 30).into();
-    // it takes 2 months to become a collaborative validator from 0
-    pub static CollaborativeValidatorReputationThreshold: ReputationPoint = (*pallet_reputation::REPUTATION_POINTS_PER_DAY * 60).into();
+    pub static ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
+    pub static CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Trailblazer(1);
 }
 
 pub struct MockReward;
@@ -301,27 +299,13 @@ impl EnergyRateCalculator<StakeOf<Test>, EnergyOf<Test>> for EnergyPerStakeCurre
     }
 }
 
-pub struct EnergyPerReputationPoint;
-
-impl EnergyRateCalculator<StakeOf<Test>, EnergyOf<Test>> for EnergyPerReputationPoint {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Test>,
-        _total_issuance: EnergyOf<Test>,
-        _core_nodes_num: u32,
-        _battery_slot_cap: EnergyOf<Test>,
-    ) -> EnergyOf<Test> {
-        EnergyOf::<Test>::from(1_000_u128)
-    }
-}
-
 impl crate::pallet::pallet::Config for Test {
     type AdminOrigin = EnsureOneOrRoot;
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = TestBenchmarkingConfig;
     type BondingDuration = BondingDuration;
-    type CollaborativeValidatorReputationThreshold = CollaborativeValidatorReputationThreshold;
+    type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerReputationPoint = EnergyPerReputationPoint;
     type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
@@ -341,7 +325,7 @@ impl crate::pallet::pallet::Config for Test {
     type StakeCurrency = Balances;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
-    type ValidatorReputationThreshold = ValidatorReputationThreshold;
+    type ValidatorReputationTier = ValidatorReputationTier;
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;
@@ -467,12 +451,12 @@ impl ExtBuilder {
         .assimilate_storage(&mut storage);
 
         let validator_reputation = ReputationRecord {
-            points: <Test as pallet::pallet::Config>::ValidatorReputationThreshold::get(),
+            reputation: <Test as pallet::pallet::Config>::ValidatorReputationTier::get().into(),
             updated: 0,
         };
         let collab_validator_rep = ReputationRecord {
-            points:
-                <Test as pallet::pallet::Config>::CollaborativeValidatorReputationThreshold::get(),
+            reputation:
+                <Test as pallet::pallet::Config>::CollaborativeValidatorReputationTier::get().into(),
             updated: 0,
         };
         let _ = pallet_reputation::GenesisConfig::<Test> {
@@ -710,16 +694,16 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 }
 
 pub(crate) fn make_validator(controller: AccountId, stash: AccountId, balance: Balance) {
-    assert_ok!(Reputation::force_set_points(
+    assert_ok!(ReputationPallet::force_set_points(
         RuntimeOrigin::root(),
         controller,
-        CollaborativeValidatorReputationThreshold::get()
+        CollaborativeValidatorReputationTier::get().into()
     ));
 
-    assert_ok!(Reputation::force_set_points(
+    assert_ok!(ReputationPallet::force_set_points(
         RuntimeOrigin::root(),
         stash,
-        CollaborativeValidatorReputationThreshold::get()
+        CollaborativeValidatorReputationTier::get().into()
     ));
 
     bond(stash, controller, balance);

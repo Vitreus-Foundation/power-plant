@@ -40,7 +40,7 @@ use frame_support::{
     ensure,
     traits::{Defensive, Get},
 };
-use pallet_reputation::{ReputationPoint, ReputationRecord, RANKS_PER_TIER};
+use pallet_reputation::{Reputation, ReputationPoint, ReputationRecord, RANKS_PER_TIER};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{traits::Zero, DispatchResult, RuntimeDebug};
@@ -215,7 +215,7 @@ pub(crate) fn compute_slash<T: Config>(
     // is the slash amount here a maximum for the era?
     let reputation_record = pallet_reputation::AccountReputation::<T>::get(params.stash)
         .unwrap_or(ReputationRecord::with_now::<T>());
-    let max_slash = max_slash_amount::<T>(&params.stash);
+    let max_slash = max_slash_amount::<T>(&reputation_record.reputation);
     let own_slash: ReputationPoint = (params.slash * *max_slash).into();
     if *own_slash == 0 {
         // kick out the validator even if they won't be slashed,
@@ -290,13 +290,10 @@ pub(crate) fn compute_slash<T: Config>(
 }
 
 // get the maximum possible amount of slash for an account
-fn max_slash_amount<T: Config>(account: &T::AccountId) -> ReputationPoint {
-    let reputation_record = pallet_reputation::AccountReputation::<T>::get(account)
-        .unwrap_or(ReputationRecord::with_now::<T>());
-    let rank = reputation_record.reputation.tier().map(|t| t.rank()).unwrap_or(0);
+pub(crate) fn max_slash_amount<T: Config>(reputation: &Reputation) -> ReputationPoint {
+    let rank = reputation.tier().map(|t| t.rank()).unwrap_or(0);
     // RANKS_PER_TIER + 1 because we want take 0-rank into account
-    reputation_record
-        .reputation
+    reputation
         .points()
         .saturating_sub(*ReputationPoint::from_rank(rank.saturating_sub(RANKS_PER_TIER + 1)))
         .into()
