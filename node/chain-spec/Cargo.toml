@@ -1,0 +1,20 @@
+[package]
+name = "chain-spec"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rand = { workspace = true }
+hex-literal = { workspace = true }
+serde = { workspace = true }
+
+sc-chain-spec = { workspace = true }
+sc-service = { workspace = true }
+sp-consensus-babe = { workspace = true, features = ["default"] }
+sp-consensus-grandpa = { workspace = true, features = ["default"] }
+sp-core = { workspace = true, features = ["default"] }
+sp-runtime = { workspace = true, features = ["default"] }
+sp-state-machine = { workspace = true, features = ["default"] }
+vitreus-power-plant-runtime = { workspace = true, features = ["default"] }

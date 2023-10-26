@@ -18,7 +18,7 @@ use sp_arithmetic::{
     traits::CheckedAdd,
     ArithmeticError::{Overflow, Underflow},
 };
-use sp_core::{H160, U256};
+use sp_core::{H160, U256, RuntimeDebug};
 use sp_runtime::{
     traits::{CheckedSub, Convert, DispatchInfoOf, Get, PostDispatchInfoOf, Zero},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
@@ -40,6 +40,7 @@ pub mod traits;
 pub(crate) type BalanceOf<T> = <T as pallet_asset_rate::Config>::Balance;
 
 /// Fee type inferred from call info
+#[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CallFee<Balance> {
     Custom(Balance),
     Stock,
@@ -420,7 +421,11 @@ impl<T: Config> MultiplierUpdate for Pallet<T> {
         <Multiplier as sp_runtime::traits::Bounded>::max_value()
     }
     fn target() -> Perquintill {
-        Self::block_fullness_threshold()
+        // Reading BlockFulnessThreshold from storage causes
+        // runtime integrity error during runtime tests due to
+        // usage inside pallet_transaction_payment::integrity_test 
+        // outside any Externalities environment
+        DefaultBlockFullnessThreshold::<T>::get()
     }
 
     fn variability() -> Multiplier {
