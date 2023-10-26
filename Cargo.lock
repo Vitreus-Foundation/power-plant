@@ -5388,6 +5388,7 @@ dependencies = [
  "pallet-evm",
  "pallet-evm-chain-id",
  "pallet-staking-reward-curve",
+ "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",

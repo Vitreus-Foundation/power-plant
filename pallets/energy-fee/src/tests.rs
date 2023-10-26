@@ -4,7 +4,7 @@
 use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event};
 use frame_support::{
     traits::{Hooks, fungible::Inspect},
-    dispatch::DispatchInfo,
+    dispatch::{DispatchInfo, GetDispatchInfo},
 };
 use frame_system::{
     mocking::MockUncheckedExtrinsic,
@@ -271,6 +271,34 @@ fn check_burned_energy_threshold_works() {
         );
     });
 }
+
+#[test]
+fn check_sudo_bypass_burned_energy_threshold_works() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        BurnedEnergyThreshold::<Test>::put(0);
+        let transfer_amount: Balance = 1_000_000_000;
+        let assets_transfer_call: RuntimeCall = 
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+        let sudo_assets_transfer_call: RuntimeCall = RuntimeCall::Sudo(
+            pallet_sudo::Call::sudo {
+                call: Box::new(assets_transfer_call)
+            }
+        );
+        let dispatch_info: DispatchInfo = sudo_assets_transfer_call.get_dispatch_info();
+        let extrinsic_len: usize = 1000;
+
+        let extension: CheckEnergyFee<Test> = CheckEnergyFee::new();
+        assert!(extension
+            .clone()
+            .pre_dispatch(&ALICE, &sudo_assets_transfer_call, &dispatch_info, extrinsic_len)
+            .is_ok());
+    });
+}
+
 
 #[test]
 fn reset_burned_energy_on_init_works() {
