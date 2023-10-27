@@ -1,24 +1,23 @@
 //! Tests for the module.
 
-// use frame_support::pallet_prelude::*;
 use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event};
 use frame_support::{
-    traits::{Hooks, fungible::Inspect},
     dispatch::{DispatchInfo, GetDispatchInfo},
+    traits::{fungible::Inspect, Hooks},
 };
 use frame_system::{
     mocking::MockUncheckedExtrinsic,
     weights::{SubstrateWeight as SystemWeight, WeightInfo as _},
-    RawOrigin,  
+    RawOrigin,
 };
 use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
 use pallet_evm::{Config as EVMConfig, GasWeightMapping, OnChargeEVMTransaction};
-use pallet_transaction_payment::{OnChargeTransaction, Multiplier};
+use pallet_transaction_payment::{Multiplier, OnChargeTransaction};
 use parity_scale_codec::Encode;
 use sp_runtime::{
+    traits::{One, SignedExtension},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
-    traits::{SignedExtension, One},
-    DispatchError, FixedPointNumber, Perquintill
+    DispatchError, FixedPointNumber, Perquintill,
 };
 
 type Extrinsic = MockUncheckedExtrinsic<Test>;
@@ -277,17 +276,14 @@ fn check_sudo_bypass_burned_energy_threshold_works() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
         BurnedEnergyThreshold::<Test>::put(0);
         let transfer_amount: Balance = 1_000_000_000;
-        let assets_transfer_call: RuntimeCall = 
+        let assets_transfer_call: RuntimeCall =
             RuntimeCall::Assets(pallet_assets::Call::transfer {
                 id: VNRG.into(),
                 target: BOB,
                 amount: transfer_amount,
             });
-        let sudo_assets_transfer_call: RuntimeCall = RuntimeCall::Sudo(
-            pallet_sudo::Call::sudo {
-                call: Box::new(assets_transfer_call)
-            }
-        );
+        let sudo_assets_transfer_call: RuntimeCall =
+            RuntimeCall::Sudo(pallet_sudo::Call::sudo { call: Box::new(assets_transfer_call) });
         let dispatch_info: DispatchInfo = sudo_assets_transfer_call.get_dispatch_info();
         let extrinsic_len: usize = 1000;
 
@@ -298,7 +294,6 @@ fn check_sudo_bypass_burned_energy_threshold_works() {
             .is_ok());
     });
 }
-
 
 #[test]
 fn reset_burned_energy_on_init_works() {
@@ -364,10 +359,7 @@ fn update_upper_fee_multiplier_works() {
         assert_eq!(EnergyFee::upper_fee_multiplier(), Multiplier::one());
         let new_multiplier = Multiplier::from(1_234_567_890);
         assert_eq!(
-            EnergyFee::update_upper_fee_multiplier(
-                RawOrigin::Signed(ALICE).into(),
-                new_multiplier
-            ),
+            EnergyFee::update_upper_fee_multiplier(RawOrigin::Signed(ALICE).into(), new_multiplier),
             Err(DispatchError::BadOrigin.into())
         );
         EnergyFee::update_upper_fee_multiplier(RawOrigin::Root.into(), new_multiplier)

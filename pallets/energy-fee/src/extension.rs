@@ -3,10 +3,10 @@
 use crate::{BalanceOf, CallFee, Config, CustomFee, Pallet};
 use frame_support::dispatch::{fmt::Debug, Callable, DispatchInfo, Dispatchable};
 use frame_support::traits::IsSubType;
+use pallet_sudo::{Config as SudoConfig, Pallet as SudoPallet};
 use pallet_transaction_payment::{
     Config as TransactionPaymentConfig, OnChargeTransaction, Pallet as TransactionPaymentPallet,
 };
-use pallet_sudo::{Pallet as SudoPallet, Config as SudoConfig};
 use parity_scale_codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -34,8 +34,8 @@ impl<T: Config> CheckEnergyFee<T> {
 
 impl<T: Config + SudoConfig + Send + Sync> SignedExtension for CheckEnergyFee<T>
 where
-    <T as frame_system::Config>::RuntimeCall: Dispatchable<Info = DispatchInfo>
-        + IsSubType<<SudoPallet<T> as Callable<T>>::RuntimeCall>,
+    <T as frame_system::Config>::RuntimeCall:
+        Dispatchable<Info = DispatchInfo> + IsSubType<<SudoPallet<T> as Callable<T>>::RuntimeCall>,
     <T as TransactionPaymentConfig>::OnChargeTransaction:
         OnChargeTransaction<T, Balance = BalanceOf<T>>,
 {
@@ -58,7 +58,7 @@ where
     ) -> Result<Self::Pre, TransactionValidityError> {
         // Check if call is sudo
         if call.is_sub_type().is_some() {
-            return Ok(())
+            return Ok(());
         }
         let fee = match T::CustomFee::dispatch_info_to_fee(call, info) {
             CallFee::Custom(custom_fee) | CallFee::EVM(custom_fee) => custom_fee,

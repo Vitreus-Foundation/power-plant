@@ -294,11 +294,9 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     .assimilate_storage(&mut t)
     .unwrap();
 
-    pallet_sudo::GenesisConfig::<Test> {
-        key: Some(ALICE)
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
+    pallet_sudo::GenesisConfig::<Test> { key: Some(ALICE) }
+        .assimilate_storage(&mut t)
+        .unwrap();
 
     t.into()
 }

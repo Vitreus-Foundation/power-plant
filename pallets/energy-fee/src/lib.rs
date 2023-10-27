@@ -18,7 +18,7 @@ use sp_arithmetic::{
     traits::CheckedAdd,
     ArithmeticError::{Overflow, Underflow},
 };
-use sp_core::{H160, U256, RuntimeDebug};
+use sp_core::{RuntimeDebug, H160, U256};
 use sp_runtime::{
     traits::{CheckedSub, Convert, DispatchInfoOf, Get, PostDispatchInfoOf, Zero},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
@@ -423,7 +423,7 @@ impl<T: Config> MultiplierUpdate for Pallet<T> {
     fn target() -> Perquintill {
         // Reading BlockFulnessThreshold from storage causes
         // runtime integrity error during runtime tests due to
-        // usage inside pallet_transaction_payment::integrity_test 
+        // usage inside pallet_transaction_payment::integrity_test
         // outside any Externalities environment
         DefaultBlockFullnessThreshold::<T>::get()
     }
