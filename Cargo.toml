@@ -11,6 +11,7 @@ members = [
     "pallets/nac-managing",
     "pallets/reputation",
     "runtime",
+    "runtime/runtime-api",
     # "pallets/simple-staking",
     # "precompiles/balances-erc20",
     # "precompiles/utils",
@@ -191,6 +192,7 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
+vitreus-utility-runtime-api = { path = "runtime/runtime-api", default-features = false}
 
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }

@@ -94,6 +94,7 @@ vitreus-power-plant-runtime = { workspace = true, features = ["default"] }
 pallet-energy-generation = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-nfts-runtime-api = { workspace = true }
+vitreus-utility-runtime-api = { workspace = true }
 
 eth-rpc-server = { path = "./eth-rpc-server" }
 energy-fee-rpc = { workspace = true }
