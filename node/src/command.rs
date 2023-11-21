@@ -22,13 +22,12 @@ use sc_service::DatabaseSource;
 use fc_db::kv::frontier_database_dir;
 
 use crate::{
-    chain_spec,
     cli::{Cli, Subcommand},
     service::{self, db_config_dir},
 };
 
 #[cfg(feature = "runtime-benchmarks")]
-use crate::chain_spec::get_account_id_from_seed;
+use chain_spec::get_account_id_from_seed;
 
 impl SubstrateCli for Cli {
     fn impl_name() -> String {

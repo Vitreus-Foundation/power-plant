@@ -9,7 +9,7 @@ energy-fee-runtime-api = { workspace = true }
 parity-scale-codec = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server", "macros"] }
 sp-runtime = { workspace = true, default-features = false }
-sp-blockchain = { workspace = true, default-features = false }
+sp-blockchain = { workspace = true }
 sp-std = { workspace = true, default-features = false }
 sp-api = { workspace = true, default-features = false }
 fc-rpc-core = { workspace = true }

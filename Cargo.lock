@@ -889,6 +889,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "chain-spec"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.3.4",
+ "rand 0.8.5",
+ "sc-chain-spec",
+ "sc-service",
+ "serde",
+ "sp-consensus-babe",
+ "sp-consensus-grandpa",
+ "sp-core",
+ "sp-runtime",
+ "sp-state-machine",
+ "vitreus-power-plant-runtime",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5373,6 +5390,7 @@ dependencies = [
  "pallet-evm",
  "pallet-evm-chain-id",
  "pallet-staking-reward-curve",
+ "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -10267,6 +10285,7 @@ name = "vitreus-power-plant-node"
 version = "0.0.0"
 dependencies = [
  "async-trait",
+ "chain-spec",
  "clap",
  "energy-fee-rpc",
  "eth-rpc-server",
@@ -10350,6 +10369,7 @@ dependencies = [
 name = "vitreus-power-plant-runtime"
 version = "0.0.0"
 dependencies = [
+ "chain-spec",
  "energy-fee-runtime-api",
  "ethereum",
  "fp-account",

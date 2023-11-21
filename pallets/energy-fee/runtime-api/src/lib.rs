@@ -1,6 +1,4 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-// #![allow(clippy::too_many_arguments)]
-// #![allow(clippy::unnecessary_mut_passed)]
 
 use ethereum::AccessListItem;
 use ethereum_types::{H160, U256};
