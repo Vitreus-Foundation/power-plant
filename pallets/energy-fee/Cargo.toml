@@ -16,6 +16,7 @@ pallet-assets = { workspace = true }
 pallet-asset-rate = { workspace = true }
 pallet-evm = { workspace = true }
 pallet-transaction-payment = { workspace = true }
+pallet-sudo = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
 serde = { workspace = true }
@@ -62,6 +63,7 @@ std = [
     "pallet-base-fee/std",
     "pallet-evm-chain-id/std",
     "parity-scale-codec/std",
+    "pallet-sudo/std",
     "pallet-transaction-payment/std",
     "scale-info/std",
     "serde/std",
