@@ -1,11 +1,32 @@
 use super::*;
 use chain_spec::{devnet_config, devnet_keys::alith};
-use frame_support::{dispatch::DispatchClass, traits::Hooks};
+use ethereum::{TransactionAction, TransactionV2, TransactionSignature};
+use frame_support::{
+    dispatch::{DispatchClass, GetDispatchInfo},
+    traits::Hooks
+};
+use fp_self_contained::SelfContainedCall;
 use pallet_energy_fee::DefaultFeeMultiplier;
 use sp_runtime::{BuildStorage, FixedU128, Perquintill};
 
 pub fn devnet_ext() -> sp_io::TestExternalities {
     sp_io::TestExternalities::new(devnet_config().build_storage().unwrap())
+}
+
+fn mock_signature() -> TransactionSignature {
+    let r = H256([
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+			0x00, 0x00, 0x00, 0x02,
+		]);
+
+    let s = r.clone();
+
+    TransactionSignature::new(
+        27,
+        r,
+        s,
+    ).unwrap()
 }
 
 #[test]
@@ -77,3 +98,29 @@ fn fee_multiplier_update_works() {
         );
     });
 }
+
+#[test]
+fn validate_self_contained_should_allow_zero_gas_limit() {
+    devnet_ext().execute_with(|| {
+        let sample_tx = TransactionV2::Legacy(LegacyTransaction {
+            nonce: Default::default(),
+            gas_price: 1.into(),
+            gas_limit: 0.into(),
+            action: TransactionAction::Call(H160::default()),
+            value: Default::default(),
+            input: Default::default(),
+            signature: mock_signature(),
+        });
+
+        let ethereum_call = pallet_ethereum::Call::new_call_variant_transact(sample_tx);
+        let runtime_call = RuntimeCall::Ethereum(ethereum_call);
+        let dispatch_info = runtime_call.get_dispatch_info();
+        let len = 0 as usize;
+        let alith_h160 = H160::from(alith().0);
+        assert!(matches!(
+            runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
+            Some(Ok(..))
+        ));
+    })
+}
+
