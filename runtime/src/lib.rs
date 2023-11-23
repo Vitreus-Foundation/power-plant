@@ -1187,6 +1187,7 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         }
     }
 
+    // TODO: get rid of cloning the call
     fn validate_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -1197,6 +1198,25 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
             RuntimeCall::Ethereum(call) => {
                 let account_id =
                     <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
+
+                if let CallFee::EVM(amount) = EnergyFee::dispatch_info_to_fee(self, dispatch_info) {
+                    let (_, fee_vtrs_amount) =
+                        if let Ok(parts) = EnergyFee::calculate_fee_parts(&account_id, amount) {
+                            parts
+                        } else {
+                            return Some(Err(InvalidTransaction::Payment.into()));
+                        };
+
+                    let vtrs_balance = Balances::reducible_balance(
+                        &account_id,
+                        Preservation::Protect,
+                        Fortitude::Polite,
+                    );
+
+                    if fee_vtrs_amount > vtrs_balance {
+                        return Some(Err(InvalidTransaction::Payment.into()));
+                    }
+                }
 
                 if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
@@ -1212,6 +1232,7 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         }
     }
 
+    // TODO: get rid of cloning the call
     fn pre_dispatch_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -1219,9 +1240,8 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         len: usize,
     ) -> Option<Result<(), TransactionValidityError>> {
         match self {
-            RuntimeCall::Ethereum(call) => {
-                call.pre_dispatch_self_contained(info, dispatch_info, len)
-            },
+            RuntimeCall::Ethereum(call) => transact_with_new_gas_limit(call.clone())
+                .pre_dispatch_self_contained(info, dispatch_info, len),
             _ => None,
         }
     }

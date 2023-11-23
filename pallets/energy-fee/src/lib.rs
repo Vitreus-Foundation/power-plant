@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use crate::extension::CheckEnergyFee;
-pub use crate::traits::{CustomFee, Exchange, TokenExchange};
+pub use crate::traits::{CustomFee, TokenExchange};
 use frame_support::dispatch::{DispatchClass, RawOrigin};
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
@@ -14,13 +14,10 @@ pub use pallet_transaction_payment::{
     Config as TransactionPaymentConfig, Multiplier, MultiplierUpdate, OnChargeTransaction,
 };
 
-use sp_arithmetic::{
-    traits::CheckedAdd,
-    ArithmeticError::{Overflow, Underflow},
-};
+use sp_arithmetic::{traits::CheckedAdd, ArithmeticError::Overflow};
 use sp_core::{RuntimeDebug, H160, U256};
 use sp_runtime::{
-    traits::{CheckedSub, Convert, DispatchInfoOf, Get, PostDispatchInfoOf, Zero},
+    traits::{Convert, DispatchInfoOf, Get, PostDispatchInfoOf, Saturating, Zero},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
     DispatchError, Perbill, Perquintill,
 };
@@ -329,15 +326,26 @@ impl<T: Config> Pallet<T> {
         who: &T::AccountId,
         amount: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
+        let (_, missing_amount) = Self::calculate_fee_parts(who, amount)?;
+        (missing_amount > BalanceOf::<T>::zero())
+            .then(|| T::EnergyExchange::exchange_from_input(who, missing_amount).map(|_| ()))
+            .map_or(Ok(()), |v| v)
+    }
+
+    /// Calculate fee as VTRS and VNRG parts based on the presence of VNRG tokens
+    pub fn calculate_fee_parts(
+        who: &T::AccountId,
+        amount: BalanceOf<T>,
+    ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
         let current_balance =
             T::FeeTokenBalanced::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
+
         if current_balance < amount {
-            let missing_balance = amount
-                .checked_sub(&current_balance)
-                .ok_or(DispatchError::Arithmetic(Underflow))?; // sanity check
-            T::EnergyExchange::exchange_from_output(who, missing_balance).map(|_| ())
+            let missing_amount =
+                T::EnergyExchange::convert_from_output(amount.saturating_sub(current_balance))?;
+            Ok((amount, missing_amount))
         } else {
-            Ok(())
+            Ok((amount, BalanceOf::<T>::zero()))
         }
     }
 

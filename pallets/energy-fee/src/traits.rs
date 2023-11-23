@@ -8,7 +8,6 @@ use frame_support::traits::{
     Get,
 };
 use pallet_asset_rate::{Config as AssetRateConfig, Error as AssetRateError};
-use sp_arithmetic::{per_things::Rounding, ArithmeticError};
 use sp_runtime::{DispatchError, FixedPointNumber};
 use sp_std::marker::PhantomData;
 
@@ -33,10 +32,10 @@ where
     TokenBalance: Balance,
 {
     /// Calculate the amount of `TargetToken` corresponding to `amount` of `SourceToken`
-    fn convert_from_input(amount: TokenBalance) -> Option<TokenBalance>;
+    fn convert_from_input(amount: TokenBalance) -> Result<TokenBalance, DispatchError>;
 
     /// Calculate the amount of `SourceToken` corresponding to `amount` of `TargetToken`
-    fn convert_from_output(amount: TokenBalance) -> Option<TokenBalance>;
+    fn convert_from_output(amount: TokenBalance) -> Result<TokenBalance, DispatchError>;
 
     /// Exchange `SourceToken` -> `TargetToken` based on the `amount` of `SourceToken`
     /// on behalf of user `who`
@@ -47,8 +46,7 @@ where
         if amount.is_zero() {
             return Ok(TokenBalance::zero());
         }
-        let resulting_amount = Self::convert_from_input(amount)
-            .ok_or(DispatchError::Arithmetic(ArithmeticError::Overflow))?;
+        let resulting_amount = Self::convert_from_input(amount)?;
         Self::exchange_inner(who, amount, resulting_amount)
     }
 
@@ -61,8 +59,7 @@ where
         if amount.is_zero() {
             return Ok(TokenBalance::zero());
         }
-        let resulting_amount = Self::convert_from_output(amount)
-            .ok_or(DispatchError::Arithmetic(ArithmeticError::Overflow))?;
+        let resulting_amount = Self::convert_from_output(amount)?;
         Self::exchange_inner(who, resulting_amount, amount)
     }
 
@@ -138,35 +135,37 @@ where
     B: Balance,
     G: Get<AS>,
     R: ConversionFromAssetBalance<B, AS, B> + ConversionToAssetBalance<B, AS, B>,
+    <R as ConversionFromAssetBalance<B, AS, B>>::Error: Into<DispatchError>,
+    <R as ConversionToAssetBalance<B, AS, B>>::Error: Into<DispatchError>,
 {
-    fn convert_from_input(amount: B) -> Option<B> {
+    fn convert_from_input(amount: B) -> Result<B, DispatchError> {
         let asset_id = G::get();
-        R::to_asset_balance(amount, asset_id).ok()
+        R::to_asset_balance(amount, asset_id).map_err(|e| e.into())
     }
 
-    fn convert_from_output(amount: B) -> Option<B> {
+    fn convert_from_output(amount: B) -> Result<B, DispatchError> {
         let asset_id = G::get();
-        R::from_asset_balance(amount, asset_id).ok()
+        R::from_asset_balance(amount, asset_id).map_err(|e| e.into())
     }
 }
 
-/// X of S tokens equal R*X of T tokens
-pub struct Exchange<S, T, R>(PhantomData<(S, T, R)>);
-
-impl<A, S, T, R, B> TokenExchange<A, S, T, B> for Exchange<S, T, R>
-where
-    R: Get<(B, B)>,
-    S: Balanced<A> + Inspect<A, Balance = B>,
-    T: Balanced<A> + Inspect<A, Balance = B>,
-    B: Balance,
-{
-    fn convert_from_input(amount: B) -> Option<B> {
-        let (numerator, denominator) = R::get();
-        amount.multiply_rational(numerator, denominator, Rounding::Down)
-    }
-
-    fn convert_from_output(amount: B) -> Option<B> {
-        let (numerator, denominator) = R::get();
-        amount.multiply_rational(denominator, numerator, Rounding::Up)
-    }
-}
+// X of S tokens equal R*X of T tokens
+// pub struct Exchange<S, T, R>(PhantomData<(S, T, R)>);
+//
+// impl<A, S, T, R, B> TokenExchange<A, S, T, B> for Exchange<S, T, R>
+// where
+//     R: Get<(B, B)>,
+//     S: Balanced<A> + Inspect<A, Balance = B>,
+//     T: Balanced<A> + Inspect<A, Balance = B>,
+//     B: Balance,
+// {
+//     fn convert_from_input(amount: B) -> Option<B> {
+//         let (numerator, denominator) = R::get();
+//         amount.multiply_rational(numerator, denominator, Rounding::Down)
+//     }
+//
+//     fn convert_from_output(amount: B) -> Option<B> {
+//         let (numerator, denominator) = R::get();
+//         amount.multiply_rational(denominator, numerator, Rounding::Up)
+//     }
+// }
