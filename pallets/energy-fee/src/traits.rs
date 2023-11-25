@@ -1,14 +1,15 @@
 use crate::CallFee;
+use frame_support::ensure;
 use frame_support::traits::{
     fungible::{Balanced, Inspect},
     tokens::{
-        Balance, ConversionFromAssetBalance, ConversionToAssetBalance, Fortitude, Precision,
-        Preservation,
+        imbalance::Imbalance, Balance, ConversionFromAssetBalance, ConversionToAssetBalance,
+        Fortitude, Precision, Preservation,
     },
     Get,
 };
 use pallet_asset_rate::{Config as AssetRateConfig, Error as AssetRateError};
-use sp_runtime::{DispatchError, FixedPointNumber};
+use sp_runtime::{DispatchError, FixedPointNumber, FixedPointOperand, TokenError};
 use sp_std::marker::PhantomData;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
@@ -68,13 +69,14 @@ where
         amount_in: TokenBalance,
         amount_out: TokenBalance,
     ) -> Result<TokenBalance, DispatchError> {
-        let _ = SourceToken::withdraw(
+        let credit = SourceToken::withdraw(
             who,
             amount_in,
-            Precision::Exact,
+            Precision::BestEffort,
             Preservation::Protect,
             Fortitude::Polite,
         )?;
+        ensure!(credit.peek() == amount_in, DispatchError::Token(TokenError::FundsUnavailable));
         let _ = TargetToken::deposit(who, amount_out, Precision::Exact)?;
         Ok(amount_out)
     }
@@ -91,14 +93,15 @@ where
         BalanceOf<T>,
         Error = AssetRateError<T>,
     >,
+    BalanceOf<T>: FixedPointOperand,
 {
-    type Error = AssetRateError<T>;
+    type Error = DispatchError;
 
     fn from_asset_balance(
         balance: BalanceOf<T>,
         asset_id: AssetIdOf<T>,
     ) -> Result<BalanceOf<T>, Self::Error> {
-        P::from_asset_balance(balance, asset_id)
+        P::from_asset_balance(balance, asset_id).map_err(|e| e.into())
     }
 }
 
@@ -111,16 +114,22 @@ where
         BalanceOf<T>,
         Error = AssetRateError<T>,
     >,
+    BalanceOf<T>: FixedPointOperand,
 {
-    type Error = AssetRateError<T>;
+    type Error = DispatchError;
 
     fn to_asset_balance(
         balance: BalanceOf<T>,
         asset_id: AssetIdOf<T>,
     ) -> Result<BalanceOf<T>, Self::Error> {
         let rate = pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id)
-            .ok_or(Self::Error::UnknownAssetId)?;
-        Ok(rate.saturating_div_int(balance))
+            .ok_or::<Self::Error>(AssetRateError::<T>::UnknownAssetId.into())?;
+        let result = rate
+            .reciprocal()
+            .ok_or(DispatchError::Other("Asset rate too low"))?
+            .saturating_mul_int(balance);
+
+        Ok(result)
     }
 }
 
@@ -134,38 +143,17 @@ where
     ST: Balanced<AC> + Inspect<AC, Balance = B>,
     B: Balance,
     G: Get<AS>,
-    R: ConversionFromAssetBalance<B, AS, B> + ConversionToAssetBalance<B, AS, B>,
-    <R as ConversionFromAssetBalance<B, AS, B>>::Error: Into<DispatchError>,
-    <R as ConversionToAssetBalance<B, AS, B>>::Error: Into<DispatchError>,
+    R: ConversionFromAssetBalance<B, AS, B, Error = DispatchError>
+        + ConversionToAssetBalance<B, AS, B, Error = DispatchError>,
 {
     fn convert_from_input(amount: B) -> Result<B, DispatchError> {
         let asset_id = G::get();
-        R::to_asset_balance(amount, asset_id).map_err(|e| e.into())
+        R::to_asset_balance(amount, asset_id)
     }
 
     fn convert_from_output(amount: B) -> Result<B, DispatchError> {
         let asset_id = G::get();
-        R::from_asset_balance(amount, asset_id).map_err(|e| e.into())
+        R::from_asset_balance(amount, asset_id)
     }
 }
 
-// X of S tokens equal R*X of T tokens
-// pub struct Exchange<S, T, R>(PhantomData<(S, T, R)>);
-//
-// impl<A, S, T, R, B> TokenExchange<A, S, T, B> for Exchange<S, T, R>
-// where
-//     R: Get<(B, B)>,
-//     S: Balanced<A> + Inspect<A, Balance = B>,
-//     T: Balanced<A> + Inspect<A, Balance = B>,
-//     B: Balance,
-// {
-//     fn convert_from_input(amount: B) -> Option<B> {
-//         let (numerator, denominator) = R::get();
-//         amount.multiply_rational(numerator, denominator, Rounding::Down)
-//     }
-//
-//     fn convert_from_output(amount: B) -> Option<B> {
-//         let (numerator, denominator) = R::get();
-//         amount.multiply_rational(denominator, numerator, Rounding::Up)
-//     }
-// }
