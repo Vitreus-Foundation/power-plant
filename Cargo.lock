@@ -2054,6 +2054,7 @@ version = "0.1.0"
 dependencies = [
  "ethereum",
  "ethereum-types",
+ "fc-db",
  "fc-rpc",
  "fc-rpc-core",
  "fp-rpc",
@@ -2068,6 +2069,7 @@ dependencies = [
  "sp-block-builder",
  "sp-blockchain",
  "sp-runtime",
+ "vitreus-utility-runtime-api",
 ]
 
 [[package]]
@@ -10360,6 +10362,7 @@ dependencies = [
  "substrate-frame-rpc-system",
  "substrate-prometheus-endpoint",
  "vitreus-power-plant-runtime",
+ "vitreus-utility-runtime-api",
 ]
 
 [[package]]
@@ -10368,6 +10371,7 @@ version = "0.0.0"
 dependencies = [
  "chain-spec",
  "energy-fee-runtime-api",
+ "ethereum",
  "fp-account",
  "fp-evm",
  "fp-rpc",
@@ -10432,6 +10436,20 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
+ "vitreus-utility-runtime-api",
+]
+
+[[package]]
+name = "vitreus-utility-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
