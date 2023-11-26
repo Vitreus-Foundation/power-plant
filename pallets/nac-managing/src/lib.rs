@@ -15,6 +15,7 @@ pub use pallet::*;
 use pallet_nfts::{
     CollectionConfig, CollectionSetting, CollectionSettings, ItemConfig, ItemSettings, MintSettings,
 };
+use pallet_reputation::ReputationPoint;
 use parity_scale_codec::Encode;
 use sp_runtime::traits::{BlakeTwo256, Hash, StaticLookup};
 use sp_std::prelude::*;
@@ -49,7 +50,9 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_nfts::Config {
+    pub trait Config:
+        frame_system::Config + pallet_nfts::Config + pallet_reputation::Config
+    {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -266,6 +269,9 @@ impl<T: Config> Pallet<T> {
             owner.clone(),
             item_config,
         )?;
+
+        let account_id = T::Lookup::lookup(owner.clone())?;
+        pallet_reputation::Pallet::<T>::increase_creating(&account_id, ReputationPoint(39_000_000));
 
         Self::deposit_event(Event::NftMinted { owner, item_id });
         Ok(())

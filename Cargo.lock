@@ -5587,6 +5587,7 @@ dependencies = [
  "frame-system",
  "pallet-balances",
  "pallet-nfts",
+ "pallet-reputation",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
