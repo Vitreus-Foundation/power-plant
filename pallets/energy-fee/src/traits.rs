@@ -156,4 +156,3 @@ where
         R::from_asset_balance(amount, asset_id)
     }
 }
-
