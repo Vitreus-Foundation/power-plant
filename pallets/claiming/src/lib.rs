@@ -6,10 +6,12 @@
 #![warn(clippy::all)]
 
 use crate::weights::WeightInfo;
-use frame_support::{pallet_prelude::MaxEncodedLen, pallet_prelude::*};
-use pallet_atomic_swap::SwapAction;
+use frame_support::traits::Currency;
+use frame_support::traits::ExistenceRequirement::AllowDeath;
+use frame_support::{pallet_prelude::MaxEncodedLen, pallet_prelude::*, PalletId};
 use scale_info::prelude::vec::Vec;
 use sp_core::H256;
+use sp_runtime::traits::{AccountIdConversion, CheckedSub};
 
 pub use pallet::*;
 
@@ -20,13 +22,17 @@ mod tests;
 
 pub mod weights;
 
+const PALLET_ID: PalletId = PalletId(*b"Claiming");
+type BalanceOf<T> =
+    <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
 /// Information about tokens claiming.
 #[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen)]
 #[scale_info(skip_type_params(T))]
 #[codec(mel_bound())]
 pub struct ClaimingInfo<T: Config> {
     /// Action of this claim.
-    pub action: T::SwapAction,
+    pub amount: BalanceOf<T>,
     /// Ethereum transaction hash.
     pub eth_hash: H256,
 }
@@ -41,17 +47,25 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_atomic_swap::Config {
+    pub trait Config: frame_system::Config + pallet_balances::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// The currency mechanism, used for VTRS claiming.
+        type Currency: Currency<Self::AccountId>;
 
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
     }
 
     #[pallet::storage]
+    #[pallet::getter(fn claims)]
     pub type Claims<T: Config> =
         StorageMap<_, Blake2_128Concat, T::AccountId, Vec<ClaimingInfo<T>>, ValueQuery>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn total)]
+    pub(super) type Total<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -60,23 +74,18 @@ pub mod pallet {
         Claimed {
             /// To whom the tokens were claimed.
             account_id: T::AccountId,
-            /// Swap information.
-            swap_info: ClaimingInfo<T>,
+            /// Amount to claim.
+            amount: BalanceOf<T>,
         },
 
-        /// User claims information.
-        ClaimsInfo {
-            /// About whom the claims information was issued.
-            account_id: T::AccountId,
-            /// Information about claims: value and ethereum transaction hash.
-            claims: Vec<ClaimingInfo<T>>,
-        },
+        /// Tokens was minted to claim.
+        TokenMintedToClaim(BalanceOf<T>),
     }
 
     #[pallet::error]
     pub enum Error<T> {
-        /// Error when claiming tokens for a user
-        ClaimProcessError,
+        /// Error indicating insufficient VTRS for a claim.
+        NotEnoughTokensForClaim,
     }
 
     #[pallet::call]
@@ -87,31 +96,28 @@ pub mod pallet {
         pub fn claim(
             origin: OriginFor<T>,
             account_id: T::AccountId,
-            action: T::SwapAction,
+            amount: BalanceOf<T>,
             eth_hash: H256,
         ) -> DispatchResult {
-            let source = ensure_signed(origin)?;
+            ensure_root(origin)?;
 
-            action.reserve(&source)?;
+            let claim = ClaimingInfo::<T> { amount, eth_hash };
+            Self::process_claim(claim, &account_id)?;
 
-            let swap = ClaimingInfo::<T> { action, eth_hash };
-
-            Self::process_claim(swap.clone(), &source, &account_id)?;
-
-            Self::deposit_event(Event::<T>::Claimed { account_id, swap_info: swap });
-
+            Self::deposit_event(Event::<T>::Claimed { account_id, amount });
             Ok(())
         }
 
-        /// Get user claims information.
+        /// Mint a new claim to collect VTRS.
         #[pallet::call_index(1)]
-        #[pallet::weight(<T as Config>::WeightInfo::get_claims_info())]
-        pub fn get_claims_info(origin: OriginFor<T>, account_id: T::AccountId) -> DispatchResult {
-            ensure_signed(origin)?;
+        #[pallet::weight(<T as Config>::WeightInfo::mint_tokens_to_claim())]
+        pub fn mint_tokens_to_claim(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+            ensure_root(origin)?;
 
-            let claims = Claims::<T>::get(&account_id);
+            T::Currency::deposit_creating(&Self::claim_account_id(), amount);
 
-            Self::deposit_event(Event::<T>::ClaimsInfo { account_id, claims });
+            <Total<T>>::mutate(|value| *value += amount);
+            Self::deposit_event(Event::<T>::TokenMintedToClaim(amount));
 
             Ok(())
         }
@@ -119,19 +125,28 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+    /// The account ID that holds the VTRS to claim.
+    fn claim_account_id() -> T::AccountId {
+        PALLET_ID.into_account_truncating()
+    }
+
     /// Claims tokens to account wallet.
-    fn process_claim(
-        swap_info: ClaimingInfo<T>,
-        source: &T::AccountId,
-        to_acc: &T::AccountId,
-    ) -> DispatchResult {
-        if !swap_info.action.claim(source, to_acc) {
-            return Err(Error::<T>::ClaimProcessError)?;
-        }
+    fn process_claim(claim_info: ClaimingInfo<T>, to_acc: &T::AccountId) -> DispatchResult {
+        let new_total = Self::total()
+            .checked_sub(&claim_info.amount)
+            .ok_or(Error::<T>::NotEnoughTokensForClaim)?;
+
+        <T as Config>::Currency::transfer(
+            &Self::claim_account_id(),
+            to_acc,
+            claim_info.amount,
+            AllowDeath,
+        )?;
 
         let mut claims = Claims::<T>::get(to_acc);
-        claims.push(swap_info);
+        claims.push(claim_info.clone());
         Claims::<T>::insert(to_acc, claims);
+        <Total<T>>::put(new_total);
 
         Ok(())
     }

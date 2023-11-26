@@ -752,6 +752,7 @@ impl pallet_atomic_swap::Config for Runtime {
 
 impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
     type WeightInfo = ();
 }
 
