@@ -23,7 +23,6 @@ use frame_support::{
     construct_runtime,
     traits::{ConstU32, ConstU64},
 };
-use pallet_atomic_swap::BalanceSwapAction;
 use sp_core::H256;
 use sp_runtime::{
     traits::{BlakeTwo256, IdentityLookup},
@@ -35,7 +34,6 @@ type Block = frame_system::mocking::MockBlock<Test>;
 construct_runtime!(
     pub enum Test
     {
-        AtomicSwap: pallet_atomic_swap,
         System: frame_system,
         Balances: pallet_balances::{Pallet, Event<T>},
         Claiming: pallet_claiming,
@@ -84,14 +82,9 @@ impl pallet_balances::Config for Test {
     type MaxFreezes = ();
 }
 
-impl pallet_atomic_swap::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type SwapAction = BalanceSwapAction<u64, Balances>;
-    type ProofLimit = ConstU32<1024>;
-}
-
 impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
     type WeightInfo = ();
 }
 
