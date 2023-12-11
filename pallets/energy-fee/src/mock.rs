@@ -57,6 +57,7 @@ frame_support::construct_runtime!(
         Ethereum: pallet_ethereum,
         EVM: pallet_evm,
         BaseFee: pallet_base_fee,
+        Sudo: pallet_sudo,
     }
 );
 
@@ -253,6 +254,12 @@ impl pallet_transaction_payment::Config for Test {
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = ();
 }
+
+impl pallet_sudo::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeCall = RuntimeCall;
+    type WeightInfo = ();
+}
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
@@ -286,6 +293,10 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut t)
     .unwrap();
+
+    pallet_sudo::GenesisConfig::<Test> { key: Some(ALICE) }
+        .assimilate_storage(&mut t)
+        .unwrap();
 
     t.into()
 }

@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "node",
+    "node/chain-spec",
     "node/eth-rpc-server",
     "pallets/claiming",
     "pallets/energy-fee",
@@ -11,6 +12,7 @@ members = [
     "pallets/nac-managing",
     "pallets/reputation",
     "runtime",
+    "runtime/runtime-api",
     # "pallets/simple-staking",
     # "precompiles/balances-erc20",
     # "precompiles/utils",
@@ -191,6 +193,7 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
+vitreus-utility-runtime-api = { path = "runtime/runtime-api", default-features = false}
 
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
@@ -200,8 +203,11 @@ pallet-nac-managing = { path = "pallets/nac-managing", default-features = false 
 pallet-reputation = { path = "pallets/reputation", default-features = false }
 pallet-simple-staking = { path = "pallets/simple-staking", default-features = false }
 
+# Node utility
+chain-spec = { path = "node/chain-spec" }
 energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-features = false }
 energy-fee-rpc = { path = "pallets/energy-fee/rpc" }
+eth-rpc-server = { path = "node/eth-rpc-server" }
 
 # Arkworks
 ark-bls12-377 = { version = "0.4.0", default-features = false, features = [

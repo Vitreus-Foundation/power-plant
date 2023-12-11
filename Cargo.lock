@@ -889,6 +889,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "chain-spec"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.3.4",
+ "rand 0.8.5",
+ "sc-chain-spec",
+ "sc-service",
+ "serde",
+ "sp-consensus-babe",
+ "sp-consensus-grandpa",
+ "sp-core",
+ "sp-runtime",
+ "sp-state-machine",
+ "vitreus-power-plant-runtime",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2037,6 +2054,7 @@ version = "0.1.0"
 dependencies = [
  "ethereum",
  "ethereum-types",
+ "fc-db",
  "fc-rpc",
  "fc-rpc-core",
  "fp-rpc",
@@ -2051,6 +2069,7 @@ dependencies = [
  "sp-block-builder",
  "sp-blockchain",
  "sp-runtime",
+ "vitreus-utility-runtime-api",
 ]
 
 [[package]]
@@ -5327,7 +5346,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "pallet-atomic-swap",
  "pallet-balances",
  "parity-scale-codec",
  "scale-info",
@@ -5371,6 +5389,7 @@ dependencies = [
  "pallet-evm",
  "pallet-evm-chain-id",
  "pallet-staking-reward-curve",
+ "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -5588,6 +5607,7 @@ dependencies = [
  "frame-system",
  "pallet-balances",
  "pallet-nfts",
+ "pallet-reputation",
  "pallet-staking-reward-curve",
  "pallet-timestamp",
  "parity-scale-codec",
@@ -10265,6 +10285,7 @@ name = "vitreus-power-plant-node"
 version = "0.0.0"
 dependencies = [
  "async-trait",
+ "chain-spec",
  "clap",
  "energy-fee-rpc",
  "eth-rpc-server",
@@ -10341,13 +10362,16 @@ dependencies = [
  "substrate-frame-rpc-system",
  "substrate-prometheus-endpoint",
  "vitreus-power-plant-runtime",
+ "vitreus-utility-runtime-api",
 ]
 
 [[package]]
 name = "vitreus-power-plant-runtime"
 version = "0.0.0"
 dependencies = [
+ "chain-spec",
  "energy-fee-runtime-api",
+ "ethereum",
  "fp-account",
  "fp-evm",
  "fp-rpc",
@@ -10412,6 +10436,20 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
+ "vitreus-utility-runtime-api",
+]
+
+[[package]]
+name = "vitreus-utility-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

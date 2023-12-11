@@ -1,3 +1,4 @@
+use crate::GetConstantGasLimit;
 use fp_evm::UsedGas;
 use frame_support::dispatch::{DispatchInfo, GetDispatchInfo};
 use frame_support::pallet_prelude::Weight;
@@ -69,7 +70,7 @@ where
         target: H160,
         input: Vec<u8>,
         value: U256,
-        gas_limit: u64,
+        _gas_limit: u64,
         max_fee_per_gas: Option<U256>,
         max_priority_fee_per_gas: Option<U256>,
         nonce: Option<U256>,
@@ -80,6 +81,7 @@ where
         proof_size_base_cost: Option<u64>,
         config: &pallet_evm::EvmConfig,
     ) -> Result<CallInfo, RunnerError<Self::Error>> {
+        let gas_limit = GetConstantGasLimit::get().as_u64();
         Self::evm_user_has_permission(source, weight_limit, CALL_ACCESS_LEVEL)?;
         let call = Call::new_call_variant_call(
             source,
@@ -120,7 +122,7 @@ where
         source: H160,
         init: Vec<u8>,
         value: U256,
-        gas_limit: u64,
+        _gas_limit: u64,
         max_fee_per_gas: Option<U256>,
         max_priority_fee_per_gas: Option<U256>,
         nonce: Option<U256>,
@@ -131,6 +133,7 @@ where
         proof_size_base_cost: Option<u64>,
         config: &pallet_evm::EvmConfig,
     ) -> Result<CreateInfo, RunnerError<Self::Error>> {
+        let gas_limit = GetConstantGasLimit::get().as_u64();
         Self::evm_user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
         let call = Call::new_call_variant_create(
             source,
@@ -165,7 +168,8 @@ where
         })
     }
 
-    fn create2(source: H160, init: Vec<u8>, salt: H256, value: U256, gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CreateInfo, RunnerError<Self::Error>> {
+    fn create2(source: H160, init: Vec<u8>, salt: H256, value: U256, _gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CreateInfo, RunnerError<Self::Error>> {
+        let gas_limit = GetConstantGasLimit::get().as_u64();
         Self::evm_user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
         let call = Call::new_call_variant_create2(
             source,

@@ -21,6 +21,7 @@ pub use fc_rpc::{EthBlockDataCacheTask, EthConfig, OverrideHandle, StorageOverri
 pub use fc_rpc_core::types::{FeeHistoryCache, FeeHistoryCacheLimit, FilterPool};
 pub use fc_storage::overrides_handle;
 use fp_rpc::{ConvertTransaction, ConvertTransactionRuntimeApi, EthereumRuntimeRPCApi};
+use vitreus_utility_runtime_api::UtilityApi;
 
 /// Extra dependencies for Ethereum compatibility.
 pub struct EthDeps<C, P, A: ChainApi, CT, B: BlockT> {
@@ -100,6 +101,7 @@ where
     B: BlockT<Hash = sp_core::H256>,
     C: CallApiAt<B> + ProvideRuntimeApi<B>,
     C::Api: BlockBuilderApi<B> + ConvertTransactionRuntimeApi<B> + EthereumRuntimeRPCApi<B>,
+    C::Api: UtilityApi<B>,
     C: BlockchainEvents<B> + 'static,
     C: HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError> + StorageProvider<B, BE>,
     BE: Backend<B> + 'static,
@@ -107,7 +109,7 @@ where
     A: ChainApi<Block = B> + 'static,
     CT: ConvertTransaction<<B as BlockT>::Extrinsic> + Send + Sync + 'static,
 {
-    use eth_rpc_server::EthApiServer;
+    use eth_rpc_server::{EthApiServer, EthExtension, EthExtensionApiServer};
     use fc_rpc::{
         Eth, EthDevSigner, EthFilter, EthFilterApiServer, EthPubSub, EthPubSubApiServer, EthSigner,
         Net, NetApiServer, Web3, Web3ApiServer,
@@ -165,7 +167,7 @@ where
         io.merge(
             EthFilter::new(
                 client.clone(),
-                frontier_backend,
+                frontier_backend.clone(),
                 graph.clone(),
                 filter_pool,
                 500_usize, // max stored filters
@@ -178,7 +180,7 @@ where
 
     io.merge(
         EthPubSub::new(
-            pool,
+            pool.clone(),
             client.clone(),
             sync,
             subscription_task_executor,
@@ -201,7 +203,9 @@ where
     io.merge(Web3::new(client.clone()).into_rpc())?;
 
     #[cfg(feature = "txpool")]
-    io.merge(TxPool::new(client, graph).into_rpc())?;
+    io.merge(TxPool::new(client.clone(), graph.clone()).into_rpc())?;
+
+    io.merge(EthExtension::new(client, pool, graph, frontier_backend).into_rpc())?;
 
     Ok(io)
 }

@@ -8,7 +8,13 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use frame_support::traits::tokens::nonfungibles_v2::Inspect;
+use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
+use frame_support::pallet_prelude::{DispatchError, DispatchResult};
+use frame_support::traits::tokens::{
+    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
+    Preservation, Provenance, WithdrawConsequence,
+};
+use frame_support::traits::{Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons};
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_core::{
@@ -27,7 +33,7 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, Perbill, Permill,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Permill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{marker::PhantomData, prelude::*};
@@ -84,6 +90,8 @@ mod precompiles;
 mod helpers {
     pub mod runner;
 }
+#[cfg(test)]
+mod tests;
 
 use precompiles::VitreusPrecompiles;
 
@@ -704,7 +712,7 @@ impl pallet_transaction_payment::Config for Runtime {
     type OperationalFeeMultiplier = ConstU8<5>;
     type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
-    type FeeMultiplierUpdate = ();
+    type FeeMultiplierUpdate = EnergyFee;
 }
 
 impl pallet_asset_rate::Config for Runtime {
@@ -722,6 +730,7 @@ impl pallet_asset_rate::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
+    pub GetConstantGasLimit: U256 = U256::from(56_000);
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
@@ -751,6 +760,7 @@ impl pallet_atomic_swap::Config for Runtime {
 
 impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
     type WeightInfo = ();
 }
 
@@ -762,15 +772,15 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         runtime_call: &RuntimeCall,
         _dispatch_info: &DispatchInfoOf<RuntimeCall>,
     ) -> CallFee<Balance> {
+        let next_multiplier = TransactionPayment::next_fee_multiplier();
+        let default_fee = next_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
         match runtime_call {
             RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(GetConstantEnergyFee::get()),
-            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => {
-                CallFee::EVM(GetConstantEnergyFee::get())
-            },
+            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(default_fee),
+            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(default_fee),
             _ => CallFee::Stock,
         }
     }
@@ -820,13 +830,145 @@ parameter_types! {
         );
 }
 
+/// Helper struct which mimics some functionality of the Balances pallet.
+///
+/// Used in pallet_evm for correct work of fee calculation. The only difference between Balances
+/// pallet and this struct is the implementation of the reducible balance, due to the fact that tx
+/// fee can be paid as in VTRS as in VNRG.
+pub struct QuasiBalances;
+
+impl Currency<AccountId> for QuasiBalances {
+    type Balance = <Balances as Currency<AccountId>>::Balance;
+
+    type PositiveImbalance = <Balances as Currency<AccountId>>::PositiveImbalance;
+
+    type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
+
+    fn total_balance(who: &AccountId) -> Self::Balance {
+        <Balances as Currency<AccountId>>::total_balance(who)
+    }
+
+    fn can_slash(who: &AccountId, value: Self::Balance) -> bool {
+        <Balances as Currency<AccountId>>::can_slash(who, value)
+    }
+
+    fn total_issuance() -> Self::Balance {
+        <Balances as Currency<AccountId>>::total_issuance()
+    }
+
+    fn minimum_balance() -> Self::Balance {
+        <Balances as Currency<AccountId>>::minimum_balance()
+    }
+
+    fn burn(amount: Self::Balance) -> Self::PositiveImbalance {
+        <Balances as Currency<AccountId>>::burn(amount)
+    }
+
+    fn issue(amount: Self::Balance) -> Self::NegativeImbalance {
+        <Balances as Currency<AccountId>>::issue(amount)
+    }
+
+    fn free_balance(who: &AccountId) -> Self::Balance {
+        <Balances as Currency<AccountId>>::free_balance(who)
+    }
+
+    fn ensure_can_withdraw(
+        who: &AccountId,
+        _amount: Self::Balance,
+        reasons: WithdrawReasons,
+        new_balance: Self::Balance,
+    ) -> DispatchResult {
+        <Balances as Currency<AccountId>>::ensure_can_withdraw(who, _amount, reasons, new_balance)
+    }
+
+    fn transfer(
+        source: &AccountId,
+        dest: &AccountId,
+        value: Self::Balance,
+        existence_requirement: ExistenceRequirement,
+    ) -> DispatchResult {
+        <Balances as Currency<AccountId>>::transfer(source, dest, value, existence_requirement)
+    }
+
+    fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+        <Balances as Currency<AccountId>>::slash(who, value)
+    }
+
+    fn deposit_into_existing(
+        who: &AccountId,
+        value: Self::Balance,
+    ) -> Result<Self::PositiveImbalance, DispatchError> {
+        <Balances as Currency<AccountId>>::deposit_into_existing(who, value)
+    }
+
+    fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance {
+        <Balances as Currency<AccountId>>::deposit_creating(who, value)
+    }
+
+    fn withdraw(
+        who: &AccountId,
+        value: Self::Balance,
+        reasons: WithdrawReasons,
+        liveness: ExistenceRequirement,
+    ) -> Result<Self::NegativeImbalance, DispatchError> {
+        <Balances as Currency<AccountId>>::withdraw(who, value, reasons, liveness)
+    }
+
+    fn make_free_balance_be(
+        who: &AccountId,
+        balance: Self::Balance,
+    ) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
+        <Balances as Currency<AccountId>>::make_free_balance_be(who, balance)
+    }
+}
+
+impl FungibleInspect<AccountId> for QuasiBalances {
+    type Balance = <Balances as FungibleInspect<AccountId>>::Balance;
+
+    fn total_issuance() -> Self::Balance {
+        <Balances as FungibleInspect<AccountId>>::total_issuance()
+    }
+
+    fn minimum_balance() -> Self::Balance {
+        <Balances as FungibleInspect<AccountId>>::minimum_balance()
+    }
+
+    fn total_balance(who: &AccountId) -> Self::Balance {
+        <Balances as FungibleInspect<AccountId>>::total_balance(who)
+    }
+
+    fn balance(who: &AccountId) -> Self::Balance {
+        <Balances as FungibleInspect<AccountId>>::balance(who)
+    }
+
+    fn reducible_balance(
+        _who: &AccountId,
+        _preservation: Preservation,
+        _force: Fortitude,
+    ) -> Self::Balance {
+        1_000_000_000_000_000_000_000
+    }
+
+    fn can_deposit(
+        who: &AccountId,
+        amount: Self::Balance,
+        provenance: Provenance,
+    ) -> DepositConsequence {
+        <Balances as FungibleInspect<AccountId>>::can_deposit(who, amount, provenance)
+    }
+
+    fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
+        <Balances as FungibleInspect<AccountId>>::can_withdraw(who, amount)
+    }
+}
+
 impl pallet_evm::Config for Runtime {
     type AddressMapping = IdentityAddressMapping;
     type BlockGasLimit = BlockGasLimit;
     type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
     type CallOrigin = EnsureAccountId20;
     type ChainId = EVMChainId;
-    type Currency = Balances;
+    type Currency = QuasiBalances;
     type Runner = helpers::runner::NacRunner<Self>;
     type RuntimeEvent = RuntimeEvent;
     type WeightPerGas = WeightPerGas;
@@ -996,6 +1138,35 @@ pub type Executive = frame_executive::Executive<
     AllPalletsWithSystem,
 >;
 
+fn transact_with_new_gas_limit(
+    transact_call: pallet_ethereum::Call<Runtime>,
+) -> pallet_ethereum::Call<Runtime> {
+    match transact_call {
+        transact { transaction } => {
+            let transaction = match transaction {
+                EthereumTransaction::Legacy(tx) => EthereumTransaction::Legacy(LegacyTransaction {
+                    gas_limit: GetConstantGasLimit::get(),
+                    ..tx
+                }),
+                EthereumTransaction::EIP1559(tx) => {
+                    EthereumTransaction::EIP1559(EIP1559Transaction {
+                        gas_limit: GetConstantGasLimit::get(),
+                        ..tx
+                    })
+                },
+                EthereumTransaction::EIP2930(tx) => {
+                    EthereumTransaction::EIP2930(EIP2930Transaction {
+                        gas_limit: GetConstantGasLimit::get(),
+                        ..tx
+                    })
+                },
+            };
+            pallet_ethereum::Call::new_call_variant_transact(transaction)
+        },
+        _ => transact_call,
+    }
+}
+
 // user doesn't have NAC to dispatch transaction
 const ACCESS_RESTRICTED: u8 = u8::MAX;
 
@@ -1016,6 +1187,7 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         }
     }
 
+    // TODO: get rid of cloning the call
     fn validate_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -1027,16 +1199,40 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                 let account_id =
                     <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
 
+                if let CallFee::EVM(amount) = EnergyFee::dispatch_info_to_fee(self, dispatch_info) {
+                    let (_, fee_vtrs_amount) =
+                        if let Ok(parts) = EnergyFee::calculate_fee_parts(&account_id, amount) {
+                            parts
+                        } else {
+                            return Some(Err(InvalidTransaction::Payment.into()));
+                        };
+
+                    let vtrs_balance = Balances::reducible_balance(
+                        &account_id,
+                        Preservation::Protect,
+                        Fortitude::Polite,
+                    );
+
+                    if fee_vtrs_amount > vtrs_balance {
+                        return Some(Err(InvalidTransaction::Payment.into()));
+                    }
+                }
+
                 if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
                 };
 
-                call.validate_self_contained(info, dispatch_info, len)
+                transact_with_new_gas_limit(call.clone()).validate_self_contained(
+                    info,
+                    dispatch_info,
+                    len,
+                )
             },
             _ => None,
         }
     }
 
+    // TODO: get rid of cloning the call
     fn pre_dispatch_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -1044,9 +1240,8 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         len: usize,
     ) -> Option<Result<(), TransactionValidityError>> {
         match self {
-            RuntimeCall::Ethereum(call) => {
-                call.pre_dispatch_self_contained(info, dispatch_info, len)
-            },
+            RuntimeCall::Ethereum(call) => transact_with_new_gas_limit(call.clone())
+                .pre_dispatch_self_contained(info, dispatch_info, len),
             _ => None,
         }
     }
@@ -1686,17 +1881,11 @@ impl_runtime_apis! {
             Ok(batches)
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::{Runtime, WeightPerGas};
-    #[test]
-    fn configured_base_extrinsic_weight_is_evm_compatible() {
-        let min_ethereum_transaction_weight = WeightPerGas::get() * 21_000;
-        let base_extrinsic = <Runtime as frame_system::Config>::BlockWeights::get()
-            .get(frame_support::dispatch::DispatchClass::Normal)
-            .base_extrinsic;
-        assert!(base_extrinsic.ref_time() <= min_ethereum_transaction_weight.ref_time());
+    impl vitreus_utility_runtime_api::UtilityApi<Block> for Runtime {
+        fn balance(who: H160) -> U256 {
+            let account_id = <Self as pallet_evm::Config>::AddressMapping::into_account_id(who);
+            Balances::reducible_balance(&account_id, Preservation::Preserve, Fortitude::Polite).into()
+        }
     }
 }

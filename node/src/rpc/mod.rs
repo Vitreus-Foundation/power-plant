@@ -101,6 +101,7 @@ where
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
     C::Api: sc_consensus_babe::BabeApi<Block>,
     C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block>,
+    C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
     C: BlockchainEvents<Block> + 'static,
     C: HeaderBackend<Block>
         + HeaderMetadata<Block, Error = BlockChainError>

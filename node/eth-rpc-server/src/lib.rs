@@ -1,20 +1,133 @@
+extern crate alloc;
+use alloc::sync::Arc;
 use ethereum_types::{H160, H256, H64, U256, U64};
 use jsonrpsee::{
     core::{async_trait, RpcResult},
     proc_macros::rpc,
 };
 use std::collections::BTreeMap;
+use std::marker::PhantomData;
 
-use fc_rpc::{Eth, EthConfig};
+use fc_rpc::{frontier_backend_client, internal_err, Eth, EthConfig};
 use fc_rpc_core::types::*;
 use fp_rpc::{ConvertTransaction, ConvertTransactionRuntimeApi, EthereumRuntimeRPCApi};
 use sc_client_api::backend::{Backend, StorageProvider};
-use sc_transaction_pool::ChainApi;
-use sc_transaction_pool_api::TransactionPool;
-use sp_api::{CallApiAt, ProvideRuntimeApi};
+use sc_transaction_pool::{ChainApi, Pool};
+use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
+use sp_api::{ApiRef, CallApiAt, Core, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::Block as BlockT;
+use sp_runtime::traits::{Block as BlockT, Header};
+use vitreus_utility_runtime_api::UtilityApi;
+
+pub struct EthExtension<B: BlockT, C, P, BE, A: ChainApi> {
+    client: Arc<C>,
+    _pool: Arc<P>,
+    graph: Arc<Pool<A>>,
+    backend: Arc<dyn fc_db::BackendReader<B> + Send + Sync>,
+    _marker: PhantomData<(B, BE)>,
+}
+
+impl<B, C, P, BE, A: ChainApi> EthExtension<B, C, P, BE, A>
+where
+    B: BlockT,
+    C: ProvideRuntimeApi<B>,
+    C::Api: BlockBuilderApi<B> + EthereumRuntimeRPCApi<B> + UtilityApi<B>,
+    C: HeaderBackend<B> + StorageProvider<B, BE> + 'static,
+    BE: Backend<B> + 'static,
+    P: TransactionPool<Block = B> + 'static,
+    A: ChainApi<Block = B> + 'static,
+{
+    pub fn new(
+        client: Arc<C>,
+        pool: Arc<P>,
+        graph: Arc<Pool<A>>,
+        backend: Arc<dyn fc_db::BackendReader<B> + Send + Sync>,
+    ) -> Self {
+        Self { client, _pool: pool, graph, backend, _marker: Default::default() }
+    }
+
+    fn pending_runtime_api<'a>(client: &'a C, graph: &'a Pool<A>) -> RpcResult<ApiRef<'a, C::Api>> {
+        // In case of Pending, we need an overlayed state to query over.
+        let api = client.runtime_api();
+        let best_hash = client.info().best_hash;
+        // Get all transactions in the ready queue.
+        let xts: Vec<<B as BlockT>::Extrinsic> = graph
+            .validated_pool()
+            .ready()
+            .map(|in_pool_tx| in_pool_tx.data().clone())
+            .collect::<Vec<<B as BlockT>::Extrinsic>>();
+        // Manually initialize the overlay.
+        if let Ok(Some(header)) = client.header(best_hash) {
+            let parent_hash = *header.parent_hash();
+            api.initialize_block(parent_hash, &header)
+                .map_err(|e| internal_err(format!("Runtime api access error: {:?}", e)))?;
+            // Apply the ready queue to the best block's state.
+            for xt in xts {
+                let _ = api.apply_extrinsic(best_hash, xt);
+            }
+            Ok(api)
+        } else {
+            Err(internal_err(format!("Cannot get header for block {:?}", best_hash)))
+        }
+    }
+
+    pub async fn balance(&self, address: H160, number: Option<BlockNumber>) -> RpcResult<U256> {
+        let number = number.unwrap_or(BlockNumber::Latest);
+        if number == BlockNumber::Pending {
+            let api = Self::pending_runtime_api(self.client.as_ref(), self.graph.as_ref())?;
+            Ok(api
+                .balance(self.client.info().best_hash, address)
+                .map_err(|err| internal_err(format!("fetch runtime chain id failed: {:?}", err)))?)
+        } else if let Ok(Some(id)) = frontier_backend_client::native_block_id::<B, C>(
+            self.client.as_ref(),
+            self.backend.as_ref(),
+            Some(number),
+        )
+        .await
+        {
+            let substrate_hash = self
+                .client
+                .expect_block_hash_from_id(&id)
+                .map_err(|_| internal_err(format!("Expect block number from id: {}", id)))?;
+
+            Ok(self
+                .client
+                .runtime_api()
+                .balance(substrate_hash, address)
+                .map_err(|err| internal_err(format!("fetch runtime chain id failed: {:?}", err)))?)
+        } else {
+            Ok(U256::zero())
+        }
+    }
+}
+
+#[rpc(server)]
+#[async_trait]
+pub trait EthExtensionApi {
+    /// Returns balance of the given account.
+    #[method(name = "eth_getBalance")]
+    async fn balance(&self, address: H160, number: Option<BlockNumber>) -> RpcResult<U256>;
+}
+
+#[async_trait]
+impl<B, C, P, BE, A> EthExtensionApiServer for EthExtension<B, C, P, BE, A>
+where
+    B: BlockT,
+    C: CallApiAt<B> + ProvideRuntimeApi<B>,
+    C::Api: BlockBuilderApi<B>
+        + ConvertTransactionRuntimeApi<B>
+        + EthereumRuntimeRPCApi<B>
+        + UtilityApi<B>,
+    C: HeaderBackend<B> + StorageProvider<B, BE> + 'static,
+    BE: Backend<B> + 'static,
+    P: TransactionPool<Block = B> + 'static,
+    A: ChainApi<Block = B> + 'static,
+{
+    async fn balance(&self, address: H160, number: Option<BlockNumber>) -> RpcResult<U256> {
+        self.balance(address, number).await
+    }
+}
 
 /// Eth rpc interface.
 #[rpc(server)]
@@ -132,10 +245,6 @@ pub trait EthApi {
     // ########################################################################
     // State
     // ########################################################################
-
-    /// Returns balance of the given account.
-    #[method(name = "eth_getBalance")]
-    async fn balance(&self, address: H160, number: Option<BlockNumber>) -> RpcResult<U256>;
 
     /// Returns content of the storage at given address.
     #[method(name = "eth_getStorageAt")]
@@ -363,10 +472,6 @@ where
     // State
     // ########################################################################
 
-    async fn balance(&self, address: H160, number: Option<BlockNumber>) -> RpcResult<U256> {
-        self.balance(address, number).await
-    }
-
     async fn storage_at(
         &self,
         address: H160,
@@ -415,7 +520,7 @@ where
     // ########################################################################
 
     fn gas_price(&self) -> RpcResult<U256> {
-        Ok(U256::zero())
+        Ok(U256::one())
     }
 
     async fn fee_history(

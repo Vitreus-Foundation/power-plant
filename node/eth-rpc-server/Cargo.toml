@@ -8,6 +8,7 @@ edition = "2021"
 [dependencies]
 ethereum = { workspace = true, features = ["with-codec", "with-serde"] }
 ethereum-types = { workspace = true }
+fc-db = { workspace = true }
 fc-rpc = { workspace = true }
 fc-rpc-core = { workspace = true }
 fp-rpc = { workspace = true }
@@ -22,3 +23,4 @@ sp-block-builder = { workspace = true }
 sc-client-api = { workspace = true }
 sc-transaction-pool-api = { workspace = true }
 sc-transaction-pool = { workspace = true }
+vitreus-utility-runtime-api = { workspace = true }

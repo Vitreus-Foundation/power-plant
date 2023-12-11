@@ -38,6 +38,7 @@ pub type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
 construct_runtime!(
     pub enum Test
     {
+        Reputation: pallet_reputation,
         System: frame_system,
         Balances: pallet_balances,
         NacManaging: pallet_nac_managing,
@@ -85,6 +86,11 @@ impl pallet_balances::Config for Test {
     type MaxReserves = ConstU32<50>;
     type MaxHolds = ();
     type MaxFreezes = ();
+}
+
+impl pallet_reputation::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
 }
 
 parameter_types! {
