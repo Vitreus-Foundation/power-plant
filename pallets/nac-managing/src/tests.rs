@@ -54,7 +54,7 @@ fn basic_minting_should_work() {
         ));
 
         assert_eq!(NacManaging::get_nac_level(&account(1)), Some((nac_level, 123)));
-        assert_eq!(Reputation::reputation(account(1)).unwrap().points.0, 39_000_000);
+        assert_eq!(Reputation::reputation(account(1)).unwrap().reputation.points().0, 39_000_000);
     });
 }
 
@@ -75,7 +75,7 @@ fn update_metadata_and_nac_level_test() {
             item_id,
             account(1)
         ));
-        assert_eq!(Reputation::reputation(account(1)).unwrap().points.0, 39_000_000);
+        assert_eq!(Reputation::reputation(account(1)).unwrap().reputation.points().0, 39_000_000);
         assert_ok!(NacManaging::update_nft_info(
             RuntimeOrigin::signed(account(1)),
             collection_id,
@@ -103,7 +103,7 @@ fn update_metadata_and_nac_level_test() {
             account(1)
         ));
         assert_eq!(NacManaging::get_nac_level(&account(1)), Some((new_nac_level, 123)));
-        assert_eq!(Reputation::reputation(account(1)).unwrap().points.0, 39_000_000);
+        assert_eq!(Reputation::reputation(account(1)).unwrap().reputation.points().0, 39_000_000);
     });
 }
 
