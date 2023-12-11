@@ -20,7 +20,7 @@ use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{Header, UintAuthorityId},
     traits::{IdentityLookup, Zero},
-    BuildStorage,
+    BuildStorage, Percent,
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
@@ -882,4 +882,30 @@ pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
     (Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+pub(crate) fn controller_stash_reputation_tier(controller: &AccountId) -> Option<ReputationTier> {
+    let stash = energy_generation::Ledger::<Test>::get(controller)
+        .expect("Expected to get a controller's ledger")
+        .stash;
+
+    account_reputation_tier(&stash)
+}
+
+pub(crate) fn account_reputation_tier(account: &AccountId) -> Option<ReputationTier> {
+    pallet_reputation::AccountReputation::<Test>::get(account)
+        .expect("Expected to get account's reputation record")
+        .reputation
+        .tier()
+}
+
+pub(crate) fn calculate_reward(
+    total_payout: Balance,
+    total_stake: Balance,
+    personal_stake: Balance,
+    bonus_percent: Percent,
+) -> Balance {
+    let part = Perbill::from_rational(personal_stake, total_stake);
+    let reward = part * total_payout;
+    bonus_percent.mul_floor(reward) + reward
 }

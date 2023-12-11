@@ -215,7 +215,7 @@ pub(crate) fn compute_slash<T: Config>(
     // is the slash amount here a maximum for the era?
     let reputation_record = pallet_reputation::AccountReputation::<T>::get(params.stash)
         .unwrap_or(ReputationRecord::with_now::<T>());
-    let max_slash = max_slash_amount::<T>(&reputation_record.reputation);
+    let max_slash = max_slash_amount(&reputation_record.reputation);
     let own_slash: ReputationPoint = (params.slash * *max_slash).into();
     if *own_slash == 0 {
         // kick out the validator even if they won't be slashed,
@@ -290,7 +290,7 @@ pub(crate) fn compute_slash<T: Config>(
 }
 
 // get the maximum possible amount of slash for an account
-pub(crate) fn max_slash_amount<T: Config>(reputation: &Reputation) -> ReputationPoint {
+pub(crate) fn max_slash_amount(reputation: &Reputation) -> ReputationPoint {
     let rank = reputation.tier().map(|t| t.rank()).unwrap_or(0);
     // RANKS_PER_TIER + 1 because we want take 0-rank into account
     reputation

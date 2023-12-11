@@ -418,8 +418,8 @@ pub struct ValidatorPrefs {
     pub commission: Perbill,
     /// Whether or not this validator is accepting cooperations.
     ///
-    /// Notice, that to be a collaborative validator it should have reputation more than
-    /// `Config::CollaborativeValidatorReputationThreshold`.
+    /// Notice, that to be a collaborative validator it should have reputation tier more than
+    /// `Config::CollaborativeValidatorReputationTier`.
     pub collaborative: bool,
     /// The minimum reputation for cooperators.
     pub min_coop_reputation: Reputation,

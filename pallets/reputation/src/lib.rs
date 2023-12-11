@@ -17,10 +17,10 @@
 
 use core::ops::{Deref, DerefMut, Range};
 
+use libm::{ceil, pow};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::traits::SaturatedConversion;
-use sp_std::sync::OnceLock;
 
 pub use pallet::*;
 
@@ -72,7 +72,24 @@ pub const RANKS_PER_U3: u8 = 9;
 /// The number of ranks per tier.
 pub const RANKS_PER_TIER: u8 = 3;
 
-static RANKS: OnceLock<[Range<u64>; u8::MAX as usize]> = OnceLock::new();
+static mut RANKS: Option<[Range<u64>; u8::MAX as usize]> = None;
+
+/// Lazily initialize `RANKS` static variable.
+fn initialize_ranks() {
+    // Using unsafe, since rust prohibits direct static variables mutation due to a possibility of
+    // race conditions. It's ok to use it, since runtime is working synchronously.
+    unsafe {
+        if RANKS.is_none() {
+            let mut res = [(0, 0); u8::MAX as usize];
+            for n in 1..res.len() {
+                res[n - 1].1 = ReputationPoint::from_rank(n as u8).0;
+                res[n] = (ReputationPoint::from_rank(n as u8).0, 0);
+            }
+            res.last_mut().unwrap().1 = u64::MAX;
+            RANKS = Some(res.map(|v| v.0..v.1));
+        }
+    }
+}
 
 /// The reputation type has the amount of reputation (called `points`) and when it was updated.
 #[derive(
@@ -295,7 +312,7 @@ impl ReputationTier {
         };
 
         let lower_index = relative_to.tier_index().saturating_sub(1);
-        let middle_rank = (RANKS_PER_TIER as f64 / 2.0).ceil() as u8;
+        let middle_rank = ceil(RANKS_PER_TIER as f64 / 2.0) as u8;
         let zero_threshold = ReputationPoint::from_rank(lower_index + middle_rank);
 
         if relative_to.relative_rank() == 0 && new_points <= zero_threshold {
@@ -361,22 +378,18 @@ impl ReputationPoint {
     pub fn from_rank(rank: u8) -> Self {
         ReputationPoint(
             (ULTRAMODERN_3_POINTS.0 as f64
-                * (f64::from(rank) / f64::from(RANKS_PER_U3)).powf(CURVATURE)) as u64,
+                * pow(f64::from(rank) / f64::from(RANKS_PER_U3), CURVATURE)) as u64,
         )
     }
 
     /// The corresponding reputation rank.
     pub fn rank(&self) -> u8 {
-        RANKS
-            .get_or_init(|| {
-                let mut res = [(0, 0); u8::MAX as usize];
-                for n in 1..res.len() {
-                    res[n - 1].1 = ReputationPoint::from_rank(n as u8).0;
-                    res[n] = (ReputationPoint::from_rank(n as u8).0, 0);
-                }
-                res.last_mut().unwrap().1 = u64::MAX;
-                res.map(|v| v.0..v.1)
-            })
+        // TODO: come up with a better lazy initialization mechanism. This is just straight up bad
+        let ranks = unsafe {
+            initialize_ranks();
+            RANKS.clone().unwrap()
+        };
+        ranks
             .binary_search_by(|v| {
                 if v.contains(&self.0) {
                     core::cmp::Ordering::Equal

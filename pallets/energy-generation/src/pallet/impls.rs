@@ -15,11 +15,13 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::prelude::*;
 
-use pallet_reputation::{ReputationPoint, ReputationRecord};
+use pallet_reputation::{
+    ReputationPoint, ReputationRecord, ReputationTier, NORMAL, RANKS_PER_TIER,
+};
 use pallet_session::historical;
 use sp_runtime::{
     traits::{Convert, One, Saturating, Zero},
-    Perbill,
+    Perbill, Percent,
 };
 use sp_staking::{
     offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -258,6 +260,10 @@ impl<T: Config> Pallet<T> {
     fn make_payout(stash: &T::AccountId, amount: EnergyOf<T>) -> Option<EnergyDebtOf<T>> {
         let dest = Self::payee(stash);
         let asset_id = T::EnergyAssetId::get();
+        let amount = Self::calculate_energy_reward_multiplier(stash)
+            .mul_floor(amount)
+            .saturating_add(amount);
+
         match dest {
             RewardDestination::Controller => Self::bonded(stash).and_then(|controller| {
                 pallet_assets::Pallet::<T>::deposit(asset_id, &controller, amount, Precision::Exact)
@@ -300,6 +306,7 @@ impl<T: Config> Pallet<T> {
     /// Plan a new session potentially trigger a new era.
     fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
         // In any case we update reputation per each session.
+        // TODO: replace with an associated type in Config
         pallet_reputation::Pallet::<T>::update_points_for_time();
 
         if let Some(current_era) = Self::current_era() {
@@ -391,6 +398,7 @@ impl<T: Config> Pallet<T> {
     /// Start a new era. It does:
     ///
     /// * Increment `active_era.index`,
+    /// * Calculate energy rate per bonded currency for active era
     /// * reset `active_era.start`,
     /// * update `BondedEras` and apply slashes.
     fn start_era(start_session: SessionIndex) -> DispatchResult {
@@ -806,6 +814,50 @@ impl<T: Config> Pallet<T> {
             false
         }
     }
+
+    // TODO: get rid of floating point types.
+    pub fn calculate_block_authoring_reward() -> ReputationPoint {
+        let active_validators_count = T::SessionInterface::validators().len();
+        let reward = ((NORMAL * pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0 as f64) as u64)
+            .saturating_sub(pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0)
+            .saturating_mul(active_validators_count as u64);
+
+        ReputationPoint(reward)
+    }
+
+    // TODO: make coefficients a runtime parameter.
+    pub fn calculate_energy_reward_multiplier(stash: &T::AccountId) -> Percent {
+        let reputation = if let Some(record) = pallet_reputation::AccountReputation::<T>::get(stash)
+        {
+            record.reputation
+        } else {
+            return Percent::zero();
+        };
+
+        if let Some(tier) = reputation.tier() {
+            // Since there is no strict formula for percentage calculation, everything is hardcoded.
+            match tier {
+                ReputationTier::Vanguard(2) => Percent::from_percent(2),
+                ReputationTier::Vanguard(3) => Percent::from_percent(4),
+                ReputationTier::Trailblazer(0) => Percent::from_percent(5),
+                ReputationTier::Trailblazer(1) => Percent::from_percent(8),
+                ReputationTier::Trailblazer(2) => Percent::from_percent(10),
+                ReputationTier::Trailblazer(3) => Percent::from_percent(12),
+                ReputationTier::Ultramodern(0) => Percent::from_percent(13),
+                ReputationTier::Ultramodern(1) => Percent::from_percent(16),
+                ReputationTier::Ultramodern(2) => Percent::from_percent(18),
+                ReputationTier::Ultramodern(3) => Percent::from_percent(20),
+                ReputationTier::Ultramodern(rank) => {
+                    let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
+                    Percent::from_percent(20.saturating_add(additional_percentage))
+                },
+                // includes unhandled cases
+                _ => Percent::zero(),
+            }
+        } else {
+            Percent::zero()
+        }
+    }
 }
 
 /// In this implementation `new_session(session)` must be called before `end_session(session-1)`
@@ -1038,7 +1090,7 @@ where
     fn note_author(author: T::AccountId) {
         if let Err(e) = <pallet_reputation::Pallet<T>>::do_increase_points(
             &author,
-            pallet_reputation::REPUTATION_POINTS_PER_DAY,
+            Self::calculate_block_authoring_reward(),
         ) {
             pallet_reputation::Pallet::<T>::deposit_event(
                 pallet_reputation::Event::<T>::ReputationIncreaseFailed {

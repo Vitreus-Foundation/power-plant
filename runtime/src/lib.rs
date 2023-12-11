@@ -394,7 +394,7 @@ impl pallet_faucet::Config for Runtime {
     type WeightInfo = ();
 }
 
-use pallet_reputation::REPUTATION_POINTS_PER_DAY;
+use pallet_reputation::{ReputationTier, REPUTATION_POINTS_PER_DAY};
 
 impl pallet_reputation::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
@@ -545,9 +545,9 @@ parameter_types! {
     pub const RewardOnUnbalanceWasCalled: bool = false;
     pub const MaxWinners: u32 = 100;
     // it takes a month to become a validator from 0
-    pub const ValidatorReputationThreshold: ReputationPoint = VALIDATOR_REPUTATION_THRESHOLD;
+    pub const ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     // it takes 2 months to become a collaborative validator from 0
-    pub const CollaborativeValidatorReputationThreshold: ReputationPoint = COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD;
+    pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Trailblazer(1);
     pub const RewardRemainderUnbalanced: u128 = 0;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 
@@ -590,9 +590,9 @@ impl pallet_energy_generation::Config for Runtime {
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = EnergyGenerationBenchmarkConfig;
     type BondingDuration = BondingDuration;
-    type CollaborativeValidatorReputationThreshold = CollaborativeValidatorReputationThreshold;
+    type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
+    type ValidatorReputationTier = ValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerReputationPoint = EnergyPerReputationPoint;
     type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
@@ -612,7 +612,6 @@ impl pallet_energy_generation::Config for Runtime {
     type StakeCurrency = Balances;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
-    type ValidatorReputationThreshold = ValidatorReputationThreshold;
 }
 
 parameter_types! {
