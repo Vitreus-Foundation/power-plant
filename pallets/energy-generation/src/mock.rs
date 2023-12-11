@@ -12,7 +12,8 @@ use frame_support::{
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use pallet_reputation::{ReputationRecord, ReputationTier};
+use orml_traits::GetByKey;
+use pallet_reputation::{ReputationRecord, ReputationTier, RANKS_PER_TIER};
 use parity_scale_codec::Compact;
 use sp_core::H256;
 
@@ -299,6 +300,32 @@ impl EnergyRateCalculator<StakeOf<Test>, EnergyOf<Test>> for EnergyPerStakeCurre
     }
 }
 
+pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
+
+impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
+    fn get(k: &ReputationTier) -> Perbill {
+        match k {
+            ReputationTier::Vanguard(2) => Perbill::from_percent(2),
+            ReputationTier::Vanguard(3) => Perbill::from_percent(4),
+            ReputationTier::Trailblazer(0) => Perbill::from_percent(5),
+            ReputationTier::Trailblazer(1) => Perbill::from_percent(8),
+            ReputationTier::Trailblazer(2) => Perbill::from_percent(10),
+            ReputationTier::Trailblazer(3) => Perbill::from_percent(12),
+            ReputationTier::Ultramodern(0) => Perbill::from_percent(13),
+            ReputationTier::Ultramodern(1) => Perbill::from_percent(16),
+            ReputationTier::Ultramodern(2) => Perbill::from_percent(18),
+            ReputationTier::Ultramodern(3) => Perbill::from_percent(20),
+            ReputationTier::Ultramodern(rank) => {
+                let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
+                Perbill::from_percent(20_u8.saturating_add(additional_percentage).into())
+            },
+            // includes unhandled cases
+            _ => Perbill::zero(),
+        }
+ 
+    }
+}
+
 impl crate::pallet::pallet::Config for Test {
     type AdminOrigin = EnsureOneOrRoot;
     type BatterySlotCapacity = BatterySlotCapacity;
@@ -314,6 +341,7 @@ impl crate::pallet::pallet::Config for Test {
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = EventListenerMock;
+    type ReputationTierEnergyRewardAdditionalPercentMapping = ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = MockReward;
     type RewardRemainder = RewardRemainderMock;
     type RuntimeEvent = RuntimeEvent;

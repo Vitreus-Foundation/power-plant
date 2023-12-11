@@ -14,14 +14,15 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::prelude::*;
+use orml_traits::GetByKey;
 
 use pallet_reputation::{
-    ReputationPoint, ReputationRecord, ReputationTier, NORMAL, RANKS_PER_TIER,
+    ReputationPoint, ReputationRecord, NORMAL,
 };
 use pallet_session::historical;
 use sp_runtime::{
     traits::{Convert, One, Saturating, Zero},
-    Perbill, Percent,
+    Perbill,
 };
 use sp_staking::{
     offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
@@ -826,36 +827,18 @@ impl<T: Config> Pallet<T> {
     }
 
     // TODO: make coefficients a runtime parameter.
-    pub fn calculate_energy_reward_multiplier(stash: &T::AccountId) -> Percent {
+    pub fn calculate_energy_reward_multiplier(stash: &T::AccountId) -> Perbill {
         let reputation = if let Some(record) = pallet_reputation::AccountReputation::<T>::get(stash)
         {
             record.reputation
         } else {
-            return Percent::zero();
+            return Perbill::zero();
         };
 
         if let Some(tier) = reputation.tier() {
-            // Since there is no strict formula for percentage calculation, everything is hardcoded.
-            match tier {
-                ReputationTier::Vanguard(2) => Percent::from_percent(2),
-                ReputationTier::Vanguard(3) => Percent::from_percent(4),
-                ReputationTier::Trailblazer(0) => Percent::from_percent(5),
-                ReputationTier::Trailblazer(1) => Percent::from_percent(8),
-                ReputationTier::Trailblazer(2) => Percent::from_percent(10),
-                ReputationTier::Trailblazer(3) => Percent::from_percent(12),
-                ReputationTier::Ultramodern(0) => Percent::from_percent(13),
-                ReputationTier::Ultramodern(1) => Percent::from_percent(16),
-                ReputationTier::Ultramodern(2) => Percent::from_percent(18),
-                ReputationTier::Ultramodern(3) => Percent::from_percent(20),
-                ReputationTier::Ultramodern(rank) => {
-                    let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
-                    Percent::from_percent(20.saturating_add(additional_percentage))
-                },
-                // includes unhandled cases
-                _ => Percent::zero(),
-            }
+            T::ReputationTierEnergyRewardAdditionalPercentMapping::get(&tier)
         } else {
-            Percent::zero()
+            Perbill::zero()
         }
     }
 }

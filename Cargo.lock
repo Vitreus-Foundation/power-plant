@@ -1600,6 +1600,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2696e8a945f658fd14dc3b87242e6b80cd0f36ff04ea560fa39082368847946"
 
 [[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "derive-syn-parse"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1962,6 +1973,33 @@ version = "0.1.0"
 dependencies = [
  "ethereum",
  "ethereum-types",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "energy-generation-rpc"
+version = "0.1.0"
+dependencies = [
+ "energy-generation-runtime-api",
+ "jsonrpsee",
+ "pallet-reputation",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "energy-generation-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "pallet-reputation",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -3888,6 +3926,9 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+dependencies = [
+ "spin 0.5.2",
+]
 
 [[package]]
 name = "lazycell"
@@ -5214,6 +5255,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "orml-traits"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v1.0.0#2b41f29e749fda52522cb4c7ea0e47f517f6a59d"
+dependencies = [
+ "frame-support",
+ "impl-trait-for-tuples",
+ "num-traits",
+ "orml-utilities",
+ "parity-scale-codec",
+ "paste",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "xcm",
+]
+
+[[package]]
+name = "orml-utilities"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v1.0.0#2b41f29e749fda52522cb4c7ea0e47f517f6a59d"
+dependencies = [
+ "frame-support",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "p256"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5421,6 +5495,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "orml-traits",
  "pallet-assets",
  "pallet-authorship",
  "pallet-balances",
@@ -5681,6 +5756,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "lazy_static",
  "libm",
  "parity-scale-codec",
  "scale-info",
@@ -10295,6 +10371,7 @@ dependencies = [
  "chain-spec",
  "clap",
  "energy-fee-rpc",
+ "energy-generation-rpc",
  "eth-rpc-server",
  "fc-cli",
  "fc-consensus",
@@ -10378,6 +10455,7 @@ version = "0.0.0"
 dependencies = [
  "chain-spec",
  "energy-fee-runtime-api",
+ "energy-generation-runtime-api",
  "ethereum",
  "fp-account",
  "fp-evm",
@@ -10392,6 +10470,7 @@ dependencies = [
  "libsecp256k1",
  "log",
  "num_enum",
+ "orml-traits",
  "pallet-asset-rate",
  "pallet-assets",
  "pallet-atomic-swap",
@@ -11428,6 +11507,33 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
  "time 0.3.28",
+]
+
+[[package]]
+name = "xcm"
+version = "1.0.0"
+source = "git+https://github.com/paritytech/polkadot?branch=release-v1.0.0#c9ec8c5a15959ce711bb60aa79add58f560d61e9"
+dependencies = [
+ "bounded-collections",
+ "derivative",
+ "impl-trait-for-tuples",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-weights",
+ "xcm-procedural",
+]
+
+[[package]]
+name = "xcm-procedural"
+version = "1.0.0"
+source = "git+https://github.com/paritytech/polkadot?branch=release-v1.0.0#c9ec8c5a15959ce711bb60aa79add58f560d61e9"
+dependencies = [
+ "Inflector",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.31",
 ]
 
 [[package]]

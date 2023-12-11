@@ -28,6 +28,8 @@ use frame_support::{
     },
     weights::Weight,
 };
+
+use orml_traits::GetByKey;
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
@@ -225,6 +227,9 @@ pub mod pallet {
         /// collaborative staking.
         #[pallet::constant]
         type CollaborativeValidatorReputationTier: Get<ReputationTier>;
+
+        /// `ReputationTier` -> `Perbill` mapping, depicting additional energy reward ratio per tier.
+        type ReputationTierEnergyRewardAdditionalPercentMapping: GetByKey<ReputationTier, Perbill>;
 
         /// Some parameters of the benchmarking.
         type BenchmarkingConfig: BenchmarkingConfig;

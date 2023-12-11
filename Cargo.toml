@@ -8,6 +8,8 @@ members = [
     "pallets/energy-fee/runtime-api",
     "pallets/energy-fee/rpc",
     "pallets/energy-generation",
+    "pallets/energy-generation/runtime-api",
+    "pallets/energy-generation/rpc",
     "pallets/faucet",
     "pallets/nac-managing",
     "pallets/reputation",
@@ -43,6 +45,7 @@ libm = { version = "0.2.8" }
 libsecp256k1 = { version = "0.7", default-features = false }
 log = { version = "0.4", default-features = false }
 num_enum = { version = "0.6", default-features = false }
+orml-traits = { git = "https://github.com/open-web3-stack//open-runtime-module-library.git", branch = "polkadot-v1.0.0", default-features = false}
 parity-db = "0.4"
 rand_chacha = { version = "0.2", default-features = false }
 rlp = { version = "0.5", default-features = false }
@@ -208,7 +211,9 @@ pallet-simple-staking = { path = "pallets/simple-staking", default-features = fa
 # Node utility
 chain-spec = { path = "node/chain-spec" }
 energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-features = false }
+energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api", default-features = false }
 energy-fee-rpc = { path = "pallets/energy-fee/rpc" }
+energy-generation-rpc = { path = "pallets/energy-generation/rpc" }
 eth-rpc-server = { path = "node/eth-rpc-server" }
 
 # Arkworks

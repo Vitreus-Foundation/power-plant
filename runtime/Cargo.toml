@@ -17,6 +17,7 @@ scale-info = { workspace = true }
 num_enum = { workspace = true }
 log = { workspace = true }
 libsecp256k1 = { workspace = true }
+orml-traits = { workspace = true }
 
 # Substrate
 sp-api = { workspace = true }
@@ -65,7 +66,10 @@ pallet-transaction-payment = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 pallet-uniques = { workspace = true }
 pallet-utility = { workspace = true }
+
+# Runtime API
 energy-fee-runtime-api = { workspace = true }
+energy-generation-runtime-api = { workspace = true }
 vitreus-utility-runtime-api = { workspace = true }
 
 # Frontier

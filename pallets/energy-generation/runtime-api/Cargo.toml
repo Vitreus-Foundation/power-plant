@@ -1,0 +1,26 @@
+[package]
+name = "energy-generation-runtime-api"
+version = "0.1.0"
+edition = "2021"
+authors = ["Innowise FinTech Team"]
+
+[dependencies]
+serde = { workspace = true }
+parity-scale-codec = { workspace = true }
+scale-info = { workspace = true }
+sp-api = { workspace = true }
+sp-runtime = { workspace = true }
+sp-std = { workspace = true }
+pallet-reputation = { workspace = true }
+
+[features]
+default = ["std"]
+std = [
+    "serde/std",
+    "parity-scale-codec/std",
+    "scale-info/std",
+    "sp-api/std",
+    "sp-runtime/std",
+    "sp-std/std",
+    "pallet-reputation/std"
+]
