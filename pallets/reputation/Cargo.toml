@@ -17,7 +17,8 @@ scale-info = { workspace = true }
 sp-runtime = { workspace = true }
 sp-std = { workspace = true }
 serde = { workspace = true }
-libm = { version = "0.2.8" }
+libm = { workspace = true }
+lazy_static = { workspace = true }
 
 [dev-dependencies]
 sp-core = { workspace = true }

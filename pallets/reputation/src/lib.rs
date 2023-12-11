@@ -21,6 +21,7 @@ use libm::{ceil, pow};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::traits::SaturatedConversion;
+use lazy_static::lazy_static;
 
 pub use pallet::*;
 
@@ -72,23 +73,19 @@ pub const RANKS_PER_U3: u8 = 9;
 /// The number of ranks per tier.
 pub const RANKS_PER_TIER: u8 = 3;
 
-static mut RANKS: Option<[Range<u64>; u8::MAX as usize]> = None;
+lazy_static!{
+    static ref RANKS: [Range<u64>; u8::MAX as usize] = points_rank_mapping();
+}
 
-/// Lazily initialize `RANKS` static variable.
-fn initialize_ranks() {
-    // Using unsafe, since rust prohibits direct static variables mutation due to a possibility of
-    // race conditions. It's ok to use it, since runtime is working synchronously.
-    unsafe {
-        if RANKS.is_none() {
-            let mut res = [(0, 0); u8::MAX as usize];
-            for n in 1..res.len() {
-                res[n - 1].1 = ReputationPoint::from_rank(n as u8).0;
-                res[n] = (ReputationPoint::from_rank(n as u8).0, 0);
-            }
-            res.last_mut().unwrap().1 = u64::MAX;
-            RANKS = Some(res.map(|v| v.0..v.1));
-        }
+/// Calculate points -> rank mapping
+fn points_rank_mapping() -> [Range<u64>; u8::MAX as usize] {
+    let mut res = [(0, 0); u8::MAX as usize];
+    for n in 1..res.len() {
+        res[n - 1].1 = ReputationPoint::from_rank(n as u8).0;
+        res[n] = (ReputationPoint::from_rank(n as u8).0, 0);
     }
+    res.last_mut().unwrap().1 = u64::MAX;
+    res.map(|v| v.0..v.1) 
 }
 
 /// The reputation type has the amount of reputation (called `points`) and when it was updated.
@@ -384,13 +381,7 @@ impl ReputationPoint {
 
     /// The corresponding reputation rank.
     pub fn rank(&self) -> u8 {
-        // TODO: come up with a better lazy initialization mechanism. This is just straight up bad
-        let ranks = unsafe {
-            initialize_ranks();
-            RANKS.clone().unwrap()
-        };
-        ranks
-            .binary_search_by(|v| {
+        RANKS.binary_search_by(|v| {
                 if v.contains(&self.0) {
                     core::cmp::Ordering::Equal
                 } else if self.0 < v.start {
