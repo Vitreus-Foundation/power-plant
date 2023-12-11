@@ -322,7 +322,6 @@ impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalP
             // includes unhandled cases
             _ => Perbill::zero(),
         }
- 
     }
 }
 
@@ -341,7 +340,8 @@ impl crate::pallet::pallet::Config for Test {
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = EventListenerMock;
-    type ReputationTierEnergyRewardAdditionalPercentMapping = ReputationTierEnergyRewardAdditionalPercentMapping;
+    type ReputationTierEnergyRewardAdditionalPercentMapping =
+        ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = MockReward;
     type RewardRemainder = RewardRemainderMock;
     type RuntimeEvent = RuntimeEvent;

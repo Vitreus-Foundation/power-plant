@@ -134,6 +134,7 @@ fn tier_correct() {
 
         let mut reputation = Reputation::default();
         reputation.update((*ReputationPoint::from_rank(n) - 1).into());
+        // 3699032 -> 0
         if n == 1 {
             assert_eq!(reputation.tier, None);
         } else {
@@ -230,6 +231,16 @@ fn decrease_reputation_works() {
     reputation.decrease(333.into());
 
     assert_eq!(*reputation.points, *init_rep - 333);
+}
+
+#[test]
+fn ranks_are_stable() {
+    for rank in 1..u8::MAX {
+        let points = ReputationPoint::from_rank(rank);
+        assert_eq!(rank, points.rank());
+        let points_minus_1 = ReputationPoint::new(*points - 1);
+        assert_eq!(rank - 1, points_minus_1.rank());
+    }
 }
 
 fn user() -> u64 {

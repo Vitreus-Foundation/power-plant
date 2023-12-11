@@ -13,12 +13,10 @@ use frame_support::{
     weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use scale_info::prelude::*;
 use orml_traits::GetByKey;
+use scale_info::prelude::*;
 
-use pallet_reputation::{
-    ReputationPoint, ReputationRecord, NORMAL,
-};
+use pallet_reputation::{ReputationPoint, ReputationRecord, NORMAL};
 use pallet_session::historical;
 use sp_runtime::{
     traits::{Convert, One, Saturating, Zero},

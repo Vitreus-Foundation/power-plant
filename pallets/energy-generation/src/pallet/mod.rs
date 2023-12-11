@@ -29,8 +29,8 @@ use frame_support::{
     weights::Weight,
 };
 
-use orml_traits::GetByKey;
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
+use orml_traits::GetByKey;
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, CheckedSub, SaturatedConversion, StaticLookup, Zero},

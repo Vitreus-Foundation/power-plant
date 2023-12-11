@@ -15,13 +15,12 @@
 #![warn(clippy::all)]
 #![warn(missing_docs)]
 
-use core::ops::{Deref, DerefMut, Range};
+use core::ops::{Deref, DerefMut};
 
 use libm::{ceil, pow};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::traits::SaturatedConversion;
-use lazy_static::lazy_static;
 
 pub use pallet::*;
 
@@ -72,21 +71,6 @@ pub const RANKS_PER_U3: u8 = 9;
 
 /// The number of ranks per tier.
 pub const RANKS_PER_TIER: u8 = 3;
-
-lazy_static!{
-    static ref RANKS: [Range<u64>; u8::MAX as usize] = points_rank_mapping();
-}
-
-/// Calculate points -> rank mapping
-fn points_rank_mapping() -> [Range<u64>; u8::MAX as usize] {
-    let mut res = [(0, 0); u8::MAX as usize];
-    for n in 1..res.len() {
-        res[n - 1].1 = ReputationPoint::from_rank(n as u8).0;
-        res[n] = (ReputationPoint::from_rank(n as u8).0, 0);
-    }
-    res.last_mut().unwrap().1 = u64::MAX;
-    res.map(|v| v.0..v.1) 
-}
 
 /// The reputation type has the amount of reputation (called `points`) and when it was updated.
 #[derive(
@@ -381,16 +365,14 @@ impl ReputationPoint {
 
     /// The corresponding reputation rank.
     pub fn rank(&self) -> u8 {
-        RANKS.binary_search_by(|v| {
-                if v.contains(&self.0) {
-                    core::cmp::Ordering::Equal
-                } else if self.0 < v.start {
-                    core::cmp::Ordering::Greater
-                } else {
-                    core::cmp::Ordering::Less
-                }
-            })
-            .unwrap_or(u8::MAX as usize) as u8
+        let res = libm::pow(self.0 as f64 / ULTRAMODERN_3_POINTS.0 as f64, 1. / CURVATURE)
+            * RANKS_PER_U3 as f64;
+        let resulting_rank = ceil(res) as u8;
+        if &ReputationPoint::from_rank(resulting_rank) > self {
+            resulting_rank.saturating_sub(1)
+        } else {
+            resulting_rank
+        }
     }
 }
 

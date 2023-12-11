@@ -5,10 +5,7 @@ use jsonrpsee::{
 };
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
-use sp_runtime::{
-    traits::Block as BlockT,
-    Perbill
-};
+use sp_runtime::{traits::Block as BlockT, Perbill};
 use std::sync::Arc;
 
 use pallet_reputation::ReputationTier;
@@ -19,7 +16,11 @@ pub use energy_generation_runtime_api::EnergyGenerationApi as EnergyGenerationRu
 #[rpc(server, client)]
 pub trait EnergyGenerationApi<BlockHash> {
     #[method(name = "energyGeneration_reputationTierAdditionalReward")]
-    fn reputation_tier_additional_reward(&self, tier: ReputationTier, at: Option<BlockHash>) -> RpcResult<Perbill>;
+    fn reputation_tier_additional_reward(
+        &self,
+        tier: ReputationTier,
+        at: Option<BlockHash>,
+    ) -> RpcResult<Perbill>;
 }
 
 pub struct EnergyGeneration<C, B> {

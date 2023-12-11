@@ -63,7 +63,7 @@ use pallet_energy_fee::{
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
-use pallet_reputation::{ReputationTier, REPUTATION_POINTS_PER_DAY, RANKS_PER_TIER};
+use pallet_reputation::{ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_DAY};
 use pallet_transaction_payment::{FeeDetails, InclusionFee};
 // Frontier
 use fp_account::EthereumSignature;
@@ -609,10 +609,8 @@ impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalP
             // includes unhandled cases
             _ => Perbill::zero(),
         }
- 
     }
 }
-
 
 pub struct EnergyGenerationBenchmarkConfig;
 impl pallet_energy_generation::BenchmarkingConfig for EnergyGenerationBenchmarkConfig {
@@ -636,7 +634,8 @@ impl pallet_energy_generation::Config for Runtime {
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = ();
-    type ReputationTierEnergyRewardAdditionalPercentMapping = ReputationTierEnergyRewardAdditionalPercentMapping;
+    type ReputationTierEnergyRewardAdditionalPercentMapping =
+        ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = ();
     type RewardRemainder = ();
     type RuntimeEvent = RuntimeEvent;
