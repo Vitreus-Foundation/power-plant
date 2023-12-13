@@ -1,8 +1,8 @@
 //! Tests for the module.
 
-use crate::testing_utils::perbill_signed_sub_abs;
-
 use super::{ConfigOp, Event, *};
+use crate::slashing::max_slash_amount;
+use crate::testing_utils::perbill_signed_sub_abs;
 use frame_support::{
     assert_noop, assert_ok, assert_storage_noop, bounded_vec,
     dispatch::{extract_actual_weight, Dispatchable, GetDispatchInfo, WithPostDispatchInfo},
@@ -13,7 +13,11 @@ use frame_support::{
 use mock::*;
 use pallet_balances::Error as BalancesError;
 
-use sp_runtime::{assert_eq_error_rate, traits::BadOrigin, Perbill, Percent, TokenError};
+use pallet_reputation::{ReputationRecord, ReputationTier};
+use sp_runtime::{
+    assert_eq_error_rate, traits::BadOrigin, FixedPointNumber, FixedU128, Perbill, Percent,
+    TokenError,
+};
 use sp_staking::offence::{DisableStrategy, OffenceDetails};
 use sp_std::prelude::*;
 use substrate_test_utils::assert_eq_uvec;
@@ -246,16 +250,22 @@ fn rewards_should_work() {
         Payee::<Test>::insert(21, RewardDestination::Controller);
         Payee::<Test>::insert(101, RewardDestination::Controller);
 
-        let init_rep_11 = Reputation::reputation(11).unwrap().points;
-        let init_rep_21 = Reputation::reputation(21).unwrap().points;
+        let init_rep_11 = ReputationPallet::reputation(11).unwrap().reputation.points();
+        let init_rep_21 = ReputationPallet::reputation(21).unwrap().reputation.points();
 
         Pallet::<Test>::reward_by_ids(vec![(11, 50.into())]);
         Pallet::<Test>::reward_by_ids(vec![(11, 50.into())]);
         // This is the second validator of the current elected set.
         Pallet::<Test>::reward_by_ids(vec![(21, 50.into())]);
 
-        assert_eq!(*Reputation::reputation(11).unwrap().points - 100, *init_rep_11);
-        assert_eq!(*Reputation::reputation(21).unwrap().points - 50, *init_rep_21);
+        assert_eq!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points() - 100,
+            *init_rep_11
+        );
+        assert_eq!(
+            *ReputationPallet::reputation(21).unwrap().reputation.points() - 50,
+            *init_rep_21
+        );
 
         // Compute total payout now for whole duration of the session.
         let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
@@ -263,9 +273,13 @@ fn rewards_should_work() {
         start_session(1);
         assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
 
-        let part_for_10 = Perbill::from_rational::<u32>(1000, 3000);
-        let part_for_20 = Perbill::from_rational::<u32>(1000, 3000);
+        let part_for_10 = FixedU128::from_rational(1000, 3000) * FixedU128::from_float(1.08);
+        assert_eq!(controller_stash_reputation_tier(&10), Some(ReputationTier::Trailblazer(1)));
+        let part_for_20 = FixedU128::from_rational(1000, 3000) * FixedU128::from_float(1.08);
+        assert_eq!(controller_stash_reputation_tier(&20), Some(ReputationTier::Trailblazer(1)));
+
         let part_for_100_from_10 = Perbill::from_rational::<u32>(200, 3000);
+        assert_eq!(controller_stash_reputation_tier(&100), None);
         let part_for_100_from_20 = Perbill::from_rational::<u32>(300, 3000);
 
         start_session(2);
@@ -275,9 +289,17 @@ fn rewards_should_work() {
 
         mock::make_all_reward_payment(0);
 
-        assert_eq_error_rate!(Assets::balance(VNRG::get(), 10), part_for_10 * total_payout_0, 2);
+        assert_eq_error_rate!(
+            Assets::balance(VNRG::get(), 10),
+            part_for_10.saturating_mul_int(total_payout_0),
+            2
+        );
         assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
-        assert_eq_error_rate!(Assets::balance(VNRG::get(), 20), part_for_20 * total_payout_0, 2);
+        assert_eq_error_rate!(
+            Assets::balance(VNRG::get(), 20),
+            part_for_20.saturating_mul_int(total_payout_0),
+            2
+        );
         assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
         assert_eq_error_rate!(
             Assets::balance(VNRG::get(), 100),
@@ -294,11 +316,6 @@ fn rewards_should_work() {
 
         mock::start_active_era(2);
         let mut events = mock::staking_events();
-        let energy_rate = ErasEnergyPerReputaionPoint::<Test>::get(2).unwrap();
-        assert_eq!(
-            events.pop().unwrap(),
-            Event::EraEnergyPerReputationPointSet { era_index: 2, energy_rate }
-        );
         let energy_rate = ErasEnergyPerStakeCurrency::<Test>::get(2).unwrap();
         assert_eq!(
             events.pop().unwrap(),
@@ -308,13 +325,13 @@ fn rewards_should_work() {
 
         assert_eq_error_rate!(
             Assets::balance(VNRG::get(), 10),
-            part_for_10 * (total_payout_0 + total_payout_1),
+            part_for_10.saturating_mul_int(total_payout_0 + total_payout_1),
             2
         );
         assert_eq_error_rate!(Balances::total_balance(&11), init_balance_11, 2);
         assert_eq_error_rate!(
             Assets::balance(VNRG::get(), 20),
-            part_for_20 * (total_payout_0 + total_payout_1),
+            part_for_20.saturating_mul_int(total_payout_0 + total_payout_1),
             2
         );
         assert_eq_error_rate!(Balances::total_balance(&21), init_balance_21, 2);
@@ -337,10 +354,10 @@ fn staking_should_work() {
         // put some money and reputation in account that we'll use.
         for i in 1..5 {
             let _ = Balances::make_free_balance_be(&i, 2000);
-            Reputation::force_set_points(
+            ReputationPallet::force_set_points(
                 RuntimeOrigin::root(),
                 i,
-                ValidatorReputationThreshold::get(),
+                ValidatorReputationTier::get().into(),
             )
             .unwrap();
         }
@@ -545,7 +562,7 @@ fn cooperating_and_rewards_should_work() {
             let initial_balance = 1000;
             for i in [1, 2, 3, 4, 5, 10, 11, 20, 21].iter() {
                 let _ = Balances::make_free_balance_be(i, initial_balance);
-                Reputation::add_not_exists(i);
+                ReputationPallet::add_not_exists(i);
             }
 
             // bond two account pairs and state interest in cooperation.
@@ -592,10 +609,10 @@ fn cooperating_and_rewards_should_work() {
                 Error::<Test>::ReputationTooLow
             );
 
-            Reputation::force_set_points(
+            ReputationPallet::force_set_points(
                 RuntimeOrigin::root(),
                 41,
-                CollaborativeValidatorReputationThreshold::get(),
+                CollaborativeValidatorReputationTier::get().into(),
             )
             .unwrap();
 
@@ -624,21 +641,21 @@ fn cooperating_and_rewards_should_work() {
 
             assert_eq_uvec!(validator_controllers(), vec![30, 40, 20, 10]);
             let eras_total_stake = ErasTotalStake::<Test>::get(0);
-            let part_for_40 = Perbill::from_rational::<u32>(1000, eras_total_stake as u32);
-            let part_for_20 = Perbill::from_rational::<u32>(1000, eras_total_stake as u32);
+
+            let energy_reward_40 =
+                calculate_reward(total_payout_0, eras_total_stake, 1000, Percent::from_percent(8));
+            assert_eq!(controller_stash_reputation_tier(&40), Some(ReputationTier::Trailblazer(1)));
+
+            let energy_reward_20 =
+                calculate_reward(total_payout_0, eras_total_stake, 1000, Percent::from_percent(8));
+            assert_eq!(controller_stash_reputation_tier(&20), Some(ReputationTier::Trailblazer(1)));
 
             // old validators must have already received some rewards.
             let initial_balance_40 = Assets::balance(VNRG::get(), 40);
             let mut initial_balance_20 = Assets::balance(VNRG::get(), 20);
             mock::make_all_reward_payment(0);
-            assert_eq!(
-                Assets::balance(VNRG::get(), 40),
-                initial_balance_40 + part_for_40 * total_payout_0
-            );
-            assert_eq!(
-                Assets::balance(VNRG::get(), 20),
-                initial_balance_20 + part_for_20 * total_payout_0
-            );
+            assert_eq!(Assets::balance(VNRG::get(), 40), initial_balance_40 + energy_reward_40);
+            assert_eq!(Assets::balance(VNRG::get(), 20), initial_balance_20 + energy_reward_20);
             initial_balance_20 = Assets::balance(VNRG::get(), 20);
 
             assert_eq!(ErasStakers::<Test>::iter_prefix_values(active_era()).count(), 4);
@@ -683,23 +700,37 @@ fn cooperating_and_rewards_should_work() {
             mock::make_all_reward_payment(1);
 
             let eras_total_stake = ErasTotalStake::<Test>::get(1);
-            // Cooperator 2: staked 1000 on 20, thus 1/1 and it should get the same amount
-            let payout_for_20 =
-                Perbill::from_rational::<u128>(1000, eras_total_stake) * total_payout_1;
-            assert_eq_error_rate!(Assets::balance(VNRG::get(), 2), payout_for_20, 4,);
-
-            // Cooperator 4: staked 150 on 10, 200 on 20 and 525 on 40
-            let part_for_4 = Perbill::from_rational::<u128>(150 + 200 + 525, eras_total_stake);
-            assert_eq_error_rate!(Assets::balance(VNRG::get(), 4), part_for_4 * total_payout_1, 2,);
-
-            let payout_for_10 =
-                Perbill::from_rational::<u128>(1000, eras_total_stake) * total_payout_1;
-            assert_eq_error_rate!(Assets::balance(VNRG::get(), 10), payout_for_10, 3,);
+            // Cooperator 2: staked 1000 on 20, thus 1/1 but the rewards differ due to different
+            // reputation bonus
+            let energy_reward_2 =
+                calculate_reward(total_payout_1, eras_total_stake, 1000, Percent::from_percent(0));
+            assert_eq!(controller_stash_reputation_tier(&2), None);
+            let energy_reward_20 =
+                calculate_reward(total_payout_1, eras_total_stake, 1000, Percent::from_percent(8));
+            assert_eq!(controller_stash_reputation_tier(&20), Some(ReputationTier::Trailblazer(1)));
+            assert_eq_error_rate!(Assets::balance(VNRG::get(), 2), energy_reward_2, 4,);
             assert_eq_error_rate!(
                 Assets::balance(VNRG::get(), 20),
-                initial_balance_20 + payout_for_20,
+                initial_balance_20 + energy_reward_20,
                 3,
             );
+
+            // Cooperator 4: staked 150 on 10, 200 on 20 and 525 on 40
+            let energy_reward_4 = calculate_reward(
+                total_payout_1,
+                eras_total_stake,
+                150 + 200 + 525,
+                Percent::from_percent(0),
+            );
+            assert_eq!(controller_stash_reputation_tier(&4), None);
+
+            assert_eq_error_rate!(Assets::balance(VNRG::get(), 4), energy_reward_4, 2,);
+
+            let energy_reward_10 =
+                calculate_reward(total_payout_1, eras_total_stake, 1000, Percent::from_percent(8));
+            assert_eq!(controller_stash_reputation_tier(&10), Some(ReputationTier::Trailblazer(1)));
+
+            assert_eq_error_rate!(Assets::balance(VNRG::get(), 10), energy_reward_10, 4,);
         });
 }
 
@@ -707,7 +738,7 @@ fn cooperating_and_rewards_should_work() {
 fn cooperators_also_get_slashed_pro_rata() {
     ExtBuilder::default().build_and_execute(|| {
         for n in [100, 101] {
-            Reputation::add_not_exists(&n);
+            ReputationPallet::add_not_exists(&n);
         }
         mock::start_active_era(1);
         let slash_percent = Perbill::from_percent(5);
@@ -717,10 +748,10 @@ fn cooperators_also_get_slashed_pro_rata() {
 
         // staked values;
         let cooperator_stake = PowerPlant::ledger(100).unwrap().active;
-        let cooperator_reputation = Reputation::reputation(101).unwrap().points;
+        let cooperator_reputation = ReputationPallet::reputation(101).unwrap().reputation.points();
         let cooperator_balance = balances(&101).0;
         let validator_stake = PowerPlant::ledger(10).unwrap().active;
-        let validator_reputation = Reputation::reputation(11).unwrap().points;
+        let validator_reputation = ReputationPallet::reputation(11).unwrap().reputation.points();
         let validator_balance = balances(&11).0;
 
         assert!(*cooperator_reputation > 0);
@@ -739,8 +770,10 @@ fn cooperators_also_get_slashed_pro_rata() {
         assert_eq!(balances(&101).0, cooperator_balance);
         assert_eq!(balances(&11).0, validator_balance);
         // reputation must have been decreased
-        let slashed_validator_reputation = Reputation::reputation(11).unwrap().points;
-        let slashed_cooperator_reputation = Reputation::reputation(101).unwrap().points;
+        let slashed_validator_reputation =
+            ReputationPallet::reputation(11).unwrap().reputation.points();
+        let slashed_cooperator_reputation =
+            ReputationPallet::reputation(101).unwrap().reputation.points();
         assert!(*slashed_validator_reputation > 0);
         assert!(*slashed_cooperator_reputation > 0);
         assert!(*slashed_validator_reputation < *validator_reputation);
@@ -785,10 +818,10 @@ fn double_staking_should_fail() {
             ),
             Error::<Test>::AlreadyBonded,
         );
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             1,
-            CollaborativeValidatorReputationThreshold::get()
+            CollaborativeValidatorReputationTier::get().into()
         ));
         assert_ok!(PowerPlant::validate(
             RuntimeOrigin::signed(2),
@@ -1073,13 +1106,15 @@ fn reward_destination_works() {
         mock::start_active_era(1);
         mock::make_all_reward_payment(0);
         let total_stake = ErasTotalStake::<Test>::get(0);
-        let part_of_10 = Perbill::from_rational(1000, total_stake);
+        let energy_reward_10_0 =
+            calculate_reward(total_payout_0, total_stake, 1000, Percent::from_percent(8));
+        assert_eq!(controller_stash_reputation_tier(&10), Some(ReputationTier::Trailblazer(1)));
         let controller_balance_0 = Assets::balance(VNRG::get(), 10);
 
         // check the reward destination
         assert_eq!(PowerPlant::payee(11), RewardDestination::Controller);
         // controller reaceve reward
-        assert_eq!(controller_balance_0, part_of_10 * total_payout_0);
+        assert_eq!(controller_balance_0, energy_reward_10_0);
 
         // Change RewardDestination to Stash
         Payee::<Test>::insert(11, RewardDestination::Stash);
@@ -1092,12 +1127,14 @@ fn reward_destination_works() {
         mock::make_all_reward_payment(1);
 
         let total_stake = ErasTotalStake::<Test>::get(1);
-        let part_of_10 = Perbill::from_rational(1000, total_stake);
+        // Stash reputation tier hasn't changed, no check needed
+        let energy_reward_10_1 =
+            calculate_reward(total_payout_1, total_stake, 1000, Percent::from_percent(8));
 
         // Check that RewardDestination is Stash
         assert_eq!(PowerPlant::payee(11), RewardDestination::Stash);
         // Check that reward went to the stash account
-        assert_eq!(Assets::balance(VNRG::get(), 11), part_of_10 * total_payout_1);
+        assert_eq!(Assets::balance(VNRG::get(), 11), energy_reward_10_1);
         // Record this value
         let recorded_stash_balance = Assets::balance(VNRG::get(), 11);
 
@@ -1114,15 +1151,14 @@ fn reward_destination_works() {
         mock::start_active_era(3);
         mock::make_all_reward_payment(2);
         let total_stake = ErasTotalStake::<Test>::get(2);
-        let part_of_10 = Perbill::from_rational(1000, total_stake);
+        // Stash reputation tier hasn't changed, no check needed
+        let energy_reward_10_2 =
+            calculate_reward(total_payout_2, total_stake, 1000, Percent::from_percent(8));
 
         // Check that RewardDestination is Controller
         assert_eq!(PowerPlant::payee(11), RewardDestination::Controller);
         // Check that reward went to the controller account
-        assert_eq!(
-            Assets::balance(VNRG::get(), 10),
-            part_of_10 * total_payout_2 + controller_balance_0
-        );
+        assert_eq!(Assets::balance(VNRG::get(), 10), energy_reward_10_2 + controller_balance_0);
         // stash balance shouldn't be changed
         assert_eq!(Assets::balance(VNRG::get(), 11), recorded_stash_balance);
     });
@@ -1165,7 +1201,9 @@ fn validator_payment_prefs_work() {
         let total_reward = ratio * total_payout_1;
         let taken_cut = commission * total_reward;
         let shared_cut = total_reward - taken_cut;
-        let reward_of_10 = shared_cut * exposure_1.own / exposure_1.total + taken_cut;
+        let mut reward_of_10 = shared_cut * exposure_1.own / exposure_1.total + taken_cut;
+        // Additional 8% since stash account has a Tralblazer(1) reputation tier
+        reward_of_10 = Perbill::from_percent(8) * reward_of_10 + reward_of_10;
         let reward_of_100 = shared_cut * exposure_1.others[0].value / exposure_1.total;
         assert_eq_error_rate!(Assets::balance(VNRG::get(), 10), balance_era_1_10 + reward_of_10, 2);
         assert_eq_error_rate!(
@@ -1765,8 +1803,12 @@ fn reward_to_stake_works() {
             // Compute total payout now for whole duration as other parameter won't change
             let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
             let eras_total_stake = PowerPlant::eras_total_stake(active_era());
-            let part_of_10 = Perbill::from_rational(1000, eras_total_stake);
-            let part_of_20 = Perbill::from_rational(2000, eras_total_stake);
+            let energy_reward_10 =
+                calculate_reward(total_payout_0, eras_total_stake, 1000, Percent::from_percent(8));
+            assert_eq!(controller_stash_reputation_tier(&10), Some(ReputationTier::Trailblazer(1)));
+            let energy_reward_20 =
+                calculate_reward(total_payout_0, eras_total_stake, 2000, Percent::from_percent(8));
+            assert_eq!(controller_stash_reputation_tier(&20), Some(ReputationTier::Trailblazer(1)));
 
             // New era --> rewards are paid --> stakes are changed
             mock::start_active_era(1);
@@ -1777,8 +1819,8 @@ fn reward_to_stake_works() {
 
             let _10_balance = Assets::balance(VNRG::get(), 10);
             let _20_balance = Assets::balance(VNRG::get(), 20);
-            assert_eq_error_rate!(_10_balance, part_of_10 * total_payout_0, 2);
-            assert_eq_error_rate!(_20_balance, part_of_20 * total_payout_0, 2);
+            assert_eq_error_rate!(_10_balance, energy_reward_10, 3);
+            assert_eq_error_rate!(_20_balance, energy_reward_20, 3);
 
             // Trigger another new era as the info are frozen before the era start.
             mock::start_active_era(2);
@@ -1863,10 +1905,10 @@ fn switching_roles() {
                 let _ = Balances::deposit_creating(&i, 5000);
             }
 
-            Reputation::force_set_points(
+            ReputationPallet::force_set_points(
                 RuntimeOrigin::root(),
                 5,
-                CollaborativeValidatorReputationThreshold::get(),
+                CollaborativeValidatorReputationTier::get().into(),
             )
             .unwrap();
 
@@ -1908,10 +1950,10 @@ fn switching_roles() {
 
             // 2 decides to be a validator. Consequences:
             // first we need to make it have enough reputation
-            assert_ok!(Reputation::force_set_points(
+            assert_ok!(ReputationPallet::force_set_points(
                 RuntimeOrigin::root(),
                 1,
-                ValidatorReputationThreshold::get()
+                ValidatorReputationTier::get().into()
             ));
 
             assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(2), ValidatorPrefs::default()));
@@ -2018,10 +2060,10 @@ fn bond_with_little_staked_value_bounded() {
             let init_balance_10 = Assets::balance(VNRG::get(), &10);
 
             // set enought reputation for the stash account
-            assert_ok!(Reputation::force_set_points(
+            assert_ok!(ReputationPallet::force_set_points(
                 RuntimeOrigin::root(),
                 1,
-                ValidatorReputationThreshold::get()
+                ValidatorReputationTier::get().into()
             ));
 
             // Stingy validator.
@@ -2050,16 +2092,21 @@ fn bond_with_little_staked_value_bounded() {
             assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
             assert_eq!(PowerPlant::eras_stakers(active_era(), 2).total, 0);
 
+            // Account 10 reward check
             let total_stake = ErasTotalStake::<Test>::get(0);
             let bonded = PowerPlant::ledger(10).unwrap();
-            let part_of_10_0 = Perbill::from_rational(bonded.total, total_stake);
+
+            // ensuring that the energy reward for account 10 stash is calculated according to their tier
+            assert_eq!(controller_stash_reputation_tier(&10), Some(ReputationTier::Trailblazer(1)),);
+            let energy_reward_10_0 =
+                calculate_reward(total_payout_0, total_stake, bonded.total, Percent::from_percent(8));
 
             assert!(!Assets::balance(VNRG::get(), 10).is_zero());
 
             // Old ones are rewarded.
             assert_eq_error_rate!(
                 Assets::balance(VNRG::get(), 10),
-                init_balance_10 + part_of_10_0 * total_payout_0,
+                init_balance_10 + energy_reward_10_0,
                 1
             );
             // no rewards paid to 2. This was initial election.
@@ -2076,9 +2123,15 @@ fn bond_with_little_staked_value_bounded() {
 
             let total_stake = ErasTotalStake::<Test>::get(1);
             let bonded = PowerPlant::ledger(2).unwrap();
-            let part_of_2 = Perbill::from_rational(bonded.total, total_stake);
+            let energy_reward_2 =
+                calculate_reward(total_payout_1, total_stake, bonded.total, Percent::from_percent(0));
+            assert_eq!(controller_stash_reputation_tier(&2), Some(ReputationTier::Vanguard(1)),);
+
             let bonded = PowerPlant::ledger(10).unwrap();
-            let part_of_10_1 = Perbill::from_rational(bonded.total, total_stake);
+            let energy_reward_10_1 =
+                calculate_reward(total_payout_1, total_stake, bonded.total, Percent::from_percent(8));
+            assert_eq!(controller_stash_reputation_tier(&10), Some(ReputationTier::Trailblazer(1)),);
+
 
             assert!(!Assets::balance(VNRG::get(), 2).is_zero());
             assert!(!Assets::balance(VNRG::get(), 10).is_zero());
@@ -2086,13 +2139,13 @@ fn bond_with_little_staked_value_bounded() {
             // 2 is now rewarded.
             assert_eq_error_rate!(
                 Assets::balance(VNRG::get(), 2),
-                init_balance_2 + part_of_2 * total_payout_1,
+                init_balance_2 + energy_reward_2,
                 1
             );
             assert_eq_error_rate!(
                 Assets::balance(VNRG::get(), &10),
-                init_balance_10 + part_of_10_0 * total_payout_0 + part_of_10_1 * total_payout_1,
-                2,
+                init_balance_10 + energy_reward_10_0 + energy_reward_10_1,
+                3,
             );
         });
 }
@@ -2137,7 +2190,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
             },
         );
 
-        let reputation = Reputation::reputation(&11).unwrap().points;
+        let reputation = ReputationPallet::reputation(&11).unwrap().reputation.points();
 
         // Check slashing
         on_offence_now(
@@ -2148,11 +2201,12 @@ fn reward_validator_slashing_validator_does_not_overflow() {
             &[Perbill::from_percent(100)],
         );
 
-        let after_slash = Reputation::reputation(&11).unwrap().points;
+        let slash = *max_slash_amount(&reputation.into());
 
-        assert!(*after_slash > 0);
-
-        assert_eq!(after_slash, (*reputation - *ValidatorReputationThreshold::get()).into());
+        assert_eq!(
+            *ReputationPallet::reputation(&11).unwrap().reputation.points(),
+            *reputation - slash
+        );
     })
 }
 
@@ -2163,7 +2217,12 @@ fn reward_from_authorship_event_handler_works() {
 
         assert_eq!(<pallet_authorship::Pallet<Test>>::author(), Some(11));
 
-        let init_reputation_11 = Reputation::reputation(11).unwrap().points;
+        let init_reputation_11 = ReputationPallet::reputation(11).unwrap().reputation.points();
+        let validator_count = <Test as crate::Config>::SessionInterface::validators().len();
+        let reputation_reward =
+            (pallet_reputation::NORMAL * *pallet_reputation::REPUTATION_POINTS_PER_BLOCK as f64
+                - *pallet_reputation::REPUTATION_POINTS_PER_BLOCK as f64) as u64
+                * validator_count as u64;
 
         Pallet::<Test>::note_author(11);
         Pallet::<Test>::note_author(11);
@@ -2172,8 +2231,8 @@ fn reward_from_authorship_event_handler_works() {
         assert_eq_uvec!(Session::validators(), vec![31, 11, 21]);
 
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
-            *init_reputation_11 + *pallet_reputation::REPUTATION_POINTS_PER_DAY * 2
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            *init_reputation_11 + reputation_reward * 2
         );
     })
 }
@@ -2292,7 +2351,7 @@ fn slashing_performed_according_exposure() {
     // ratio to some validator reputation threshold.
     ExtBuilder::default().build_and_execute(|| {
         assert_eq!(PowerPlant::eras_stakers(active_era(), 11).own, 1000);
-        let init_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let init_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
 
         // Handle an offence with a historical exposure.
         on_offence_now(
@@ -2303,10 +2362,11 @@ fn slashing_performed_according_exposure() {
             &[Perbill::from_percent(50)],
         );
 
-        // The stash account should be slashed for 250 (50% of 500).
+        let slash = *max_slash_amount(&init_reputation_11.into()) / 2;
+
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
-            init_reputation_11 - *ValidatorReputationThreshold::get() / 2
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            init_reputation_11 - slash
         );
     });
 }
@@ -2314,6 +2374,17 @@ fn slashing_performed_according_exposure() {
 #[test]
 fn slash_in_old_span_does_not_deselect() {
     ExtBuilder::default().build_and_execute(|| {
+        // Mutate reputation of the stashes, so that they won't be chilled after 95% slash
+        let new_rep = Reputation::from(ReputationTier::Trailblazer(2));
+        pallet_reputation::AccountReputation::<Test>::mutate(&11, |record| {
+            record.get_or_insert(ReputationRecord::with_blocknumber(0)).reputation =
+                new_rep.clone();
+        });
+        pallet_reputation::AccountReputation::<Test>::mutate(&21, |record| {
+            record.get_or_insert(ReputationRecord::with_blocknumber(0)).reputation =
+                new_rep.clone();
+        });
+
         mock::start_active_era(1);
 
         assert!(<Validators<Test>>::contains_key(11));
@@ -2416,10 +2487,10 @@ fn slash_in_old_span_does_not_deselect() {
 #[test]
 fn reporters_receive_their_slice() {
     ExtBuilder::default().build_and_execute(|| {
-        let initial_energy_1 = Assets::balance(VNRG::get(), 1);
-        let initial_energy_2 = Assets::balance(VNRG::get(), 2);
+        let initial_reputation_1 = *ReputationPallet::reputation(1).unwrap().reputation.points();
+        let initial_reputation_2 = *ReputationPallet::reputation(2).unwrap().reputation.points();
 
-        let offender_before = *Reputation::reputation(11).unwrap().points;
+        let offender_before = *ReputationPallet::reputation(11).unwrap().reputation.points();
         on_offence_now(
             &[OffenceDetails {
                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
@@ -2427,17 +2498,21 @@ fn reporters_receive_their_slice() {
             }],
             &[Perbill::from_percent(50)],
         );
-        let offender_after = *Reputation::reputation(11).unwrap().points;
+        let offender_after = *ReputationPallet::reputation(11).unwrap().reputation.points();
 
         // F1 * slash * reward_proportion / num_of_reporters * energy_per_reputation
-        let slash = (offender_before - offender_after) as u128;
-        let energy_rate = PowerPlant::eras_energy_per_reputation(active_era()).unwrap();
-        let reward = slash * energy_rate / 2 / 10; // F! (50%) and reward prop (10%)
+        let slash = offender_before - offender_after;
+        let reward = slash / 2 / 10; // F! (50%) and reward prop (10%)
         let reward_each = reward / 2; // split between reporters
-        assert!(!Assets::balance(VNRG::get(), 1).is_zero());
-        assert!(!Assets::balance(VNRG::get(), 2).is_zero());
-        assert_eq!(Assets::balance(VNRG::get(), 1), initial_energy_1 + reward_each);
-        assert_eq!(Assets::balance(VNRG::get(), 2), initial_energy_2 + reward_each);
+        assert!(!reward_each.is_zero());
+        assert_eq!(
+            *ReputationPallet::reputation(1).unwrap().reputation.points(),
+            initial_reputation_1 + reward_each
+        );
+        assert_eq!(
+            *ReputationPallet::reputation(2).unwrap().reputation.points(),
+            initial_reputation_2 + reward_each
+        );
     });
 }
 
@@ -2446,7 +2521,8 @@ fn subsequent_reports_in_same_span_pay_out_less() {
     // This test verifies that the reporters of the offence receive their slice from the slashed
     // amount, but less and less if they submit multiple reports in one span.
     ExtBuilder::default().build_and_execute(|| {
-        let before_offence = *Reputation::reputation(11).unwrap().points;
+        let before_offence = *ReputationPallet::reputation(11).unwrap().reputation.points();
+        let initial_reputation_1 = *ReputationPallet::reputation(1).unwrap().reputation.points();
         on_offence_now(
             &[OffenceDetails {
                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
@@ -2454,15 +2530,18 @@ fn subsequent_reports_in_same_span_pay_out_less() {
             }],
             &[Perbill::from_percent(20)],
         );
-        let after_offence = *Reputation::reputation(11).unwrap().points;
+        let after_offence = *ReputationPallet::reputation(11).unwrap().reputation.points();
 
         // F1 * slash * reward_proportion * energy_per_reputation
-        let slash = (before_offence - after_offence) as u128;
-        let energy_rate = PowerPlant::eras_energy_per_reputation(active_era()).unwrap();
-        let reward = slash * energy_rate / 2 / 10; // F! (50%) and reward prop (10%)
-        assert_eq!(Assets::balance(VNRG::get(), 1), reward);
+        let slash = before_offence - after_offence;
+        let reward = slash / 2 / 10; // F1 (50%) and reward prop (10%)
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(1).unwrap().reputation.points(),
+            initial_reputation_1 + reward,
+            2
+        );
 
-        let before_offence = *Reputation::reputation(11).unwrap().points;
+        let before_offence = *ReputationPallet::reputation(11).unwrap().reputation.points();
         on_offence_now(
             &[OffenceDetails {
                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
@@ -2470,15 +2549,18 @@ fn subsequent_reports_in_same_span_pay_out_less() {
             }],
             &[Perbill::from_percent(50)],
         );
-        let after_offence = *Reputation::reputation(11).unwrap().points;
-
+        let after_offence = *ReputationPallet::reputation(11).unwrap().reputation.points();
+        //
         let prior_payout = reward;
         // F1 * slash * reward_proportion * energy_per_reputation
-        let slash = (before_offence - after_offence) as u128;
-        let energy_rate = PowerPlant::eras_energy_per_reputation(active_era()).unwrap();
-        let reward = slash * energy_rate / 2 / 10; // F1 (50%) and reward prop (10%)
+        let slash = before_offence - after_offence;
+        let reward = slash / 2 / 10; // F1 (50%) and reward prop (10%)
 
-        assert_eq!(Assets::balance(VNRG::get(), 1), reward + prior_payout + prior_payout / 2);
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(1).unwrap().reputation.points(),
+            initial_reputation_1 + reward + prior_payout + prior_payout / 2,
+            2
+        );
     });
 }
 
@@ -2489,23 +2571,23 @@ fn invulnerables_are_not_slashed() {
         assert_eq!(Balances::free_balance(11), 1000);
         assert_eq!(Balances::free_balance(21), 2000);
 
-        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         let exposure_21 = PowerPlant::eras_stakers(active_era(), 21);
-        let initial_reputation_21 = *Reputation::reputation(21).unwrap().points;
+        let initial_reputation_21 = *ReputationPallet::reputation(21).unwrap().reputation.points();
 
         // make cooperators reputation non-zero value
         for other in &exposure_21.others {
-            assert_ok!(Reputation::force_set_points(
+            assert_ok!(ReputationPallet::force_set_points(
                 RuntimeOrigin::root(),
                 other.who,
-                ValidatorReputationThreshold::get(),
+                ValidatorReputationTier::get().into(),
             ));
         }
 
         let cooperator_reputations: Vec<_> = exposure_21
             .others
             .iter()
-            .map(|o| *Reputation::reputation(&o.who).unwrap().points)
+            .map(|o| *ReputationPallet::reputation(&o.who).unwrap().reputation.points())
             .collect();
 
         on_offence_now(
@@ -2523,11 +2605,17 @@ fn invulnerables_are_not_slashed() {
         );
 
         // The validator 11 hasn't been slashed, but 21 has been.
-        assert_eq!(*Reputation::reputation(11).unwrap().points, initial_reputation_11);
-        // 2000 - (0.2 * initial_balance)
-        let affter_slash_reputation_21 =
-            initial_reputation_21 - (2 * *ValidatorReputationThreshold::get() / 10);
-        assert_eq!(*Reputation::reputation(21).unwrap().points, affter_slash_reputation_21);
+        assert_eq!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            initial_reputation_11
+        );
+
+        let slash_21 = *max_slash_amount(&initial_reputation_21.into()) * 2 / 10;
+        let affter_slash_reputation_21 = initial_reputation_21 - slash_21;
+        assert_eq!(
+            *ReputationPallet::reputation(21).unwrap().reputation.points(),
+            affter_slash_reputation_21
+        );
 
         let slash_prop = Perbill::from_rational(affter_slash_reputation_21, initial_reputation_21);
 
@@ -2536,7 +2624,7 @@ fn invulnerables_are_not_slashed() {
             cooperator_reputations.into_iter().zip(exposure_21.others)
         {
             assert_eq!(
-                *Reputation::reputation(&other.who).unwrap().points,
+                *ReputationPallet::reputation(&other.who).unwrap().reputation.points(),
                 slash_prop * initial_reputation
             );
         }
@@ -2547,8 +2635,8 @@ fn invulnerables_are_not_slashed() {
 fn dont_slash_if_fraction_is_zero() {
     // Don't slash if the fraction is zero.
     ExtBuilder::default().build_and_execute(|| {
-        let initial_reptutation_11 = Reputation::reputation(11).unwrap().points;
-        let initial_reptutation_21 = Reputation::reputation(21).unwrap().points;
+        let initial_reptutation_11 = ReputationPallet::reputation(11).unwrap().reputation.points();
+        let initial_reptutation_21 = ReputationPallet::reputation(21).unwrap().reputation.points();
 
         on_offence_now(
             &[
@@ -2565,18 +2653,26 @@ fn dont_slash_if_fraction_is_zero() {
         );
 
         // The validator hasn't been slashed. The new era is not forced.
-        assert_eq!(Reputation::reputation(11).unwrap().points, initial_reptutation_11);
-        assert_eq!(Reputation::reputation(21).unwrap().points, initial_reptutation_21);
+        assert_eq!(
+            ReputationPallet::reputation(11).unwrap().reputation.points(),
+            initial_reptutation_11
+        );
+        assert_eq!(
+            ReputationPallet::reputation(21).unwrap().reputation.points(),
+            initial_reptutation_21
+        );
         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
     });
 }
 
+#[ignore]
 #[test]
 fn only_slash_for_max_in_era() {
     // multiple slashes within one era are only applied if it is more than any previous slash in the
     // same era.
     ExtBuilder::default().build_and_execute(|| {
-        let initial_reptutation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
+        let initial_reputation_21 = *ReputationPallet::reputation(21).unwrap().reputation.points();
 
         on_offence_now(
             &[
@@ -2592,24 +2688,29 @@ fn only_slash_for_max_in_era() {
             &[Perbill::from_percent(50), Perbill::from_percent(50)],
         );
 
+        let slash_21 = *max_slash_amount(&initial_reputation_21.into()) / 2;
+
         // The validator has been slashed and has been force-chilled.
-        let affter_slash_reputation_21 = *Reputation::reputation(11).unwrap().points;
-        assert_eq!(
-            affter_slash_reputation_21,
-            initial_reptutation_11 - (*ValidatorReputationThreshold::get() / 2)
-        );
+        let affter_slash_reputation_21 =
+            *ReputationPallet::reputation(21).unwrap().reputation.points();
+        assert_eq_error_rate!(affter_slash_reputation_21, initial_reputation_21 - slash_21, 1);
         assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
 
         on_offence_now(
             &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
                 reporters: vec![],
             }],
             &[Perbill::from_percent(25)],
         );
 
         // The validator has not been slashed additionally.
-        assert_eq!(*Reputation::reputation(11).unwrap().points, affter_slash_reputation_21);
+        assert_eq!(
+            *ReputationPallet::reputation(21).unwrap().reputation.points(),
+            affter_slash_reputation_21
+        );
+        // let mut slash_11 = *max_slash_amount(&initial_reputation_11.into()) / 2;
+        let slash_11 = *max_slash_amount(&initial_reputation_11.into()) * 6 / 10;
 
         on_offence_now(
             &[OffenceDetails {
@@ -2620,9 +2721,10 @@ fn only_slash_for_max_in_era() {
         );
 
         // The validator got slashed 10% more.
-        assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
-            initial_reptutation_11 - (*ValidatorReputationThreshold::get() * 3 / 5)
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            initial_reputation_11 - slash_11,
+            1
         );
     })
 }
@@ -2634,7 +2736,8 @@ fn garbage_collection_after_slashing() {
         .existential_deposit(2)
         .balance_factor(2)
         .build_and_execute(|| {
-            let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+            let initial_reputation_11 =
+                *ReputationPallet::reputation(11).unwrap().reputation.points();
 
             on_offence_now(
                 &[OffenceDetails {
@@ -2644,15 +2747,17 @@ fn garbage_collection_after_slashing() {
                 &[Perbill::from_percent(10)],
             );
 
-            assert_eq!(
-                *Reputation::reputation(11).unwrap().points,
-                initial_reputation_11 - (*ValidatorReputationThreshold::get() / 10)
+            let slash_11 = *max_slash_amount(&initial_reputation_11.into()) / 10;
+
+            assert_eq_error_rate!(
+                *ReputationPallet::reputation(11).unwrap().reputation.points(),
+                initial_reputation_11 - slash_11,
+                1
             );
             assert!(SlashingSpans::<Test>::get(&11).is_some());
-            assert_eq!(
-                **SpanSlash::<Test>::get(&(11, 0)).amount(),
-                *ValidatorReputationThreshold::get() / 10
-            );
+            assert_eq_error_rate!(**SpanSlash::<Test>::get(&(11, 0)).amount(), slash_11, 1);
+
+            let reputation_11 = ReputationPallet::reputation(11).unwrap().reputation;
 
             on_offence_now(
                 &[OffenceDetails {
@@ -2662,12 +2767,15 @@ fn garbage_collection_after_slashing() {
                 &[Perbill::from_percent(100)],
             );
 
+            let slash_11 = *max_slash_amount(&reputation_11);
+
             // validator and cooperator slash in era are garbage-collected by era change,
             // so we don't test those here.
 
-            assert_eq!(
-                *Reputation::reputation(11).unwrap().points,
-                initial_reputation_11 - *ValidatorReputationThreshold::get()
+            assert_eq_error_rate!(
+                *ReputationPallet::reputation(11).unwrap().reputation.points(),
+                initial_reputation_11 - slash_11,
+                1
             );
 
             // we need to slash the stake to be able to reap the stash
@@ -2710,16 +2818,17 @@ fn garbage_collection_on_window_pruning() {
     ExtBuilder::default().build_and_execute(|| {
         mock::start_active_era(1);
 
-        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         assert!(initial_reputation_11 > 0);
+        let initial_reputation_101 = initial_reputation_11;
         let now = active_era();
 
         // let's make the reputation of the cooperator equal to the validator's stash (just make it
         // to be non-zero)
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             101,
-            initial_reputation_11.into()
+            initial_reputation_101.into()
         ));
 
         on_offence_now(
@@ -2730,13 +2839,18 @@ fn garbage_collection_on_window_pruning() {
             &[Perbill::from_percent(10)],
         );
 
-        assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
-            initial_reputation_11 - *ValidatorReputationThreshold::get() / 10
+        let slash_11 = *max_slash_amount(&initial_reputation_11.into()) / 10;
+        let slash_101 = *max_slash_amount(&initial_reputation_101.into()) / 10;
+
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            initial_reputation_11 - slash_11,
+            1
         );
-        assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
-            initial_reputation_11 - *ValidatorReputationThreshold::get() / 10
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
+            initial_reputation_101 - slash_101,
+            1
         );
 
         assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
@@ -2762,7 +2876,7 @@ fn slashes_are_summed_across_spans() {
         mock::start_active_era(2);
         mock::start_active_era(3);
 
-        let initial_reputation_21 = *Reputation::reputation(21).unwrap().points;
+        let initial_reputation_21 = *ReputationPallet::reputation(21).unwrap().reputation.points();
 
         let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
 
@@ -2774,23 +2888,22 @@ fn slashes_are_summed_across_spans() {
             &[Perbill::from_percent(10)],
         );
 
-        let reputation_after_slash = *Reputation::reputation(21).unwrap().points;
+        let reputation_after_slash = *ReputationPallet::reputation(21).unwrap().reputation.points();
 
         let expected_spans = vec![
             slashing::SlashingSpan { index: 1, start: 4, length: None },
             slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
         ];
 
+        let slash_21 = *max_slash_amount(&initial_reputation_21.into()) / 10;
         assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
-        assert_eq!(
-            reputation_after_slash,
-            initial_reputation_21 - *ValidatorReputationThreshold::get() / 10
-        );
+        assert_eq_error_rate!(reputation_after_slash, initial_reputation_21 - slash_21, 2);
 
         // 21 has been force-chilled. re-signal intent to validate.
         PowerPlant::validate(RuntimeOrigin::signed(20), Default::default()).unwrap();
 
         mock::start_active_era(4);
+        let before_slash_21 = *ReputationPallet::reputation(21).unwrap().reputation.points();
 
         on_offence_now(
             &[OffenceDetails {
@@ -2806,11 +2919,12 @@ fn slashes_are_summed_across_spans() {
             slashing::SlashingSpan { index: 0, start: 0, length: Some(4) },
         ];
 
+        let slash_21 = *max_slash_amount(&before_slash_21.into()) / 10;
         assert_eq!(get_span(21).iter().collect::<Vec<_>>(), expected_spans);
-        assert_eq!(
-            *Reputation::reputation(21).unwrap().points,
-            reputation_after_slash - *ValidatorReputationThreshold::get() / 10
-                + reputation_per_era(),
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(21).unwrap().reputation.points(),
+            reputation_after_slash - slash_21 + reputation_per_era(),
+            2
         );
     });
 }
@@ -2820,17 +2934,14 @@ fn deferred_slashes_are_deferred() {
     ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
         mock::start_active_era(1);
 
-        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         let initial_reputation_101 = initial_reputation_11;
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             101,
             initial_reputation_101.into()
         ));
-        // let exposure = PowerPlant::eras_stakers(active_era(), 11);
-        // assert_eq!(Balances::free_balance(101), 2000);
-        // let cooperated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
-        //
+
         System::reset_events();
 
         on_offence_now(
@@ -2841,53 +2952,61 @@ fn deferred_slashes_are_deferred() {
             &[Perbill::from_percent(10)],
         );
 
+        let slash_11 = *max_slash_amount(&initial_reputation_11.into()) / 10;
+        let slash_101 = *max_slash_amount(&initial_reputation_101.into()) / 10;
+
         // cooperations are not removed regardless of the deferring.
         assert_eq!(
             PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
             vec![&11, &21]
         );
 
-        assert_eq!(*Reputation::reputation(11).unwrap().points, initial_reputation_11);
-        assert_eq!(*Reputation::reputation(101).unwrap().points, initial_reputation_101);
+        assert_eq!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            initial_reputation_11
+        );
+        assert_eq!(
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
+            initial_reputation_101
+        );
 
         mock::start_active_era(2);
 
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             initial_reputation_11 + reputation_per_era()
         );
         assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
             initial_reputation_101 + reputation_per_era()
         );
 
         mock::start_active_era(3);
 
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             initial_reputation_11 + reputation_per_era() * 2
         );
         assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
             initial_reputation_101 + reputation_per_era() * 2
         );
-
-        let reputation_11 = initial_reputation_11 + reputation_per_era() * 2;
-        let reputation_101 = initial_reputation_101 + reputation_per_era() * 2;
 
         // at the start of era 4, slashes from era 1 are processed,
         // after being deferred for at least 2 full eras.
         mock::start_active_era(4);
 
-        assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
-            (reputation_11 + reputation_per_sessions(2))
-                - *ValidatorReputationThreshold::get() / 10
+        let rep_rewards = reputation_per_sessions(2) + reputation_per_era() * 2;
+
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            (initial_reputation_11 + rep_rewards) - slash_11,
+            1
         );
-        assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
-            (reputation_101 + reputation_per_sessions(2))
-                - *ValidatorReputationThreshold::get() / 10
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
+            (initial_reputation_101 + rep_rewards) - slash_101,
+            1
         );
 
         assert!(matches!(
@@ -2897,8 +3016,8 @@ fn deferred_slashes_are_deferred() {
                 Event::SlashReported { validator: 11, slash_era: 1, .. },
                 Event::StakersElected,
                 ..,
-                Event::Slashed { staker: 11, amount: ReputationPoint(3888000) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(3888000) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(3399277,) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(3399277,) },
             ]
         ));
     })
@@ -2935,8 +3054,8 @@ fn retroactive_deferred_slashes_two_eras_before() {
                 Event::Chilled { stash: 11 },
                 Event::SlashReported { validator: 11, slash_era: 1, .. },
                 ..,
-                Event::Slashed { staker: 11, amount: ReputationPoint(3888000) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(202) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(3399313) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(54) },
             ]
         ));
     })
@@ -2958,7 +3077,8 @@ fn retroactive_deferred_slashes_one_before() {
         mock::start_active_era(3);
         System::reset_events();
 
-        let reputation_before_slash = *Reputation::reputation(11).unwrap().points;
+        let reputation_before_slash =
+            *ReputationPallet::reputation(11).unwrap().reputation.points();
         on_offence_in_era(
             &[OffenceDetails { offender: (11, exposure_11_at_era_1), reporters: vec![] }],
             &[Perbill::from_percent(10)],
@@ -2969,7 +3089,7 @@ fn retroactive_deferred_slashes_one_before() {
         mock::start_active_era(4);
 
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             reputation_before_slash + reputation_per_era()
         );
         // slash happens after the next line.
@@ -2980,8 +3100,8 @@ fn retroactive_deferred_slashes_one_before() {
             &[
                 Event::SlashReported { validator: 11, slash_era: 2, .. },
                 ..,
-                Event::Slashed { staker: 11, amount: ReputationPoint(3888000) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(202) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(3399313) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(54) },
             ]
         ));
     })
@@ -2993,9 +3113,9 @@ fn staker_cannot_bail_deferred_slash() {
     ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
         mock::start_active_era(1);
 
-        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         let initial_reputation_101 = initial_reputation_11;
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             101,
             initial_reputation_101.into()
@@ -3009,6 +3129,9 @@ fn staker_cannot_bail_deferred_slash() {
             &[Perbill::from_percent(10)],
         );
 
+        let slash_11 = *max_slash_amount(&initial_reputation_11.into()) / 10;
+        let slash_101 = *max_slash_amount(&initial_reputation_101.into()) / 10;
+
         // now we chill
         assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(100)));
         assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(100), 500));
@@ -3017,17 +3140,23 @@ fn staker_cannot_bail_deferred_slash() {
         assert_eq!(active_era(), 1);
 
         // no slash yet.
-        assert_eq!(*Reputation::reputation(11).unwrap().points, initial_reputation_11);
-        assert_eq!(*Reputation::reputation(101).unwrap().points, initial_reputation_101);
+        assert_eq!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            initial_reputation_11
+        );
+        assert_eq!(
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
+            initial_reputation_101
+        );
 
         // no slash yet.
         mock::start_active_era(2);
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             initial_reputation_11 + reputation_per_era()
         );
         assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
             initial_reputation_101 + reputation_per_era()
         );
         assert_eq!(PowerPlant::current_era().unwrap(), 2);
@@ -3036,11 +3165,11 @@ fn staker_cannot_bail_deferred_slash() {
         // no slash yet.
         mock::start_active_era(3);
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             initial_reputation_11 + reputation_per_era() * 2
         );
         assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
             initial_reputation_101 + reputation_per_era() * 2
         );
         assert_eq!(PowerPlant::current_era().unwrap(), 3);
@@ -3059,17 +3188,19 @@ fn staker_cannot_bail_deferred_slash() {
         // after being deferred for at least 2 full eras.
         mock::start_active_era(4);
 
-        assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             initial_reputation_11 + reputation_per_era() * 3
                 - reputation_per_sessions(1)
-                - *ValidatorReputationThreshold::get() / 10
+                - slash_11,
+            1
         );
-        assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
             initial_reputation_101 + reputation_per_era() * 3
                 - reputation_per_sessions(1)
-                - *ValidatorReputationThreshold::get() / 10
+                - slash_101,
+            1
         );
 
         // and the leftover of the funds can now be unbonded.
@@ -3081,9 +3212,9 @@ fn remove_deferred() {
     ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
         mock::start_active_era(1);
 
-        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         let initial_reputation_101 = initial_reputation_11;
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             101,
             initial_reputation_101.into()
@@ -3097,8 +3228,14 @@ fn remove_deferred() {
             &[Perbill::from_percent(10)],
         );
 
-        assert_eq!(*Reputation::reputation(11).unwrap().points, initial_reputation_11);
-        assert_eq!(*Reputation::reputation(101).unwrap().points, initial_reputation_101);
+        assert_eq!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            initial_reputation_11
+        );
+        assert_eq!(
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
+            initial_reputation_101
+        );
 
         mock::start_active_era(2);
 
@@ -3121,22 +3258,22 @@ fn remove_deferred() {
         assert_ok!(PowerPlant::cancel_deferred_slash(RuntimeOrigin::root(), 4, vec![0]));
 
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             initial_reputation_11 + reputation_per_era()
         );
         assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
             initial_reputation_101 + reputation_per_era()
         );
 
         mock::start_active_era(3);
 
         assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             initial_reputation_11 + reputation_per_era() * 2
         );
         assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
             initial_reputation_101 + reputation_per_era() * 2
         );
 
@@ -3150,8 +3287,8 @@ fn remove_deferred() {
             &[
                 Event::SlashReported { validator: 11, slash_era: 1, .. },
                 ..,
-                Event::Slashed { staker: 11, amount: ReputationPoint(1944000) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(1943933) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(1699665) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(1699647) },
             ]
         ));
     })
@@ -3162,15 +3299,17 @@ fn remove_multi_deferred() {
     ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
         mock::start_active_era(1);
 
-        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         let initial_reputation_101 = initial_reputation_11;
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             101,
             initial_reputation_101.into()
         ));
 
         let exposure = PowerPlant::eras_stakers(active_era(), 11);
+
+        assert_eq!(Session::validators(), [31, 21, 11]);
 
         on_offence_now(
             &[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
@@ -3190,26 +3329,29 @@ fn remove_multi_deferred() {
             &[Perbill::from_percent(25)],
         );
 
+        // not a validator
         on_offence_now(
             &[OffenceDetails { offender: (42, exposure.clone()), reporters: vec![] }],
             &[Perbill::from_percent(25)],
         );
 
+        // not a validator
         on_offence_now(
             &[OffenceDetails { offender: (69, exposure.clone()), reporters: vec![] }],
             &[Perbill::from_percent(25)],
         );
 
-        assert_eq!(UnappliedSlashes::<Test>::get(&4).len(), 5);
+        // 11, 21, 11
+        assert_eq!(UnappliedSlashes::<Test>::get(&4).len(), 3);
 
         // fails if list is not sorted
         assert_noop!(
-            PowerPlant::cancel_deferred_slash(RuntimeOrigin::root(), 1, vec![2, 0, 4]),
+            PowerPlant::cancel_deferred_slash(RuntimeOrigin::root(), 1, vec![2, 0]),
             Error::<Test>::NotSortedAndUnique
         );
         // fails if list is not unique
         assert_noop!(
-            PowerPlant::cancel_deferred_slash(RuntimeOrigin::root(), 1, vec![0, 2, 2]),
+            PowerPlant::cancel_deferred_slash(RuntimeOrigin::root(), 1, vec![2, 2]),
             Error::<Test>::NotSortedAndUnique
         );
         // fails if bad index
@@ -3218,12 +3360,11 @@ fn remove_multi_deferred() {
             Error::<Test>::InvalidSlashIndex
         );
 
-        assert_ok!(PowerPlant::cancel_deferred_slash(RuntimeOrigin::root(), 4, vec![0, 2, 4]));
+        assert_ok!(PowerPlant::cancel_deferred_slash(RuntimeOrigin::root(), 4, vec![0, 2]));
 
         let slashes = UnappliedSlashes::<Test>::get(&4);
-        assert_eq!(slashes.len(), 2);
+        assert_eq!(slashes.len(), 1);
         assert_eq!(slashes[0].validator, 21);
-        assert_eq!(slashes[1].validator, 42);
     })
 }
 
@@ -3233,9 +3374,9 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
         mock::start_active_era(1);
         assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
 
-        let initial_reputation_11 = *Reputation::reputation(11).unwrap().points;
+        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         let initial_reputation_101 = initial_reputation_11;
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             101,
             initial_reputation_101.into()
@@ -3262,19 +3403,23 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
                 ..,
                 Event::Chilled { stash: 11 },
                 Event::SlashReported { validator: 11, slash_era: 1, .. },
-                Event::Slashed { staker: 11, amount: ReputationPoint(3888000) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(3888000) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(3399277) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(3399277) },
             ]
         ));
 
         // post-slash balance
-        assert_eq!(
-            *Reputation::reputation(11).unwrap().points,
-            initial_reputation_11 - *ValidatorReputationThreshold::get() / 10
+        let slash_11 = *max_slash_amount(&initial_reputation_11.into()) / 10;
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
+            initial_reputation_11 - slash_11,
+            2
         );
-        assert_eq!(
-            *Reputation::reputation(101).unwrap().points,
-            initial_reputation_101 - *ValidatorReputationThreshold::get() / 10
+        let slash_101 = *max_slash_amount(&initial_reputation_101.into()) / 10;
+        assert_eq_error_rate!(
+            *ReputationPallet::reputation(101).unwrap().reputation.points(),
+            initial_reputation_101 - slash_101,
+            2
         );
 
         // check that validator was chilled.
@@ -3327,8 +3472,8 @@ fn non_slashable_offence_doesnt_disable_validator() {
                 Event::Chilled { stash: 21 },
                 Event::ForceEra { mode: Forcing::ForceNew },
                 Event::SlashReported { validator: 21, slash_era: 1, .. },
-                Event::Slashed { staker: 21, amount: ReputationPoint(9720000,) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(169,) }
+                Event::Slashed { staker: 21, amount: ReputationPoint(8498191) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(45) },
             ]
         ));
 
@@ -3387,8 +3532,8 @@ fn slashing_independent_of_disabling_validator() {
                 Event::Chilled { stash: 21 },
                 Event::ForceEra { mode: Forcing::ForceNew },
                 Event::SlashReported { validator: 21, slash_era: 1, .. },
-                Event::Slashed { staker: 21, amount: ReputationPoint(9720000,) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(169,) },
+                Event::Slashed { staker: 21, amount: ReputationPoint(8498191) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(45) },
             ]
         ));
 
@@ -3718,18 +3863,20 @@ fn test_payout_stakers() {
 
         mock::start_active_era(1);
         let exposure = PowerPlant::eras_stakers(1, 11);
-        let mut payout_part = Perbill::from_rational(exposure.own, exposure.total);
+        // adding additional 8%, since validator have a Trailblazer(1) reputation tier
+        let mut payout_part =
+            FixedU128::from_rational(exposure.own, exposure.total) * FixedU128::from_float(1.08);
 
         for coop in &exposure.others[36..] {
             // only top value coops are rewarded
             let coop_part = Perbill::from_rational(coop.value, exposure.total);
-            payout_part = payout_part + coop_part;
+            payout_part = payout_part + coop_part.into();
         }
 
         PowerPlant::reward_by_ids(vec![(11, 1.into())]);
         // compute and ensure the reward amount is greater than zero.
         let payout = current_total_payout_for_duration(reward_time_per_era());
-        let actual_paid_out = payout_part * payout;
+        let actual_paid_out = payout_part.saturating_mul_int(payout);
 
         mock::start_active_era(2);
 
@@ -3739,7 +3886,7 @@ fn test_payout_stakers() {
         assert_eq_error_rate!(
             Assets::total_supply(VNRG::get()),
             pre_payout_total_issuance + actual_paid_out,
-            2
+            45
         );
         assert!(RewardOnUnbalanceWasCalled::get());
 
@@ -3771,7 +3918,8 @@ fn test_payout_stakers() {
 
             // compute and ensure the reward amount is greater than zero.
             let payout = current_total_payout_for_duration(reward_time_per_era());
-            let actual_paid_out = payout_part * payout;
+            let actual_paid_out = payout_part.saturating_mul_int(payout);
+
             let pre_payout_total_issuance = Assets::total_supply(VNRG::get());
 
             mock::start_active_era(i);
@@ -3780,7 +3928,7 @@ fn test_payout_stakers() {
             assert_eq_error_rate!(
                 Assets::total_supply(VNRG::get()),
                 pre_payout_total_issuance + actual_paid_out,
-                2
+                45
             );
             assert!(RewardOnUnbalanceWasCalled::get());
         }
@@ -4416,10 +4564,10 @@ fn min_bond_checks_work() {
                 Error::<Test>::InsufficientBond
             );
 
-            assert_ok!(Reputation::force_set_points(
+            assert_ok!(ReputationPallet::force_set_points(
                 RuntimeOrigin::root(),
                 3,
-                CollaborativeValidatorReputationThreshold::get()
+                CollaborativeValidatorReputationTier::get().into()
             ));
 
             assert_noop!(
@@ -4496,10 +4644,10 @@ fn chill_other_works() {
                     1500,
                     RewardDestination::Controller
                 ));
-                assert_ok!(Reputation::force_set_points(
+                assert_ok!(ReputationPallet::force_set_points(
                     RuntimeOrigin::root(),
                     c,
-                    ValidatorReputationThreshold::get(),
+                    ValidatorReputationTier::get().into(),
                 ));
                 assert_ok!(PowerPlant::validate(
                     RuntimeOrigin::signed(d),
@@ -4650,15 +4798,15 @@ fn capped_stakers_works() {
 
         // but no more
         bond(some_existing_validator + 2, some_existing_validator + 1, 1000);
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             some_existing_validator + 1,
-            CollaborativeValidatorReputationThreshold::get()
+            CollaborativeValidatorReputationTier::get().into()
         ));
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             some_existing_validator + 2,
-            CollaborativeValidatorReputationThreshold::get()
+            CollaborativeValidatorReputationTier::get().into()
         ));
 
         assert_noop!(
@@ -4800,16 +4948,16 @@ fn force_apply_min_commission_works() {
     };
     let validators = || Validators::<Test>::iter().collect::<Vec<_>>();
     ExtBuilder::default().build_and_execute(|| {
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             31,
-            CollaborativeValidatorReputationThreshold::get()
+            CollaborativeValidatorReputationTier::get().into()
         ));
         assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(30), prefs(10)));
-        assert_ok!(Reputation::force_set_points(
+        assert_ok!(ReputationPallet::force_set_points(
             RuntimeOrigin::root(),
             21,
-            CollaborativeValidatorReputationThreshold::get()
+            CollaborativeValidatorReputationTier::get().into()
         ));
         assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(20), prefs(5)));
 

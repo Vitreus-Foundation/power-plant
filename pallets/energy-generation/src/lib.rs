@@ -304,7 +304,7 @@ use frame_support::{
     traits::{tokens::fungibles::Debt, Currency, Defensive, Get},
     BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use pallet_reputation::ReputationPoint;
+use pallet_reputation::{Reputation, ReputationPoint};
 use parity_scale_codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -418,11 +418,11 @@ pub struct ValidatorPrefs {
     pub commission: Perbill,
     /// Whether or not this validator is accepting cooperations.
     ///
-    /// Notice, that to be a collaborative validator it should have reputation more than
-    /// `Config::CollaborativeValidatorReputationThreshold`.
+    /// Notice, that to be a collaborative validator it should have reputation tier more than
+    /// `Config::CollaborativeValidatorReputationTier`.
     pub collaborative: bool,
     /// The minimum reputation for cooperators.
-    pub min_coop_reputation: ReputationPoint,
+    pub min_coop_reputation: Reputation,
 }
 
 impl ValidatorPrefs {

@@ -15,6 +15,7 @@ use frame_support::traits::tokens::{
     Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons};
+use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_core::{
@@ -62,6 +63,7 @@ use pallet_energy_fee::{
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
+use pallet_reputation::{ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_DAY};
 use pallet_transaction_payment::{FeeDetails, InclusionFee};
 // Frontier
 use fp_account::EthereumSignature;
@@ -402,8 +404,6 @@ impl pallet_faucet::Config for Runtime {
     type WeightInfo = ();
 }
 
-use pallet_reputation::REPUTATION_POINTS_PER_DAY;
-
 impl pallet_reputation::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -553,9 +553,9 @@ parameter_types! {
     pub const RewardOnUnbalanceWasCalled: bool = false;
     pub const MaxWinners: u32 = 100;
     // it takes a month to become a validator from 0
-    pub const ValidatorReputationThreshold: ReputationPoint = VALIDATOR_REPUTATION_THRESHOLD;
+    pub const ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     // it takes 2 months to become a collaborative validator from 0
-    pub const CollaborativeValidatorReputationThreshold: ReputationPoint = COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD;
+    pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Trailblazer(1);
     pub const RewardRemainderUnbalanced: u128 = 0;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 
@@ -587,6 +587,31 @@ impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerReputationPoint
     }
 }
 
+pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
+
+impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
+    fn get(k: &ReputationTier) -> Perbill {
+        match k {
+            ReputationTier::Vanguard(2) => Perbill::from_percent(2),
+            ReputationTier::Vanguard(3) => Perbill::from_percent(4),
+            ReputationTier::Trailblazer(0) => Perbill::from_percent(5),
+            ReputationTier::Trailblazer(1) => Perbill::from_percent(8),
+            ReputationTier::Trailblazer(2) => Perbill::from_percent(10),
+            ReputationTier::Trailblazer(3) => Perbill::from_percent(12),
+            ReputationTier::Ultramodern(0) => Perbill::from_percent(13),
+            ReputationTier::Ultramodern(1) => Perbill::from_percent(16),
+            ReputationTier::Ultramodern(2) => Perbill::from_percent(18),
+            ReputationTier::Ultramodern(3) => Perbill::from_percent(20),
+            ReputationTier::Ultramodern(rank) => {
+                let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
+                Perbill::from_percent(20_u8.saturating_add(additional_percentage).into())
+            },
+            // includes unhandled cases
+            _ => Perbill::zero(),
+        }
+    }
+}
+
 pub struct EnergyGenerationBenchmarkConfig;
 impl pallet_energy_generation::BenchmarkingConfig for EnergyGenerationBenchmarkConfig {
     type MaxValidators = ConstU32<1000>;
@@ -598,9 +623,9 @@ impl pallet_energy_generation::Config for Runtime {
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = EnergyGenerationBenchmarkConfig;
     type BondingDuration = BondingDuration;
-    type CollaborativeValidatorReputationThreshold = CollaborativeValidatorReputationThreshold;
+    type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
+    type ValidatorReputationTier = ValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerReputationPoint = EnergyPerReputationPoint;
     type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
@@ -609,6 +634,8 @@ impl pallet_energy_generation::Config for Runtime {
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = ();
+    type ReputationTierEnergyRewardAdditionalPercentMapping =
+        ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = ();
     type RewardRemainder = ();
     type RuntimeEvent = RuntimeEvent;
@@ -620,7 +647,6 @@ impl pallet_energy_generation::Config for Runtime {
     type StakeCurrency = Balances;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
-    type ValidatorReputationThreshold = ValidatorReputationThreshold;
 }
 
 parameter_types! {
@@ -1887,6 +1913,12 @@ impl_runtime_apis! {
         fn balance(who: H160) -> U256 {
             let account_id = <Self as pallet_evm::Config>::AddressMapping::into_account_id(who);
             Balances::reducible_balance(&account_id, Preservation::Preserve, Fortitude::Polite).into()
+        }
+    }
+
+    impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
+        fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
+            ReputationTierEnergyRewardAdditionalPercentMapping::get(&tier)
         }
     }
 }

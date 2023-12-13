@@ -13,9 +13,10 @@ use frame_support::{
     weights::Weight,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
+use orml_traits::GetByKey;
 use scale_info::prelude::*;
 
-use pallet_reputation::{ReputationPoint, ReputationRecord};
+use pallet_reputation::{ReputationPoint, ReputationRecord, NORMAL};
 use pallet_session::historical;
 use sp_runtime::{
     traits::{Convert, One, Saturating, Zero},
@@ -39,7 +40,11 @@ impl<T: Config> Pallet<T> {
     /// Checks if the account has enough reputation to be a validator.
     pub fn is_legit_for_validator(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {
-            Some(reputation) => *reputation.points >= *T::ValidatorReputationThreshold::get(),
+            Some(record) => record
+                .reputation
+                .tier()
+                .map(|tier| tier >= T::ValidatorReputationTier::get())
+                .unwrap_or(false),
             None => false,
         }
     }
@@ -47,9 +52,11 @@ impl<T: Config> Pallet<T> {
     /// Check if the account has enough reputation for collaborative staking.
     pub fn is_legit_for_collab(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {
-            Some(reputation) => {
-                *reputation.points >= *T::CollaborativeValidatorReputationThreshold::get()
-            },
+            Some(record) => record
+                .reputation
+                .tier()
+                .map(|tier| tier >= T::CollaborativeValidatorReputationTier::get())
+                .unwrap_or(false),
             None => false,
         }
     }
@@ -70,10 +77,10 @@ impl<T: Config> Pallet<T> {
 
     pub(crate) fn check_reputation_cooperator(validator: &T::AccountId, cooperator: &T::AccountId) {
         let prefs = Self::validators(validator);
-        let rep = pallet_reputation::AccountReputation::<T>::get(cooperator)
+        let record = pallet_reputation::AccountReputation::<T>::get(cooperator)
             .unwrap_or_else(ReputationRecord::with_now::<T>);
 
-        if *prefs.min_coop_reputation > *rep.points {
+        if prefs.min_coop_reputation > record.reputation {
             Self::chill_stash(cooperator);
         }
     }
@@ -252,6 +259,10 @@ impl<T: Config> Pallet<T> {
     fn make_payout(stash: &T::AccountId, amount: EnergyOf<T>) -> Option<EnergyDebtOf<T>> {
         let dest = Self::payee(stash);
         let asset_id = T::EnergyAssetId::get();
+        let amount = Self::calculate_energy_reward_multiplier(stash)
+            .mul_floor(amount)
+            .saturating_add(amount);
+
         match dest {
             RewardDestination::Controller => Self::bonded(stash).and_then(|controller| {
                 pallet_assets::Pallet::<T>::deposit(asset_id, &controller, amount, Precision::Exact)
@@ -294,6 +305,7 @@ impl<T: Config> Pallet<T> {
     /// Plan a new session potentially trigger a new era.
     fn new_session(session_index: SessionIndex) -> Option<Vec<T::AccountId>> {
         // In any case we update reputation per each session.
+        // TODO: replace with an associated type in Config
         pallet_reputation::Pallet::<T>::update_points_for_time();
 
         if let Some(current_era) = Self::current_era() {
@@ -385,6 +397,7 @@ impl<T: Config> Pallet<T> {
     /// Start a new era. It does:
     ///
     /// * Increment `active_era.index`,
+    /// * Calculate energy rate per bonded currency for active era
     /// * reset `active_era.start`,
     /// * update `BondedEras` and apply slashes.
     fn start_era(start_session: SessionIndex) -> DispatchResult {
@@ -440,23 +453,10 @@ impl<T: Config> Pallet<T> {
             battery_slot_cap,
         );
 
-        let energy_per_reputation_point = T::EnergyPerReputationPoint::calculate_energy_rate(
-            staked,
-            issuance,
-            core_nodes_num,
-            battery_slot_cap,
-        );
-
         <ErasEnergyPerStakeCurrency<T>>::insert(era_index, energy_per_stake_currency);
         Self::deposit_event(Event::<T>::EraEnergyPerStakeCurrencySet {
             era_index,
             energy_rate: energy_per_stake_currency,
-        });
-
-        <ErasEnergyPerReputaionPoint<T>>::insert(era_index, energy_per_reputation_point);
-        Self::deposit_event(Event::<T>::EraEnergyPerReputationPointSet {
-            era_index,
-            energy_rate: energy_per_reputation_point,
         });
     }
 
@@ -599,10 +599,9 @@ impl<T: Config> Pallet<T> {
                                 .and_then(|collab| collab.targets.get(&validator).cloned())
                             {
                                 Some(value) => {
-                                    let reputation =
-                                        pallet_reputation::Pallet::<T>::reputation(&who)
-                                            .unwrap_or_else(ReputationRecord::with_now::<T>);
-                                    if *reputation.points >= *prefs.min_coop_reputation {
+                                    let record = pallet_reputation::Pallet::<T>::reputation(&who)
+                                        .unwrap_or_else(ReputationRecord::with_now::<T>);
+                                    if record.reputation >= prefs.min_coop_reputation {
                                         Some(IndividualExposure { who, value })
                                     } else {
                                         None
@@ -699,8 +698,7 @@ impl<T: Config> Pallet<T> {
             active_era,
         );
         for slash in era_slashes {
-            let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
-            slashing::apply_slash::<T>(slash, slash_era)?;
+            slashing::apply_slash::<T>(slash)?;
         }
 
         Ok(())
@@ -813,6 +811,32 @@ impl<T: Config> Pallet<T> {
             true
         } else {
             false
+        }
+    }
+
+    // TODO: get rid of floating point types.
+    pub fn calculate_block_authoring_reward() -> ReputationPoint {
+        let active_validators_count = T::SessionInterface::validators().len();
+        let reward = ((NORMAL * pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0 as f64) as u64)
+            .saturating_sub(pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0)
+            .saturating_mul(active_validators_count as u64);
+
+        ReputationPoint(reward)
+    }
+
+    // TODO: make coefficients a runtime parameter.
+    pub fn calculate_energy_reward_multiplier(stash: &T::AccountId) -> Perbill {
+        let reputation = if let Some(record) = pallet_reputation::AccountReputation::<T>::get(stash)
+        {
+            record.reputation
+        } else {
+            return Perbill::zero();
+        };
+
+        if let Some(tier) = reputation.tier() {
+            T::ReputationTierEnergyRewardAdditionalPercentMapping::get(&tier)
+        } else {
+            Perbill::zero()
         }
     }
 }
@@ -1002,7 +1026,7 @@ where
                 unapplied.reporters = details.reporters.clone();
                 if slash_defer_duration == 0 {
                     // Apply right away.
-                    if let Err(e) = slashing::apply_slash::<T>(unapplied, slash_era) {
+                    if let Err(e) = slashing::apply_slash::<T>(unapplied) {
                         frame_support::print(format!("failed to apply slash: {:?}", e).as_str());
                     }
                     {
@@ -1047,7 +1071,7 @@ where
     fn note_author(author: T::AccountId) {
         if let Err(e) = <pallet_reputation::Pallet<T>>::do_increase_points(
             &author,
-            pallet_reputation::REPUTATION_POINTS_PER_DAY,
+            Self::calculate_block_authoring_reward(),
         ) {
             pallet_reputation::Pallet::<T>::deposit_event(
                 pallet_reputation::Event::<T>::ReputationIncreaseFailed {

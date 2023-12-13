@@ -94,6 +94,7 @@ vitreus-power-plant-runtime = { workspace = true, features = ["default"] }
 # RPC modules
 eth-rpc-server = { workspace = true }
 energy-fee-rpc = { workspace = true }
+energy-generation-rpc = { workspace = true }
 
 # Misc
 chain-spec = { workspace = true }

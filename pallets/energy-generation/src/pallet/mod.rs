@@ -28,8 +28,10 @@ use frame_support::{
     },
     weights::Weight,
 };
+
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-use pallet_reputation::{ReputationPoint, ReputationRecord};
+use orml_traits::GetByKey;
+use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, CheckedSub, SaturatedConversion, StaticLookup, Zero},
     ArithmeticError, Perbill, Percent,
@@ -183,9 +185,6 @@ pub mod pallet {
         /// Energy per stake currency rate calculation callback.
         type EnergyPerStakeCurrency: EnergyRateCalculator<StakeOf<Self>, EnergyOf<Self>>;
 
-        /// Energy per reputation point rate calculation callback.
-        type EnergyPerReputationPoint: EnergyRateCalculator<StakeOf<Self>, EnergyOf<Self>>;
-
         /// Something that can estimate the next session change, accurately or as a best effort
         /// guess.
         type NextNewSession: EstimateNextNewSession<BlockNumberFor<Self>>;
@@ -222,12 +221,15 @@ pub mod pallet {
 
         /// The minimum reputation to be a validator.
         #[pallet::constant]
-        type ValidatorReputationThreshold: Get<ReputationPoint>;
+        type ValidatorReputationTier: Get<ReputationTier>;
 
         /// The minimum reputation to be able to expose your account in the staking marketplace for
         /// collaborative staking.
         #[pallet::constant]
-        type CollaborativeValidatorReputationThreshold: Get<ReputationPoint>;
+        type CollaborativeValidatorReputationTier: Get<ReputationTier>;
+
+        /// `ReputationTier` -> `Perbill` mapping, depicting additional energy reward ratio per tier.
+        type ReputationTierEnergyRewardAdditionalPercentMapping: GetByKey<ReputationTier, Perbill>;
 
         /// Some parameters of the benchmarking.
         type BenchmarkingConfig: BenchmarkingConfig;
@@ -444,12 +446,6 @@ pub mod pallet {
     pub type ErasEnergyPerStakeCurrency<T: Config> =
         StorageMap<_, Twox64Concat, EraIndex, EnergyOf<T>>;
 
-    /// Energy rate per reputation point per eras.
-    #[pallet::storage]
-    #[pallet::getter(fn eras_energy_per_reputation)]
-    pub type ErasEnergyPerReputaionPoint<T: Config> =
-        StorageMap<_, Twox64Concat, EraIndex, EnergyOf<T>>;
-
     /// The total amount staked for the last `HISTORY_DEPTH` eras.
     /// If total hasn't been set or has been removed then 0 stake is returned.
     #[pallet::storage]
@@ -635,8 +631,6 @@ pub mod pallet {
     pub enum Event<T: Config> {
         /// The era energy per stake currency has been set.
         EraEnergyPerStakeCurrencySet { era_index: EraIndex, energy_rate: EnergyOf<T> },
-        /// The era energy per reputation point has been set.
-        EraEnergyPerReputationPointSet { era_index: EraIndex, energy_rate: EnergyOf<T> },
         /// The cooperator has been rewarded by this amount.
         Rewarded { stash: T::AccountId, amount: EnergyOf<T> },
         /// A staker (validator or cooperator) has been slashed by the given amount.
@@ -1117,7 +1111,7 @@ pub mod pallet {
 
             let old =
                 Cooperators::<T>::get(stash).map_or_else(BTreeMap::new, |x| x.targets.into_inner());
-            let reputation = pallet_reputation::Pallet::<T>::reputation(stash)
+            let record = pallet_reputation::Pallet::<T>::reputation(stash)
                 .unwrap_or_else(ReputationRecord::with_now::<T>);
 
             let targets: BoundedBTreeMap<_, _, _> = targets
@@ -1127,7 +1121,7 @@ pub mod pallet {
                     n.and_then(|n| {
                         let target = Validators::<T>::get(&n);
                         if !Self::is_legit_for_collab(&n)
-                            || *target.min_coop_reputation > *reputation.points
+                            || target.min_coop_reputation > record.reputation
                         {
                             Err(Error::<T>::ReputationTooLow.into())
                         } else if old.contains_key(&n) || target.collaborative {
