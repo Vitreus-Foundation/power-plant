@@ -77,6 +77,8 @@ use pallet_evm::{
 use pallet_nfts::PalletFeatures;
 use sp_runtime::transaction_validity::InvalidTransaction;
 
+use crate::areas::pallet_custom_origins;
+
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
 pub use pallet_energy_generation::StakerStatus;
@@ -91,7 +93,10 @@ pub use pallet_timestamp::Call as TimestampCall;
 mod precompiles;
 mod helpers {
     pub mod runner;
+    mod macros;
 }
+mod areas;
+
 #[cfg(test)]
 mod tests;
 
@@ -201,6 +206,12 @@ pub const EPOCH_DURATION_IN_SLOTS: u64 = {
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
+
+pub const FEMTO_VTRS: Balance = 1_000;
+pub const PICO_VTRS: Balance = 1_000 * FEMTO_VTRS;
+pub const NANO_VTRS: Balance = 1_000 * PICO_VTRS;
+pub const MICRO_VTRS: Balance = 1_000 * NANO_VTRS;
+pub const MILLI_VTRS: Balance = 1_000 * MICRO_VTRS;
 
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
@@ -1098,6 +1109,15 @@ construct_runtime!(
         Utility: pallet_utility,
         Historical: pallet_session::historical,
         NacManaging: pallet_nac_managing,
+
+        // Governance-related pallets
+        // Scheduler: pallet_scheduler,
+        // Treasury: pallet_treasury,
+        // Democracy: pallet_democracy,
+        // Council: pallet_collective::<Instance1>,
+
+        Origins: pallet_custom_origins::{Origin},
+        
     }
 );
 
