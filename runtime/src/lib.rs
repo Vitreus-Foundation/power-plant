@@ -88,7 +88,7 @@ pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
-pub use areas::CouncilCollective;
+pub use areas::{CouncilCollective, TechnicalCollective};
 
 mod precompiles;
 mod helpers {
@@ -136,6 +136,12 @@ pub type DigestItem = generic::DigestItem;
 
 /// Asset ID.
 pub type AssetId = u128;
+
+/// Origin for council voting
+type MoreThanHalfCouncil = EitherOfDiverse<
+	EnsureRoot<AccountId>,
+	pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
+>;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -1121,6 +1127,11 @@ construct_runtime!(
         // Treasury: pallet_treasury,
         // Democracy: pallet_democracy,
         Council: pallet_collective::<Instance1>,        
+        TechnicalCommittee: pallet_collective::<Instance2>,        
+        TechnicalMembership: pallet_membership::<Instance1>,
+        Treasury: pallet_treasury,
+        Bounties: pallet_bounties,
+        Democracy: pallet_democracy,
     }
 );
 

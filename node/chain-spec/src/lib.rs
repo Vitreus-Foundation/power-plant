@@ -15,7 +15,7 @@ use vitreus_power_plant_runtime::{
     EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
     MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix,
     SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY, CouncilConfig,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY, CouncilConfig, TechnicalCommitteeConfig, TechnicalMembershipConfig,
 };
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
@@ -269,6 +269,7 @@ fn testnet_genesis(
             members: endowed_accounts.iter().cloned().take(3).collect(),
             ..Default::default()
         },
+        democracy: Default::default(),
         grandpa: Default::default(),
         transaction_payment: Default::default(),
 
@@ -317,6 +318,16 @@ fn testnet_genesis(
                 .map(|x| (x.1, x.0, session_keys(x.2.clone(), x.3.clone(), x.4.clone())))
                 .collect::<Vec<_>>(),
         },
+        technical_committee: TechnicalCommitteeConfig {
+            members: {
+                let mut tech_members = endowed_accounts.clone();
+                tech_members.reverse();
+                tech_members.into_iter().take(3).collect()
+            }, 
+            ..Default::default()
+        },
+        technical_membership: Default::default(),
+        treasury: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32,
