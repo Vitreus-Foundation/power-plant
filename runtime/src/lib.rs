@@ -14,7 +14,7 @@ use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
     Preservation, Provenance, WithdrawConsequence,
 };
-use frame_support::traits::{Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons};
+use frame_support::traits::{Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons, EitherOfDiverse};
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
@@ -87,6 +87,8 @@ pub use pallet_reputation::ReputationPoint;
 pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
+
+pub use areas::CouncilCollective;
 
 mod precompiles;
 mod helpers {
@@ -627,8 +629,13 @@ impl pallet_energy_generation::BenchmarkingConfig for EnergyGenerationBenchmarkC
     type MaxCooperators = ConstU32<1000>;
 }
 
+type EnergyGenerationAdminOrigin = EitherOfDiverse<
+	EnsureRoot<AccountId>,
+	pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 4>,
+>;
+
 impl pallet_energy_generation::Config for Runtime {
-    type AdminOrigin = EnsureRoot<AccountId>;
+    type AdminOrigin = EnergyGenerationAdminOrigin;
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = EnergyGenerationBenchmarkConfig;
     type BondingDuration = BondingDuration;
@@ -1113,7 +1120,7 @@ construct_runtime!(
         Preimage: pallet_preimage,
         // Treasury: pallet_treasury,
         // Democracy: pallet_democracy,
-        // Council: pallet_collective::<Instance1>,        
+        Council: pallet_collective::<Instance1>,        
     }
 );
 

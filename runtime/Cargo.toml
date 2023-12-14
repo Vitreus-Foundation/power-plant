@@ -48,6 +48,7 @@ pallet-authorship = { workspace = true }
 pallet-babe = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-claiming = { workspace = true }
+pallet-collective = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-faucet = { workspace = true }
@@ -137,6 +138,7 @@ std = [
     "pallet-authorship/std",
     "pallet-babe/std",
     "pallet-balances/std",
+    "pallet-collective/std",
     "pallet-faucet/std",
     "pallet-grandpa/std",
     "pallet-im-online/std",
