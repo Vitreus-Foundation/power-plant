@@ -16,7 +16,7 @@
 // limitations under the License.
 use futures::TryFutureExt;
 // Substrate
-use sc_cli::{ChainSpec, SubstrateCli, CliConfiguration};
+use sc_cli::{ChainSpec, SubstrateCli};
 use sc_service::DatabaseSource;
 // Frontier
 use fc_db::kv::frontier_database_dir;

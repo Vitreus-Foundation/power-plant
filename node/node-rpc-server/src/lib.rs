@@ -1,29 +1,16 @@
 extern crate alloc;
-use alloc::sync::Arc;
 use jsonrpsee::{
     core::{async_trait, RpcResult},
     proc_macros::rpc,
 };
-use std::collections::BTreeMap;
-use std::marker::PhantomData;
-
-use sc_client_api::backend::{Backend, StorageProvider};
-use sc_transaction_pool::{ChainApi, Pool};
-use sc_transaction_pool_api::{InPoolTransaction, TransactionPool};
-use sp_api::{ApiRef, CallApiAt, Core, ProvideRuntimeApi};
-use sp_block_builder::BlockBuilder as BlockBuilderApi;
-use sp_blockchain::HeaderBackend;
-use sp_runtime::traits::{Block as BlockT, Header};
 
 pub struct Node {
-    name: String
+    name: String,
 }
 
 impl Node {
     pub fn new(name: String) -> Self {
-        Self {
-            name
-        }
+        Self { name }
     }
 }
 

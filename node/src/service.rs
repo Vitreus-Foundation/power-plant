@@ -440,9 +440,7 @@ where
                     subscription_executor: subscription_executor.clone(),
                     finality_provider: finality_provider.clone(),
                 },
-                node: crate::rpc::NodeDeps {
-                    name: node_name.clone()
-                },
+                node: crate::rpc::NodeDeps { name: node_name.clone() },
             };
 
             crate::rpc::create_full(deps, subscription_executor, pubsub_notification_sinks.clone())

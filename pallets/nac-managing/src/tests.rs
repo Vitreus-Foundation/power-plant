@@ -167,8 +167,8 @@ fn user_has_access_test() {
             account(1)
         ));
 
-        assert_eq!(NacManaging::user_has_access(account(1), 2), true);
-        assert_eq!(NacManaging::user_has_access(account(1), 5), true);
-        assert_eq!(NacManaging::user_has_access(account(1), 6), false);
+        assert!(NacManaging::user_has_access(account(1), 2));
+        assert!(NacManaging::user_has_access(account(1), 5));
+        assert!(!NacManaging::user_has_access(account(1), 6));
     });
 }

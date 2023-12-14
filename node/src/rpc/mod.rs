@@ -123,16 +123,25 @@ where
 {
     use energy_fee_rpc::{EnergyFee, EnergyFeeApiServer};
     use energy_generation_rpc::{EnergyGeneration, EnergyGenerationApiServer};
+    use node_rpc_server::{Node, NodeApiServer};
     use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiServer};
     use sc_consensus_babe_rpc::{Babe, BabeApiServer};
     use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
     use sc_consensus_manual_seal::rpc::{ManualSeal, ManualSealApiServer};
     use substrate_frame_rpc_system::{System, SystemApiServer};
-    use node_rpc_server::{Node, NodeApiServer};
 
     let mut io = RpcModule::new(());
-    let FullDeps { client, pool, select_chain, deny_unsafe, command_sink, eth, babe, grandpa, node } =
-        deps;
+    let FullDeps {
+        client,
+        pool,
+        select_chain,
+        deny_unsafe,
+        command_sink,
+        eth,
+        babe,
+        grandpa,
+        node,
+    } = deps;
     let BabeDeps { keystore, worker_handle } = babe;
     let GrandpaDeps {
         shared_voter_state,
@@ -141,9 +150,7 @@ where
         subscription_executor,
         finality_provider,
     } = grandpa;
-    let NodeDeps {
-        name
-    } = node;
+    let NodeDeps { name } = node;
 
     io.merge(Node::new(name).into_rpc())?;
     io.merge(System::new(client.clone(), pool, deny_unsafe).into_rpc())?;
