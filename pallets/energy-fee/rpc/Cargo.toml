@@ -12,4 +12,3 @@ sp-runtime = { workspace = true, default-features = false }
 sp-blockchain = { workspace = true }
 sp-std = { workspace = true, default-features = false }
 sp-api = { workspace = true, default-features = false }
-fc-rpc-core = { workspace = true }

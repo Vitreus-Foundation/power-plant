@@ -1958,7 +1958,6 @@ version = "0.1.0"
 dependencies = [
  "energy-fee-runtime-api",
  "ethereum-types",
- "fc-rpc-core",
  "jsonrpsee",
  "parity-scale-codec",
  "sp-api",
@@ -5006,6 +5005,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-rpc-server"
+version = "0.1.0"
+dependencies = [
+ "jsonrpsee",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5756,7 +5764,6 @@ dependencies = [
  "pallet-nfts",
  "pallet-reputation",
  "pallet-staking-reward-curve",
- "pallet-timestamp",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",
@@ -10508,6 +10515,7 @@ dependencies = [
  "hex-literal 0.3.4",
  "jsonrpsee",
  "log",
+ "node-rpc-server",
  "pallet-energy-generation",
  "pallet-nfts-runtime-api",
  "pallet-reputation",

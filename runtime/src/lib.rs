@@ -1851,8 +1851,6 @@ impl_runtime_apis! {
                     let value = value.unwrap_or_else(U256::zero);
                     let gas_limit = gas.unwrap_or_else(|| U256::from(21000)).low_u64(); // default gas limit to 21000
                     let max_fee_per_gas = max_fee_per_gas.unwrap_or_else(U256::zero);
-                    let max_priority_fee_per_gas = max_priority_fee_per_gas;
-                    let nonce = nonce;
                     let access_list = access_list.unwrap_or_default();
                     let access_list_converted = access_list.into_iter()
                         .map(|item| (item.address, item.storage_keys))
