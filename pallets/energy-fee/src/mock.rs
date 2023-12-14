@@ -277,10 +277,7 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     .unwrap();
 
     pallet_assets::GenesisConfig::<Test> {
-        accounts: vec![(GetVNRG::get(), BOB, 1000)]
-            .into_iter()
-            .chain(alice_account.into_iter())
-            .collect(),
+        accounts: vec![(GetVNRG::get(), BOB, 1000)].into_iter().chain(alice_account).collect(),
         assets: vec![(GetVNRG::get(), BOB, false, 1)],
         metadata: vec![(GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
     }

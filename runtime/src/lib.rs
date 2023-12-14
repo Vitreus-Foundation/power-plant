@@ -14,7 +14,9 @@ use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
     Preservation, Provenance, WithdrawConsequence,
 };
-use frame_support::traits::{Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons, EitherOfDiverse};
+use frame_support::traits::{
+    Currency, EitherOfDiverse, ExistenceRequirement, SignedImbalance, WithdrawReasons,
+};
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
@@ -92,8 +94,8 @@ pub use areas::{CouncilCollective, TechnicalCollective};
 
 mod precompiles;
 mod helpers {
-    pub mod runner;
     mod macros;
+    pub mod runner;
 }
 mod areas;
 
@@ -139,8 +141,8 @@ pub type AssetId = u128;
 
 /// Origin for council voting
 type MoreThanHalfCouncil = EitherOfDiverse<
-	EnsureRoot<AccountId>,
-	pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
+    EnsureRoot<AccountId>,
+    pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
 >;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
@@ -629,8 +631,8 @@ impl pallet_energy_generation::BenchmarkingConfig for EnergyGenerationBenchmarkC
 }
 
 type EnergyGenerationAdminOrigin = EitherOfDiverse<
-	EnsureRoot<AccountId>,
-	pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 4>,
+    EnsureRoot<AccountId>,
+    pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 4>,
 >;
 
 impl pallet_energy_generation::Config for Runtime {
@@ -1119,8 +1121,8 @@ construct_runtime!(
         Preimage: pallet_preimage,
         // Treasury: pallet_treasury,
         // Democracy: pallet_democracy,
-        Council: pallet_collective::<Instance1>,        
-        TechnicalCommittee: pallet_collective::<Instance2>,        
+        Council: pallet_collective::<Instance1>,
+        TechnicalCommittee: pallet_collective::<Instance2>,
         TechnicalMembership: pallet_membership::<Instance1>,
         Treasury: pallet_treasury,
         Bounties: pallet_bounties,

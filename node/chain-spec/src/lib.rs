@@ -11,11 +11,12 @@ use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
-    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix,
-    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY, CouncilConfig, TechnicalCommitteeConfig,
+    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, CouncilConfig,
+    EVMChainIdConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
+    ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig,
+    SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
+    TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
@@ -319,7 +320,7 @@ fn testnet_genesis(
                 .collect::<Vec<_>>(),
         },
         technical_committee: TechnicalCommitteeConfig {
-            members: endowed_accounts.iter().cloned().skip(3).take(3).collect(), 
+            members: endowed_accounts.iter().cloned().skip(3).take(3).collect(),
             ..Default::default()
         },
         technical_membership: Default::default(),
