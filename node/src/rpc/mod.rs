@@ -29,6 +29,12 @@ use vitreus_power_plant_runtime::{opaque::Block, AccountId, Balance, BlockNumber
 mod eth;
 pub use self::eth::{create_eth, overrides_handle, EthDeps};
 
+/// Extra dependencies for Node
+pub struct NodeDeps {
+    /// Node name defined during boot
+    pub name: String,
+}
+
 /// Extra dependencies for BABE.
 pub struct BabeDeps {
     /// The keystore that manages the keys of the node.
@@ -68,6 +74,8 @@ pub struct FullDeps<C, P, BE, A: ChainApi, CT, SC> {
     pub babe: BabeDeps,
     /// GRANDPA specific dependencies.
     pub grandpa: GrandpaDeps<BE>,
+    /// Node specific dependencies.
+    pub node: NodeDeps,
 }
 
 pub struct DefaultEthConfig<C, BE>(std::marker::PhantomData<(C, BE)>);
@@ -123,7 +131,7 @@ where
     use node_rpc_server::{Node, NodeApiServer};
 
     let mut io = RpcModule::new(());
-    let FullDeps { client, pool, select_chain, deny_unsafe, command_sink, eth, babe, grandpa } =
+    let FullDeps { client, pool, select_chain, deny_unsafe, command_sink, eth, babe, grandpa, node } =
         deps;
     let BabeDeps { keystore, worker_handle } = babe;
     let GrandpaDeps {
@@ -133,8 +141,11 @@ where
         subscription_executor,
         finality_provider,
     } = grandpa;
+    let NodeDeps {
+        name
+    } = node;
 
-    io.merge(Node::new().into_rpc())?;
+    io.merge(Node::new(name).into_rpc())?;
     io.merge(System::new(client.clone(), pool, deny_unsafe).into_rpc())?;
     io.merge(TransactionPayment::new(client.clone()).into_rpc())?;
     io.merge(EnergyFee::new(client.clone()).into_rpc())?;

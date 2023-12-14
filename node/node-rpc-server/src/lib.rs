@@ -15,11 +15,15 @@ use sp_block_builder::BlockBuilder as BlockBuilderApi;
 use sp_blockchain::HeaderBackend;
 use sp_runtime::traits::{Block as BlockT, Header};
 
-pub struct Node;
+pub struct Node {
+    name: String
+}
 
 impl Node {
-    pub fn new() -> Self {
-        Self
+    pub fn new(name: String) -> Self {
+        Self {
+            name
+        }
     }
 }
 
@@ -34,6 +38,6 @@ pub trait NodeApi {
 #[async_trait]
 impl NodeApiServer for Node {
     async fn name(&self) -> RpcResult<String> {
-        Ok("vitreus-default-node-name".to_owned())
+        Ok(self.name.clone())
     }
 }
