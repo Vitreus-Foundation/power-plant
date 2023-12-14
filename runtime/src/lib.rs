@@ -1111,7 +1111,8 @@ construct_runtime!(
         NacManaging: pallet_nac_managing,
 
         // Governance-related pallets
-        // Scheduler: pallet_scheduler,
+        Scheduler: pallet_scheduler,
+        Preimage: pallet_preimage,
         // Treasury: pallet_treasury,
         // Democracy: pallet_democracy,
         // Council: pallet_collective::<Instance1>,

@@ -57,7 +57,9 @@ pallet-nac-managing = { workspace = true }
 pallet-nfts = { workspace = true }
 pallet-nfts-runtime-api = { workspace = true }
 pallet-offences = { workspace = true }
+pallet-preimage = { workspace = true }
 pallet-reputation = { workspace = true }
+pallet-scheduler = { workspace = true }
 pallet-session = { workspace = true }
 pallet-staking-reward-curve = { workspace = true }
 pallet-sudo = { workspace = true }
@@ -146,6 +148,8 @@ std = [
     "pallet-transaction-payment/std",
     "pallet-nfts/std",
     "pallet-nfts-runtime-api/std",
+    "pallet-preimage/std",
+    "pallet-scheduler/std",
     "pallet-uniques/std",
     "pallet-utility/std",
     # Frontier
