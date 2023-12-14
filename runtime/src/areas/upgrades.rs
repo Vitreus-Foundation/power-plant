@@ -2,7 +2,7 @@ use core::cmp::Ordering;
 
 use crate::prod_or_fast;
 use crate::{
-    areas::AuctionAdmin, AccountId, Balance, Balances, Preimage, BlockNumber, BlockWeights, OriginCaller,
+    AccountId, Balance, Balances, Preimage, BlockNumber, BlockWeights, OriginCaller,
     Runtime, RuntimeEvent, RuntimeOrigin, RuntimeCall, DAYS, HOURS, MINUTES, NANO_VTRS, PICO_VTRS,
 };
 
@@ -44,6 +44,11 @@ parameter_types! {
 // 	}
 // }
 
+// type ScheduleOrigin = EitherOfDiverse<
+// 	EnsureRoot<AccountId>,
+// 	pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>,
+// >;
+
 impl pallet_scheduler::Config for Runtime {
     type RuntimeOrigin = RuntimeOrigin;
     type RuntimeEvent = RuntimeEvent;
@@ -53,7 +58,7 @@ impl pallet_scheduler::Config for Runtime {
     // The goal of having ScheduleOrigin include AuctionAdmin is to allow the auctions track of
     // OpenGov to schedule periodic auctions.
     // TODO: investigate whether we need this
-    type ScheduleOrigin = EitherOf<EnsureRoot<AccountId>, AuctionAdmin>;
+    type ScheduleOrigin = EnsureRoot<AccountId>;
     type MaxScheduledPerBlock = MaxScheduledPerBlock;
     // TODO: add weights
     type WeightInfo = ();

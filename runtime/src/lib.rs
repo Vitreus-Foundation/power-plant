@@ -77,8 +77,6 @@ use pallet_evm::{
 use pallet_nfts::PalletFeatures;
 use sp_runtime::transaction_validity::InvalidTransaction;
 
-use crate::areas::pallet_custom_origins;
-
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
 pub use pallet_energy_generation::StakerStatus;
@@ -551,7 +549,7 @@ pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
 
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const SessionsPerEra: SessionIndex = 5;
+    pub const SessionsPerEra: SessionIndex = 1;
     pub const BondingDuration: EraIndex = 24 * 28;
     pub const SlashDeferDuration: EraIndex = 24 * 7; // 1/4 the bonding duration.
     pub const Period: BlockNumber = 5;
@@ -1115,10 +1113,7 @@ construct_runtime!(
         Preimage: pallet_preimage,
         // Treasury: pallet_treasury,
         // Democracy: pallet_democracy,
-        // Council: pallet_collective::<Instance1>,
-
-        Origins: pallet_custom_origins::{Origin},
-        
+        // Council: pallet_collective::<Instance1>,        
     }
 );
 
