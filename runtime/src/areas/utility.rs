@@ -15,6 +15,14 @@ use sp_runtime::{Perbill, Percent, Permill};
 
 use crate::areas::governance::CouncilCollective;
 
+
+impl pallet_utility::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeCall = RuntimeCall;
+    type PalletsOrigin = OriginCaller;
+    type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
+}
+
 parameter_types! {
     pub MaximumSchedulerWeight: Weight = Perbill::from_percent(80) *
         BlockWeights::get().max_block;
@@ -58,28 +66,8 @@ impl pallet_scheduler::Config for Runtime {
     type MaximumWeight = MaximumSchedulerWeight;
     type ScheduleOrigin = ScheduleOrigin;
     type MaxScheduledPerBlock = MaxScheduledPerBlock;
-    // TODO: add weights
-    type WeightInfo = ();
+    type WeightInfo = pallet_scheduler::weights::SubstrateWeight<Runtime>;
     type OriginPrivilegeCmp = OriginPrivilegeCmp;
     type Preimages = Preimage;
 }
 
-pub const fn deposit(items: u32, bytes: u32) -> Balance {
-    items as Balance * 200 * NANO_VTRS + (bytes as Balance) * 1 * PICO_VTRS
-}
-
-parameter_types! {
-    pub const PreimageMaxSize: u32 = 4096 * 1024;
-    pub const PreimageBaseDeposit: Balance = deposit(2, 64);
-    pub const PreimageByteDeposit: Balance = deposit(0, 1);
-}
-
-impl pallet_preimage::Config for Runtime {
-    // TODO: add weights
-    type WeightInfo = ();
-    type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
-    type ManagerOrigin = EnsureRoot<AccountId>;
-    type BaseDeposit = PreimageBaseDeposit;
-    type ByteDeposit = PreimageByteDeposit;
-}

@@ -213,12 +213,6 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 
-pub const FEMTO_VTRS: Balance = 1_000;
-pub const PICO_VTRS: Balance = 1_000 * FEMTO_VTRS;
-pub const NANO_VTRS: Balance = 1_000 * PICO_VTRS;
-pub const MICRO_VTRS: Balance = 1_000 * NANO_VTRS;
-pub const MILLI_VTRS: Balance = 1_000 * MICRO_VTRS;
-
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
 pub fn native_version() -> sp_version::NativeVersion {
@@ -236,7 +230,13 @@ pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
 pub mod vtrs {
     use super::*;
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
+    pub const FEMTO_VTRS: Balance = 1_000;
+    pub const PICO_VTRS: Balance = 1_000 * FEMTO_VTRS;
+    pub const NANO_VTRS: Balance = 1_000 * PICO_VTRS;
+    pub const MICRO_VTRS: Balance = 1_000 * NANO_VTRS;
+    pub const MILLI_VTRS: Balance = 1_000 * MICRO_VTRS;
 }
+pub use vtrs::*;
 
 pub mod vnrg {
     use super::*;
@@ -454,13 +454,6 @@ impl pallet_session::Config for Runtime {
 impl pallet_session::historical::Config for Runtime {
     type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
-}
-
-impl pallet_utility::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type RuntimeCall = RuntimeCall;
-    type PalletsOrigin = OriginCaller;
-    type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_authorship::Config for Runtime {

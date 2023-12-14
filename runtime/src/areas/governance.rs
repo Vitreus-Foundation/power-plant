@@ -15,6 +15,25 @@ use sp_core::ConstU32;
 use sp_runtime::{Perbill, Percent, Permill};
 
 
+pub const fn deposit(items: u32, bytes: u32) -> Balance {
+    items as Balance * 200 * NANO_VTRS + (bytes as Balance) * 1 * PICO_VTRS
+}
+
+parameter_types! {
+    pub const PreimageMaxSize: u32 = 4096 * 1024;
+    pub const PreimageBaseDeposit: Balance = deposit(2, 64);
+    pub const PreimageByteDeposit: Balance = deposit(0, 1);
+}
+
+impl pallet_preimage::Config for Runtime {
+    type WeightInfo = pallet_preimage::weights::SubstrateWeight<Runtime>;
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type ManagerOrigin = EnsureRoot<AccountId>;
+    type BaseDeposit = PreimageBaseDeposit;
+    type ByteDeposit = PreimageByteDeposit;
+}
+
 parameter_types! {
 	pub CouncilMotionDuration: BlockNumber = prod_or_fast!(7 * DAYS, 2 * MINUTES, "VITREUS_MOTION_DURATION");
 	pub const CouncilMaxProposals: u32 = 100;
@@ -33,8 +52,7 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 	type MaxMembers = CouncilMaxMembers;
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type SetMembersOrigin = EnsureRoot<AccountId>;
-    // TODO: add weights
-	type WeightInfo = ();
+	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -54,8 +72,7 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
 	type MaxMembers = TechnicalMaxMembers;
 	type DefaultVote = pallet_collective::PrimeDefaultVote;
 	type SetMembersOrigin = EnsureRoot<AccountId>;
-    // TODO: add weights
-	type WeightInfo = ();
+	type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_membership::Config<pallet_membership::Instance1> for Runtime {
@@ -68,8 +85,7 @@ impl pallet_membership::Config<pallet_membership::Instance1> for Runtime {
 	type MembershipInitialized = TechnicalCommittee;
 	type MembershipChanged = TechnicalCommittee;
 	type MaxMembers = TechnicalMaxMembers;
-    // TODO: add weights
-	type WeightInfo = ();
+	type WeightInfo = pallet_membership::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -80,9 +96,6 @@ parameter_types! {
 	pub const Burn: Permill = Permill::from_percent(1);
 	pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 
-	pub const TipCountdown: BlockNumber = 1 * DAYS;
-	pub const TipFindersFee: Percent = Percent::from_percent(20);
-	pub const TipReportDepositBase: Balance = 10 * NANO_VTRS;
 	pub const DataDepositPerByte: Balance = 100 * PICO_VTRS;
 	pub const MaxApprovals: u32 = 100;
 	pub const MaxAuthorities: u32 = 100_000;
@@ -113,8 +126,7 @@ impl pallet_treasury::Config for Runtime {
 	type BurnDestination = ();
 	type SpendFunds = Bounties;
 	type MaxApprovals = MaxApprovals;
-    // TODO: add weights
-	type WeightInfo = ();
+	type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
 	type SpendOrigin = EitherOf<
 		frame_system::EnsureRootWithSuccess<AccountId, RootSpendOriginMaxAmount>,
 		EnsureWithSuccess<
@@ -148,8 +160,7 @@ impl pallet_bounties::Config for Runtime {
 	type ChildBountyManager = ();
 	type DataDepositPerByte = DataDepositPerByte;
 	type MaximumReasonLength = MaximumReasonLength;
-    // TODO: add weights
-	type WeightInfo = ();
+	type WeightInfo = pallet_bounties::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -221,8 +232,7 @@ impl pallet_democracy::Config for Runtime {
 	type Scheduler = Scheduler;
 	type PalletsOrigin = OriginCaller;
 	type MaxVotes = MaxVotes;
-    // TODO: add weights 
-	type WeightInfo = ();
+	type WeightInfo = pallet_democracy::weights::SubstrateWeight<Runtime>;
 	type MaxProposals = MaxProposals;
 	type Preimages = Preimage;
 	type MaxDeposits = ConstU32<100>;
