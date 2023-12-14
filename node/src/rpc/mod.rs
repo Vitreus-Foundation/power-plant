@@ -120,6 +120,7 @@ where
     use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
     use sc_consensus_manual_seal::rpc::{ManualSeal, ManualSealApiServer};
     use substrate_frame_rpc_system::{System, SystemApiServer};
+    use node_rpc_server::{Node, NodeApiServer};
 
     let mut io = RpcModule::new(());
     let FullDeps { client, pool, select_chain, deny_unsafe, command_sink, eth, babe, grandpa } =
@@ -133,6 +134,7 @@ where
         finality_provider,
     } = grandpa;
 
+    io.merge(Node::new().into_rpc())?;
     io.merge(System::new(client.clone(), pool, deny_unsafe).into_rpc())?;
     io.merge(TransactionPayment::new(client.clone()).into_rpc())?;
     io.merge(EnergyFee::new(client.clone()).into_rpc())?;

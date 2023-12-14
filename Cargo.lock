@@ -5006,6 +5006,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-rpc-server"
+version = "0.1.0"
+dependencies = [
+ "jsonrpsee",
+ "sc-client-api",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "serde",
+ "serde_json",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-runtime",
+]
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -10388,6 +10404,7 @@ dependencies = [
  "hex-literal 0.3.4",
  "jsonrpsee",
  "log",
+ "node-rpc-server",
  "pallet-energy-generation",
  "pallet-nfts-runtime-api",
  "pallet-reputation",
