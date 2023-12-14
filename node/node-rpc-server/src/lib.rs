@@ -17,7 +17,7 @@ impl Node {
 #[rpc(server)]
 #[async_trait]
 pub trait NodeApi {
-    /// Returns balance of the given account.
+    /// Returns the node's name.
     #[method(name = "node_name")]
     async fn name(&self) -> RpcResult<String>;
 }
