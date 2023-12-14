@@ -2011,7 +2011,7 @@ fn bond_with_no_staked_value() {
                 5,
                 RewardDestination::Controller
             ));
-            assert_eq!(Balances::locks(&1)[0].amount, 5);
+            assert_eq!(Balances::locks(1)[0].amount, 5);
 
             // unbonding even 1 will cause all to be unbonded.
             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(2), 1));
@@ -2032,14 +2032,14 @@ fn bond_with_no_staked_value() {
             // not yet removed.
             assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
             assert!(PowerPlant::ledger(2).is_some());
-            assert_eq!(Balances::locks(&1)[0].amount, 5);
+            assert_eq!(Balances::locks(1)[0].amount, 5);
 
             mock::start_active_era(3);
 
             // poof. Account 1 is removed from the staking system.
             assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
             assert!(PowerPlant::ledger(2).is_none());
-            assert_eq!(Balances::locks(&1).len(), 0);
+            assert_eq!(Balances::locks(1).len(), 0);
         });
 }
 
@@ -2056,8 +2056,8 @@ fn bond_with_little_staked_value_bounded() {
                 RuntimeOrigin::signed(10),
                 RewardDestination::Controller
             ));
-            let init_balance_2 = Assets::balance(VNRG::get(), &2);
-            let init_balance_10 = Assets::balance(VNRG::get(), &10);
+            let init_balance_2 = Assets::balance(VNRG::get(), 2);
+            let init_balance_10 = Assets::balance(VNRG::get(), 10);
 
             // set enought reputation for the stash account
             assert_ok!(ReputationPallet::force_set_points(
@@ -2143,7 +2143,7 @@ fn bond_with_little_staked_value_bounded() {
                 1
             );
             assert_eq_error_rate!(
-                Assets::balance(VNRG::get(), &10),
+                Assets::balance(VNRG::get(), 10),
                 init_balance_10 + energy_reward_10_0 + energy_reward_10_1,
                 3,
             );
@@ -2170,7 +2170,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
         ErasEnergyPerStakeCurrency::<Test>::insert(0, stake);
         mock::start_active_era(1);
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 0));
-        assert_eq!(Assets::balance(VNRG::get(), &10), Balance::max_value());
+        assert_eq!(Assets::balance(VNRG::get(), 10), Balance::max_value());
 
         // Set staker
         let _ = Balances::make_free_balance_be(&11, stake);
@@ -2190,7 +2190,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
             },
         );
 
-        let reputation = ReputationPallet::reputation(&11).unwrap().reputation.points();
+        let reputation = ReputationPallet::reputation(11).unwrap().reputation.points();
 
         // Check slashing
         on_offence_now(
@@ -2204,7 +2204,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
         let slash = *max_slash_amount(&reputation.into());
 
         assert_eq!(
-            *ReputationPallet::reputation(&11).unwrap().reputation.points(),
+            *ReputationPallet::reputation(11).unwrap().reputation.points(),
             *reputation - slash
         );
     })
@@ -2376,11 +2376,11 @@ fn slash_in_old_span_does_not_deselect() {
     ExtBuilder::default().build_and_execute(|| {
         // Mutate reputation of the stashes, so that they won't be chilled after 95% slash
         let new_rep = Reputation::from(ReputationTier::Trailblazer(2));
-        pallet_reputation::AccountReputation::<Test>::mutate(&11, |record| {
+        pallet_reputation::AccountReputation::<Test>::mutate(11, |record| {
             record.get_or_insert(ReputationRecord::with_blocknumber(0)).reputation =
                 new_rep.clone();
         });
-        pallet_reputation::AccountReputation::<Test>::mutate(&21, |record| {
+        pallet_reputation::AccountReputation::<Test>::mutate(21, |record| {
             record.get_or_insert(ReputationRecord::with_blocknumber(0)).reputation =
                 new_rep.clone();
         });
@@ -2587,7 +2587,7 @@ fn invulnerables_are_not_slashed() {
         let cooperator_reputations: Vec<_> = exposure_21
             .others
             .iter()
-            .map(|o| *ReputationPallet::reputation(&o.who).unwrap().reputation.points())
+            .map(|o| *ReputationPallet::reputation(o.who).unwrap().reputation.points())
             .collect();
 
         on_offence_now(
@@ -2624,7 +2624,7 @@ fn invulnerables_are_not_slashed() {
             cooperator_reputations.into_iter().zip(exposure_21.others)
         {
             assert_eq!(
-                *ReputationPallet::reputation(&other.who).unwrap().reputation.points(),
+                *ReputationPallet::reputation(other.who).unwrap().reputation.points(),
                 slash_prop * initial_reputation
             );
         }
@@ -2754,8 +2754,8 @@ fn garbage_collection_after_slashing() {
                 initial_reputation_11 - slash_11,
                 1
             );
-            assert!(SlashingSpans::<Test>::get(&11).is_some());
-            assert_eq_error_rate!(**SpanSlash::<Test>::get(&(11, 0)).amount(), slash_11, 1);
+            assert!(SlashingSpans::<Test>::get(11).is_some());
+            assert_eq_error_rate!(**SpanSlash::<Test>::get((11, 0)).amount(), slash_11, 1);
 
             let reputation_11 = ReputationPallet::reputation(11).unwrap().reputation;
 
@@ -2795,7 +2795,7 @@ fn garbage_collection_after_slashing() {
             assert_eq!(Balances::free_balance(11), 2);
             assert_eq!(Balances::total_balance(&11), 2);
 
-            let slashing_spans = SlashingSpans::<Test>::get(&11).unwrap();
+            let slashing_spans = SlashingSpans::<Test>::get(11).unwrap();
             assert_eq!(slashing_spans.iter().count(), 2);
 
             // reap_stash respects num_slashing_spans so that weight is accurate
@@ -2806,8 +2806,8 @@ fn garbage_collection_after_slashing() {
             );
             assert_ok!(PowerPlant::reap_stash(RuntimeOrigin::signed(20), 11, 2));
 
-            assert!(SlashingSpans::<Test>::get(&11).is_none());
-            assert_eq!(SpanSlash::<Test>::get(&(11, 0)).amount(), &0.into());
+            assert!(SlashingSpans::<Test>::get(11).is_none());
+            assert_eq!(SpanSlash::<Test>::get((11, 0)).amount(), &0.into());
         })
 }
 
@@ -2853,19 +2853,19 @@ fn garbage_collection_on_window_pruning() {
             1
         );
 
-        assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
-        assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_some());
+        assert!(ValidatorSlashInEra::<Test>::get(now, 11).is_some());
+        assert!(CooperatorSlashInEra::<Test>::get(now, 101).is_some());
 
         // + 1 because we have to exit the bonding window.
         for era in (0..(BondingDuration::get() + 1)).map(|offset| offset + now + 1) {
-            assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_some());
-            assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_some());
+            assert!(ValidatorSlashInEra::<Test>::get(now, 11).is_some());
+            assert!(CooperatorSlashInEra::<Test>::get(now, 101).is_some());
 
             mock::start_active_era(era);
         }
 
-        assert!(ValidatorSlashInEra::<Test>::get(&now, &11).is_none());
-        assert!(CooperatorSlashInEra::<Test>::get(&now, &101).is_none());
+        assert!(ValidatorSlashInEra::<Test>::get(now, 11).is_none());
+        assert!(CooperatorSlashInEra::<Test>::get(now, 101).is_none());
     })
 }
 
@@ -2878,7 +2878,7 @@ fn slashes_are_summed_across_spans() {
 
         let initial_reputation_21 = *ReputationPallet::reputation(21).unwrap().reputation.points();
 
-        let get_span = |account| SlashingSpans::<Test>::get(&account).unwrap();
+        let get_span = |account| SlashingSpans::<Test>::get(account).unwrap();
 
         on_offence_now(
             &[OffenceDetails {
@@ -3342,7 +3342,7 @@ fn remove_multi_deferred() {
         );
 
         // 11, 21, 11
-        assert_eq!(UnappliedSlashes::<Test>::get(&4).len(), 3);
+        assert_eq!(UnappliedSlashes::<Test>::get(4).len(), 3);
 
         // fails if list is not sorted
         assert_noop!(
@@ -3362,7 +3362,7 @@ fn remove_multi_deferred() {
 
         assert_ok!(PowerPlant::cancel_deferred_slash(RuntimeOrigin::root(), 4, vec![0, 2]));
 
-        let slashes = UnappliedSlashes::<Test>::get(&4);
+        let slashes = UnappliedSlashes::<Test>::get(4);
         assert_eq!(slashes.len(), 1);
         assert_eq!(slashes[0].validator, 21);
     })
@@ -3386,8 +3386,8 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
         assert!(PowerPlant::cooperators(101).unwrap().targets.contains_key(&11));
 
         // 11 and 21 both have the support of 100
-        let exposure_11 = PowerPlant::eras_stakers(active_era(), &11);
-        let exposure_21 = PowerPlant::eras_stakers(active_era(), &21);
+        let exposure_11 = PowerPlant::eras_stakers(active_era(), 11);
+        let exposure_21 = PowerPlant::eras_stakers(active_era(), 21);
 
         assert_eq!(exposure_11.total, 1000 + 200);
         assert_eq!(exposure_21.total, 1000 + 300);
@@ -3436,8 +3436,8 @@ fn non_slashable_offence_doesnt_disable_validator() {
         mock::start_active_era(1);
         assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
 
-        let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
-        let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
+        let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
+        let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
 
         // offence with no slash associated
         on_offence_now(
@@ -3490,8 +3490,8 @@ fn slashing_independent_of_disabling_validator() {
         mock::start_active_era(1);
         assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
 
-        let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
-        let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
+        let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
+        let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
 
         let now = PowerPlant::active_era().unwrap().index;
 
@@ -3561,12 +3561,9 @@ fn offence_threshold_triggers_new_era() {
             // we have 4 validators and an offending validator threshold of 75%,
             // once the third validator commits an offence a new era should be forced
 
-            let exposure_11 =
-                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
-            let exposure_21 =
-                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
-            let exposure_31 =
-                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &31);
+            let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
+            let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
+            let exposure_31 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 31);
 
             on_offence_now(
                 &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
@@ -3601,10 +3598,8 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
             assert_eq_uvec!(Session::validators(), vec![41, 31, 21, 11]);
             assert_eq!(<Test as Config>::SessionsPerEra::get(), 3);
 
-            let exposure_11 =
-                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &11);
-            let exposure_21 =
-                PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, &21);
+            let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
+            let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
 
             on_offence_now(
                 &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
@@ -3833,9 +3828,9 @@ fn test_max_cooperator_rewarded_per_validator_and_cant_steal_someone_else_reward
             let balance = 10_000 + i as Balance;
 
             if i < max_rewarded {
-                assert_eq!(Assets::balance(VNRG::get(), &stash), balance + cooperator_reward);
+                assert_eq!(Assets::balance(VNRG::get(), stash), balance + cooperator_reward);
             } else {
-                assert_eq!(Assets::balance(VNRG::get(), &stash), balance);
+                assert_eq!(Assets::balance(VNRG::get(), stash), balance);
             }
         }
     });
@@ -3892,18 +3887,18 @@ fn test_payout_stakers() {
 
         // Top 64 cooperators of validator 11 automatically paid out, including the validator
         // Validator payout goes to controller.
-        assert!(Assets::balance(VNRG::get(), &10) > 0);
+        assert!(Assets::balance(VNRG::get(), 10) > 0);
         for i in 36..100 {
-            assert!(Assets::balance(VNRG::get(), &(100 + i)) > 0);
+            assert!(Assets::balance(VNRG::get(), 100 + i) > 0);
         }
         // The bottom 36 do not
         for i in 0..36 {
-            assert_eq!(Assets::balance(VNRG::get(), &(100 + i)), 0);
+            assert_eq!(Assets::balance(VNRG::get(), 100 + i), 0);
         }
 
         // We track rewards in `claimed_rewards` vec
         assert_eq!(
-            PowerPlant::ledger(&10),
+            PowerPlant::ledger(10),
             Some(StakingLedger {
                 stash: 11,
                 total: 1000,
@@ -3935,7 +3930,7 @@ fn test_payout_stakers() {
 
         // We track rewards in `claimed_rewards` vec
         assert_eq!(
-            PowerPlant::ledger(&10),
+            PowerPlant::ledger(10),
             Some(StakingLedger {
                 stash: 11,
                 total: 1000,
@@ -3968,7 +3963,7 @@ fn test_payout_stakers() {
             expected_last_reward_era
         ));
         assert_eq!(
-            PowerPlant::ledger(&10),
+            PowerPlant::ledger(10),
             Some(StakingLedger {
                 stash: 11,
                 total: 1000,
@@ -3983,7 +3978,7 @@ fn test_payout_stakers() {
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 23));
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 42));
         assert_eq!(
-            PowerPlant::ledger(&10),
+            PowerPlant::ledger(10),
             Some(StakingLedger {
                 stash: 11,
                 total: 1000,
@@ -4015,7 +4010,7 @@ fn payout_stakers_handles_basic_errors() {
         // Create cooperators, targeting stash
         for i in 0..100 {
             let bond = balance + i as Balance;
-            bond_cooperator(1000 + i, 100 + i, bond, vec![(11, bond.into())]);
+            bond_cooperator(1000 + i, 100 + i, bond, vec![(11, bond)]);
         }
 
         mock::start_active_era(1);
@@ -4218,7 +4213,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
         // Era = None
         make_validator(8, 9, 1000);
         assert_eq!(
-            PowerPlant::ledger(&8),
+            PowerPlant::ledger(8),
             Some(StakingLedger {
                 stash: 9,
                 total: 1000,
@@ -4230,7 +4225,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
         mock::start_active_era(5);
         make_validator(10, 11, 1000);
         assert_eq!(
-            PowerPlant::ledger(&10),
+            PowerPlant::ledger(10),
             Some(StakingLedger {
                 stash: 11,
                 total: 1000,
@@ -4246,7 +4241,7 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
         mock::start_active_era(current_era);
         make_validator(12, 13, 1000);
         assert_eq!(
-            PowerPlant::ledger(&12),
+            PowerPlant::ledger(12),
             Some(StakingLedger {
                 stash: 13,
                 total: 1000,
@@ -4426,7 +4421,7 @@ fn cannot_rebond_to_lower_than_ed() {
         .build_and_execute(|| {
             // initial stuff.
             assert_eq!(
-                PowerPlant::ledger(&20).unwrap(),
+                PowerPlant::ledger(20).unwrap(),
                 StakingLedger {
                     stash: 21,
                     total: 10 * 1000,
@@ -4440,7 +4435,7 @@ fn cannot_rebond_to_lower_than_ed() {
             assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(20)));
             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(20), 10 * 1000));
             assert_eq!(
-                PowerPlant::ledger(&20).unwrap(),
+                PowerPlant::ledger(20).unwrap(),
                 StakingLedger {
                     stash: 21,
                     total: 10 * 1000,
@@ -4466,7 +4461,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
         .build_and_execute(|| {
             // initial stuff.
             assert_eq!(
-                PowerPlant::ledger(&20).unwrap(),
+                PowerPlant::ledger(20).unwrap(),
                 StakingLedger {
                     stash: 21,
                     total: 10 * 1000,
@@ -4480,7 +4475,7 @@ fn cannot_bond_extra_to_lower_than_ed() {
             assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(20)));
             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(20), 10 * 1000));
             assert_eq!(
-                PowerPlant::ledger(&20).unwrap(),
+                PowerPlant::ledger(20).unwrap(),
                 StakingLedger {
                     stash: 21,
                     total: 10 * 1000,
@@ -4507,7 +4502,7 @@ fn do_not_die_when_active_is_ed() {
         .build_and_execute(|| {
             // given
             assert_eq!(
-                PowerPlant::ledger(&20).unwrap(),
+                PowerPlant::ledger(20).unwrap(),
                 StakingLedger {
                     stash: 21,
                     total: 1000 * ed,
@@ -4524,7 +4519,7 @@ fn do_not_die_when_active_is_ed() {
 
             // then
             assert_eq!(
-                PowerPlant::ledger(&20).unwrap(),
+                PowerPlant::ledger(20).unwrap(),
                 StakingLedger {
                     stash: 21,
                     total: ed,
@@ -5261,7 +5256,7 @@ fn pre_bonding_era_cannot_be_claimed() {
         let claimed_rewards: BoundedVec<_, _> =
             (start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
         assert_eq!(
-            PowerPlant::ledger(&4).unwrap(),
+            PowerPlant::ledger(4).unwrap(),
             StakingLedger {
                 stash: 3,
                 total: 1500,
@@ -5272,7 +5267,7 @@ fn pre_bonding_era_cannot_be_claimed() {
         );
 
         // start next era
-        current_era = current_era + 1;
+        current_era += 1;
         mock::start_active_era(current_era);
 
         // claiming reward for last era in which validator was active works
@@ -5289,7 +5284,7 @@ fn pre_bonding_era_cannot_be_claimed() {
 
         // decoding will fail now since PowerPlant Ledger is in corrupt state
         HistoryDepth::set(history_depth - 1);
-        assert_eq!(PowerPlant::ledger(&4), None);
+        assert_eq!(PowerPlant::ledger(4), None);
 
         // make sure stakers still cannot claim rewards that they are not meant to
         assert_noop!(
@@ -5332,7 +5327,7 @@ fn reducing_history_depth_abrupt() {
         let claimed_rewards: BoundedVec<_, _> =
             (start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
         assert_eq!(
-            PowerPlant::ledger(&4).unwrap(),
+            PowerPlant::ledger(4).unwrap(),
             StakingLedger {
                 stash: 3,
                 total: 1500,
@@ -5343,14 +5338,14 @@ fn reducing_history_depth_abrupt() {
         );
 
         // next era
-        current_era = current_era + 1;
+        current_era += 1;
         mock::start_active_era(current_era);
 
         // claiming reward for last era in which validator was active works
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(4), 3, current_era - 1));
 
         // next era
-        current_era = current_era + 1;
+        current_era += 1;
         mock::start_active_era(current_era);
 
         // history_depth reduced without migration
@@ -5376,7 +5371,7 @@ fn reducing_history_depth_abrupt() {
         let claimed_rewards: BoundedVec<_, _> =
             (start_reward_era..=last_reward_era).collect::<Vec<_>>().try_into().unwrap();
         assert_eq!(
-            PowerPlant::ledger(&6).unwrap(),
+            PowerPlant::ledger(6).unwrap(),
             StakingLedger {
                 stash: 5,
                 total: 1200,

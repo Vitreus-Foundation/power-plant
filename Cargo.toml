@@ -3,6 +3,7 @@ members = [
     "node",
     "node/chain-spec",
     "node/eth-rpc-server",
+    "node/node-rpc-server",
     "pallets/claiming",
     "pallets/energy-fee",
     "pallets/energy-fee/runtime-api",
@@ -214,6 +215,7 @@ energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api"
 energy-fee-rpc = { path = "pallets/energy-fee/rpc" }
 energy-generation-rpc = { path = "pallets/energy-generation/rpc" }
 eth-rpc-server = { path = "node/eth-rpc-server" }
+node-rpc-server = { path = "node/node-rpc-server" }
 
 # Arkworks
 ark-bls12-377 = { version = "0.4.0", default-features = false, features = [

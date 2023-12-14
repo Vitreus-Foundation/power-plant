@@ -418,6 +418,7 @@ where
             backend.clone(),
             Some(shared_authority_set.clone()),
         );
+        let node_name = name.clone();
 
         Box::new(move |deny_unsafe, subscription_executor: sc_rpc::SubscriptionTaskExecutor| {
             let shared_voter_state = sc_consensus_grandpa::SharedVoterState::empty();
@@ -439,6 +440,7 @@ where
                     subscription_executor: subscription_executor.clone(),
                     finality_provider: finality_provider.clone(),
                 },
+                node: crate::rpc::NodeDeps { name: node_name.clone() },
             };
 
             crate::rpc::create_full(deps, subscription_executor, pubsub_notification_sinks.clone())
