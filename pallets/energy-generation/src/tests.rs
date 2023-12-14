@@ -3889,11 +3889,11 @@ fn test_payout_stakers() {
         // Validator payout goes to controller.
         assert!(Assets::balance(VNRG::get(), 10) > 0);
         for i in 36..100 {
-            assert!(Assets::balance(VNRG::get(), (100 + i)) > 0);
+            assert!(Assets::balance(VNRG::get(), 100 + i) > 0);
         }
         // The bottom 36 do not
         for i in 0..36 {
-            assert_eq!(Assets::balance(VNRG::get(), (100 + i)), 0);
+            assert_eq!(Assets::balance(VNRG::get(), 100 + i), 0);
         }
 
         // We track rewards in `claimed_rewards` vec

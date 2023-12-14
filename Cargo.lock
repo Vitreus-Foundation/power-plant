@@ -1958,7 +1958,6 @@ version = "0.1.0"
 dependencies = [
  "energy-fee-runtime-api",
  "ethereum-types",
- "fc-rpc-core",
  "jsonrpsee",
  "parity-scale-codec",
  "sp-api",
@@ -5010,15 +5009,8 @@ name = "node-rpc-server"
 version = "0.1.0"
 dependencies = [
  "jsonrpsee",
- "sc-client-api",
- "sc-transaction-pool",
- "sc-transaction-pool-api",
  "serde",
  "serde_json",
- "sp-api",
- "sp-block-builder",
- "sp-blockchain",
- "sp-runtime",
 ]
 
 [[package]]
@@ -5703,7 +5695,6 @@ dependencies = [
  "pallet-nfts",
  "pallet-reputation",
  "pallet-staking-reward-curve",
- "pallet-timestamp",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",
