@@ -1,4 +1,4 @@
-use crate::{prod_or_fast, MICRO_VTRS};
+use crate::{prod_or_fast, MICRO_VTRS, MILLI_VTRS, UNITS};
 use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, MoreThanHalfCouncil,
     OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Scheduler,
@@ -86,12 +86,13 @@ impl pallet_membership::Config<pallet_membership::Instance1> for Runtime {
 
 parameter_types! {
     pub const ProposalBond: Permill = Permill::from_percent(5);
-    pub const ProposalBondMinimum: Balance = MICRO_VTRS;
-    pub const ProposalBondMaximum: Balance = 5 * MICRO_VTRS;
+    pub const ProposalBondMinimum: Balance = 10 * MILLI_VTRS;
+    pub const ProposalBondMaximum: Balance = 10 * UNITS;
     pub const SpendPeriod: BlockNumber = 24 * DAYS;
     pub const Burn: Permill = Permill::from_percent(1);
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 
+    // TODO: reconsider
     pub const DataDepositPerByte: Balance = 100 * PICO_VTRS;
     pub const MaxApprovals: u32 = 100;
     pub const MaxAuthorities: u32 = 100_000;
@@ -163,7 +164,7 @@ parameter_types! {
     pub LaunchPeriod: BlockNumber = prod_or_fast!(28 * DAYS, 1, "VITREUS_LAUNCH_PERIOD");
     pub VotingPeriod: BlockNumber = prod_or_fast!(28 * DAYS, MINUTES, "VITREUS_VOTING_PERIOD");
     pub FastTrackVotingPeriod: BlockNumber = prod_or_fast!(3 * HOURS, MINUTES, "VITREUS_FAST_TRACK_VOTING_PERIOD");
-    pub const MinimumDeposit: Balance = MICRO_VTRS;
+    pub const MinimumDeposit: Balance = UNITS;
     pub EnactmentPeriod: BlockNumber = prod_or_fast!(28 * DAYS, 1, "VITREUS_ENACTMENT_PERIOD");
     pub CooloffPeriod: BlockNumber = prod_or_fast!(7 * DAYS, 1, "VITREUS_COOLOFF_PERIOD");
     pub const InstantAllowed: bool = true;
