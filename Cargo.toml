@@ -14,6 +14,7 @@ members = [
     "pallets/faucet",
     "pallets/nac-managing",
     "pallets/reputation",
+    "pallets/treasury-extension",
     "runtime",
     "runtime/runtime-api",
     # "pallets/simple-staking",
@@ -158,6 +159,7 @@ pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", 
 pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-treasury = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-treasury-extension = { path = "pallets/treasury-extension", default-features = false }
 pallet-nfts = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-nfts-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-uniques = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }

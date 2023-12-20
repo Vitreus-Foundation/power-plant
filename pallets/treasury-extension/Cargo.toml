@@ -1,0 +1,58 @@
+[package]
+name = "pallet-treasury-extension"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+parity-scale-codec = { workspace = true }
+scale-info = { workspace = true }
+serde = { workspace = true }
+sp-arithmetic = { workspace = true }
+sp-core = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
+sp-std = { workspace = true }
+
+pallet-treasury = { workspace = true }
+
+# Optional imports for benchmarking
+frame-benchmarking = { workspace = true, optional = true }
+rand_chacha = { workspace = true, optional = true }
+
+[dev-dependencies]
+sp-tracing = { workspace = true }
+sp-core = { workspace = true }
+pallet-assets = { workspace = true }
+pallet-balances = { workspace = true }
+pallet-ethereum = { workspace = true }
+pallet-timestamp = { workspace = true }
+pallet-staking-reward-curve = { workspace = true }
+substrate-test-utils = { workspace = true }
+frame-benchmarking = { workspace = true }
+rand_chacha = { workspace = true }
+ethereum-types = { workspace = true }
+pallet-base-fee = { workspace = true }
+
+[features]
+default = ["std"]
+std = [
+    "frame-benchmarking/std",
+    "frame-support/std",
+    "frame-system/std",
+    "parity-scale-codec/std",
+    "pallet-treasury/std",
+    "scale-info/std",
+    "serde/std",
+    "sp-io/std",
+    "sp-runtime/std",
+    "sp-std/std",
+]
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+]
