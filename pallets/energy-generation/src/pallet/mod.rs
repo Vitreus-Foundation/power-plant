@@ -650,6 +650,8 @@ pub mod pallet {
         Bonded { stash: T::AccountId, amount: StakeOf<T> },
         /// An account has unbonded this amount.
         Unbonded { stash: T::AccountId, amount: StakeOf<T> },
+        /// An account has unbonded this amount.
+        Cooperated { controller: T::AccountId, targets: Vec<(AccountIdLookupOf<T>, StakeOf<T>)> },
         /// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
         /// from the unlocking queue.
         Withdrawn { stash: T::AccountId, amount: StakeOf<T> },
@@ -1089,6 +1091,7 @@ pub mod pallet {
                 Error::<T>::InsufficientBond
             );
             let stash = &ledger.stash;
+            let cooperator_targets = targets.clone();
 
             // Only check limits if they are not already a cooperator.
             if !Cooperators::<T>::contains_key(stash) {
@@ -1144,6 +1147,9 @@ pub mod pallet {
 
             Self::do_remove_validator(stash);
             Self::do_add_cooperator(stash, cooperations)?;
+
+            Self::deposit_event(Event::<T>::Cooperated { controller, targets: cooperator_targets });
+
             Ok(())
         }
 
