@@ -817,7 +817,7 @@ impl<T: Config> Pallet<T> {
     // TODO: get rid of floating point types.
     pub fn calculate_block_authoring_reward() -> ReputationPoint {
         let active_validators_count = T::SessionInterface::validators().len();
-        let reward = ((NORMAL * pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0 as f64) as u64)
+        let reward = (NORMAL as u64 * pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0)
             .saturating_sub(pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0)
             .saturating_mul(active_validators_count as u64);
 

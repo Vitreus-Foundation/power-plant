@@ -639,7 +639,7 @@ impl pallet_energy_generation::Config for Runtime {
     type Reward = ();
     type RewardRemainder = ();
     type RuntimeEvent = RuntimeEvent;
-    type SessionInterface = ();
+    type SessionInterface = Self;
     type SessionsPerEra = SessionsPerEra;
     type Slash = ();
     type SlashDeferDuration = SlashDeferDuration;
