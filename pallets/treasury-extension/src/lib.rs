@@ -6,6 +6,12 @@ use pallet::*;
 use pallet_treasury::{BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
 use sp_arithmetic::{traits::Saturating, Permill};
 
+#[cfg(test)]
+mod mock;
+
+#[cfg(test)]
+mod tests;
+
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -47,12 +53,14 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
         total_weight: &mut Weight,
         missed_any: &mut bool,
     ) {
-        let fraction_for_recycle = T::SpendThreshold::get().mul_floor(Self::treasury_balance());
+        // Just to make sure that treasury won't burn funds
+        *missed_any = true;
 
+        let fraction_for_recycle = T::SpendThreshold::get().mul_ceil(Self::treasury_balance());
         let imbalance_amount = imbalance.peek();
 
         // imbalance amount is greater than amount for recycle, no need to continue
-        if fraction_for_recycle < imbalance_amount {
+        if fraction_for_recycle <= imbalance_amount {
             *total_weight += T::DbWeight::get().reads_writes(1, 0);
             return;
         }
@@ -64,8 +72,6 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
         Self::deposit_event(Event::Recycled { recyled_funds: unrecycled_amount });
 
         *budget_remaining = budget_remaining.saturating_sub(unrecycled_amount);
-        // Just to make sure that treasury won't burn funds
-        *missed_any = true;
         // TODO: add weight mutation
         // *total_weight += <T as pallet::Config<I>>::WeightInfo::spend_funds();
     }
