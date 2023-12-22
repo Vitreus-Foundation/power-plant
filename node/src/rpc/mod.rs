@@ -29,6 +29,12 @@ use vitreus_power_plant_runtime::{opaque::Block, AccountId, Balance, BlockNumber
 mod eth;
 pub use self::eth::{create_eth, overrides_handle, EthDeps};
 
+/// Extra dependencies for Node
+pub struct NodeDeps {
+    /// Node name defined during boot
+    pub name: String,
+}
+
 /// Extra dependencies for BABE.
 pub struct BabeDeps {
     /// The keystore that manages the keys of the node.
@@ -68,6 +74,8 @@ pub struct FullDeps<C, P, BE, A: ChainApi, CT, SC> {
     pub babe: BabeDeps,
     /// GRANDPA specific dependencies.
     pub grandpa: GrandpaDeps<BE>,
+    /// Node specific dependencies.
+    pub node: NodeDeps,
 }
 
 pub struct DefaultEthConfig<C, BE>(std::marker::PhantomData<(C, BE)>);
@@ -100,6 +108,9 @@ where
     C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
     C::Api: sc_consensus_babe::BabeApi<Block>,
+    C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block>,
+    C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
+    C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block>,
     C: BlockchainEvents<Block> + 'static,
     C: HeaderBackend<Block>
         + HeaderMetadata<Block, Error = BlockChainError>
@@ -110,6 +121,9 @@ where
     CT: fp_rpc::ConvertTransaction<<Block as BlockT>::Extrinsic> + Send + Sync + 'static,
     SC: sp_consensus::SelectChain<Block> + 'static,
 {
+    use energy_fee_rpc::{EnergyFee, EnergyFeeApiServer};
+    use energy_generation_rpc::{EnergyGeneration, EnergyGenerationApiServer};
+    use node_rpc_server::{Node, NodeApiServer};
     use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiServer};
     use sc_consensus_babe_rpc::{Babe, BabeApiServer};
     use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
@@ -117,8 +131,17 @@ where
     use substrate_frame_rpc_system::{System, SystemApiServer};
 
     let mut io = RpcModule::new(());
-    let FullDeps { client, pool, select_chain, deny_unsafe, command_sink, eth, babe, grandpa } =
-        deps;
+    let FullDeps {
+        client,
+        pool,
+        select_chain,
+        deny_unsafe,
+        command_sink,
+        eth,
+        babe,
+        grandpa,
+        node,
+    } = deps;
     let BabeDeps { keystore, worker_handle } = babe;
     let GrandpaDeps {
         shared_voter_state,
@@ -127,9 +150,13 @@ where
         subscription_executor,
         finality_provider,
     } = grandpa;
+    let NodeDeps { name } = node;
 
+    io.merge(Node::new(name).into_rpc())?;
     io.merge(System::new(client.clone(), pool, deny_unsafe).into_rpc())?;
     io.merge(TransactionPayment::new(client.clone()).into_rpc())?;
+    io.merge(EnergyFee::new(client.clone()).into_rpc())?;
+    io.merge(EnergyGeneration::new(client.clone()).into_rpc())?;
     io.merge(Babe::new(client, worker_handle, keystore, select_chain, deny_unsafe).into_rpc())?;
     io.merge(
         Grandpa::new(

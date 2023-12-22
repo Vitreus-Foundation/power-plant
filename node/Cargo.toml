@@ -91,8 +91,18 @@ fp-evm = { workspace = true, features = ["default"] }
 fp-rpc = { workspace = true, features = ["default"] }
 vitreus-power-plant-runtime = { workspace = true, features = ["default"] }
 
+# RPC modules
+eth-rpc-server = { workspace = true }
+energy-fee-rpc = { workspace = true }
+energy-generation-rpc = { workspace = true }
+node-rpc-server = { workspace = true }
+
+# Misc
+chain-spec = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-reputation = { workspace = true }
+pallet-nfts-runtime-api = { workspace = true }
+vitreus-utility-runtime-api = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true }

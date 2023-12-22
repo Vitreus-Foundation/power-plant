@@ -1,23 +1,35 @@
 //! Tests for the module.
 
-// use frame_support::pallet_prelude::*;
-use crate::mock::*;
-use frame_support::{dispatch::DispatchInfo, traits::fungible::Inspect};
-use frame_system::mocking::MockUncheckedExtrinsic;
-use frame_system::weights::{SubstrateWeight as SystemWeight, WeightInfo as _};
+use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event};
+use frame_support::{
+    dispatch::{DispatchInfo, GetDispatchInfo},
+    traits::{fungible::Inspect, Hooks},
+};
+use frame_system::{
+    mocking::MockUncheckedExtrinsic,
+    weights::{SubstrateWeight as SystemWeight, WeightInfo as _},
+    RawOrigin,
+};
 use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
 use pallet_evm::{Config as EVMConfig, GasWeightMapping, OnChargeEVMTransaction};
-use pallet_transaction_payment::OnChargeTransaction;
+use pallet_transaction_payment::{Multiplier, OnChargeTransaction};
 use parity_scale_codec::Encode;
-use sp_runtime::FixedPointNumber;
+use sp_runtime::{
+    traits::{One, SignedExtension},
+    transaction_validity::{InvalidTransaction, TransactionValidityError},
+    DispatchError, FixedPointNumber, Perquintill,
+};
 
 type Extrinsic = MockUncheckedExtrinsic<Test>;
 
 const INITIAL_ENERGY_BALANCE: Balance = 1_000_000_000_000;
 
+// TODO: replace numeric constants with named constants and define all of them in mock
+
 #[test]
 fn withdraw_fee_with_stock_coefficients_works() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
         let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
 
         let system_remark_call: RuntimeCall =
@@ -44,12 +56,17 @@ fn withdraw_fee_with_stock_coefficients_works() {
             BalancesVNRG::balance(&ALICE),
             initial_energy_balance.saturating_sub(computed_fee),
         );
+
+        System::assert_has_event(
+            Event::<Test>::EnergyFeePaid { who: ALICE, amount: computed_fee }.into(),
+        );
     });
 }
 
 #[test]
 fn withdraw_fee_with_custom_coefficients_works() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
         let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
         let transfer_amount: Balance = 1_000_000_000;
 
@@ -83,12 +100,18 @@ fn withdraw_fee_with_custom_coefficients_works() {
             BalancesVNRG::balance(&ALICE),
             initial_energy_balance.saturating_sub(constant_fee),
         );
+
+        assert_eq!(BurnedEnergy::<Test>::get(), constant_fee);
+        System::assert_has_event(
+            Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into(),
+        );
     });
 }
 
 #[test]
 fn withdraw_zero_fee_during_evm_extrinsic_call_works() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
         let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
         let transfer_amount: Balance = 1_000_000_000;
         let gas_limit: u64 = 1_000_000;
@@ -131,6 +154,7 @@ fn withdraw_zero_fee_during_evm_extrinsic_call_works() {
 #[test]
 fn evm_withdraw_fee_works() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
         let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
 
         // fee equals arbitrary number since we don't take it into account
@@ -145,12 +169,18 @@ fn evm_withdraw_fee_works() {
             BalancesVNRG::balance(&ALICE),
             initial_energy_balance.saturating_sub(constant_fee),
         );
+
+        assert_eq!(BurnedEnergy::<Test>::get(), constant_fee);
+        System::assert_has_event(
+            Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into(),
+        );
     });
 }
 
 #[test]
 fn vtrs_exchange_during_withdraw_evm_fee_works() {
-    new_test_ext(2).execute_with(|| {
+    new_test_ext(0).execute_with(|| {
+        System::set_block_number(1);
         let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
 
         // fee equals arbitrary number since we don't take it into account
@@ -160,12 +190,15 @@ fn vtrs_exchange_during_withdraw_evm_fee_works() {
         )
         .is_ok());
 
-        let constant_fee = GetConstantEnergyFee::get() - 1;
+        let constant_fee = GetConstantEnergyFee::get();
         let vtrs_fee = VNRG_TO_VTRS_RATE
             .checked_mul_int(constant_fee)
             .expect("Expected to calculate missing fee in VTRS");
-        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);
-        assert_eq!(BalancesVNRG::balance(&ALICE), 1,);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee));
+        assert_eq!(BalancesVNRG::balance(&ALICE), 0);
+        System::assert_has_event(
+            Event::<Test>::EnergyFeePaid { who: ALICE, amount: GetConstantEnergyFee::get() }.into(),
+        );
     });
 }
 
@@ -197,9 +230,145 @@ fn vtrs_exchange_during_withdraw_fee_with_stock_coefficients_works() {
         // We add 1 since VNRG is sufficient and account must have existential
         // balance
         let vtrs_fee = VNRG_TO_VTRS_RATE
-            .checked_mul_int(computed_fee + 1)
+            .checked_mul_int(computed_fee)
             .expect("Expected to calculate missing fee in VTRS");
 
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);
+    });
+}
+
+#[test]
+fn check_burned_energy_threshold_works() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        let transfer_amount: Balance = 1_000_000_000;
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+        let dispatch_info: DispatchInfo =
+            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+        let extrinsic_len: usize = 1000;
+
+        let extension: CheckEnergyFee<Test> = CheckEnergyFee::new();
+        assert!(extension
+            .clone()
+            .pre_dispatch(&ALICE, &assets_transfer_call, &dispatch_info, extrinsic_len)
+            .is_ok());
+
+        BurnedEnergyThreshold::<Test>::put(1_000_000_001);
+        assert!(extension
+            .clone()
+            .pre_dispatch(&ALICE, &assets_transfer_call, &dispatch_info, extrinsic_len)
+            .is_ok());
+
+        BurnedEnergyThreshold::<Test>::put(999_999_999);
+        assert_eq!(
+            extension.pre_dispatch(&ALICE, &assets_transfer_call, &dispatch_info, extrinsic_len),
+            Err(TransactionValidityError::Invalid(InvalidTransaction::ExhaustsResources))
+        );
+    });
+}
+
+#[test]
+fn check_sudo_bypass_burned_energy_threshold_works() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        BurnedEnergyThreshold::<Test>::put(0);
+        let transfer_amount: Balance = 1_000_000_000;
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+        let sudo_assets_transfer_call: RuntimeCall =
+            RuntimeCall::Sudo(pallet_sudo::Call::sudo { call: Box::new(assets_transfer_call) });
+        let dispatch_info: DispatchInfo = sudo_assets_transfer_call.get_dispatch_info();
+        let extrinsic_len: usize = 1000;
+
+        let extension: CheckEnergyFee<Test> = CheckEnergyFee::new();
+        assert!(extension
+            .clone()
+            .pre_dispatch(&ALICE, &sudo_assets_transfer_call, &dispatch_info, extrinsic_len)
+            .is_ok());
+    });
+}
+
+#[test]
+fn reset_burned_energy_on_init_works() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        BurnedEnergy::<Test>::put(1_234_567_890);
+        EnergyFee::on_initialize(1);
+        assert_eq!(EnergyFee::burned_energy(), 0);
+    });
+}
+
+#[test]
+fn update_burned_energy_threshold_works() {
+    new_test_ext(0).execute_with(|| {
+        System::set_block_number(1);
+        assert_eq!(EnergyFee::burned_energy_threshold(), None);
+        let new_threshold = 1_234_567_890;
+        assert_eq!(
+            EnergyFee::update_burned_energy_threshold(
+                RawOrigin::Signed(ALICE).into(),
+                new_threshold
+            ),
+            Err(DispatchError::BadOrigin.into())
+        );
+        EnergyFee::update_burned_energy_threshold(RawOrigin::Root.into(), new_threshold)
+            .expect("Expected to set a new burned energy threshold");
+
+        System::assert_last_event(
+            Event::<Test>::BurnedEnergyThresholdUpdated { new_threshold }.into(),
+        );
+
+        assert_eq!(EnergyFee::burned_energy_threshold(), Some(new_threshold));
+    });
+}
+
+#[test]
+fn update_block_fulness_threshold_works() {
+    new_test_ext(0).execute_with(|| {
+        System::set_block_number(1);
+        assert_eq!(EnergyFee::block_fullness_threshold(), Perquintill::one());
+        let new_threshold = Perquintill::from_parts(1_234_567_890);
+        assert_eq!(
+            EnergyFee::update_block_fullness_threshold(
+                RawOrigin::Signed(ALICE).into(),
+                new_threshold
+            ),
+            Err(DispatchError::BadOrigin.into())
+        );
+        EnergyFee::update_block_fullness_threshold(RawOrigin::Root.into(), new_threshold)
+            .expect("Expected to set a new block fullness threshold");
+
+        System::assert_last_event(
+            Event::<Test>::BlockFullnessThresholdUpdated { new_threshold }.into(),
+        );
+
+        assert_eq!(EnergyFee::block_fullness_threshold(), new_threshold);
+    });
+}
+
+#[test]
+fn update_upper_fee_multiplier_works() {
+    new_test_ext(0).execute_with(|| {
+        System::set_block_number(1);
+        assert_eq!(EnergyFee::upper_fee_multiplier(), Multiplier::one());
+        let new_multiplier = Multiplier::from(1_234_567_890);
+        assert_eq!(
+            EnergyFee::update_upper_fee_multiplier(RawOrigin::Signed(ALICE).into(), new_multiplier),
+            Err(DispatchError::BadOrigin.into())
+        );
+        EnergyFee::update_upper_fee_multiplier(RawOrigin::Root.into(), new_multiplier)
+            .expect("Expected to set a upper fee multiplier");
+
+        System::assert_last_event(
+            Event::<Test>::UpperFeeMultiplierUpdated { new_multiplier }.into(),
+        );
+
+        assert_eq!(EnergyFee::upper_fee_multiplier(), new_multiplier);
     });
 }

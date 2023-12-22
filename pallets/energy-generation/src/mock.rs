@@ -1,7 +1,6 @@
 //! Test utilities
 
 #![allow(unused_imports)]
-#![allow(dead_code)] // TODO remove it after deploy!
 
 use crate::{self as energy_generation, *};
 use frame_support::{
@@ -13,7 +12,8 @@ use frame_support::{
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use pallet_reputation::ReputationRecord;
+use orml_traits::GetByKey;
+use pallet_reputation::{ReputationRecord, ReputationTier, RANKS_PER_TIER};
 use parity_scale_codec::Compact;
 use sp_core::H256;
 
@@ -21,7 +21,7 @@ use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{Header, UintAuthorityId},
     traits::{IdentityLookup, Zero},
-    BuildStorage,
+    BuildStorage, Percent,
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
@@ -81,7 +81,7 @@ frame_support::construct_runtime!(
         Authorship: pallet_authorship,
         Balances: pallet_balances,
         Historical: pallet_session::historical,
-        Reputation: pallet_reputation,
+        ReputationPallet: pallet_reputation,
         Session: pallet_session,
         PowerPlant: energy_generation,
         System: frame_system,
@@ -126,8 +126,8 @@ impl frame_system::Config for Test {
     type Version = ();
     type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = Reputation;
-    type OnKilledAccount = Reputation;
+    type OnNewAccount = ReputationPallet;
+    type OnKilledAccount = ReputationPallet;
     type SystemWeightInfo = ();
     type SS58Prefix = ();
     type OnSetCode = ();
@@ -265,10 +265,8 @@ parameter_types! {
     pub static RewardOnUnbalanceWasCalled: bool = false;
     pub static LedgerSlashPerEra: (StakeOf<Test>, BTreeMap<EraIndex, StakeOf<Test>>) = (Zero::zero(), BTreeMap::new());
     pub static MaxWinners: u32 = 100;
-    // it takes a month to become a validator from 0
-    pub static ValidatorReputationThreshold: ReputationPoint = (*pallet_reputation::REPUTATION_POINTS_PER_DAY * 30).into();
-    // it takes 2 months to become a collaborative validator from 0
-    pub static CollaborativeValidatorReputationThreshold: ReputationPoint = (*pallet_reputation::REPUTATION_POINTS_PER_DAY * 60).into();
+    pub static ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
+    pub static CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Trailblazer(1);
 }
 
 pub struct MockReward;
@@ -302,16 +300,28 @@ impl EnergyRateCalculator<StakeOf<Test>, EnergyOf<Test>> for EnergyPerStakeCurre
     }
 }
 
-pub struct EnergyPerReputationPoint;
+pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
 
-impl EnergyRateCalculator<StakeOf<Test>, EnergyOf<Test>> for EnergyPerReputationPoint {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Test>,
-        _total_issuance: EnergyOf<Test>,
-        _core_nodes_num: u32,
-        _battery_slot_cap: EnergyOf<Test>,
-    ) -> EnergyOf<Test> {
-        EnergyOf::<Test>::from(1_000_u128)
+impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
+    fn get(k: &ReputationTier) -> Perbill {
+        match k {
+            ReputationTier::Vanguard(2) => Perbill::from_percent(2),
+            ReputationTier::Vanguard(3) => Perbill::from_percent(4),
+            ReputationTier::Trailblazer(0) => Perbill::from_percent(5),
+            ReputationTier::Trailblazer(1) => Perbill::from_percent(8),
+            ReputationTier::Trailblazer(2) => Perbill::from_percent(10),
+            ReputationTier::Trailblazer(3) => Perbill::from_percent(12),
+            ReputationTier::Ultramodern(0) => Perbill::from_percent(13),
+            ReputationTier::Ultramodern(1) => Perbill::from_percent(16),
+            ReputationTier::Ultramodern(2) => Perbill::from_percent(18),
+            ReputationTier::Ultramodern(3) => Perbill::from_percent(20),
+            ReputationTier::Ultramodern(rank) => {
+                let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
+                Perbill::from_percent(20_u8.saturating_add(additional_percentage).into())
+            },
+            // includes unhandled cases
+            _ => Perbill::zero(),
+        }
     }
 }
 
@@ -320,9 +330,8 @@ impl crate::pallet::pallet::Config for Test {
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = TestBenchmarkingConfig;
     type BondingDuration = BondingDuration;
-    type CollaborativeValidatorReputationThreshold = CollaborativeValidatorReputationThreshold;
+    type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerReputationPoint = EnergyPerReputationPoint;
     type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
@@ -331,6 +340,8 @@ impl crate::pallet::pallet::Config for Test {
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = EventListenerMock;
+    type ReputationTierEnergyRewardAdditionalPercentMapping =
+        ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = MockReward;
     type RewardRemainder = RewardRemainderMock;
     type RuntimeEvent = RuntimeEvent;
@@ -342,7 +353,7 @@ impl crate::pallet::pallet::Config for Test {
     type StakeCurrency = Balances;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
-    type ValidatorReputationThreshold = ValidatorReputationThreshold;
+    type ValidatorReputationTier = ValidatorReputationTier;
 }
 
 pub(crate) type StakingCall = crate::Call<Test>;
@@ -468,12 +479,12 @@ impl ExtBuilder {
         .assimilate_storage(&mut storage);
 
         let validator_reputation = ReputationRecord {
-            points: <Test as pallet::pallet::Config>::ValidatorReputationThreshold::get(),
+            reputation: <Test as pallet::pallet::Config>::ValidatorReputationTier::get().into(),
             updated: 0,
         };
         let collab_validator_rep = ReputationRecord {
-            points:
-                <Test as pallet::pallet::Config>::CollaborativeValidatorReputationThreshold::get(),
+            reputation:
+                <Test as pallet::pallet::Config>::CollaborativeValidatorReputationTier::get().into(),
             updated: 0,
         };
         let _ = pallet_reputation::GenesisConfig::<Test> {
@@ -636,16 +647,6 @@ pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
     ));
 }
 
-pub(crate) fn bond_validator(stash: AccountId, ctrl: AccountId, val: Balance) {
-    bond(stash, ctrl, val);
-    assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(ctrl), ValidatorPrefs::default()));
-    assert_ok!(Session::set_keys(
-        RuntimeOrigin::signed(ctrl),
-        SessionKeys { other: ctrl.into() },
-        vec![]
-    ));
-}
-
 pub(crate) fn bond_cooperator(
     stash: AccountId,
     ctrl: AccountId,
@@ -718,6 +719,33 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 
     assert!(payout > 0);
     payout
+}
+
+pub(crate) fn make_validator(controller: AccountId, stash: AccountId, balance: Balance) {
+    assert_ok!(ReputationPallet::force_set_points(
+        RuntimeOrigin::root(),
+        controller,
+        CollaborativeValidatorReputationTier::get().into()
+    ));
+
+    assert_ok!(ReputationPallet::force_set_points(
+        RuntimeOrigin::root(),
+        stash,
+        CollaborativeValidatorReputationTier::get().into()
+    ));
+
+    bond(stash, controller, balance);
+
+    assert_ok!(PowerPlant::validate(
+        RuntimeOrigin::signed(controller),
+        ValidatorPrefs::default_collaborative()
+    ));
+
+    assert_ok!(Session::set_keys(
+        RuntimeOrigin::signed(controller),
+        SessionKeys { other: controller.into() },
+        vec![]
+    ));
 }
 
 /// Time it takes to finish a session.
@@ -882,4 +910,30 @@ pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
     (Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+pub(crate) fn controller_stash_reputation_tier(controller: &AccountId) -> Option<ReputationTier> {
+    let stash = energy_generation::Ledger::<Test>::get(controller)
+        .expect("Expected to get a controller's ledger")
+        .stash;
+
+    account_reputation_tier(&stash)
+}
+
+pub(crate) fn account_reputation_tier(account: &AccountId) -> Option<ReputationTier> {
+    pallet_reputation::AccountReputation::<Test>::get(account)
+        .expect("Expected to get account's reputation record")
+        .reputation
+        .tier()
+}
+
+pub(crate) fn calculate_reward(
+    total_payout: Balance,
+    total_stake: Balance,
+    personal_stake: Balance,
+    bonus_percent: Percent,
+) -> Balance {
+    let part = Perbill::from_rational(personal_stake, total_stake);
+    let reward = part * total_payout;
+    bonus_percent.mul_floor(reward) + reward
 }

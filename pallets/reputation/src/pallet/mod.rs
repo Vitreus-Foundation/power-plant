@@ -1,3 +1,4 @@
+//! Pallet implementation (dispatchables and storages).
 use crate::weights::*;
 use crate::{ReputationPoint, ReputationRecord};
 pub use impls::*;
@@ -8,6 +9,9 @@ mod impls;
 #[allow(clippy::module_inception)]
 #[frame_support::pallet]
 pub mod pallet {
+    // because substrate's macros won't allow us to add docs in some places
+    #![allow(missing_docs)]
+
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
@@ -75,7 +79,10 @@ pub mod pallet {
             ensure_root(origin)?;
             let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
 
-            <AccountReputation<T>>::insert(&account, ReputationRecord { points, updated });
+            <AccountReputation<T>>::insert(
+                &account,
+                ReputationRecord { reputation: points.into(), updated },
+            );
 
             Self::deposit_event(Event::ReputationSetForcibly { account, points });
 
@@ -121,12 +128,12 @@ pub mod pallet {
         pub fn update_points(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
             let _ = ensure_signed(origin)?;
             let now = <frame_system::Pallet<T>>::block_number().saturated_into();
-            let mut rep = <AccountReputation<T>>::get(&account)
+            let mut record = <AccountReputation<T>>::get(&account)
                 .unwrap_or_else(|| ReputationRecord::with_blocknumber(now));
-            rep.update_with_block_number(now);
-            let points = rep.points;
+            record.update_with_block_number(now);
+            let points = record.reputation.points;
 
-            <AccountReputation<T>>::insert(&account, rep);
+            <AccountReputation<T>>::insert(&account, record);
 
             Self::deposit_event(Event::ReputationUpdated { account, points });
 
@@ -137,6 +144,7 @@ pub mod pallet {
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
+        /// Accounts with preset reputation.
         pub accounts: Vec<(T::AccountId, ReputationRecord)>,
     }
 

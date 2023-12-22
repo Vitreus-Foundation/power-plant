@@ -18,23 +18,63 @@
 //! Tests for claiming pallet.
 
 use crate::mock::*;
+use crate::Error;
 use frame_support::{assert_err, assert_ok};
-use sp_runtime::{DispatchError::BadOrigin, TokenError::FundsUnavailable};
+use sp_core::H256;
+use sp_runtime::DispatchError::BadOrigin;
+
+type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
+
+fn account(id: u32) -> AccountIdOf<Test> {
+    id.into()
+}
 
 #[test]
-fn assigning_tokens_test() {
+fn mint_tokens_to_claim() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Claiming::assign_token_amount(RuntimeOrigin::root(), 1, 10000));
-        assert_err!(Claiming::assign_token_amount(RuntimeOrigin::signed(1), 1, 10000), BadOrigin);
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 50));
+        assert_eq!(Claiming::total(), 50);
+
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
+        assert_eq!(Claiming::total(), 200);
+
+        assert_err!(
+            Claiming::mint_tokens_to_claim(RuntimeOrigin::signed(account(1)), 150),
+            BadOrigin
+        );
     });
 }
 
 #[test]
-fn user_has_access_test() {
+fn claim_tokens() {
     new_test_ext().execute_with(|| {
-        assert_ok!(Claiming::assign_token_amount(RuntimeOrigin::root(), 1, 10000));
-        assert_ok!(Claiming::claim(RuntimeOrigin::signed(1), 2, 5000));
-        assert_err!(Claiming::claim(RuntimeOrigin::signed(4), 3, 1000), FundsUnavailable);
-        assert_err!(Claiming::claim(RuntimeOrigin::signed(1), 4, 6000), FundsUnavailable);
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 200));
+        assert_eq!(Claiming::total(), 200);
+
+        let first_test_account_id = account(10);
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::root(),
+            first_test_account_id,
+            50,
+            H256::random()
+        ));
+        assert_eq!(Claiming::total(), 150);
+        assert_eq!(Balances::free_balance(first_test_account_id), 50);
+
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::root(),
+            first_test_account_id,
+            150,
+            H256::random()
+        ));
+        assert_eq!(Claiming::total(), 0);
+        assert_eq!(Balances::free_balance(first_test_account_id), 200);
+
+        assert_err!(
+            Claiming::claim(RuntimeOrigin::root(), first_test_account_id, 50, H256::random()),
+            Error::<Test>::NotEnoughTokensForClaim
+        );
+
+        assert_eq!(Claiming::claims(first_test_account_id).len(), 2);
     });
 }

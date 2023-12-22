@@ -6,7 +6,6 @@
 
 #[cfg(feature = "runtime-benchmarks")]
 mod benchmarking;
-mod chain_spec;
 mod cli;
 mod client;
 mod command;

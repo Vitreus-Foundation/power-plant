@@ -889,6 +889,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "chain-spec"
+version = "0.1.0"
+dependencies = [
+ "hex-literal 0.3.4",
+ "rand 0.8.5",
+ "sc-chain-spec",
+ "sc-service",
+ "serde",
+ "sp-consensus-babe",
+ "sp-consensus-grandpa",
+ "sp-core",
+ "sp-runtime",
+ "sp-state-machine",
+ "vitreus-power-plant-runtime",
+]
+
+[[package]]
 name = "chrono"
 version = "0.4.28"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1583,6 +1600,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f2696e8a945f658fd14dc3b87242e6b80cd0f36ff04ea560fa39082368847946"
 
 [[package]]
+name = "derivative"
+version = "2.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fcc3dd5e9e9c0b295d6e1e4d811fb6f157d5ffd784b8d202fc62eac8035a770b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 1.0.109",
+]
+
+[[package]]
 name = "derive-syn-parse"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1925,6 +1953,61 @@ dependencies = [
 ]
 
 [[package]]
+name = "energy-fee-rpc"
+version = "0.1.0"
+dependencies = [
+ "energy-fee-runtime-api",
+ "ethereum-types",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "energy-fee-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "ethereum",
+ "ethereum-types",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "energy-generation-rpc"
+version = "0.1.0"
+dependencies = [
+ "energy-generation-runtime-api",
+ "jsonrpsee",
+ "pallet-reputation",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "energy-generation-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "pallet-reputation",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "enum-as-inner"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1934,6 +2017,26 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 1.0.109",
+]
+
+[[package]]
+name = "enumflags2"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c041f5090df68b32bcd905365fd51769c8b9d553fe87fde0b683534f10c01bd2"
+dependencies = [
+ "enumflags2_derive",
+]
+
+[[package]]
+name = "enumflags2_derive"
+version = "0.7.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5e9a1f9f7d83e59740248a6e14ecf93929ade55027844dfcea78beafccc15745"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.31",
 ]
 
 [[package]]
@@ -1980,6 +2083,30 @@ checksum = "aa68f1b12764fab894d2755d2518754e71b4fd80ecfb822714a1206c2aab39bf"
 dependencies = [
  "cc",
  "libc",
+]
+
+[[package]]
+name = "eth-rpc-server"
+version = "0.1.0"
+dependencies = [
+ "ethereum",
+ "ethereum-types",
+ "fc-db",
+ "fc-rpc",
+ "fc-rpc-core",
+ "fp-rpc",
+ "jsonrpsee",
+ "rustc-hex",
+ "sc-client-api",
+ "sc-transaction-pool",
+ "sc-transaction-pool-api",
+ "serde",
+ "serde_json",
+ "sp-api",
+ "sp-block-builder",
+ "sp-blockchain",
+ "sp-runtime",
+ "vitreus-utility-runtime-api",
 ]
 
 [[package]]
@@ -3822,6 +3949,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "libm"
+version = "0.2.8"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4ec2a862134d2a7d32d7983ddcdd1c4923530833c9f2ea1a44fc5fa473989058"
+
+[[package]]
 name = "libp2p"
 version = "0.51.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4872,6 +5005,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "node-rpc-server"
+version = "0.1.0"
+dependencies = [
+ "jsonrpsee",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "nohash-hasher"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5118,6 +5260,39 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
+name = "orml-traits"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v1.0.0#2b41f29e749fda52522cb4c7ea0e47f517f6a59d"
+dependencies = [
+ "frame-support",
+ "impl-trait-for-tuples",
+ "num-traits",
+ "orml-utilities",
+ "parity-scale-codec",
+ "paste",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "xcm",
+]
+
+[[package]]
+name = "orml-utilities"
+version = "0.4.1-dev"
+source = "git+https://github.com/open-web3-stack//open-runtime-module-library.git?branch=polkadot-v1.0.0#2b41f29e749fda52522cb4c7ea0e47f517f6a59d"
+dependencies = [
+ "frame-support",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "p256"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5163,6 +5338,21 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-core",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-atomic-swap"
+version = "4.0.0-dev"
+source = "git+https://github.com/paritytech/substrate?branch=polkadot-v1.0.0#948fbd2fd1233dc26dbb9f9bbc1d2cca2c03945d"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
  "sp-runtime",
  "sp-std",
 ]
@@ -5284,6 +5474,7 @@ dependencies = [
  "pallet-evm",
  "pallet-evm-chain-id",
  "pallet-staking-reward-curve",
+ "pallet-sudo",
  "pallet-timestamp",
  "pallet-transaction-payment",
  "parity-scale-codec",
@@ -5309,6 +5500,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "orml-traits",
  "pallet-assets",
  "pallet-authorship",
  "pallet-balances",
@@ -5500,9 +5692,9 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-nfts",
+ "pallet-reputation",
  "pallet-staking-reward-curve",
- "pallet-timestamp",
- "pallet-uniques",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",
@@ -5513,6 +5705,35 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-utils",
+]
+
+[[package]]
+name = "pallet-nfts"
+version = "4.0.0-dev"
+source = "git+https://github.com/paritytech/substrate?branch=polkadot-v1.0.0#948fbd2fd1233dc26dbb9f9bbc1d2cca2c03945d"
+dependencies = [
+ "enumflags2",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-nfts-runtime-api"
+version = "4.0.0-dev"
+source = "git+https://github.com/paritytech/substrate?branch=polkadot-v1.0.0#948fbd2fd1233dc26dbb9f9bbc1d2cca2c03945d"
+dependencies = [
+ "frame-support",
+ "pallet-nfts",
+ "parity-scale-codec",
+ "sp-api",
 ]
 
 [[package]]
@@ -5539,6 +5760,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "libm",
  "parity-scale-codec",
  "scale-info",
  "serde",
@@ -10149,7 +10371,11 @@ name = "vitreus-power-plant-node"
 version = "0.0.0"
 dependencies = [
  "async-trait",
+ "chain-spec",
  "clap",
+ "energy-fee-rpc",
+ "energy-generation-rpc",
+ "eth-rpc-server",
  "fc-cli",
  "fc-consensus",
  "fc-db",
@@ -10169,7 +10395,9 @@ dependencies = [
  "hex-literal 0.3.4",
  "jsonrpsee",
  "log",
+ "node-rpc-server",
  "pallet-energy-generation",
+ "pallet-nfts-runtime-api",
  "pallet-reputation",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc",
@@ -10222,12 +10450,17 @@ dependencies = [
  "substrate-frame-rpc-system",
  "substrate-prometheus-endpoint",
  "vitreus-power-plant-runtime",
+ "vitreus-utility-runtime-api",
 ]
 
 [[package]]
 name = "vitreus-power-plant-runtime"
 version = "0.0.0"
 dependencies = [
+ "chain-spec",
+ "energy-fee-runtime-api",
+ "energy-generation-runtime-api",
+ "ethereum",
  "fp-account",
  "fp-evm",
  "fp-rpc",
@@ -10241,8 +10474,10 @@ dependencies = [
  "libsecp256k1",
  "log",
  "num_enum",
+ "orml-traits",
  "pallet-asset-rate",
  "pallet-assets",
+ "pallet-atomic-swap",
  "pallet-authorship",
  "pallet-babe",
  "pallet-balances",
@@ -10262,6 +10497,8 @@ dependencies = [
  "pallet-hotfix-sufficients",
  "pallet-im-online",
  "pallet-nac-managing",
+ "pallet-nfts",
+ "pallet-nfts-runtime-api",
  "pallet-offences",
  "pallet-reputation",
  "pallet-session",
@@ -10289,6 +10526,20 @@ dependencies = [
  "sp-transaction-pool",
  "sp-version",
  "substrate-wasm-builder",
+ "vitreus-utility-runtime-api",
+]
+
+[[package]]
+name = "vitreus-utility-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-core",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -11260,6 +11511,33 @@ dependencies = [
  "rusticata-macros",
  "thiserror",
  "time 0.3.28",
+]
+
+[[package]]
+name = "xcm"
+version = "1.0.0"
+source = "git+https://github.com/paritytech/polkadot?branch=release-v1.0.0#c9ec8c5a15959ce711bb60aa79add58f560d61e9"
+dependencies = [
+ "bounded-collections",
+ "derivative",
+ "impl-trait-for-tuples",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-weights",
+ "xcm-procedural",
+]
+
+[[package]]
+name = "xcm-procedural"
+version = "1.0.0"
+source = "git+https://github.com/paritytech/polkadot?branch=release-v1.0.0#c9ec8c5a15959ce711bb60aa79add58f560d61e9"
+dependencies = [
+ "Inflector",
+ "proc-macro2",
+ "quote",
+ "syn 2.0.31",
 ]
 
 [[package]]

@@ -50,7 +50,7 @@ impl frame_system::Config for Test {
     type Nonce = u64;
     type Hash = H256;
     type Hashing = BlakeTwo256;
-    type AccountId = u32;
+    type AccountId = u64;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Block = Block;
     type BlockHashCount = ConstU64<250>;
@@ -84,15 +84,14 @@ impl pallet_balances::Config for Test {
 
 impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type AdminOrigin = frame_system::EnsureRoot<u32>;
     type Currency = Balances;
     type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
-    let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+    let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
+    let genesis = pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 100), (2, 200)] };
+    genesis.assimilate_storage(&mut t).unwrap();
 
-    let mut ext = sp_io::TestExternalities::new(t);
-    ext.execute_with(|| System::set_block_number(1));
-    ext
+    t.into()
 }

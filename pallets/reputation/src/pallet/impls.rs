@@ -1,4 +1,4 @@
-//! Implementations for the Reputation pallet.
+//! Implementations for the Reputation pallet (non-dispatchables).
 
 use crate::{ReputationPoint, ReputationRecord};
 
@@ -30,7 +30,7 @@ impl<T: Config> Pallet<T> {
             value
                 .as_mut()
                 .map(|old| {
-                    *old.points = old.points.saturating_sub(*points);
+                    old.reputation.decrease(points);
                     old.updated = updated;
                 })
                 .ok_or(Error::<T>::AccountNotFound)
@@ -53,7 +53,7 @@ impl<T: Config> Pallet<T> {
     /// Increase the points for an account by the given amount, creating it if it doesn't exist.
     pub fn increase_creating(account: &T::AccountId, points: ReputationPoint) {
         AccountReputation::<T>::mutate(account, |old| match old {
-            Some(rec) => *rec.points += *points,
+            Some(rec) => rec.reputation.increase(points),
             None => *old = Some(ReputationRecord::from(points)),
         });
     }
@@ -66,7 +66,7 @@ impl<T: Config> Pallet<T> {
             value
                 .as_mut()
                 .map(|old| {
-                    *old.points = old.points.saturating_add(*points);
+                    old.reputation.increase(points);
                     old.updated = updated;
                 })
                 .ok_or(Error::<T>::AccountNotFound)

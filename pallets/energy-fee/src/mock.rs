@@ -40,7 +40,7 @@ pub(crate) const BOB: AccountId = AccountId20([2u8; 20]);
 /// 1 VNRG = VNRG_TO_VTRS_RATE VTRS
 pub(crate) const VNRG_TO_VTRS_RATE: FixedU128 =
     FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
-pub(crate) const VNRG_INITIAL_BALANCE: u128 = 2_000_000_000_000_000_000_000_000_000;
+pub(crate) const VTRS_INITIAL_BALANCE: u128 = 2_000_000_000_000_000_000_000_000_000;
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
@@ -57,6 +57,7 @@ frame_support::construct_runtime!(
         Ethereum: pallet_ethereum,
         EVM: pallet_evm,
         BaseFee: pallet_base_fee,
+        Sudo: pallet_sudo,
     }
 );
 
@@ -126,12 +127,11 @@ impl pallet_asset_rate::Config for Test {
     type Currency = BalancesVTRS;
     type Balance = Balance;
     type WeightInfo = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type AssetKindFactory = ();
 }
 
 impl pallet_energy_fee::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type ManageOrigin = EnsureRoot<AccountId>;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type FeeTokenBalanced = BalancesVNRG;
@@ -240,8 +240,6 @@ impl pallet_assets::Config for Test {
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type CallbackHandle = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
 }
 
 parameter_types! {
@@ -256,6 +254,12 @@ impl pallet_transaction_payment::Config for Test {
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = ();
 }
+
+impl pallet_sudo::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeCall = RuntimeCall;
+    type WeightInfo = ();
+}
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
@@ -266,20 +270,22 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
         vec![]
     };
 
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![(ALICE, VTRS_INITIAL_BALANCE), (BOB, VTRS_INITIAL_BALANCE)],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+
     pallet_assets::GenesisConfig::<Test> {
         accounts: vec![(GetVNRG::get(), BOB, 1000)]
             .into_iter()
             .chain(alice_account.into_iter())
             .collect(),
-        assets: vec![(GetVNRG::get(), BOB, true, 1)],
+        assets: vec![(GetVNRG::get(), BOB, false, 1)],
         metadata: vec![(GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
     }
     .assimilate_storage(&mut t)
     .unwrap();
-
-    pallet_balances::GenesisConfig::<Test> { balances: vec![(ALICE, VNRG_INITIAL_BALANCE)] }
-        .assimilate_storage(&mut t)
-        .unwrap();
 
     pallet_energy_fee::GenesisConfig::<Test> {
         initial_energy_rate: VNRG_TO_VTRS_RATE,
@@ -287,6 +293,10 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut t)
     .unwrap();
+
+    pallet_sudo::GenesisConfig::<Test> { key: Some(ALICE) }
+        .assimilate_storage(&mut t)
+        .unwrap();
 
     t.into()
 }

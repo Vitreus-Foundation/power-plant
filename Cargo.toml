@@ -1,13 +1,21 @@
 [workspace]
 members = [
     "node",
+    "node/chain-spec",
+    "node/eth-rpc-server",
+    "node/node-rpc-server",
     "pallets/claiming",
     "pallets/energy-fee",
+    "pallets/energy-fee/runtime-api",
+    "pallets/energy-fee/rpc",
     "pallets/energy-generation",
+    "pallets/energy-generation/runtime-api",
+    "pallets/energy-generation/rpc",
     "pallets/faucet",
     "pallets/nac-managing",
     "pallets/reputation",
     "runtime",
+    "runtime/runtime-api",
     # "pallets/simple-staking",
     # "precompiles/balances-erc20",
     # "precompiles/utils",
@@ -33,9 +41,11 @@ impl-serde = { version = "0.4", default-features = false }
 impl-trait-for-tuples = "0.2"
 jsonrpsee = "0.16"
 kvdb-rocksdb = "0.17"
+libm = { version = "0.2.8" }
 libsecp256k1 = { version = "0.7", default-features = false }
 log = { version = "0.4", default-features = false }
 num_enum = { version = "0.6", default-features = false }
+orml-traits = { git = "https://github.com/open-web3-stack//open-runtime-module-library.git", branch = "polkadot-v1.0.0", default-features = false}
 parity-db = "0.4"
 rand_chacha = { version = "0.2", default-features = false }
 rlp = { version = "0.5", default-features = false }
@@ -125,6 +135,7 @@ frame-system-benchmarking = { git = "https://github.com/paritytech/substrate", b
 frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-asset-rate = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-atomic-swap = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-authorship = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-bags-list = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
@@ -140,6 +151,8 @@ pallet-timestamp = { git = "https://github.com/paritytech/substrate", branch = "
 pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-nfts = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-nfts-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-uniques = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-utility = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-staking-reward-curve = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
@@ -185,6 +198,7 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
+vitreus-utility-runtime-api = { path = "runtime/runtime-api", default-features = false}
 
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
@@ -193,6 +207,15 @@ pallet-faucet = { path = "pallets/faucet", default-features = false }
 pallet-nac-managing = { path = "pallets/nac-managing", default-features = false }
 pallet-reputation = { path = "pallets/reputation", default-features = false }
 pallet-simple-staking = { path = "pallets/simple-staking", default-features = false }
+
+# Node utility
+chain-spec = { path = "node/chain-spec" }
+energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-features = false }
+energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api", default-features = false }
+energy-fee-rpc = { path = "pallets/energy-fee/rpc" }
+energy-generation-rpc = { path = "pallets/energy-generation/rpc" }
+eth-rpc-server = { path = "node/eth-rpc-server" }
+node-rpc-server = { path = "node/node-rpc-server" }
 
 # Arkworks
 ark-bls12-377 = { version = "0.4.0", default-features = false, features = [

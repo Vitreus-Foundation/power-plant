@@ -8,6 +8,14 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
+use frame_support::pallet_prelude::{DispatchError, DispatchResult};
+use frame_support::traits::tokens::{
+    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
+    Preservation, Provenance, WithdrawConsequence,
+};
+use frame_support::traits::{Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons};
+use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_core::{
@@ -26,12 +34,13 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, Perbill, Permill,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Permill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 // Substrate FRAME
+use energy_fee_runtime_api::CallRequest;
 #[cfg(feature = "with-paritydb-weights")]
 use frame_support::weights::constants::ParityDbWeight as RuntimeDbWeight;
 #[cfg(feature = "with-rocksdb-weights")]
@@ -54,6 +63,7 @@ use pallet_energy_fee::{
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
+use pallet_reputation::{ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_DAY};
 use pallet_transaction_payment::{FeeDetails, InclusionFee};
 // Frontier
 use fp_account::EthereumSignature;
@@ -64,6 +74,7 @@ use pallet_evm::{
     Account as EVMAccount, AddressMapping, EnsureAccountId20, FeeCalculator, GasWeightMapping,
     IdentityAddressMapping, Runner,
 };
+use pallet_nfts::PalletFeatures;
 use sp_runtime::transaction_validity::InvalidTransaction;
 
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
@@ -81,6 +92,8 @@ mod precompiles;
 mod helpers {
     pub mod runner;
 }
+#[cfg(test)]
+mod tests;
 
 use precompiles::VitreusPrecompiles;
 
@@ -391,8 +404,6 @@ impl pallet_faucet::Config for Runtime {
     type WeightInfo = ();
 }
 
-use pallet_reputation::REPUTATION_POINTS_PER_DAY;
-
 impl pallet_reputation::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -481,6 +492,7 @@ where
             frame_system::CheckNonce::<Runtime>::from(nonce),
             frame_system::CheckWeight::<Runtime>::new(),
             pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
+            pallet_energy_fee::CheckEnergyFee::<Runtime>::new(),
         );
         let raw_payload = SignedPayload::new(call, extra)
             .map_err(|e| {
@@ -541,9 +553,9 @@ parameter_types! {
     pub const RewardOnUnbalanceWasCalled: bool = false;
     pub const MaxWinners: u32 = 100;
     // it takes a month to become a validator from 0
-    pub const ValidatorReputationThreshold: ReputationPoint = VALIDATOR_REPUTATION_THRESHOLD;
+    pub const ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     // it takes 2 months to become a collaborative validator from 0
-    pub const CollaborativeValidatorReputationThreshold: ReputationPoint = COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD;
+    pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Trailblazer(1);
     pub const RewardRemainderUnbalanced: u128 = 0;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 
@@ -575,6 +587,31 @@ impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerReputationPoint
     }
 }
 
+pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
+
+impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
+    fn get(k: &ReputationTier) -> Perbill {
+        match k {
+            ReputationTier::Vanguard(2) => Perbill::from_percent(2),
+            ReputationTier::Vanguard(3) => Perbill::from_percent(4),
+            ReputationTier::Trailblazer(0) => Perbill::from_percent(5),
+            ReputationTier::Trailblazer(1) => Perbill::from_percent(8),
+            ReputationTier::Trailblazer(2) => Perbill::from_percent(10),
+            ReputationTier::Trailblazer(3) => Perbill::from_percent(12),
+            ReputationTier::Ultramodern(0) => Perbill::from_percent(13),
+            ReputationTier::Ultramodern(1) => Perbill::from_percent(16),
+            ReputationTier::Ultramodern(2) => Perbill::from_percent(18),
+            ReputationTier::Ultramodern(3) => Perbill::from_percent(20),
+            ReputationTier::Ultramodern(rank) => {
+                let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
+                Perbill::from_percent(20_u8.saturating_add(additional_percentage).into())
+            },
+            // includes unhandled cases
+            _ => Perbill::zero(),
+        }
+    }
+}
+
 pub struct EnergyGenerationBenchmarkConfig;
 impl pallet_energy_generation::BenchmarkingConfig for EnergyGenerationBenchmarkConfig {
     type MaxValidators = ConstU32<1000>;
@@ -586,9 +623,9 @@ impl pallet_energy_generation::Config for Runtime {
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = EnergyGenerationBenchmarkConfig;
     type BondingDuration = BondingDuration;
-    type CollaborativeValidatorReputationThreshold = CollaborativeValidatorReputationThreshold;
+    type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
+    type ValidatorReputationTier = ValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerReputationPoint = EnergyPerReputationPoint;
     type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
@@ -597,10 +634,12 @@ impl pallet_energy_generation::Config for Runtime {
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = ();
+    type ReputationTierEnergyRewardAdditionalPercentMapping =
+        ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = ();
     type RewardRemainder = ();
     type RuntimeEvent = RuntimeEvent;
-    type SessionInterface = ();
+    type SessionInterface = Self;
     type SessionsPerEra = SessionsPerEra;
     type Slash = ();
     type SlashDeferDuration = SlashDeferDuration;
@@ -608,7 +647,6 @@ impl pallet_energy_generation::Config for Runtime {
     type StakeCurrency = Balances;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
-    type ValidatorReputationThreshold = ValidatorReputationThreshold;
 }
 
 parameter_types! {
@@ -620,10 +658,41 @@ parameter_types! {
     pub const ItemAttributesApprovalsLimit: u32 = 20;
     pub const MaxTips: u32 = 10;
     pub const MaxDeadlineDuration: BlockNumber = 12 * 30 * DAYS;
+    pub const MaxAttributesPerCall: u32 = 10;
+    pub Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
 type CollectionId = u32;
-type ItemId = u64;
+type ItemId = u32;
+
+impl pallet_nfts::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
+    type Currency = Balances;
+    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
+    type CollectionDeposit = CollectionDeposit;
+    type ApprovalsLimit = ();
+    type ItemAttributesApprovalsLimit = ();
+    type MaxTips = ();
+    type MaxDeadlineDuration = ();
+    type MaxAttributesPerCall = ();
+    type Features = ();
+    type OffchainPublic = <Signature as Verify>::Signer;
+    type OffchainSignature = Signature;
+    type ItemDeposit = ItemDeposit;
+    type MetadataDepositBase = MetadataDepositBase;
+    type AttributeDepositBase = MetadataDepositBase;
+    type DepositPerByte = MetadataDepositPerByte;
+    type StringLimit = AssetsStringLimit;
+    type KeyLimit = KeyLimit;
+    type ValueLimit = ValueLimit;
+    type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
+    #[cfg(feature = "runtime-benchmarks")]
+    type Helper = ();
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type Locker = ();
+}
 
 impl pallet_uniques::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
@@ -646,13 +715,18 @@ impl pallet_uniques::Config for Runtime {
     type Locker = ();
 }
 
+parameter_types! {
+    pub const NftCollectionId: CollectionId = 0;
+}
+
 impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
-    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
+    type Nfts = Nfts;
+    type NftCollectionId = NftCollectionId;
 }
 
 parameter_types! {
@@ -665,7 +739,7 @@ impl pallet_transaction_payment::Config for Runtime {
     type OperationalFeeMultiplier = ConstU8<5>;
     type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
-    type FeeMultiplierUpdate = ();
+    type FeeMultiplierUpdate = EnergyFee;
 }
 
 impl pallet_asset_rate::Config for Runtime {
@@ -683,6 +757,7 @@ impl pallet_asset_rate::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
+    pub GetConstantGasLimit: U256 = U256::from(56_000);
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
@@ -690,6 +765,7 @@ type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
 impl pallet_energy_fee::Config for Runtime {
+    type ManageOrigin = EnsureRoot<AccountId>;
     type RuntimeEvent = RuntimeEvent;
     type FeeTokenBalanced = EnergyItem;
     type MainTokenBalanced = Balances;
@@ -699,9 +775,18 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyAssetId = VNRG;
 }
 
+parameter_types! {
+    pub const ProofLimit: u32 = 2048;
+}
+
+impl pallet_atomic_swap::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type SwapAction = pallet_atomic_swap::BalanceSwapAction<Self::AccountId, Balances>;
+    type ProofLimit = ProofLimit;
+}
+
 impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type AdminOrigin = EnsureRoot<AccountId>;
     type Currency = Balances;
     type WeightInfo = ();
 }
@@ -714,15 +799,15 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         runtime_call: &RuntimeCall,
         _dispatch_info: &DispatchInfoOf<RuntimeCall>,
     ) -> CallFee<Balance> {
+        let next_multiplier = TransactionPayment::next_fee_multiplier();
+        let default_fee = next_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
         match runtime_call {
             RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(GetConstantEnergyFee::get()),
-            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => {
-                CallFee::EVM(GetConstantEnergyFee::get())
-            },
+            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(default_fee),
+            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(default_fee),
             _ => CallFee::Stock,
         }
     }
@@ -750,6 +835,13 @@ impl<F: FindAuthor<u32>> FindAuthor<H160> for FindAuthorTruncated<F> {
     }
 }
 
+pub struct FixedFeeCalculator;
+impl FeeCalculator for FixedFeeCalculator {
+    fn min_gas_price() -> (U256, Weight) {
+        (U256::one(), Weight::zero())
+    }
+}
+
 const BLOCK_GAS_LIMIT: u64 = 75_000_000;
 const MAX_POV_SIZE: u64 = 5 * 1024 * 1024;
 
@@ -765,20 +857,152 @@ parameter_types! {
         );
 }
 
+/// Helper struct which mimics some functionality of the Balances pallet.
+///
+/// Used in pallet_evm for correct work of fee calculation. The only difference between Balances
+/// pallet and this struct is the implementation of the reducible balance, due to the fact that tx
+/// fee can be paid as in VTRS as in VNRG.
+pub struct QuasiBalances;
+
+impl Currency<AccountId> for QuasiBalances {
+    type Balance = <Balances as Currency<AccountId>>::Balance;
+
+    type PositiveImbalance = <Balances as Currency<AccountId>>::PositiveImbalance;
+
+    type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
+
+    fn total_balance(who: &AccountId) -> Self::Balance {
+        <Balances as Currency<AccountId>>::total_balance(who)
+    }
+
+    fn can_slash(who: &AccountId, value: Self::Balance) -> bool {
+        <Balances as Currency<AccountId>>::can_slash(who, value)
+    }
+
+    fn total_issuance() -> Self::Balance {
+        <Balances as Currency<AccountId>>::total_issuance()
+    }
+
+    fn minimum_balance() -> Self::Balance {
+        <Balances as Currency<AccountId>>::minimum_balance()
+    }
+
+    fn burn(amount: Self::Balance) -> Self::PositiveImbalance {
+        <Balances as Currency<AccountId>>::burn(amount)
+    }
+
+    fn issue(amount: Self::Balance) -> Self::NegativeImbalance {
+        <Balances as Currency<AccountId>>::issue(amount)
+    }
+
+    fn free_balance(who: &AccountId) -> Self::Balance {
+        <Balances as Currency<AccountId>>::free_balance(who)
+    }
+
+    fn ensure_can_withdraw(
+        who: &AccountId,
+        _amount: Self::Balance,
+        reasons: WithdrawReasons,
+        new_balance: Self::Balance,
+    ) -> DispatchResult {
+        <Balances as Currency<AccountId>>::ensure_can_withdraw(who, _amount, reasons, new_balance)
+    }
+
+    fn transfer(
+        source: &AccountId,
+        dest: &AccountId,
+        value: Self::Balance,
+        existence_requirement: ExistenceRequirement,
+    ) -> DispatchResult {
+        <Balances as Currency<AccountId>>::transfer(source, dest, value, existence_requirement)
+    }
+
+    fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
+        <Balances as Currency<AccountId>>::slash(who, value)
+    }
+
+    fn deposit_into_existing(
+        who: &AccountId,
+        value: Self::Balance,
+    ) -> Result<Self::PositiveImbalance, DispatchError> {
+        <Balances as Currency<AccountId>>::deposit_into_existing(who, value)
+    }
+
+    fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance {
+        <Balances as Currency<AccountId>>::deposit_creating(who, value)
+    }
+
+    fn withdraw(
+        who: &AccountId,
+        value: Self::Balance,
+        reasons: WithdrawReasons,
+        liveness: ExistenceRequirement,
+    ) -> Result<Self::NegativeImbalance, DispatchError> {
+        <Balances as Currency<AccountId>>::withdraw(who, value, reasons, liveness)
+    }
+
+    fn make_free_balance_be(
+        who: &AccountId,
+        balance: Self::Balance,
+    ) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
+        <Balances as Currency<AccountId>>::make_free_balance_be(who, balance)
+    }
+}
+
+impl FungibleInspect<AccountId> for QuasiBalances {
+    type Balance = <Balances as FungibleInspect<AccountId>>::Balance;
+
+    fn total_issuance() -> Self::Balance {
+        <Balances as FungibleInspect<AccountId>>::total_issuance()
+    }
+
+    fn minimum_balance() -> Self::Balance {
+        <Balances as FungibleInspect<AccountId>>::minimum_balance()
+    }
+
+    fn total_balance(who: &AccountId) -> Self::Balance {
+        <Balances as FungibleInspect<AccountId>>::total_balance(who)
+    }
+
+    fn balance(who: &AccountId) -> Self::Balance {
+        <Balances as FungibleInspect<AccountId>>::balance(who)
+    }
+
+    fn reducible_balance(
+        _who: &AccountId,
+        _preservation: Preservation,
+        _force: Fortitude,
+    ) -> Self::Balance {
+        1_000_000_000_000_000_000_000
+    }
+
+    fn can_deposit(
+        who: &AccountId,
+        amount: Self::Balance,
+        provenance: Provenance,
+    ) -> DepositConsequence {
+        <Balances as FungibleInspect<AccountId>>::can_deposit(who, amount, provenance)
+    }
+
+    fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
+        <Balances as FungibleInspect<AccountId>>::can_withdraw(who, amount)
+    }
+}
+
 impl pallet_evm::Config for Runtime {
     type AddressMapping = IdentityAddressMapping;
     type BlockGasLimit = BlockGasLimit;
     type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
     type CallOrigin = EnsureAccountId20;
     type ChainId = EVMChainId;
-    type Currency = Balances;
+    type Currency = QuasiBalances;
     type Runner = helpers::runner::NacRunner<Self>;
     type RuntimeEvent = RuntimeEvent;
     type WeightPerGas = WeightPerGas;
     type WithdrawOrigin = EnsureAccountId20;
     type OnCreate = ();
     type Timestamp = Timestamp;
-    type FeeCalculator = BaseFee;
+    type FeeCalculator = FixedFeeCalculator;
     type FindAuthor = FindAuthorTruncated<Babe>;
     type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
@@ -859,7 +1083,9 @@ construct_runtime!(
         Ethereum: pallet_ethereum,
         HotfixSufficients: pallet_hotfix_sufficients,
         Uniques: pallet_uniques,
+        Nfts: pallet_nfts,
         Reputation: pallet_reputation,
+        AtomicSwap: pallet_atomic_swap,
         Claiming: pallet_claiming,
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
@@ -920,6 +1146,7 @@ pub type SignedExtra = (
     frame_system::CheckNonce<Runtime>,
     frame_system::CheckWeight<Runtime>,
     pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
+    pallet_energy_fee::CheckEnergyFee<Runtime>,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
@@ -937,6 +1164,35 @@ pub type Executive = frame_executive::Executive<
     Runtime,
     AllPalletsWithSystem,
 >;
+
+fn transact_with_new_gas_limit(
+    transact_call: pallet_ethereum::Call<Runtime>,
+) -> pallet_ethereum::Call<Runtime> {
+    match transact_call {
+        transact { transaction } => {
+            let transaction = match transaction {
+                EthereumTransaction::Legacy(tx) => EthereumTransaction::Legacy(LegacyTransaction {
+                    gas_limit: GetConstantGasLimit::get(),
+                    ..tx
+                }),
+                EthereumTransaction::EIP1559(tx) => {
+                    EthereumTransaction::EIP1559(EIP1559Transaction {
+                        gas_limit: GetConstantGasLimit::get(),
+                        ..tx
+                    })
+                },
+                EthereumTransaction::EIP2930(tx) => {
+                    EthereumTransaction::EIP2930(EIP2930Transaction {
+                        gas_limit: GetConstantGasLimit::get(),
+                        ..tx
+                    })
+                },
+            };
+            pallet_ethereum::Call::new_call_variant_transact(transaction)
+        },
+        _ => transact_call,
+    }
+}
 
 // user doesn't have NAC to dispatch transaction
 const ACCESS_RESTRICTED: u8 = u8::MAX;
@@ -958,6 +1214,7 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         }
     }
 
+    // TODO: get rid of cloning the call
     fn validate_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -969,16 +1226,40 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                 let account_id =
                     <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
 
+                if let CallFee::EVM(amount) = EnergyFee::dispatch_info_to_fee(self, dispatch_info) {
+                    let (_, fee_vtrs_amount) =
+                        if let Ok(parts) = EnergyFee::calculate_fee_parts(&account_id, amount) {
+                            parts
+                        } else {
+                            return Some(Err(InvalidTransaction::Payment.into()));
+                        };
+
+                    let vtrs_balance = Balances::reducible_balance(
+                        &account_id,
+                        Preservation::Protect,
+                        Fortitude::Polite,
+                    );
+
+                    if fee_vtrs_amount > vtrs_balance {
+                        return Some(Err(InvalidTransaction::Payment.into()));
+                    }
+                }
+
                 if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
                 };
 
-                call.validate_self_contained(info, dispatch_info, len)
+                transact_with_new_gas_limit(call.clone()).validate_self_contained(
+                    info,
+                    dispatch_info,
+                    len,
+                )
             },
             _ => None,
         }
     }
 
+    // TODO: get rid of cloning the call
     fn pre_dispatch_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -986,9 +1267,8 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         len: usize,
     ) -> Option<Result<(), TransactionValidityError>> {
         match self {
-            RuntimeCall::Ethereum(call) => {
-                call.pre_dispatch_self_contained(info, dispatch_info, len)
-            },
+            RuntimeCall::Ethereum(call) => transact_with_new_gas_limit(call.clone())
+                .pre_dispatch_self_contained(info, dispatch_info, len),
             _ => None,
         }
     }
@@ -1389,6 +1669,50 @@ impl_runtime_apis! {
         }
     }
 
+    impl pallet_nfts_runtime_api::NftsApi<Block, AccountId, u32, u32> for Runtime {
+        fn owner(collection: u32, item: u32) -> Option<AccountId> {
+            <Nfts as Inspect<AccountId>>::owner(&collection, &item)
+        }
+
+        fn collection_owner(collection: u32) -> Option<AccountId> {
+            <Nfts as Inspect<AccountId>>::collection_owner(&collection)
+        }
+
+        fn attribute(
+            collection: u32,
+            item: u32,
+            key: Vec<u8>,
+        ) -> Option<Vec<u8>> {
+            <Nfts as Inspect<AccountId>>::attribute(&collection, &item, &key)
+        }
+
+        fn custom_attribute(
+            account: AccountId,
+            collection: u32,
+            item: u32,
+            key: Vec<u8>,
+        ) -> Option<Vec<u8>> {
+            <Nfts as Inspect<AccountId>>::custom_attribute(
+                &account,
+                &collection,
+                &item,
+                &key,
+            )
+        }
+
+        fn system_attribute(
+            collection: u32,
+            item: u32,
+            key: Vec<u8>,
+        ) -> Option<Vec<u8>> {
+            <Nfts as Inspect<AccountId>>::system_attribute(&collection, &item, &key)
+        }
+
+        fn collection_attribute(collection: u32, key: Vec<u8>) -> Option<Vec<u8>> {
+            <Nfts as Inspect<AccountId>>::collection_attribute(&collection, &key)
+        }
+    }
+
     impl sp_session::SessionKeys<Block> for Runtime {
         fn generate_session_keys(seed: Option<Vec<u8>>) -> Vec<u8> {
             opaque::SessionKeys::generate(seed)
@@ -1479,6 +1803,71 @@ impl_runtime_apis! {
         }
     }
 
+    impl energy_fee_runtime_api::EnergyFeeApi<Block> for Runtime {
+        fn estimate_gas(request: CallRequest) -> U256 {
+            let CallRequest {
+                from,
+                to,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                gas,
+                value,
+                data,
+                nonce,
+                access_list,
+                ..
+            } = request;
+            let call = match data {
+                Some(data) => {
+                    let from = from.unwrap_or_default();
+                    let to = to.unwrap_or_default();
+                    let value = value.unwrap_or_else(U256::zero);
+                    let gas_limit = gas.unwrap_or_else(|| U256::from(21000)).low_u64(); // default gas limit to 21000
+                    let max_fee_per_gas = max_fee_per_gas.unwrap_or_else(U256::zero);
+                    let access_list = access_list.unwrap_or_default();
+                    let access_list_converted = access_list.into_iter()
+                        .map(|item| (item.address, item.storage_keys))
+                        .collect();
+
+                    RuntimeCall::EVM(pallet_evm::Call::call {
+                        source: from,
+                        target: to,
+                        input: data.into_inner(),
+                        value,
+                        gas_limit,
+                        max_fee_per_gas,
+                        max_priority_fee_per_gas,
+                        nonce,
+                        access_list: access_list_converted,
+                    })
+                },
+                None => {
+                    match (from, to, value) {
+                        (_, Some(to), Some(value)) => {
+                            let value_converted = Balance::from(value.low_u128());  // Adjust this conversion as necessary
+
+                            RuntimeCall::Balances(pallet_balances::Call::transfer {
+                                dest: to.into(),
+                                value: value_converted,
+                            })
+                        },
+                        _ => return GetConstantEnergyFee::get().into(),
+                    }
+                }
+            };
+            let dispatch_info = call.get_dispatch_info();
+
+            match EnergyFee::dispatch_info_to_fee(
+                &call,
+                &dispatch_info
+            ) {
+                CallFee::Custom(fee) => fee,
+                CallFee::EVM(fee) => fee,
+                CallFee::Stock => TransactionPayment::weight_to_fee(dispatch_info.weight)
+            }.into()
+        }
+    }
+
     #[cfg(feature = "runtime-benchmarks")]
     impl frame_benchmarking::Benchmark<Block> for Runtime {
         fn benchmark_metadata(extra: bool) -> (
@@ -1517,17 +1906,17 @@ impl_runtime_apis! {
             Ok(batches)
         }
     }
-}
 
-#[cfg(test)]
-mod tests {
-    use super::{Runtime, WeightPerGas};
-    #[test]
-    fn configured_base_extrinsic_weight_is_evm_compatible() {
-        let min_ethereum_transaction_weight = WeightPerGas::get() * 21_000;
-        let base_extrinsic = <Runtime as frame_system::Config>::BlockWeights::get()
-            .get(frame_support::dispatch::DispatchClass::Normal)
-            .base_extrinsic;
-        assert!(base_extrinsic.ref_time() <= min_ethereum_transaction_weight.ref_time());
+    impl vitreus_utility_runtime_api::UtilityApi<Block> for Runtime {
+        fn balance(who: H160) -> U256 {
+            let account_id = <Self as pallet_evm::Config>::AddressMapping::into_account_id(who);
+            Balances::reducible_balance(&account_id, Preservation::Preserve, Fortitude::Polite).into()
+        }
+    }
+
+    impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
+        fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
+            ReputationTierEnergyRewardAdditionalPercentMapping::get(&tier)
+        }
     }
 }

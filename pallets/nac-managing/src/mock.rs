@@ -26,19 +26,23 @@ use frame_support::{
 };
 use sp_core::H256;
 use sp_runtime::{
-    traits::{BlakeTwo256, IdentityLookup},
-    BuildStorage,
+    traits::{BlakeTwo256, IdentifyAccount, IdentityLookup, Verify},
+    BuildStorage, MultiSignature,
 };
 
 type Block = frame_system::mocking::MockBlock<Test>;
+pub type Signature = MultiSignature;
+pub type AccountPublic = <Signature as Verify>::Signer;
+pub type AccountId = <AccountPublic as IdentifyAccount>::AccountId;
 
 construct_runtime!(
     pub enum Test
     {
+        Reputation: pallet_reputation,
         System: frame_system,
         Balances: pallet_balances,
         NacManaging: pallet_nac_managing,
-        Uniques: pallet_uniques,
+        Nfts: pallet_nfts,
     }
 );
 
@@ -52,7 +56,7 @@ impl frame_system::Config for Test {
     type Nonce = u64;
     type Hash = H256;
     type Hashing = BlakeTwo256;
-    type AccountId = u32;
+    type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Block = Block;
     type BlockHashCount = ConstU64<250>;
@@ -84,23 +88,34 @@ impl pallet_balances::Config for Test {
     type MaxFreezes = ();
 }
 
+impl pallet_reputation::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
+}
+
 parameter_types! {
     pub TestCollectionDeposit:  u64 = 2;
     pub TestItemDeposit:  u64 = 1;
 }
 
 type CollectionId = u32;
-type ItemId = u64;
+type ItemId = u32;
 
-impl pallet_uniques::Config for Test {
+impl pallet_nfts::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<u32>;
-    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u32>>;
-    type Locker = ();
+    type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
     type CollectionDeposit = TestCollectionDeposit;
+    type ApprovalsLimit = ();
+    type ItemAttributesApprovalsLimit = ();
+    type MaxTips = ();
+    type MaxDeadlineDuration = ();
+    type MaxAttributesPerCall = ();
+    type Features = ();
+    type OffchainPublic = AccountPublic;
+    type OffchainSignature = Signature;
     type ItemDeposit = TestItemDeposit;
     type MetadataDepositBase = ConstU64<1>;
     type AttributeDepositBase = ConstU64<1>;
@@ -109,15 +124,24 @@ impl pallet_uniques::Config for Test {
     type KeyLimit = ConstU32<50>;
     type ValueLimit = ConstU32<50>;
     type WeightInfo = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type Helper = ();
+    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
+    type Locker = ();
+}
+
+parameter_types! {
+    pub const NftCollectionId: CollectionId = 0;
 }
 
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type ForceOrigin = frame_system::EnsureRoot<u32>;
-    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<u32>>;
+    type Nfts = Nfts;
+    type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type WeightInfo = ();
+    type NftCollectionId = NftCollectionId;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

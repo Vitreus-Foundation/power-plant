@@ -33,20 +33,17 @@
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
 use crate::{
-    Config, CooperatorSlashInEra, EnergyOf, Error, Exposure, OffendingValidators, Pallet, Perbill,
+    Config, CooperatorSlashInEra, Error, Exposure, OffendingValidators, Pallet, Perbill,
     SessionInterface, SpanSlash, StakeOf, UnappliedSlash, ValidatorSlashInEra,
 };
 use frame_support::{
     ensure,
-    traits::{fungibles::Balanced, tokens::Precision, Defensive, Get},
+    traits::{Defensive, Get},
 };
-use pallet_reputation::ReputationPoint;
+use pallet_reputation::{Reputation, ReputationPoint, ReputationRecord, RANKS_PER_TIER};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{
-    traits::{Saturating, Zero},
-    DispatchResult, RuntimeDebug, SaturatedConversion,
-};
+use sp_runtime::{traits::Zero, DispatchResult, RuntimeDebug};
 use sp_staking::{offence::DisableStrategy, EraIndex};
 use sp_std::vec::Vec;
 
@@ -216,8 +213,10 @@ pub(crate) fn compute_slash<T: Config>(
     let mut val_slashed = 0.into();
 
     // is the slash amount here a maximum for the era?
-    let basic_validator_reputation = T::ValidatorReputationThreshold::get();
-    let own_slash: ReputationPoint = (params.slash * *basic_validator_reputation).into();
+    let reputation_record = pallet_reputation::AccountReputation::<T>::get(params.stash)
+        .unwrap_or(ReputationRecord::with_now::<T>());
+    let max_slash = max_slash_amount(&reputation_record.reputation);
+    let own_slash: ReputationPoint = (params.slash * *max_slash).into();
     if *own_slash == 0 {
         // kick out the validator even if they won't be slashed,
         // as long as the misbehavior is from their most recent slashing span.
@@ -227,10 +226,7 @@ pub(crate) fn compute_slash<T: Config>(
 
     let prior_slash_p = ValidatorSlashInEra::<T>::get(params.slash_era, params.stash)
         .map_or(Zero::zero(), |(prior_slash_proportion, _)| prior_slash_proportion);
-    let validator_rep = pallet_reputation::AccountReputation::<T>::get(params.stash)
-        .map(|r| r.points)
-        .unwrap_or_default();
-    let validator_loss = Perbill::from_rational(*own_slash, *validator_rep);
+    let validator_loss = Perbill::from_rational(*own_slash, *reputation_record.reputation.points());
 
     // compare slash proportions rather than slash values to avoid issues due to rounding
     // error.
@@ -291,6 +287,16 @@ pub(crate) fn compute_slash<T: Config>(
         reporters: Vec::new(),
         payout: reward_payout,
     })
+}
+
+// get the maximum possible amount of slash for an account
+pub(crate) fn max_slash_amount(reputation: &Reputation) -> ReputationPoint {
+    let rank = reputation.tier().map(|t| t.rank()).unwrap_or(0);
+    // RANKS_PER_TIER + 1 because we want take 0-rank into account
+    reputation
+        .points()
+        .saturating_sub(*ReputationPoint::from_rank(rank.saturating_sub(RANKS_PER_TIER + 1)))
+        .into()
 }
 
 // doesn't apply any slash, but kicks out the validator if the misbehavior is from the most recent
@@ -377,7 +383,7 @@ fn slash_cooperators<T: Config>(
         // era.
         let era_slash = {
             let reputation = pallet_reputation::AccountReputation::<T>::get(stash)
-                .map(|r| r.points)
+                .map(|r| r.reputation.points())
                 .unwrap_or_default();
             let own_slash_prior = prior_slash_p * *reputation;
             let own_slash = validator_loss * *reputation;
@@ -600,7 +606,6 @@ pub fn do_slash<T: Config>(stash: &T::AccountId, value: ReputationPoint) -> Disp
 /// Apply a previously-unapplied slash.
 pub(crate) fn apply_slash<T: Config>(
     unapplied_slash: UnappliedSlash<T::AccountId>,
-    slash_era: EraIndex,
 ) -> DispatchResult {
     let reward_payout = unapplied_slash.payout;
 
@@ -613,12 +618,11 @@ pub(crate) fn apply_slash<T: Config>(
         Pallet::<T>::check_reputation_cooperator(&unapplied_slash.validator, cooperator);
     }
 
-    pay_reporters::<T>(slash_era, reward_payout, &unapplied_slash.reporters)
+    pay_reporters::<T>(reward_payout, &unapplied_slash.reporters)
 }
 
 /// Apply a reward payout to some reporters, paying the rewards out of the slashed imbalance.
 fn pay_reporters<T: Config>(
-    slash_era: EraIndex,
     reward_payout: ReputationPoint,
     reporters: &[T::AccountId],
 ) -> DispatchResult {
@@ -626,23 +630,10 @@ fn pay_reporters<T: Config>(
         return Ok(());
     }
 
-    let energy_rate = match Pallet::<T>::eras_energy_per_reputation(slash_era) {
-        Some(rate) => rate,
-        None => return Ok(()),
-    };
-
-    let energy_reward_payout: EnergyOf<T> =
-        energy_rate.saturating_mul((*reward_payout).saturated_into());
     let prop = Perbill::from_rational(1, reporters.len() as u64);
-    let per_reporter = prop * energy_reward_payout;
-    let asset_id = T::EnergyAssetId::get();
+    let per_reporter = prop * *reward_payout;
     for reporter in reporters {
-        let _ = pallet_assets::Pallet::<T>::deposit(
-            asset_id.clone(),
-            reporter,
-            per_reporter,
-            Precision::Exact,
-        )?;
+        pallet_reputation::Pallet::<T>::increase_creating(reporter, per_reporter.into());
     }
 
     Ok(())

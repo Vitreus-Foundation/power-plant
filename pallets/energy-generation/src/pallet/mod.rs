@@ -28,8 +28,10 @@ use frame_support::{
     },
     weights::Weight,
 };
+
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-use pallet_reputation::{ReputationPoint, ReputationRecord};
+use orml_traits::GetByKey;
+use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, CheckedSub, SaturatedConversion, StaticLookup, Zero},
     ArithmeticError, Perbill, Percent,
@@ -183,9 +185,6 @@ pub mod pallet {
         /// Energy per stake currency rate calculation callback.
         type EnergyPerStakeCurrency: EnergyRateCalculator<StakeOf<Self>, EnergyOf<Self>>;
 
-        /// Energy per reputation point rate calculation callback.
-        type EnergyPerReputationPoint: EnergyRateCalculator<StakeOf<Self>, EnergyOf<Self>>;
-
         /// Something that can estimate the next session change, accurately or as a best effort
         /// guess.
         type NextNewSession: EstimateNextNewSession<BlockNumberFor<Self>>;
@@ -222,12 +221,15 @@ pub mod pallet {
 
         /// The minimum reputation to be a validator.
         #[pallet::constant]
-        type ValidatorReputationThreshold: Get<ReputationPoint>;
+        type ValidatorReputationTier: Get<ReputationTier>;
 
         /// The minimum reputation to be able to expose your account in the staking marketplace for
         /// collaborative staking.
         #[pallet::constant]
-        type CollaborativeValidatorReputationThreshold: Get<ReputationPoint>;
+        type CollaborativeValidatorReputationTier: Get<ReputationTier>;
+
+        /// `ReputationTier` -> `Perbill` mapping, depicting additional energy reward ratio per tier.
+        type ReputationTierEnergyRewardAdditionalPercentMapping: GetByKey<ReputationTier, Perbill>;
 
         /// Some parameters of the benchmarking.
         type BenchmarkingConfig: BenchmarkingConfig;
@@ -342,7 +344,9 @@ pub mod pallet {
         _,
         Twox64Concat,
         T::AccountId,
-        BoundedBTreeSet<T::AccountId, T::MaxCooperations>,
+        // if the pallet wouldn't ask us to implement MaxEncodedLen for everything, we could use
+        // BTreeSet instead, but
+        BoundedBTreeSet<T::AccountId, ConstU32<{ u32::MAX }>>,
     >;
 
     /// The maximum cooperator count before we stop allowing new validators to join.
@@ -440,12 +444,6 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn eras_energy_per_stake_cur)]
     pub type ErasEnergyPerStakeCurrency<T: Config> =
-        StorageMap<_, Twox64Concat, EraIndex, EnergyOf<T>>;
-
-    /// Energy rate per reputation point per eras.
-    #[pallet::storage]
-    #[pallet::getter(fn eras_energy_per_reputation)]
-    pub type ErasEnergyPerReputaionPoint<T: Config> =
         StorageMap<_, Twox64Concat, EraIndex, EnergyOf<T>>;
 
     /// The total amount staked for the last `HISTORY_DEPTH` eras.
@@ -633,8 +631,6 @@ pub mod pallet {
     pub enum Event<T: Config> {
         /// The era energy per stake currency has been set.
         EraEnergyPerStakeCurrencySet { era_index: EraIndex, energy_rate: EnergyOf<T> },
-        /// The era energy per reputation point has been set.
-        EraEnergyPerReputationPointSet { era_index: EraIndex, energy_rate: EnergyOf<T> },
         /// The cooperator has been rewarded by this amount.
         Rewarded { stash: T::AccountId, amount: EnergyOf<T> },
         /// A staker (validator or cooperator) has been slashed by the given amount.
@@ -654,6 +650,8 @@ pub mod pallet {
         Bonded { stash: T::AccountId, amount: StakeOf<T> },
         /// An account has unbonded this amount.
         Unbonded { stash: T::AccountId, amount: StakeOf<T> },
+        /// An account has unbonded this amount.
+        Cooperated { controller: T::AccountId, targets: Vec<(AccountIdLookupOf<T>, StakeOf<T>)> },
         /// An account has called `withdraw_unbonded` and removed unbonding chunks worth `Balance`
         /// from the unlocking queue.
         Withdrawn { stash: T::AccountId, amount: StakeOf<T> },
@@ -1093,6 +1091,7 @@ pub mod pallet {
                 Error::<T>::InsufficientBond
             );
             let stash = &ledger.stash;
+            let cooperator_targets = targets.clone();
 
             // Only check limits if they are not already a cooperator.
             if !Cooperators::<T>::contains_key(stash) {
@@ -1115,7 +1114,7 @@ pub mod pallet {
 
             let old =
                 Cooperators::<T>::get(stash).map_or_else(BTreeMap::new, |x| x.targets.into_inner());
-            let reputation = pallet_reputation::Pallet::<T>::reputation(stash)
+            let record = pallet_reputation::Pallet::<T>::reputation(stash)
                 .unwrap_or_else(ReputationRecord::with_now::<T>);
 
             let targets: BoundedBTreeMap<_, _, _> = targets
@@ -1125,7 +1124,7 @@ pub mod pallet {
                     n.and_then(|n| {
                         let target = Validators::<T>::get(&n);
                         if !Self::is_legit_for_collab(&n)
-                            || *target.min_coop_reputation > *reputation.points
+                            || target.min_coop_reputation > record.reputation
                         {
                             Err(Error::<T>::ReputationTooLow.into())
                         } else if old.contains_key(&n) || target.collaborative {
@@ -1148,6 +1147,9 @@ pub mod pallet {
 
             Self::do_remove_validator(stash);
             Self::do_add_cooperator(stash, cooperations)?;
+
+            Self::deposit_event(Event::<T>::Cooperated { controller, targets: cooperator_targets });
+
             Ok(())
         }
 

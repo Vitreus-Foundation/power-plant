@@ -25,9 +25,10 @@
 // --template
 // ../../.maintain/frame-weight-template.hbs
 
-#![cfg_attr(rustfmt, rustfmt_skip)]
-#![allow(unused_parens)]
+#![allow(missing_docs)]
 #![allow(unused_imports)]
+#![allow(unused_parens)]
+#![cfg_attr(rustfmt, rustfmt_skip)]
 
 use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight, RuntimeDbWeight}};
 use core::marker::PhantomData;
