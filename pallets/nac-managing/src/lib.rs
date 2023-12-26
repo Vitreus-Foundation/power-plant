@@ -17,7 +17,10 @@ use pallet_nfts::{
 };
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
 use parity_scale_codec::Encode;
-use sp_runtime::{traits::{BlakeTwo256, Hash, StaticLookup}, SaturatedConversion};
+use sp_runtime::{
+    traits::{BlakeTwo256, Hash, StaticLookup},
+    SaturatedConversion,
+};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
