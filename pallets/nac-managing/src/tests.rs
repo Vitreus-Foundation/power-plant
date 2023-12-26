@@ -23,6 +23,8 @@ use frame_support::{assert_err, assert_ok};
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
 
+const VANGUARD_1_REPUTATION_POINT: u64 = 7398066;
+
 fn account(id: u8) -> AccountIdOf<Test> {
     [id; 32].into()
 }
@@ -38,12 +40,7 @@ fn basic_minting_should_work() {
 
         assert_ok!(NacManaging::create_collection(account(1)));
 
-        assert_ok!(NacManaging::do_mint(
-            RuntimeOrigin::signed(account(1)),
-            collection_id,
-            item_id,
-            account(1)
-        ));
+        assert_ok!(NacManaging::do_mint(item_id, account(1)));
         assert_ok!(NacManaging::update_nft_info(
             RuntimeOrigin::signed(account(1)),
             collection_id,
@@ -54,7 +51,10 @@ fn basic_minting_should_work() {
         ));
 
         assert_eq!(NacManaging::get_nac_level(&account(1)), Some((nac_level, 123)));
-        assert_eq!(Reputation::reputation(account(1)).unwrap().reputation.points().0, 39_000_000);
+        assert_eq!(
+            Reputation::reputation(account(1)).unwrap().reputation.points().0,
+            VANGUARD_1_REPUTATION_POINT
+        );
     });
 }
 
@@ -69,13 +69,11 @@ fn update_metadata_and_nac_level_test() {
 
         assert_ok!(NacManaging::create_collection(account(1)));
 
-        assert_ok!(NacManaging::do_mint(
-            RuntimeOrigin::signed(account(1)),
-            collection_id,
-            item_id,
-            account(1)
-        ));
-        assert_eq!(Reputation::reputation(account(1)).unwrap().reputation.points().0, 39_000_000);
+        assert_ok!(NacManaging::do_mint(item_id, account(1)));
+        assert_eq!(
+            Reputation::reputation(account(1)).unwrap().reputation.points().0,
+            VANGUARD_1_REPUTATION_POINT
+        );
         assert_ok!(NacManaging::update_nft_info(
             RuntimeOrigin::signed(account(1)),
             collection_id,
@@ -103,7 +101,10 @@ fn update_metadata_and_nac_level_test() {
             account(1)
         ));
         assert_eq!(NacManaging::get_nac_level(&account(1)), Some((new_nac_level, 123)));
-        assert_eq!(Reputation::reputation(account(1)).unwrap().reputation.points().0, 39_000_000);
+        assert_eq!(
+            Reputation::reputation(account(1)).unwrap().reputation.points().0,
+            VANGUARD_1_REPUTATION_POINT
+        );
     });
 }
 
@@ -118,12 +119,7 @@ fn check_nac_level_test() {
 
         assert_ok!(NacManaging::create_collection(account(1)));
 
-        assert_ok!(NacManaging::do_mint(
-            RuntimeOrigin::signed(account(1)),
-            collection_id,
-            item_id,
-            account(1)
-        ));
+        assert_ok!(NacManaging::do_mint(item_id, account(1)));
         assert_ok!(NacManaging::update_nft_info(
             RuntimeOrigin::signed(account(1)),
             collection_id,
@@ -152,12 +148,7 @@ fn user_has_access_test() {
 
         assert_ok!(NacManaging::create_collection(account(1)));
 
-        assert_ok!(NacManaging::do_mint(
-            RuntimeOrigin::signed(account(1)),
-            collection_id,
-            item_id,
-            account(1)
-        ));
+        assert_ok!(NacManaging::do_mint(item_id, account(1)));
         assert_ok!(NacManaging::update_nft_info(
             RuntimeOrigin::signed(account(1)),
             collection_id,
