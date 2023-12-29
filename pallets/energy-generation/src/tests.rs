@@ -3009,17 +3009,17 @@ fn deferred_slashes_are_deferred() {
             1
         );
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         Event::StakersElected,
-        //         ..,
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(3399277,) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(3399277,) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::StakersElected,
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798535,) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(6798535,) },
+            ]
+        ));
     })
 }
 
@@ -3048,16 +3048,16 @@ fn retroactive_deferred_slashes_two_eras_before() {
 
         mock::start_active_era(4);
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         ..,
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(3399313) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(54) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798571) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(54) },
+            ]
+        ));
     })
 }
 
@@ -3095,15 +3095,15 @@ fn retroactive_deferred_slashes_one_before() {
         // slash happens after the next line.
 
         mock::start_active_era(5);
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         Event::SlashReported { validator: 11, slash_era: 2, .. },
-        //         ..,
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(3399313) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(54) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::SlashReported { validator: 11, slash_era: 2, .. },
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798571) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(54) },
+            ]
+        ));
     })
 }
 
@@ -3282,15 +3282,15 @@ fn remove_deferred() {
         mock::start_active_era(4);
 
         // the first slash for 10% was cancelled, but the 15% one not.
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         ..,
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(1699665) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(1699647) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(3399295) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(3399277) },
+            ]
+        ));
     })
 }
 
@@ -3397,16 +3397,16 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
             &[Perbill::from_percent(10)],
         );
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         ..,
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(3399277) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(3399277) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798535) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(6798535) },
+            ]
+        ));
 
         // post-slash balance
         let slash_11 = *max_slash_amount(&initial_reputation_11.into()) / 10;
@@ -3463,19 +3463,19 @@ fn non_slashable_offence_doesnt_disable_validator() {
             vec![&11, &21]
         );
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         ..,
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         Event::Chilled { stash: 21 },
-        //         Event::ForceEra { mode: Forcing::ForceNew },
-        //         Event::SlashReported { validator: 21, slash_era: 1, .. },
-        //         Event::Slashed { staker: 21, amount: ReputationPoint(8498191) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(45) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::Chilled { stash: 21 },
+                Event::ForceEra { mode: Forcing::ForceNew },
+                Event::SlashReported { validator: 21, slash_era: 1, .. },
+                Event::Slashed { staker: 21, amount: ReputationPoint(16996338) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(45) },
+            ]
+        ));
 
         // the offence for validator 10 wasn't slashable so it wasn't disabled
         assert!(!is_disabled(10));
@@ -3523,19 +3523,19 @@ fn slashing_independent_of_disabling_validator() {
             vec![&11, &21]
         );
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         ..,
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         Event::Chilled { stash: 21 },
-        //         Event::ForceEra { mode: Forcing::ForceNew },
-        //         Event::SlashReported { validator: 21, slash_era: 1, .. },
-        //         Event::Slashed { staker: 21, amount: ReputationPoint(8498191) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(45) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::Chilled { stash: 21 },
+                Event::ForceEra { mode: Forcing::ForceNew },
+                Event::SlashReported { validator: 21, slash_era: 1, .. },
+                Event::Slashed { staker: 21, amount: ReputationPoint(16996338) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(45) },
+            ]
+        ));
 
         // the offence for validator 10 was explicitly disabled
         assert!(is_disabled(10));
