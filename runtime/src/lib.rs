@@ -799,17 +799,20 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         runtime_call: &RuntimeCall,
         _dispatch_info: &DispatchInfoOf<RuntimeCall>,
     ) -> CallFee<Balance> {
-        let next_multiplier = TransactionPayment::next_fee_multiplier();
-        let default_fee = next_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
         match runtime_call {
             RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(default_fee),
-            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(default_fee),
+            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(Self::custom_fee()),
+            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             _ => CallFee::Stock,
         }
+    }
+
+    fn custom_fee() -> Balance {
+        let next_multiplier = TransactionPayment::next_fee_multiplier();
+        next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
     }
 }
 

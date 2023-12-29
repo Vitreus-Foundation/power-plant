@@ -372,3 +372,110 @@ fn update_upper_fee_multiplier_works() {
         assert_eq!(EnergyFee::upper_fee_multiplier(), new_multiplier);
     });
 }
+
+#[test]
+fn fee_multiplier_works() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
+        let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
+        let transfer_amount: Balance = 1_000_000_000;
+
+        let initial_fee_multiplier = TransactionPayment::next_fee_multiplier();
+        assert_eq!(initial_fee_multiplier, Multiplier::one());
+
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+
+        let dispatch_info: DispatchInfo = assets_transfer_call.get_dispatch_info();
+        let extrinsic_len: u32 = 1000;
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+
+        let constant_fee_1 = initial_fee_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance - constant_fee_1,);
+
+        let new_multiplier = Multiplier::from(2);
+        EnergyFee::update_upper_fee_multiplier(RawOrigin::Root.into(), new_multiplier)
+            .expect("Expected to set a upper fee multiplier");
+
+        TransactionPayment::on_finalize(1);
+        assert_eq!(TransactionPayment::next_fee_multiplier(), initial_fee_multiplier);
+
+        // Update block fullness threshold
+        let block_fullness_threshold = Perquintill::from_percent(50);
+        EnergyFee::update_block_fullness_threshold(RuntimeOrigin::root(), block_fullness_threshold)
+            .expect("Expected to update block fullness threshold");
+
+        // Set block weight to be equal to the block weight threshold
+        let mock_block_weight = calculate_block_weight_based_on_threshold(block_fullness_threshold);
+        System::set_block_consumed_resources(mock_block_weight, 0);
+
+        TransactionPayment::on_finalize(1);
+        assert_eq!(TransactionPayment::next_fee_multiplier(), new_multiplier);
+
+        let constant_fee_2 = new_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
+
+        <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+        assert_eq!(
+            BalancesVNRG::balance(&ALICE),
+            initial_energy_balance - constant_fee_1 - constant_fee_2,
+        );
+    });
+}
+
+#[test]
+fn fee_multiplier_works_for_evm() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
+        let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
+
+        let new_multiplier = Multiplier::from(2);
+        EnergyFee::update_upper_fee_multiplier(RawOrigin::Root.into(), new_multiplier)
+            .expect("Expected to set a upper fee multiplier");
+
+        // Update block fullness threshold
+        let block_fullness_threshold = Perquintill::from_percent(50);
+        EnergyFee::update_block_fullness_threshold(RuntimeOrigin::root(), block_fullness_threshold)
+            .expect("Expected to update block fullness threshold");
+
+        // Set block weight to be equal to the block weight threshold
+        let mock_block_weight = calculate_block_weight_based_on_threshold(block_fullness_threshold);
+        System::set_block_consumed_resources(mock_block_weight, 0);
+
+        TransactionPayment::on_finalize(1);
+        assert_eq!(TransactionPayment::next_fee_multiplier(), new_multiplier);
+
+        assert!(<EnergyFee as OnChargeEVMTransaction<Test>>::withdraw_fee(
+            &ALICE.into(),
+            1_234_567_890.into(),
+        )
+        .is_ok());
+
+        let constant_fee = new_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
+        assert_eq!(
+            BalancesVNRG::balance(&ALICE),
+            initial_energy_balance.saturating_sub(constant_fee),
+        );
+        assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance - constant_fee,);
+    });
+}

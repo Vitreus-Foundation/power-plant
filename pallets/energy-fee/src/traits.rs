@@ -24,6 +24,12 @@ where
         runtime_call: &RuntimeCall,
         dispatch_info: &DispatchInfo,
     ) -> CallFee<Balance>;
+
+    fn custom_fee() -> Balance;
+
+    fn ethereum_fee() -> Balance {
+        Self::custom_fee()
+    }
 }
 
 pub trait TokenExchange<AccountId, SourceToken, TargetToken, TokenBalance>
