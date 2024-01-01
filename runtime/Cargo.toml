@@ -94,6 +94,7 @@ pallet-hotfix-sufficients = { workspace = true }
 
 [dev-dependencies]
 chain-spec = { workspace = true }
+energy-generation-runtime-api = { workspace = true, default-features = true }
 
 [build-dependencies]
 substrate-wasm-builder = { workspace = true, optional = true }
