@@ -650,8 +650,10 @@ impl pallet_energy_generation::Config for Runtime {
 }
 
 parameter_types! {
-    pub const CollectionDeposit: Balance = 100;
-    pub const ItemDeposit: Balance = 1;
+    // Setting this to value > 0 would break nac-managing
+    pub const CollectionDeposit: Balance = 0;
+    // Setting this to value > 0 would break nac-managing
+    pub const ItemDeposit: Balance = 0;
     pub const KeyLimit: u32 = 32;
     pub const ValueLimit: u32 = 256;
     pub const ApprovalsLimit: u32 = 20;
@@ -721,12 +723,15 @@ parameter_types! {
 
 impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type AdminOrigin = EnsureRoot<Self::AccountId>;
+    type Nfts = Nfts;
+    type Balance = Balance;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
-    type ForceOrigin = EnsureRoot<AccountId>;
-    type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
-    type Nfts = Nfts;
     type NftCollectionId = NftCollectionId;
+    type KeyLimit = ConstU32<50>;
+    type ValueLimit = ConstU32<50>;
+    type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1079,7 +1084,9 @@ construct_runtime!(
         AssetRate: pallet_asset_rate,
         TransactionPayment: pallet_transaction_payment,
         Sudo: pallet_sudo,
+        // TODO: do we need this pallet?
         BaseFee: pallet_base_fee,
+        // TODO: do we need this pallet?
         DynamicFee: pallet_dynamic_fee,
         EVM: pallet_evm,
         EVMChainId: pallet_evm_chain_id,
