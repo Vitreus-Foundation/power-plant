@@ -169,7 +169,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 1,
+    spec_version: 3,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -394,7 +394,7 @@ impl pallet_assets::Config for Runtime {
 
 parameter_types! {
     pub const AccumulationPeriod: BlockNumber = HOURS * 24;
-    pub const MaxAmount: Balance = 100 * vtrs::UNITS;
+    pub const MaxAmount: Balance = 1000 * vtrs::UNITS;
 }
 
 impl pallet_faucet::Config for Runtime {
