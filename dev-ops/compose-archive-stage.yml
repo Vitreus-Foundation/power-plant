@@ -15,6 +15,8 @@ services:
     restart: always
     depends_on:
       - vitreus_power_plant
+    volumes:
+      - node_data:/tmp/node
     command: >
       ./target/release/vitreus-power-plant-node
       --chain devnet
@@ -34,6 +36,9 @@ services:
       - "127.0.0.1:9615:9615/tcp"
     networks:
       - vitreus_power_plant-network
+volumes:
+  node_data:
+    driver: local
 
 networks:
   vitreus_power_plant-network:
