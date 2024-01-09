@@ -416,7 +416,7 @@ impl pallet_assets::Config for Runtime {
 }
 
 parameter_types! {
-    pub const AccumulationPeriod: BlockNumber = HOURS * 24;
+    pub const AccumulationPeriod: BlockNumber = prod_or_fast(HOURS * 24, 24 * MINUTES, "VITREUS_FAUCET_ACCUMULATION_PERIOD");
     pub const MaxAmount: Balance = 100 * vtrs::UNITS;
 }
 
@@ -556,8 +556,9 @@ pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
 
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const SessionsPerEra: SessionIndex = 1;
-    pub const BondingDuration: EraIndex = 24 * 28;
+    pub const SessionsPerEra: SessionIndex = prod_or_fast!(5, 1);
+    pub const BondingDuration: EraIndex = prod_or_fast(24 * 28, 5);
+    // TODO: consider removing, since the slash defer feature was removed
     pub const SlashDeferDuration: EraIndex = 24 * 7; // 1/4 the bonding duration.
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
@@ -711,6 +712,7 @@ impl pallet_nfts::Config for Runtime {
     type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
     type Helper = ();
+    // TODO: do we want to allow regular users create nfts?
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
 }
@@ -730,6 +732,7 @@ impl pallet_uniques::Config for Runtime {
     type KeyLimit = KeyLimit;
     type ValueLimit = ValueLimit;
     type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
+    // TODO: do we want to allow regular users create nfts?
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
 }
