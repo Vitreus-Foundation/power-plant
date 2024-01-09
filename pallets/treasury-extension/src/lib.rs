@@ -8,6 +8,7 @@ use pallet_treasury::{BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
 use sp_arithmetic::{traits::Saturating, Permill};
 
 pub use pallet::*;
+pub use weights::WeightInfo;
 
 #[cfg(test)]
 mod mock;
@@ -15,8 +16,10 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-// #[cfg(feature = "runtime-benchmarks")]
-// mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+mod benchmarking;
+
+pub mod weights;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -37,6 +40,8 @@ pub mod pallet {
         type SpendThreshold: Get<Permill>;
         /// What to do with the recycled funds
         type OnRecycled: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
+        /// Weight information for functions in this pallet.
+        type WeightInfo: WeightInfo;
     }
 
     #[pallet::event]
@@ -78,7 +83,6 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
         Self::deposit_event(Event::Recycled { recyled_funds: unrecycled_amount });
 
         *budget_remaining = budget_remaining.saturating_sub(unrecycled_amount);
-        // TODO: add weight mutation
-        // *total_weight += <T as pallet::Config<I>>::WeightInfo::spend_funds();
+        *total_weight += <T as pallet::Config<I>>::WeightInfo::spend_funds();
     }
 }

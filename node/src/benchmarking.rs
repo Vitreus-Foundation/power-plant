@@ -27,7 +27,7 @@ use sc_cli::Result;
 use sc_client_api::BlockBackend;
 use sp_core::{ecdsa, Pair};
 use sp_inherents::{InherentData, InherentDataProvider};
-use sp_runtime::{generic::Era, OpaqueExtrinsic, SaturatedConversion};
+use sp_runtime::{generic::Era, OpaqueExtrinsic};
 // Frontier
 use fp_account::AccountId20;
 use vitreus_power_plant_runtime::{self as runtime, AccountId, Balance, BalancesCall, SystemCall};

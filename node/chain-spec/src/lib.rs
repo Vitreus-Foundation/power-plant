@@ -6,7 +6,7 @@ use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
 use sp_core::{storage::Storage, Pair, Public};
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::traits::{AccountIdConversion, IdentifyAccount, Verify};
 use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
@@ -67,7 +67,16 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
                     // Sudo account
                     alith(),
                     // Pre-funded accounts
-                    vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
+                    vec![
+                        alith(),
+                        baltathar(),
+                        charleth(),
+                        dorothy(),
+                        ethan(),
+                        faith(),
+                        goliath(),
+                        treasury(),
+                    ],
                     // Initial Validators
                     vec![authority_keys_from_seed("Alice")],
                     vec![],
@@ -109,7 +118,16 @@ pub fn devnet_config() -> ChainSpec {
                 // Sudo account
                 alith(),
                 // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
+                vec![
+                    alith(),
+                    baltathar(),
+                    charleth(),
+                    dorothy(),
+                    ethan(),
+                    faith(),
+                    goliath(),
+                    treasury(),
+                ],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
@@ -147,7 +165,16 @@ pub fn localnet_config() -> ChainSpec {
                 // Sudo account
                 alith(),
                 // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
+                vec![
+                    alith(),
+                    baltathar(),
+                    charleth(),
+                    dorothy(),
+                    ethan(),
+                    faith(),
+                    goliath(),
+                    treasury(),
+                ],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
@@ -366,6 +393,10 @@ pub mod devnet_keys {
 
     pub fn goliath() -> AccountId {
         AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
+    }
+
+    pub fn treasury() -> AccountId {
+        vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()
     }
 
     pub fn authority_keys_from_seed(

@@ -142,6 +142,7 @@ impl pallet_treasury_extension::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = ();
+    type WeightInfo = pallet_treasury_extension::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {

@@ -3,10 +3,7 @@
 use super::*;
 
 use frame_benchmarking::v2::*;
-use frame_system::RawOrigin;
-use sp_runtime::traits::{One, Zero};
 use pallet_treasury::SpendFunds;
-
 
 fn assert_last_event<T: Config>(generic_event: <T as Config>::RuntimeEvent) {
     frame_system::Pallet::<T>::assert_last_event(generic_event.into());
@@ -32,7 +29,7 @@ mod benchmarks {
                 &mut imbalance,
                 &mut total_weight,
                 &mut missed_any,
-            ); 
+            );
         }
         assert_last_event::<T>(Event::<T>::Recycled { recyled_funds: threshold }.into());
         assert_eq!(left, budget_remaining - threshold);

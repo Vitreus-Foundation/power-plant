@@ -154,6 +154,7 @@ impl crate::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = ();
+    type WeightInfo = ();
 }
 
 // Build genesis storage according to the mock runtime.
