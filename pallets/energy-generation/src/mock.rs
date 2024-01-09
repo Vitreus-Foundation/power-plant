@@ -164,7 +164,7 @@ parameter_types! {
     pub const MetadataDepositPerByte: Balance = 0;
 }
 
-pub type AssetId = u128;
+pub type AssetId = u32;
 
 impl pallet_assets::Config for Test {
     type RuntimeEvent = RuntimeEvent;

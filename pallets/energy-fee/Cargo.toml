@@ -55,6 +55,7 @@ std = [
     "frame-system/std",
     "log/std",
     "ethereum-types/std",
+    "pallet-asset-rate/std",
     "pallet-balances/std",
     "pallet-ethereum/std",
     "pallet-evm/std",
@@ -66,6 +67,7 @@ std = [
     "pallet-transaction-payment/std",
     "scale-info/std",
     "serde/std",
+    "sp-arithmetic/std",
     "sp-application-crypto/std",
     "sp-io/std",
     "sp-runtime/std",
@@ -73,5 +75,6 @@ std = [
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
+    "pallet-assets/runtime-benchmarks",
     "pallet-ethereum/runtime-benchmarks",
 ]

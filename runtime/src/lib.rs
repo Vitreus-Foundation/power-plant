@@ -2,7 +2,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 #![allow(clippy::new_without_default, clippy::or_fun_call)]
-#![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
+// #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -137,7 +137,11 @@ pub type Hash = H256;
 pub type DigestItem = generic::DigestItem;
 
 /// Asset ID.
+#[cfg(not(feature = "runtime-benchmarks"))]
 pub type AssetId = u128;
+
+#[cfg(feature = "runtime-benchmarks")]
+pub type AssetId = u32;
 
 /// Origin for council voting
 type MoreThanHalfCouncil = EitherOfDiverse<
@@ -407,7 +411,7 @@ impl pallet_assets::Config for Runtime {
     type Extra = ();
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime_benchmarks")]
+    #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = ();
 }
 
@@ -726,8 +730,6 @@ impl pallet_uniques::Config for Runtime {
     type KeyLimit = KeyLimit;
     type ValueLimit = ValueLimit;
     type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
 }
@@ -768,8 +770,6 @@ impl pallet_asset_rate::Config for Runtime {
     type Currency = Balances;
     type Balance = Balance;
     type WeightInfo = pallet_asset_rate::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type AssetKindFactory = ();
 }
 
 parameter_types! {
@@ -1125,6 +1125,7 @@ construct_runtime!(
         TechnicalCommittee: pallet_collective::<Instance2>,
         TechnicalMembership: pallet_membership::<Instance1>,
         Treasury: pallet_treasury,
+        TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>},
         Bounties: pallet_bounties,
         Democracy: pallet_democracy,
     }

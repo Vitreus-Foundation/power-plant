@@ -27,7 +27,7 @@ use crate::{
 };
 
 #[cfg(feature = "runtime-benchmarks")]
-use chain_spec::get_account_id_from_seed;
+use chain_spec::devnet_keys::get_account_id_from_seed;
 
 impl SubstrateCli for Cli {
     fn impl_name() -> String {
@@ -179,7 +179,7 @@ pub fn run() -> sc_cli::Result<()> {
             use frame_benchmarking_cli::{
                 BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE,
             };
-            use frontier_template_runtime::{Block, ExistentialDeposit};
+            use vitreus_power_plant_runtime::{Block, ExistentialDeposit};
 
             let runner = cli.create_runner(cmd)?;
             match cmd {

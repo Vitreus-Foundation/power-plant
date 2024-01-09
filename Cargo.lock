@@ -5271,6 +5271,7 @@ dependencies = [
  "parity-scale-codec",
  "paste",
  "scale-info",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5286,6 +5287,7 @@ dependencies = [
  "frame-support",
  "parity-scale-codec",
  "scale-info",
+ "serde",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -5319,6 +5321,7 @@ name = "pallet-asset-rate"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech/substrate?branch=polkadot-v1.0.0#948fbd2fd1233dc26dbb9f9bbc1d2cca2c03945d"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "parity-scale-codec",
@@ -5429,6 +5432,7 @@ name = "pallet-bounties"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech/substrate?branch=polkadot-v1.0.0#948fbd2fd1233dc26dbb9f9bbc1d2cca2c03945d"
 dependencies = [
+ "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log",
@@ -6003,16 +6007,13 @@ dependencies = [
 name = "pallet-treasury-extension"
 version = "0.1.0"
 dependencies = [
- "ethereum-types",
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "pallet-balances",
- "pallet-base-fee",
  "pallet-bounties",
  "pallet-treasury",
  "parity-scale-codec",
- "rand_chacha 0.2.2",
  "scale-info",
  "serde",
  "sp-arithmetic",
@@ -10541,6 +10542,7 @@ dependencies = [
  "jsonrpsee",
  "log",
  "node-rpc-server",
+ "pallet-energy-fee",
  "pallet-energy-generation",
  "pallet-nfts-runtime-api",
  "pallet-reputation",
@@ -10659,6 +10661,7 @@ dependencies = [
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
  "pallet-treasury",
+ "pallet-treasury-extension",
  "pallet-uniques",
  "pallet-utility",
  "parity-scale-codec",

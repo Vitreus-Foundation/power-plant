@@ -135,6 +135,16 @@ impl pallet_treasury::Config for Runtime {
 }
 
 parameter_types! {
+    pub const SpendThreshold: Permill = Permill::from_percent(10);
+}
+
+impl pallet_treasury_extension::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type SpendThreshold = SpendThreshold;
+    type OnRecycled = ();
+}
+
+parameter_types! {
     pub const BountyDepositBase: Balance = 10 * NANO_VTRS;
     pub const BountyDepositPayoutDelay: BlockNumber = 8 * DAYS;
     pub const BountyUpdatePeriod: BlockNumber = 90 * DAYS;

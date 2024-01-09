@@ -26,7 +26,7 @@ use sp_runtime::{
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub(crate) type AccountId = AccountId20;
-pub(crate) type AssetId = u128;
+pub(crate) type AssetId = u32;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
@@ -240,6 +240,8 @@ impl pallet_assets::Config for Test {
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type CallbackHandle = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
 }
 
 parameter_types! {

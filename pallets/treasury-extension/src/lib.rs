@@ -1,16 +1,22 @@
+#![cfg_attr(not(feature = "std"), no_std)]
+
 use frame_support::{
     pallet_prelude::*,
     traits::{Currency, Get, Imbalance, IsType, OnUnbalanced},
 };
-use pallet::*;
 use pallet_treasury::{BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
 use sp_arithmetic::{traits::Saturating, Permill};
+
+pub use pallet::*;
 
 #[cfg(test)]
 mod mock;
 
 #[cfg(test)]
 mod tests;
+
+// #[cfg(feature = "runtime-benchmarks")]
+// mod benchmarking;
 
 #[frame_support::pallet]
 pub mod pallet {

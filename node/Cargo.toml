@@ -76,6 +76,7 @@ frame-benchmarking = { workspace = true, optional = true }
 frame-benchmarking-cli = { workspace = true, optional = true }
 frame-system = { workspace = true }
 pallet-transaction-payment = { workspace = true }
+pallet-energy-fee = { workspace = true }
 
 # Frontier
 fc-cli = { workspace = true }
