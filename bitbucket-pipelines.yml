@@ -16,6 +16,7 @@ pipelines:
             - cargo clippy -- -D warnings
             - cargo build --locked
             - cargo test --locked
+            - cargo test --features "runtime-benchmarks" --locked
 
     feature/*:
       - step:
@@ -29,6 +30,7 @@ pipelines:
             - cargo clippy -- -D warnings
             - cargo build --locked
             - cargo test --locked
+            - cargo test --features "runtime-benchmarks" --locked
 
     devops/*:
       - step:
@@ -42,6 +44,7 @@ pipelines:
             - cargo clippy -- -D warnings
             - cargo build --locked
             - cargo test --locked
+            - cargo test --features "runtime-benchmarks" --locked
 
   branches:   
     develop:
@@ -63,6 +66,7 @@ pipelines:
                   - cargo clippy -- -D warnings
                   - cargo build --locked
                   - cargo test --locked
+                  - cargo test --features "runtime-benchmarks" --locked
 
             - step:
                 name: inno DEVnet bootnode
@@ -133,6 +137,7 @@ pipelines:
                   - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
                   - cargo build --locked
                   - cargo test --locked
+                  - cargo test --features "runtime-benchmarks" --locked
 #                  - cargo test --locked -- --include-ignored
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
