@@ -417,7 +417,7 @@ impl pallet_assets::Config for Runtime {
 
 parameter_types! {
     pub AccumulationPeriod: BlockNumber = prod_or_fast!(HOURS * 24, 24 * MINUTES, "VITREUS_FAUCET_ACCUMULATION_PERIOD");
-    pub const MaxAmount: Balance = 100 * vtrs::UNITS;
+    pub const MaxAmount: Balance = 1000 * vtrs::UNITS;
 }
 
 impl pallet_faucet::Config for Runtime {
