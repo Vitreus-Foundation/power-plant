@@ -64,7 +64,7 @@ pipelines:
                   - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
-                  - cargo build --locked
+                  - cargo build --features "fast-runtime" --locked
                   - cargo test --locked
                   - cargo test --features "runtime-benchmarks" --locked
 
@@ -116,6 +116,19 @@ pipelines:
 
       - parallel:
           steps:
+            - step:
+                name: Build and Run Tests
+                size: 2x
+                script:
+                  - rustup target add wasm32-unknown-unknown
+                  - export RUSTFLAGS="-C strip=debuginfo"
+                  - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+                  - cargo fmt -- --check
+                  - cargo clippy -- -D warnings
+                  - cargo build --locked
+                  - cargo test --locked
+                  - cargo test --features "runtime-benchmarks" --locked
+
             - step:
                 name: Stage DEVnet bootnode
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
