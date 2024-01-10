@@ -52,7 +52,7 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 }
 
 parameter_types! {
-    pub const TechnicalMotionDuration: BlockNumber = prod_or_fast!(7 * DAYS, 5 * MINUTES, "VITREUS_MOTION_DURATION");
+    pub TechnicalMotionDuration: BlockNumber = prod_or_fast!(7 * DAYS, 5 * MINUTES, "VITREUS_MOTION_DURATION");
     pub const TechnicalMaxProposals: u32 = 100;
     pub const TechnicalMaxMembers: u32 = 100;
 }
@@ -88,7 +88,7 @@ parameter_types! {
     pub const ProposalBond: Permill = Permill::from_percent(5);
     pub const ProposalBondMinimum: Balance = 10 * MILLI_VTRS;
     pub const ProposalBondMaximum: Balance = 10 * UNITS;
-    pub const SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 7 * MINUTES, "VITREUS_SPEND_PERIOD");
+    pub SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 7 * MINUTES, "VITREUS_SPEND_PERIOD");
     pub const Burn: Permill = Permill::from_percent(1);
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 
@@ -147,8 +147,8 @@ impl pallet_treasury_extension::Config for Runtime {
 
 parameter_types! {
     pub const BountyDepositBase: Balance = 10 * NANO_VTRS;
-    pub const BountyDepositPayoutDelay: BlockNumber = prod_or_fast!(8 * DAYS, 6 * MINUTES, "VITREUS_BOUNTY_DELAY");
-    pub const BountyUpdatePeriod: BlockNumber = prod_or_fast!(90 * DAYS, 40 * MINUTES, "VITREUS_BOUNTY_UPDATE_PERIOD");
+    pub BountyDepositPayoutDelay: BlockNumber = prod_or_fast!(8 * DAYS, 6 * MINUTES, "VITREUS_BOUNTY_DELAY");
+    pub BountyUpdatePeriod: BlockNumber = prod_or_fast!(90 * DAYS, 40 * MINUTES, "VITREUS_BOUNTY_UPDATE_PERIOD");
     pub const MaximumReasonLength: u32 = 16384;
     pub const CuratorDepositMultiplier: Permill = Permill::from_percent(50);
     pub const CuratorDepositMin: Balance = 100 * NANO_VTRS;
