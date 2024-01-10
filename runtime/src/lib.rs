@@ -778,6 +778,8 @@ impl pallet_energy_fee::Config for Runtime {
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAssetId = VNRG;
+    type MainRecycleDestination = ();
+    type FeeRecycleDestination = ();
 }
 
 parameter_types! {

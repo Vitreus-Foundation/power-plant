@@ -143,6 +143,8 @@ impl pallet_energy_fee::Config for Test {
     type MainTokenBalanced = BalancesVTRS;
     type EnergyExchange = NativeExchange<AssetId, BalancesVTRS, BalancesVNRG, EnergyRate, GetVNRG>;
     type EnergyAssetId = GetVNRG;
+    type MainRecycleDestination = ();
+    type FeeRecycleDestination = ();
 }
 
 impl pallet_timestamp::Config for Test {
