@@ -3016,8 +3016,8 @@ fn deferred_slashes_are_deferred() {
                 Event::SlashReported { validator: 11, slash_era: 1, .. },
                 Event::StakersElected,
                 ..,
-                Event::Slashed { staker: 11, amount: ReputationPoint(3399277,) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(3399277,) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798535,) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(6798535,) },
             ]
         ));
     })
@@ -3054,7 +3054,7 @@ fn retroactive_deferred_slashes_two_eras_before() {
                 Event::Chilled { stash: 11 },
                 Event::SlashReported { validator: 11, slash_era: 1, .. },
                 ..,
-                Event::Slashed { staker: 11, amount: ReputationPoint(3399313) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798571) },
                 Event::Slashed { staker: 101, amount: ReputationPoint(54) },
             ]
         ));
@@ -3100,7 +3100,7 @@ fn retroactive_deferred_slashes_one_before() {
             &[
                 Event::SlashReported { validator: 11, slash_era: 2, .. },
                 ..,
-                Event::Slashed { staker: 11, amount: ReputationPoint(3399313) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798571) },
                 Event::Slashed { staker: 101, amount: ReputationPoint(54) },
             ]
         ));
@@ -3287,8 +3287,8 @@ fn remove_deferred() {
             &[
                 Event::SlashReported { validator: 11, slash_era: 1, .. },
                 ..,
-                Event::Slashed { staker: 11, amount: ReputationPoint(1699665) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(1699647) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(3399295) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(3399277) },
             ]
         ));
     })
@@ -3403,8 +3403,8 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
                 ..,
                 Event::Chilled { stash: 11 },
                 Event::SlashReported { validator: 11, slash_era: 1, .. },
-                Event::Slashed { staker: 11, amount: ReputationPoint(3399277) },
-                Event::Slashed { staker: 101, amount: ReputationPoint(3399277) },
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798535) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(6798535) },
             ]
         ));
 
@@ -3472,7 +3472,7 @@ fn non_slashable_offence_doesnt_disable_validator() {
                 Event::Chilled { stash: 21 },
                 Event::ForceEra { mode: Forcing::ForceNew },
                 Event::SlashReported { validator: 21, slash_era: 1, .. },
-                Event::Slashed { staker: 21, amount: ReputationPoint(8498191) },
+                Event::Slashed { staker: 21, amount: ReputationPoint(16996338) },
                 Event::Slashed { staker: 101, amount: ReputationPoint(45) },
             ]
         ));
@@ -3532,7 +3532,7 @@ fn slashing_independent_of_disabling_validator() {
                 Event::Chilled { stash: 21 },
                 Event::ForceEra { mode: Forcing::ForceNew },
                 Event::SlashReported { validator: 21, slash_era: 1, .. },
-                Event::Slashed { staker: 21, amount: ReputationPoint(8498191) },
+                Event::Slashed { staker: 21, amount: ReputationPoint(16996338) },
                 Event::Slashed { staker: 101, amount: ReputationPoint(45) },
             ]
         ));

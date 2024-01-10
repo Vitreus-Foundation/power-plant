@@ -8,16 +8,25 @@
 #![warn(clippy::all)]
 use frame_support::{
     pallet_prelude::{BoundedVec, DispatchResult},
-    traits::{tokens::nonfungibles_v2::Inspect, Currency, Get, Incrementable},
+    traits::{
+        tokens::{
+            nonfungibles_v2::{Create, Inspect, InspectEnumerable, Mutate},
+            Balance,
+        },
+        Get, Incrementable, OnNewAccount,
+    },
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
-use pallet_nfts::{
-    CollectionConfig, CollectionSetting, CollectionSettings, ItemConfig, ItemSettings, MintSettings,
+use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
+use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
+use parity_scale_codec::{Encode, MaxEncodedLen};
+use sp_arithmetic::FixedPointOperand;
+use sp_runtime::{
+    traits::{BlakeTwo256, Hash, MaybeSerializeDeserialize},
+    SaturatedConversion,
 };
-use pallet_reputation::ReputationPoint;
-use parity_scale_codec::Encode;
-use sp_runtime::traits::{BlakeTwo256, Hash, StaticLookup};
+use sp_std::fmt::Debug;
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -28,18 +37,17 @@ mod tests;
 
 pub mod weights;
 
-type BalanceOf<T, I = ()> = <<T as pallet_nfts::Config<I>>::Currency as Currency<
-    <T as frame_system::Config>::AccountId,
->>::Balance;
-type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
-type CollectionConfigFor<T, I = ()> = CollectionConfig<
-    BalanceOf<T, I>,
-    BlockNumberFor<T>,
-    <T as pallet_nfts::Config<I>>::CollectionId,
->;
+type CollectionConfigFor<T> =
+    CollectionConfig<<T as Config>::Balance, BlockNumberFor<T>, <T as Config>::CollectionId>;
 
 /// NAC level attribute key in NFT.
 const NAC_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
+
+/// Default NAC level for account.
+const DEFAULT_NAC_LEVEL: u8 = 1;
+
+/// Extrinsic index.
+const EXTRINSIC_INDEX: u32 = 135;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -50,18 +58,22 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config:
-        frame_system::Config + pallet_nfts::Config + pallet_reputation::Config
-    {
+    pub trait Config: frame_system::Config + pallet_reputation::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// Registry for the minted NFTs.
-        type Nfts: Inspect<
-            Self::AccountId,
-            ItemId = <Self as Config>::ItemId,
-            CollectionId = <Self as Config>::CollectionId,
-        >;
+        type Nfts: Inspect<Self::AccountId, ItemId = Self::ItemId, CollectionId = Self::CollectionId>
+            + Mutate<Self::AccountId, ItemConfig>
+            + Create<Self::AccountId, CollectionConfigFor<Self>>
+            + InspectEnumerable<Self::AccountId>;
+
+        /// The balance type.
+        type Balance: Balance
+            + MaybeSerializeDeserialize
+            + Debug
+            + MaxEncodedLen
+            + FixedPointOperand;
 
         /// The collection id type.
         type CollectionId: MaybeSerializeDeserialize
@@ -70,38 +82,32 @@ pub mod pallet {
             + Copy
             + Default
             + Ord
-            + From<<Self as pallet_nfts::Config>::CollectionId>
-            + Into<<Self as pallet_nfts::Config>::CollectionId>;
+            + Incrementable;
 
         /// The item id type.
-        type ItemId: Member
-            + Parameter
-            + MaxEncodedLen
-            + Copy
-            + From<u32>
-            + From<<Self as pallet_nfts::Config>::ItemId>
-            + Into<<Self as pallet_nfts::Config>::ItemId>;
+        type ItemId: Member + Parameter + MaxEncodedLen + Copy + From<u32>;
+
+        /// The maximum number of bytes that may be used to represent an NFT attribute key.
+        type KeyLimit: Get<u32>;
+
+        /// The maximum number of bytes that may be used to represent an NFT attribute value.
+        type ValueLimit: Get<u32>;
 
         /// The origin which may forcibly mint a NFT or otherwise alter privileged
         /// attributes.
-        type ForceOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+        type AdminOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
 
         /// NFT Collection ID.
-        type NftCollectionId: Get<<Self as Config>::CollectionId>;
+        type NftCollectionId: Get<Self::CollectionId>;
     }
 
     /// Temp storage: the information about user NFTs and NAC levels.
     #[pallet::storage]
-    pub type UsersNft<T> = StorageMap<
-        _,
-        Blake2_128Concat,
-        <T as frame_system::Config>::AccountId,
-        (<T as Config>::ItemId, u8),
-        OptionQuery,
-    >;
+    pub type UsersNft<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, (T::ItemId, u8), OptionQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -109,19 +115,17 @@ pub mod pallet {
         /// NFT was minted.
         NftMinted {
             /// Who gets the NAC.
-            owner: AccountIdLookupOf<T>,
+            owner: T::AccountId,
             /// The NAC unique ID.
-            item_id: <T as Config>::ItemId,
+            item_id: T::ItemId,
         },
 
         /// NFT metadata and attributes were updated.
         NftUpdated {
             /// Whose NFT.
-            owner: AccountIdLookupOf<T>,
+            owner: T::AccountId,
             /// The NAC level.
             nac_level: u8,
-            /// NFT metadata.
-            metadata: BoundedVec<u8, T::StringLimit>,
         },
 
         /// User has NAC level.
@@ -149,22 +153,25 @@ pub mod pallet {
         /// Mint a NFT item of a particular collection.
         #[pallet::call_index(0)]
         #[pallet::weight(<T as Config>::WeightInfo::mint())]
-        pub fn mint(
-            origin: OriginFor<T>,
-            data: BoundedVec<u8, T::StringLimit>,
-            nac_level: u8,
-            owner: AccountIdLookupOf<T>,
-        ) -> DispatchResult {
-            let account_id = T::Lookup::lookup(owner.clone())?;
-            let item_id = Self::create_unique_item_id(135, &account_id);
+        pub fn mint(origin: OriginFor<T>, nac_level: u8, owner: T::AccountId) -> DispatchResult {
+            T::AdminOrigin::ensure_origin(origin)?;
+
             let collection = T::NftCollectionId::get();
 
-            if Self::get_nac_level(&account_id).is_some() {
-                return Err(Error::<T>::NftAlreadyExist)?;
-            };
+            match Self::get_nac_level(&owner) {
+                Some((current_nac_level, item_id)) => {
+                    if current_nac_level == nac_level {
+                        return Err(Error::<T>::NftAlreadyExist)?;
+                    }
 
-            Self::do_mint(origin.clone(), collection, item_id, owner.clone())?;
-            Self::update_nft_info(origin, collection, item_id, data, nac_level, owner)
+                    Self::update_nft_info(&collection, &item_id, nac_level, owner)
+                },
+                _ => {
+                    let item_id = Self::create_unique_item_id(&owner);
+                    Self::do_mint(item_id, owner.clone())?;
+                    Self::update_nft_info(&collection, &item_id, nac_level, owner)
+                },
+            }
         }
 
         /// Update metadata and NAC level.
@@ -172,15 +179,15 @@ pub mod pallet {
         #[pallet::weight(<T as Config>::WeightInfo::update_nft())]
         pub fn update_nft(
             origin: OriginFor<T>,
-            new_data: BoundedVec<u8, T::StringLimit>,
             new_nac_level: Option<u8>,
-            owner: AccountIdLookupOf<T>,
+            owner: T::AccountId,
         ) -> DispatchResult {
-            let account_id = T::Lookup::lookup(owner.clone())?;
+            T::AdminOrigin::ensure_origin(origin)?;
+
             let collection = T::NftCollectionId::get();
             let nac_level: u8;
 
-            let item_id = match Self::get_nac_level(&account_id) {
+            let item_id = match Self::get_nac_level(&owner) {
                 Some(value) => {
                     // Checking whether the NAC level needs to be changed.
                     nac_level = new_nac_level.unwrap_or(value.0);
@@ -189,19 +196,16 @@ pub mod pallet {
                 None => return Err(Error::<T>::NftNotFound)?,
             };
 
-            Self::update_nft_info(origin, collection, item_id, new_data, nac_level, owner)
+            Self::update_nft_info(&collection, &item_id, nac_level, owner)
         }
 
         /// Check NAC level by account_id.
         #[pallet::call_index(2)]
         #[pallet::weight(<T as Config>::WeightInfo::check_nac_level())]
         pub fn check_nac_level(origin: OriginFor<T>, owner: T::AccountId) -> DispatchResult {
-            <T as Config>::ForceOrigin::ensure_origin(origin)?;
-
+            T::AdminOrigin::ensure_origin(origin)?;
             let nac_level = Self::get_nac_level(&owner).ok_or(Error::<T>::NftNotFound)?.0;
-
             Self::deposit_event(Event::UserNacLevel { nac_level, owner });
-
             Ok(())
         }
     }
@@ -219,31 +223,20 @@ pub mod pallet {
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             for owner in self.owners.iter() {
-                Pallet::<T>::create_collection(owner.clone()).expect("Cannot create a collection");
+                Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
 
                 // Get collection Id.
-                let collection_id: <T as Config>::CollectionId =
-                    <T as pallet_nfts::Config>::CollectionId::initial_value().into();
+                let collection_id: T::CollectionId = T::CollectionId::initial_value();
 
                 for (n, (account, level)) in self.accounts.iter().enumerate() {
-                    let metadata = BoundedVec::<u8, T::StringLimit>::try_from(vec![0, *level, 0])
-                        .expect("Cannot initialize metadata");
-
-                    Pallet::<T>::do_mint(
-                        frame_system::RawOrigin::Signed(owner.clone()).into(),
-                        collection_id,
-                        (n as u32).into(),
-                        T::Lookup::unlookup(account.clone()),
-                    )
-                    .expect("Cannot mint NFT");
+                    Pallet::<T>::do_mint((n as u32).into(), account.clone())
+                        .expect("Cannot mint NFT");
 
                     Pallet::<T>::update_nft_info(
-                        frame_system::RawOrigin::Signed(owner.clone()).into(),
-                        collection_id,
-                        (n as u32).into(),
-                        metadata,
+                        &collection_id,
+                        &(n as u32).into(),
                         *level,
-                        T::Lookup::unlookup(account.clone()),
+                        account.clone(),
                     )
                     .expect("Cannot update NFT.");
                 }
@@ -254,24 +247,16 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
     /// Mint user NFT.
-    pub fn do_mint(
-        origin: OriginFor<T>,
-        collection: <T as Config>::CollectionId,
-        item_id: <T as Config>::ItemId,
-        owner: AccountIdLookupOf<T>,
-    ) -> DispatchResult {
+    pub fn do_mint(item_id: T::ItemId, owner: T::AccountId) -> DispatchResult {
         let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
+        let collection = T::NftCollectionId::get();
 
-        pallet_nfts::Pallet::<T>::force_mint(
-            origin,
-            collection.into(),
-            item_id.into(),
-            owner.clone(),
-            item_config,
-        )?;
+        T::Nfts::mint_into(&collection, &item_id, &owner, &item_config, true)?;
 
-        let account_id = T::Lookup::lookup(owner.clone())?;
-        pallet_reputation::Pallet::<T>::increase_creating(&account_id, ReputationPoint(39_000_000));
+        pallet_reputation::Pallet::<T>::increase_creating(
+            &owner,
+            ReputationPoint::from(ReputationTier::Vanguard(1)),
+        );
 
         Self::deposit_event(Event::NftMinted { owner, item_id });
         Ok(())
@@ -279,82 +264,54 @@ impl<T: Config> Pallet<T> {
 
     /// Update user NFT.
     pub fn update_nft_info(
-        origin: OriginFor<T>,
-        collection: <T as Config>::CollectionId,
-        item: <T as Config>::ItemId,
-        data: BoundedVec<u8, T::StringLimit>,
+        collection: &T::CollectionId,
+        item: &T::ItemId,
         nac_level: u8,
-        owner: AccountIdLookupOf<T>,
+        owner: T::AccountId,
     ) -> DispatchResult {
-        pallet_nfts::Pallet::<T>::set_metadata(
-            origin.clone(),
-            collection.into(),
-            item.into(),
-            data.clone(),
-        )?;
-
         let key = BoundedVec::<u8, T::KeyLimit>::try_from(Vec::from(NAC_LEVEL_ATTRIBUTE_KEY))
             .unwrap_or_default();
         let mut nac = BoundedVec::<u8, T::ValueLimit>::new();
         nac.try_push(nac_level).map_err(|_| Error::<T>::NacLevelIsIncorrect)?;
 
-        pallet_nfts::Pallet::<T>::set_attribute(
-            origin,
-            collection.into(),
-            Some(item.into()),
-            pallet_nfts::AttributeNamespace::CollectionOwner,
-            key,
-            nac,
-        )?;
+        T::Nfts::set_attribute(collection, item, &key, &nac)?;
 
         // Temporary solution to save NFT id and NAC level by user.
-        UsersNft::<T>::insert(T::Lookup::lookup(owner.clone())?, (&item, &nac_level));
+        UsersNft::<T>::insert(&owner, (&item, &nac_level));
 
-        Self::deposit_event(Event::NftUpdated { owner, nac_level, metadata: data });
+        Self::deposit_event(Event::NftUpdated { owner, nac_level });
 
         Ok(())
     }
 
     /// Generate uniq ItemId using block_number, token_owner and extrinsic_index
-    pub fn create_unique_item_id(
-        extrinsic_index: u32,
-        owner: &T::AccountId,
-    ) -> <T as Config>::ItemId {
+    pub fn create_unique_item_id(owner: &T::AccountId) -> T::ItemId {
         let block_number = frame_system::Pallet::<T>::block_number();
         let mut unique_number = Vec::new();
 
         unique_number.extend_from_slice(&block_number.encode());
-        unique_number.extend_from_slice(&extrinsic_index.to_le_bytes());
+        unique_number.extend_from_slice(&EXTRINSIC_INDEX.to_le_bytes());
         unique_number.extend_from_slice(owner.encode().as_ref());
 
         // Combine the bytes of the hash into a u32 by bitwise OR (|) and left shifts (<<).
         let hash = BlakeTwo256::hash(&unique_number);
         let mut item_id: u32 = 0;
-        for i in 0..8 {
+        for i in 0..4 {
             item_id |= (hash[i] as u32) << (i * 8);
         }
 
-        <T as Config>::ItemId::from(item_id)
+        T::ItemId::from(item_id)
     }
 
     /// Create a new collection.
-    pub fn create_collection(owner: T::AccountId) -> DispatchResult {
-        let collection_settings = Self::collection_config_from_disabled_settings();
-
-        pallet_nfts::Pallet::<T>::force_create(
-            frame_system::RawOrigin::Root.into(),
-            T::Lookup::unlookup(owner.clone()),
-            collection_settings,
-        )
-    }
-
-    /// Create a new collection config.
-    pub fn collection_config_from_disabled_settings() -> CollectionConfigFor<T> {
-        CollectionConfig {
-            settings: CollectionSettings::from_disabled(CollectionSetting::DepositRequired.into()),
+    pub fn create_collection(owner: &T::AccountId) -> DispatchResult {
+        let collection_config = CollectionConfig {
+            settings: CollectionSettings::all_enabled(),
             max_supply: None,
             mint_settings: MintSettings::default(),
-        }
+        };
+
+        T::Nfts::create_collection(owner, owner, &collection_config).map(|_| ())
     }
 
     /// Check whether the account has the level.
@@ -369,20 +326,38 @@ impl<T: Config> Pallet<T> {
     pub fn get_nac_level(account_id: &T::AccountId) -> Option<(u8, <T as Config>::ItemId)> {
         let collection_id = T::NftCollectionId::get();
 
-        if let Some((keys, _)) =
-            pallet_nfts::Account::<T>::iter_prefix((&account_id, &collection_id.into())).next()
-        {
-            let item_id = keys;
+        if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account_id).next() {
+            let item_id = key;
             // Get NAC by NFT attribute key.
             let nac_level =
-                T::Nfts::attribute(&collection_id, &item_id.into(), &NAC_LEVEL_ATTRIBUTE_KEY);
+                T::Nfts::system_attribute(&collection_id, &item_id, &NAC_LEVEL_ATTRIBUTE_KEY);
 
             return match nac_level {
-                Some(bytes) => return Some((bytes[0], item_id.into())),
-                None => None,
+                Some(bytes) => Some((bytes[0], item_id)),
+                None => Some((DEFAULT_NAC_LEVEL, item_id)),
             };
         }
 
         None
+    }
+}
+
+impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
+    fn on_new_account(who: &T::AccountId) {
+        if AccountReputation::<T>::contains_key(who) {
+            return;
+        }
+
+        // Add reputation points to account.
+        let now = <frame_system::Pallet<T>>::block_number().saturated_into();
+        let new_rep = ReputationRecord::with_blocknumber(now);
+        AccountReputation::<T>::insert(who, new_rep);
+
+        // Add default NAC NFT to account.
+        let item_id = Self::create_unique_item_id(who);
+        let nac_minting_result = Self::do_mint(item_id, who.clone());
+        if nac_minting_result.is_ok() {
+            UsersNft::<T>::insert(who, (&item_id, &DEFAULT_NAC_LEVEL));
+        }
     }
 }

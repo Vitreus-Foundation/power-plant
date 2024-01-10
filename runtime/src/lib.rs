@@ -186,7 +186,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 1,
+    spec_version: 4,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -297,7 +297,7 @@ impl frame_system::Config for Runtime {
     /// The data to be stored in an account.
     type AccountData = pallet_balances::AccountData<Balance>;
     /// What to do if a new account is created.
-    type OnNewAccount = Reputation;
+    type OnNewAccount = NacManaging;
     /// What to do if an account is fully reaped from the system.
     type OnKilledAccount = Reputation;
     /// Weight information for the extrinsics of this pallet.
@@ -661,7 +661,7 @@ impl pallet_energy_generation::Config for Runtime {
     type Reward = ();
     type RewardRemainder = ();
     type RuntimeEvent = RuntimeEvent;
-    type SessionInterface = ();
+    type SessionInterface = Self;
     type SessionsPerEra = SessionsPerEra;
     type Slash = ();
     type SlashDeferDuration = SlashDeferDuration;
@@ -672,8 +672,10 @@ impl pallet_energy_generation::Config for Runtime {
 }
 
 parameter_types! {
-    pub const CollectionDeposit: Balance = 100;
-    pub const ItemDeposit: Balance = 1;
+    // Setting this to value > 0 would break nac-managing
+    pub const CollectionDeposit: Balance = 0;
+    // Setting this to value > 0 would break nac-managing
+    pub const ItemDeposit: Balance = 0;
     pub const KeyLimit: u32 = 32;
     pub const ValueLimit: u32 = 256;
     pub const ApprovalsLimit: u32 = 20;
@@ -743,12 +745,15 @@ parameter_types! {
 
 impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type AdminOrigin = EnsureRoot<Self::AccountId>;
+    type Nfts = Nfts;
+    type Balance = Balance;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
-    type ForceOrigin = EnsureRoot<AccountId>;
-    type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
-    type Nfts = Nfts;
     type NftCollectionId = NftCollectionId;
+    type KeyLimit = ConstU32<50>;
+    type ValueLimit = ConstU32<50>;
+    type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -819,17 +824,20 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         runtime_call: &RuntimeCall,
         _dispatch_info: &DispatchInfoOf<RuntimeCall>,
     ) -> CallFee<Balance> {
-        let next_multiplier = TransactionPayment::next_fee_multiplier();
-        let default_fee = next_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
         match runtime_call {
             RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(default_fee),
-            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(default_fee),
+            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(Self::custom_fee()),
+            RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             _ => CallFee::Stock,
         }
+    }
+
+    fn custom_fee() -> Balance {
+        let next_multiplier = TransactionPayment::next_fee_multiplier();
+        next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
     }
 }
 
@@ -1096,7 +1104,9 @@ construct_runtime!(
         AssetRate: pallet_asset_rate,
         TransactionPayment: pallet_transaction_payment,
         Sudo: pallet_sudo,
+        // TODO: do we need this pallet?
         BaseFee: pallet_base_fee,
+        // TODO: do we need this pallet?
         DynamicFee: pallet_dynamic_fee,
         EVM: pallet_evm,
         EVMChainId: pallet_evm_chain_id,

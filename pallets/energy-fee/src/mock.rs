@@ -15,7 +15,7 @@ use pallet_ethereum::PostLogContent;
 use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::Compact;
 
-use sp_arithmetic::FixedU128;
+use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Perquintill};
 use sp_core::{H256, U256};
 
 use sp_runtime::{
@@ -61,6 +61,9 @@ frame_support::construct_runtime!(
     }
 );
 
+const MAXIMUM_BLOCK_WEIGHT: Weight = Weight::from_parts(1_000_000_000, 1_000_000_u64);
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(100);
+
 parameter_types! {
     pub const GetVNRG: AssetId = VNRG;
     pub const AssetDeposit: Balance = 0;
@@ -69,6 +72,8 @@ parameter_types! {
     pub const AssetsStringLimit: u32 = 50;
     pub const MetadataDepositBase: Balance = 0;
     pub const MetadataDepositPerByte: Balance = 0;
+    pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
+        ::with_sensible_defaults(MAXIMUM_BLOCK_WEIGHT, NORMAL_DISPATCH_RATIO);
     pub BlockGasLimit: U256 = U256::from(75_000_000);
     pub const WeightPerGas: Weight = Weight::from_all(1_000_000);
     pub const GetPostLogContent: PostLogContent = PostLogContent::BlockAndTxnHashes;
@@ -78,7 +83,7 @@ parameter_types! {
 
 impl frame_system::Config for Test {
     type BaseCallFilter = Everything;
-    type BlockWeights = ();
+    type BlockWeights = BlockWeights;
     type BlockLength = ();
     type DbWeight = ();
     type RuntimeOrigin = RuntimeOrigin;
@@ -213,11 +218,16 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
     ) -> CallFee<Balance> {
         match runtime_call {
             RuntimeCall::BalancesVTRS(..) | RuntimeCall::Assets(..) => {
-                CallFee::Custom(GetConstantEnergyFee::get())
+                CallFee::Custom(Self::custom_fee())
             },
-            RuntimeCall::EVM(..) => CallFee::EVM(GetConstantEnergyFee::get()),
+            RuntimeCall::EVM(..) => CallFee::EVM(Self::custom_fee()),
             _ => CallFee::Stock,
         }
+    }
+
+    fn custom_fee() -> Balance {
+        let next_multiplier = TransactionPayment::next_fee_multiplier();
+        next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
     }
 }
 
@@ -254,7 +264,7 @@ impl pallet_transaction_payment::Config for Test {
     type OperationalFeeMultiplier = ();
     type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
-    type FeeMultiplierUpdate = ();
+    type FeeMultiplierUpdate = EnergyFee;
 }
 
 impl pallet_sudo::Config for Test {
@@ -298,4 +308,13 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
         .unwrap();
 
     t.into()
+}
+
+pub(crate) fn calculate_block_weight_based_on_threshold(threshold: Perquintill) -> Weight {
+    let max_block_weight = <Test as frame_system::Config>::BlockWeights::get().max_block;
+    let (ref_time, proof_size) = (
+        threshold.mul_ceil(max_block_weight.ref_time()),
+        threshold.mul_ceil(max_block_weight.proof_size()),
+    );
+    Weight::from_parts(ref_time, proof_size)
 }

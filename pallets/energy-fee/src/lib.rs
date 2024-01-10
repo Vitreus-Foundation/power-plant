@@ -276,7 +276,7 @@ pub mod pallet {
                 return Ok(None);
             }
 
-            let const_energy_fee = T::GetConstantFee::get();
+            let const_energy_fee = T::CustomFee::ethereum_fee();
             let account_id = <T as pallet_evm::Config>::AddressMapping::into_account_id(*who);
 
             Self::on_low_balance_exchange(&account_id, const_energy_fee)

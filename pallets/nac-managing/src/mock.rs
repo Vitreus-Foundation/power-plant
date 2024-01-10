@@ -94,8 +94,8 @@ impl pallet_reputation::Config for Test {
 }
 
 parameter_types! {
-    pub TestCollectionDeposit:  u64 = 2;
-    pub TestItemDeposit:  u64 = 1;
+    pub TestCollectionDeposit:  u64 = 0;
+    pub TestItemDeposit:  u64 = 0;
 }
 
 type CollectionId = u32;
@@ -136,12 +136,15 @@ parameter_types! {
 
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
     type Nfts = Nfts;
-    type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
+    type Balance = u64;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
-    type WeightInfo = ();
     type NftCollectionId = NftCollectionId;
+    type KeyLimit = ConstU32<50>;
+    type ValueLimit = ConstU32<50>;
+    type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
