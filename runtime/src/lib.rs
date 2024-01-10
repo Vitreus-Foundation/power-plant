@@ -1132,8 +1132,6 @@ construct_runtime!(
         // Governance-related pallets
         Scheduler: pallet_scheduler,
         Preimage: pallet_preimage,
-        // Treasury: pallet_treasury,
-        // Democracy: pallet_democracy,
         Council: pallet_collective::<Instance1>,
         TechnicalCommittee: pallet_collective::<Instance2>,
         TechnicalMembership: pallet_membership::<Instance1>,
