@@ -36,6 +36,12 @@ pub mod traits;
 
 pub(crate) type BalanceOf<T> = <T as pallet_asset_rate::Config>::Balance;
 
+pub type MainCreditOf<T> =
+    Credit<<T as frame_system::Config>::AccountId, <T as Config>::MainTokenBalanced>;
+
+pub type FeeCreditOf<T> =
+    Credit<<T as frame_system::Config>::AccountId, <T as Config>::FeeTokenBalanced>;
+
 /// Fee type inferred from call info
 #[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CallFee<Balance> {
@@ -99,8 +105,8 @@ pub mod pallet {
         /// Used for initializing the pallet
         type EnergyAssetId: Get<Self::AssetId>;
 
-        type MainRecycleDestination: OnUnbalanced<Credit<Self::AccountId, Self::MainTokenBalanced>>;
-        type FeeRecycleDestination: OnUnbalanced<Credit<Self::AccountId, Self::FeeTokenBalanced>>;
+        type MainRecycleDestination: OnUnbalanced<MainCreditOf<Self>>;
+        type FeeRecycleDestination: OnUnbalanced<FeeCreditOf<Self>>;
     }
 
     #[pallet::storage]

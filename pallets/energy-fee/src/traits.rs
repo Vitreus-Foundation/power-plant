@@ -1,7 +1,7 @@
 use crate::CallFee;
 use frame_support::ensure;
-use frame_support::traits::OnUnbalanced;
 use frame_support::traits::fungible::Credit;
+use frame_support::traits::OnUnbalanced;
 use frame_support::traits::{
     fungible::{Balanced, Inspect},
     tokens::{
@@ -151,7 +151,8 @@ pub struct NativeExchange<AssetId, SourceToken, TargetToken, Rate, GetAssetId>(
 );
 
 // TODO: rename types
-impl<AC, AS, TT, ST, STD, B, G, R> TokenExchange<AC, ST, TT, STD, B> for NativeExchange<AS, ST, TT, R, G>
+impl<AC, AS, TT, ST, STD, B, G, R> TokenExchange<AC, ST, TT, STD, B>
+    for NativeExchange<AS, ST, TT, R, G>
 where
     TT: Balanced<AC> + Inspect<AC, Balance = B>,
     ST: Balanced<AC> + Inspect<AC, Balance = B>,
