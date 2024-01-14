@@ -20,7 +20,7 @@ services:
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/alice
-      --chain devnet
+      --chain stagenet
       --alice
       --port 30333
       --rpc-port 9944
