@@ -4,7 +4,6 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-# energy-fee-runtime-api = { workspace = true }
 energy-generation-runtime-api = { workspace = true }
 parity-scale-codec = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server", "macros"] }

@@ -2,7 +2,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 #![allow(clippy::new_without_default, clippy::or_fun_call)]
-#![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
+// #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -14,7 +14,9 @@ use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
     Preservation, Provenance, WithdrawConsequence,
 };
-use frame_support::traits::{Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons};
+use frame_support::traits::{
+    Currency, EitherOfDiverse, ExistenceRequirement, SignedImbalance, WithdrawReasons,
+};
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
@@ -88,10 +90,15 @@ pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
+pub use areas::{CouncilCollective, TechnicalCollective};
+
 mod precompiles;
 mod helpers {
+    mod macros;
     pub mod runner;
 }
+pub mod areas;
+
 #[cfg(test)]
 mod tests;
 
@@ -130,7 +137,17 @@ pub type Hash = H256;
 pub type DigestItem = generic::DigestItem;
 
 /// Asset ID.
+#[cfg(not(feature = "runtime-benchmarks"))]
 pub type AssetId = u128;
+
+#[cfg(feature = "runtime-benchmarks")]
+pub type AssetId = u32;
+
+/// Origin for council voting
+type MoreThanHalfCouncil = EitherOfDiverse<
+    EnsureRoot<AccountId>,
+    pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
+>;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -219,7 +236,13 @@ pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
 pub mod vtrs {
     use super::*;
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
+    pub const FEMTO_VTRS: Balance = 1_000;
+    pub const PICO_VTRS: Balance = 1_000 * FEMTO_VTRS;
+    pub const NANO_VTRS: Balance = 1_000 * PICO_VTRS;
+    pub const MICRO_VTRS: Balance = 1_000 * NANO_VTRS;
+    pub const MILLI_VTRS: Balance = 1_000 * MICRO_VTRS;
 }
+pub use vtrs::*;
 
 pub mod vnrg {
     use super::*;
@@ -388,12 +411,12 @@ impl pallet_assets::Config for Runtime {
     type Extra = ();
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime_benchmarks")]
+    #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = ();
 }
 
 parameter_types! {
-    pub const AccumulationPeriod: BlockNumber = HOURS * 24;
+    pub AccumulationPeriod: BlockNumber = prod_or_fast!(HOURS * 24, 24 * MINUTES, "VITREUS_FAUCET_ACCUMULATION_PERIOD");
     pub const MaxAmount: Balance = 1000 * vtrs::UNITS;
 }
 
@@ -437,13 +460,6 @@ impl pallet_session::Config for Runtime {
 impl pallet_session::historical::Config for Runtime {
     type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
-}
-
-impl pallet_utility::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type RuntimeCall = RuntimeCall;
-    type PalletsOrigin = OriginCaller;
-    type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_authorship::Config for Runtime {
@@ -540,8 +556,9 @@ pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
 
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const SessionsPerEra: SessionIndex = 5;
-    pub const BondingDuration: EraIndex = 24 * 28;
+    pub const SessionsPerEra: SessionIndex = prod_or_fast!(5, 1);
+    pub const BondingDuration: EraIndex = prod_or_fast!(24 * 28, 5);
+    // TODO: consider removing, since the slash defer feature was removed
     pub const SlashDeferDuration: EraIndex = 24 * 7; // 1/4 the bonding duration.
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
@@ -618,8 +635,13 @@ impl pallet_energy_generation::BenchmarkingConfig for EnergyGenerationBenchmarkC
     type MaxCooperators = ConstU32<1000>;
 }
 
+type EnergyGenerationAdminOrigin = EitherOfDiverse<
+    EnsureRoot<AccountId>,
+    pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 4>,
+>;
+
 impl pallet_energy_generation::Config for Runtime {
-    type AdminOrigin = EnsureRoot<AccountId>;
+    type AdminOrigin = EnergyGenerationAdminOrigin;
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = EnergyGenerationBenchmarkConfig;
     type BondingDuration = BondingDuration;
@@ -692,6 +714,7 @@ impl pallet_nfts::Config for Runtime {
     type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
     type Helper = ();
+    // TODO: do we want to allow regular users create nfts?
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
 }
@@ -711,8 +734,7 @@ impl pallet_uniques::Config for Runtime {
     type KeyLimit = KeyLimit;
     type ValueLimit = ValueLimit;
     type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
+    // TODO: do we want to allow regular users create nfts?
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
 }
@@ -756,8 +778,6 @@ impl pallet_asset_rate::Config for Runtime {
     type Currency = Balances;
     type Balance = Balance;
     type WeightInfo = pallet_asset_rate::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type AssetKindFactory = ();
 }
 
 parameter_types! {
@@ -770,7 +790,7 @@ type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
 impl pallet_energy_fee::Config for Runtime {
-    type ManageOrigin = EnsureRoot<AccountId>;
+    type ManageOrigin = MoreThanHalfCouncil;
     type RuntimeEvent = RuntimeEvent;
     type FeeTokenBalanced = EnergyItem;
     type MainTokenBalanced = Balances;
@@ -1108,6 +1128,17 @@ construct_runtime!(
         Utility: pallet_utility,
         Historical: pallet_session::historical,
         NacManaging: pallet_nac_managing,
+
+        // Governance-related pallets
+        Scheduler: pallet_scheduler,
+        Preimage: pallet_preimage,
+        Council: pallet_collective::<Instance1>,
+        TechnicalCommittee: pallet_collective::<Instance2>,
+        TechnicalMembership: pallet_membership::<Instance1>,
+        Treasury: pallet_treasury,
+        TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>},
+        Bounties: pallet_bounties,
+        Democracy: pallet_democracy,
     }
 );
 
@@ -1886,11 +1917,11 @@ impl_runtime_apis! {
         ) {
             use frame_benchmarking::{Benchmarking, BenchmarkList};
             use frame_support::traits::StorageInfoTrait;
-            use pallet_hotfix_sufficients::Pallet as PalletHotfixSufficients;
+            use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
 
             let mut list = Vec::<BenchmarkList>::new();
             list_benchmarks!(list, extra);
-            list_benchmark!(list, extra, pallet_hotfix_sufficients, PalletHotfixSufficients::<Runtime>);
+            list_benchmark!(list, extra, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
 
             let storage_info = AllPalletsWithSystem::storage_info();
             (list, storage_info)
@@ -1900,8 +1931,7 @@ impl_runtime_apis! {
             config: frame_benchmarking::BenchmarkConfig
         ) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
             use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
-            use pallet_evm::Pallet as PalletEvmBench;
-            use pallet_hotfix_sufficients::Pallet as PalletHotfixSufficients;
+            use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
             impl frame_system_benchmarking::Config for Runtime {}
 
             let whitelist: Vec<TrackedStorageKey> = vec![];
@@ -1909,8 +1939,7 @@ impl_runtime_apis! {
             let mut batches = Vec::<BenchmarkBatch>::new();
             let params = (&config, &whitelist);
 
-            add_benchmark!(params, batches, pallet_evm, PalletEvmBench::<Runtime>);
-            add_benchmark!(params, batches, pallet_hotfix_sufficients, PalletHotfixSufficients::<Runtime>);
+            add_benchmark!(params, batches, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
 
             if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
             Ok(batches)
