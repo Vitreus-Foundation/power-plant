@@ -148,6 +148,44 @@ pub fn devnet_config() -> ChainSpec {
     )
 }
 
+pub fn stagenet_config() -> ChainSpec {
+    use devnet_keys::*;
+
+    let wasm_binary = WASM_BINARY.expect("WASM not available");
+
+    ChainSpec::from_genesis(
+        // Name
+        "Stagenet",
+        // ID
+        "stagenet",
+        ChainType::Custom("Stagenet".to_string()),
+        move || {
+            testnet_genesis(
+                wasm_binary,
+                // Sudo account
+                alith(),
+                // Pre-funded accounts
+                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
+                // Initial Validators
+                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+                vec![],
+                SS58Prefix::get() as u64,
+            )
+        },
+        // Bootnodes
+        vec![],
+        // Telemetry
+        None,
+        // Protocol ID
+        None,
+        None,
+        // Properties
+        Some(properties()),
+        // Extensions
+        None,
+    )
+}
+
 pub fn localnet_config() -> ChainSpec {
     use devnet_keys::*;
 

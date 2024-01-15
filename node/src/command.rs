@@ -61,6 +61,7 @@ impl SubstrateCli for Cli {
                 Box::new(chain_spec::development_config(enable_manual_seal))
             },
             "devnet" => Box::new(chain_spec::devnet_config()),
+            "stagenet" => Box::new(chain_spec::stagenet_config()),
             "" | "localnet" => Box::new(chain_spec::localnet_config()),
             "testnet" => Box::new(chain_spec::testnet_config()),
             path => {
