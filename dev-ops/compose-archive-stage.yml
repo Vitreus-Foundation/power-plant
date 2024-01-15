@@ -19,8 +19,8 @@ services:
       - node_data:/tmp/node
     command: >
       ./target/release/vitreus-power-plant-node
-      --chain devnet
-      --name dev-archive
+      --chain stagenet
+      --name stage-archive
       --port 30333
       --rpc-port 9944
       --unsafe-rpc-external
