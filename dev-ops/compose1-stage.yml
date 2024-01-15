@@ -15,10 +15,12 @@ services:
     restart: always
     depends_on:
       - vitreus_power_plant
+    volumes:
+      - node_data:/tmp/node
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/bob
-      --chain devnet
+      --chain stagenet
       --bob
       --port 30333
       --rpc-port 9944
@@ -36,6 +38,9 @@ services:
       - "127.0.0.1:9615:9615/tcp"
     networks:
       - vitreus_power_plant_network
+volumes:
+  node_data:
+    driver: local
 
 networks:
   vitreus_power_plant_network:
