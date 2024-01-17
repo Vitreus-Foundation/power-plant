@@ -5,8 +5,8 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
-    args:
-      BUILD_FEATURES: fast-runtime
+      args:
+        BUILD_FEATURES: fast-runtime
     image: vitreus_power_plant
     networks:
       - vitreus_power_plant_network
