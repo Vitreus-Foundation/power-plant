@@ -27,7 +27,7 @@ RUN rustup target add wasm32-unknown-unknown
 COPY . .
 
 # Build the application
-RUN cargo build --locked "--$PROFILE"
+RUN cargo build --features "fast-runtime" --locked "--$PROFILE"
 
 #Stage 2: Create the final image
 FROM ubuntu:20.04
