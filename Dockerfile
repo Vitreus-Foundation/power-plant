@@ -3,6 +3,7 @@
 FROM rust:1.71 as builder
 
 ARG PROFILE=release
+ARG BUILD_FEATURES
 WORKDIR /app
 
 # Update system packages and install build dependencies
@@ -27,7 +28,7 @@ RUN rustup target add wasm32-unknown-unknown
 COPY . .
 
 # Build the application
-RUN cargo build --features "fast-runtime" --locked "--$PROFILE"
+RUN cargo build --features "$BUILD_FEATURES" --locked "--$PROFILE"
 
 #Stage 2: Create the final image
 FROM ubuntu:20.04
