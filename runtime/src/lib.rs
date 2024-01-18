@@ -24,6 +24,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
+use sp_runtime::traits::Zero;
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -822,22 +823,57 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 {
     fn dispatch_info_to_fee(
         runtime_call: &RuntimeCall,
-        _dispatch_info: &DispatchInfoOf<RuntimeCall>,
+        dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
+        calculated_fee: Option<Balance>,
     ) -> CallFee<Balance> {
         match runtime_call {
             RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(Self::custom_fee()),
+            | RuntimeCall::EnergyGeneration(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
-            _ => CallFee::Stock,
+            RuntimeCall::Utility(pallet_utility::Call::batch { calls })
+            | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
+            | RuntimeCall::Utility(pallet_utility::Call::force_batch { calls }) => {
+                let resulting_fee = calls
+                    .iter()
+                    .map(|call| Self::dispatch_info_to_fee(call, None, None))
+                    .fold(Balance::zero(), |acc, call_fee| match call_fee {
+                        CallFee::Regular(fee) => acc.saturating_add(fee),
+                        CallFee::EVM(fee) => acc.saturating_add(fee),
+                    });
+                CallFee::Regular(resulting_fee)
+            },
+            RuntimeCall::Utility(pallet_utility::Call::dispatch_as { call, .. })
+            | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
+                CallFee::Regular(Self::weight_fee(call, None, calculated_fee))
+            },
+            _ => CallFee::Regular(Self::weight_fee(runtime_call, dispatch_info, calculated_fee)),
         }
     }
 
     fn custom_fee() -> Balance {
         let next_multiplier = TransactionPayment::next_fee_multiplier();
         next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+    }
+
+    fn weight_fee(
+        runtime_call: &RuntimeCall,
+        dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
+        calculated_fee: Option<Balance>,
+    ) -> Balance {
+        if let Some(fee) = calculated_fee {
+            fee
+        } else {
+            let len = runtime_call.encode().len() as u32;
+            if let Some(info) = dispatch_info {
+                pallet_transaction_payment::Pallet::<Runtime>::compute_fee(len, info, Zero::zero())
+            } else {
+                let info = &runtime_call.get_dispatch_info();
+                pallet_transaction_payment::Pallet::<Runtime>::compute_fee(len, info, Zero::zero())
+            }
+        }
     }
 }
 
@@ -1267,7 +1303,9 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                 let account_id =
                     <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
 
-                if let CallFee::EVM(amount) = EnergyFee::dispatch_info_to_fee(self, dispatch_info) {
+                if let CallFee::EVM(amount) =
+                    EnergyFee::dispatch_info_to_fee(self, Some(dispatch_info), None)
+                {
                     let (_, fee_vtrs_amount) =
                         if let Ok(parts) = EnergyFee::calculate_fee_parts(&account_id, amount) {
                             parts
@@ -1663,13 +1701,10 @@ impl_runtime_apis! {
             uxt: <Block as BlockT>::Extrinsic,
             len: u32
         ) -> pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo<Balance> {
-            let dispatch_info = <<Block as BlockT>::Extrinsic as GetDispatchInfo>::get_dispatch_info(&uxt);
-            let custom_fee = EnergyFee::dispatch_info_to_fee(uxt.call(), &dispatch_info);
+            let fee = EnergyFee::dispatch_info_to_fee(uxt.call(), None, None);
             let mut runtime_dispatch_info = TransactionPayment::query_info(uxt, len);
 
-            if let CallFee::Custom(custom_fee) | CallFee::EVM(custom_fee) = custom_fee {
-                runtime_dispatch_info.partial_fee = custom_fee;
-            }
+            runtime_dispatch_info.partial_fee = fee.into_inner();
             runtime_dispatch_info
         }
 
@@ -1677,26 +1712,22 @@ impl_runtime_apis! {
             uxt: <Block as BlockT>::Extrinsic,
             len: u32,
         ) -> FeeDetails<Balance> {
-            let dispatch_info = <<Block as BlockT>::Extrinsic as GetDispatchInfo>::get_dispatch_info(&uxt);
-            let custom_fee = EnergyFee::dispatch_info_to_fee(uxt.call(), &dispatch_info);
-
+            let fee = EnergyFee::dispatch_info_to_fee(uxt.call(), None, None).into_inner();
             let fee_details = TransactionPayment::query_fee_details(uxt, len);
 
-            match (custom_fee, fee_details) {
-                (
-                    CallFee::Custom(custom_fee),
-                    FeeDetails {
-                        inclusion_fee: Some(_),
-                        tip
-                }) => FeeDetails {
+            match fee_details {
+                FeeDetails {
+                    inclusion_fee: Some(InclusionFee { base_fee, len_fee, .. }),
+                    tip
+                } => FeeDetails {
                     inclusion_fee: Some(InclusionFee{
-                        base_fee: custom_fee,
-                        len_fee: 0,
-                        adjusted_weight_fee: 0,
+                        base_fee,
+                        len_fee,
+                        adjusted_weight_fee: fee,
                     }),
                     tip
                 },
-                (_, fee_details) => fee_details
+                fee_details => fee_details
             }
 
         }
@@ -1896,16 +1927,8 @@ impl_runtime_apis! {
                     }
                 }
             };
-            let dispatch_info = call.get_dispatch_info();
 
-            match EnergyFee::dispatch_info_to_fee(
-                &call,
-                &dispatch_info
-            ) {
-                CallFee::Custom(fee) => fee,
-                CallFee::EVM(fee) => fee,
-                CallFee::Stock => TransactionPayment::weight_to_fee(dispatch_info.weight)
-            }.into()
+            EnergyFee::dispatch_info_to_fee(&call, None, None).into_inner().into()
         }
     }
 

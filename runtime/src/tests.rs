@@ -71,13 +71,12 @@ fn fee_multiplier_update_works() {
 
         let call_with_custom_fee =
             RuntimeCall::Balances(BalancesCall::transfer { dest: alith(), value: 1 });
-        let dispatch_info = call_with_custom_fee.get_dispatch_info();
         let updated_custom_fee =
             upper_fee_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
 
         assert_eq!(
-            EnergyFee::dispatch_info_to_fee(&call_with_custom_fee, &dispatch_info),
-            CallFee::Custom(updated_custom_fee)
+            EnergyFee::dispatch_info_to_fee(&call_with_custom_fee, None, None),
+            CallFee::Regular(updated_custom_fee)
         );
 
         let block_weight_b = max_block_weight / 3;
@@ -90,8 +89,8 @@ fn fee_multiplier_update_works() {
         );
 
         assert_eq!(
-            EnergyFee::dispatch_info_to_fee(&call_with_custom_fee, &dispatch_info),
-            CallFee::Custom(GetConstantEnergyFee::get())
+            EnergyFee::dispatch_info_to_fee(&call_with_custom_fee, None, None),
+            CallFee::Regular(GetConstantEnergyFee::get())
         );
     });
 }
