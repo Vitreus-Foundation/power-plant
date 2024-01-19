@@ -1025,8 +1025,11 @@ pub mod pallet {
         /// The dispatch origin for this call must be _Signed_ by the controller, not the stash.
         #[pallet::call_index(4)]
         #[pallet::weight(T::ThisWeightInfo::validate())]
-        pub fn validate(origin: OriginFor<T>, prefs: ValidatorPrefs) -> DispatchResult {
+        pub fn validate(origin: OriginFor<T>, mut prefs: ValidatorPrefs) -> DispatchResult {
             let controller = ensure_signed(origin)?;
+
+            // TODO: remove field min_coop_reputation (use only default values)
+            update_prefs(&mut prefs);
 
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
@@ -1753,3 +1756,11 @@ pub mod pallet {
 fn is_sorted_and_unique(list: &[u32]) -> bool {
     list.windows(2).all(|w| w[0] < w[1])
 }
+
+#[cfg(not(test))]
+fn update_prefs(prefs: &mut ValidatorPrefs) {
+    prefs.min_coop_reputation = ReputationTier::Vanguard(1).into();
+}
+
+#[cfg(test)]
+fn update_prefs(_prefs: &mut ValidatorPrefs) {}

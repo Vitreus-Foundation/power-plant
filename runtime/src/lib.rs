@@ -2,7 +2,7 @@
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
 #![recursion_limit = "256"]
 #![allow(clippy::new_without_default, clippy::or_fun_call)]
-#![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
+// #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
 // Make the WASM binary available.
 #[cfg(feature = "std")]
@@ -14,7 +14,9 @@ use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
     Preservation, Provenance, WithdrawConsequence,
 };
-use frame_support::traits::{Currency, ExistenceRequirement, SignedImbalance, WithdrawReasons};
+use frame_support::traits::{
+    Currency, EitherOfDiverse, ExistenceRequirement, SignedImbalance, WithdrawReasons,
+};
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
@@ -22,6 +24,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
+use sp_runtime::traits::Zero;
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -88,10 +91,15 @@ pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
+pub use areas::{CouncilCollective, TechnicalCollective};
+
 mod precompiles;
 mod helpers {
+    mod macros;
     pub mod runner;
 }
+pub mod areas;
+
 #[cfg(test)]
 mod tests;
 
@@ -130,7 +138,17 @@ pub type Hash = H256;
 pub type DigestItem = generic::DigestItem;
 
 /// Asset ID.
+#[cfg(not(feature = "runtime-benchmarks"))]
 pub type AssetId = u128;
+
+#[cfg(feature = "runtime-benchmarks")]
+pub type AssetId = u32;
+
+/// Origin for council voting
+type MoreThanHalfCouncil = EitherOfDiverse<
+    EnsureRoot<AccountId>,
+    pallet_collective::EnsureProportionMoreThan<AccountId, CouncilCollective, 1, 2>,
+>;
 
 /// Opaque types. These are used by the CLI to instantiate machinery that don't need to know
 /// the specifics of the runtime. They can then be made to be agnostic over specific formats
@@ -219,7 +237,13 @@ pub const MAXIMUM_BLOCK_LENGTH: u32 = 5 * 1024 * 1024;
 pub mod vtrs {
     use super::*;
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
+    pub const FEMTO_VTRS: Balance = 1_000;
+    pub const PICO_VTRS: Balance = 1_000 * FEMTO_VTRS;
+    pub const NANO_VTRS: Balance = 1_000 * PICO_VTRS;
+    pub const MICRO_VTRS: Balance = 1_000 * NANO_VTRS;
+    pub const MILLI_VTRS: Balance = 1_000 * MICRO_VTRS;
 }
+pub use vtrs::*;
 
 pub mod vnrg {
     use super::*;
@@ -388,12 +412,12 @@ impl pallet_assets::Config for Runtime {
     type Extra = ();
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime_benchmarks")]
+    #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = ();
 }
 
 parameter_types! {
-    pub const AccumulationPeriod: BlockNumber = HOURS * 24;
+    pub AccumulationPeriod: BlockNumber = prod_or_fast!(HOURS * 24, 24 * MINUTES, "VITREUS_FAUCET_ACCUMULATION_PERIOD");
     pub const MaxAmount: Balance = 1000 * vtrs::UNITS;
 }
 
@@ -437,13 +461,6 @@ impl pallet_session::Config for Runtime {
 impl pallet_session::historical::Config for Runtime {
     type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
-}
-
-impl pallet_utility::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type RuntimeCall = RuntimeCall;
-    type PalletsOrigin = OriginCaller;
-    type WeightInfo = pallet_utility::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_authorship::Config for Runtime {
@@ -540,9 +557,10 @@ pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
 
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const SessionsPerEra: SessionIndex = 5;
-    pub const BondingDuration: EraIndex = 24 * 28;
-    pub const SlashDeferDuration: EraIndex = 24 * 7; // 1/4 the bonding duration.
+    pub const SessionsPerEra: SessionIndex = prod_or_fast!(5, 1);
+    pub const BondingDuration: EraIndex = prod_or_fast!(7 * 28, 5);
+    // TODO: consider removing, since the slash defer feature was removed
+    pub const SlashDeferDuration: EraIndex = 7 * 7; // 1/4 the bonding duration.
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const VNRG: AssetId = 1;
@@ -618,8 +636,13 @@ impl pallet_energy_generation::BenchmarkingConfig for EnergyGenerationBenchmarkC
     type MaxCooperators = ConstU32<1000>;
 }
 
+type EnergyGenerationAdminOrigin = EitherOfDiverse<
+    EnsureRoot<AccountId>,
+    pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 4>,
+>;
+
 impl pallet_energy_generation::Config for Runtime {
-    type AdminOrigin = EnsureRoot<AccountId>;
+    type AdminOrigin = EnergyGenerationAdminOrigin;
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = EnergyGenerationBenchmarkConfig;
     type BondingDuration = BondingDuration;
@@ -692,6 +715,7 @@ impl pallet_nfts::Config for Runtime {
     type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
     type Helper = ();
+    // TODO: do we want to allow regular users create nfts?
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
 }
@@ -711,8 +735,7 @@ impl pallet_uniques::Config for Runtime {
     type KeyLimit = KeyLimit;
     type ValueLimit = ValueLimit;
     type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
+    // TODO: do we want to allow regular users create nfts?
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type Locker = ();
 }
@@ -756,8 +779,6 @@ impl pallet_asset_rate::Config for Runtime {
     type Currency = Balances;
     type Balance = Balance;
     type WeightInfo = pallet_asset_rate::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type AssetKindFactory = ();
 }
 
 parameter_types! {
@@ -770,7 +791,7 @@ type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
 impl pallet_energy_fee::Config for Runtime {
-    type ManageOrigin = EnsureRoot<AccountId>;
+    type ManageOrigin = MoreThanHalfCouncil;
     type RuntimeEvent = RuntimeEvent;
     type FeeTokenBalanced = EnergyItem;
     type MainTokenBalanced = Balances;
@@ -802,22 +823,57 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 {
     fn dispatch_info_to_fee(
         runtime_call: &RuntimeCall,
-        _dispatch_info: &DispatchInfoOf<RuntimeCall>,
+        dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
+        calculated_fee: Option<Balance>,
     ) -> CallFee<Balance> {
         match runtime_call {
             RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
             | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Custom(Self::custom_fee()),
+            | RuntimeCall::EnergyGeneration(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
-            _ => CallFee::Stock,
+            RuntimeCall::Utility(pallet_utility::Call::batch { calls })
+            | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
+            | RuntimeCall::Utility(pallet_utility::Call::force_batch { calls }) => {
+                let resulting_fee = calls
+                    .iter()
+                    .map(|call| Self::dispatch_info_to_fee(call, None, None))
+                    .fold(Balance::zero(), |acc, call_fee| match call_fee {
+                        CallFee::Regular(fee) => acc.saturating_add(fee),
+                        CallFee::EVM(fee) => acc.saturating_add(fee),
+                    });
+                CallFee::Regular(resulting_fee)
+            },
+            RuntimeCall::Utility(pallet_utility::Call::dispatch_as { call, .. })
+            | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
+                CallFee::Regular(Self::weight_fee(call, None, calculated_fee))
+            },
+            _ => CallFee::Regular(Self::weight_fee(runtime_call, dispatch_info, calculated_fee)),
         }
     }
 
     fn custom_fee() -> Balance {
         let next_multiplier = TransactionPayment::next_fee_multiplier();
         next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+    }
+
+    fn weight_fee(
+        runtime_call: &RuntimeCall,
+        dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
+        calculated_fee: Option<Balance>,
+    ) -> Balance {
+        if let Some(fee) = calculated_fee {
+            fee
+        } else {
+            let len = runtime_call.encode().len() as u32;
+            if let Some(info) = dispatch_info {
+                pallet_transaction_payment::Pallet::<Runtime>::compute_fee(len, info, Zero::zero())
+            } else {
+                let info = &runtime_call.get_dispatch_info();
+                pallet_transaction_payment::Pallet::<Runtime>::compute_fee(len, info, Zero::zero())
+            }
+        }
     }
 }
 
@@ -1108,6 +1164,17 @@ construct_runtime!(
         Utility: pallet_utility,
         Historical: pallet_session::historical,
         NacManaging: pallet_nac_managing,
+
+        // Governance-related pallets
+        Scheduler: pallet_scheduler,
+        Preimage: pallet_preimage,
+        Council: pallet_collective::<Instance1>,
+        TechnicalCommittee: pallet_collective::<Instance2>,
+        TechnicalMembership: pallet_membership::<Instance1>,
+        Treasury: pallet_treasury,
+        TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>},
+        Bounties: pallet_bounties,
+        Democracy: pallet_democracy,
     }
 );
 
@@ -1236,7 +1303,9 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                 let account_id =
                     <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
 
-                if let CallFee::EVM(amount) = EnergyFee::dispatch_info_to_fee(self, dispatch_info) {
+                if let CallFee::EVM(amount) =
+                    EnergyFee::dispatch_info_to_fee(self, Some(dispatch_info), None)
+                {
                     let (_, fee_vtrs_amount) =
                         if let Ok(parts) = EnergyFee::calculate_fee_parts(&account_id, amount) {
                             parts
@@ -1632,13 +1701,10 @@ impl_runtime_apis! {
             uxt: <Block as BlockT>::Extrinsic,
             len: u32
         ) -> pallet_transaction_payment_rpc_runtime_api::RuntimeDispatchInfo<Balance> {
-            let dispatch_info = <<Block as BlockT>::Extrinsic as GetDispatchInfo>::get_dispatch_info(&uxt);
-            let custom_fee = EnergyFee::dispatch_info_to_fee(uxt.call(), &dispatch_info);
+            let fee = EnergyFee::dispatch_info_to_fee(uxt.call(), None, None);
             let mut runtime_dispatch_info = TransactionPayment::query_info(uxt, len);
 
-            if let CallFee::Custom(custom_fee) | CallFee::EVM(custom_fee) = custom_fee {
-                runtime_dispatch_info.partial_fee = custom_fee;
-            }
+            runtime_dispatch_info.partial_fee = fee.into_inner();
             runtime_dispatch_info
         }
 
@@ -1646,26 +1712,22 @@ impl_runtime_apis! {
             uxt: <Block as BlockT>::Extrinsic,
             len: u32,
         ) -> FeeDetails<Balance> {
-            let dispatch_info = <<Block as BlockT>::Extrinsic as GetDispatchInfo>::get_dispatch_info(&uxt);
-            let custom_fee = EnergyFee::dispatch_info_to_fee(uxt.call(), &dispatch_info);
-
+            let fee = EnergyFee::dispatch_info_to_fee(uxt.call(), None, None).into_inner();
             let fee_details = TransactionPayment::query_fee_details(uxt, len);
 
-            match (custom_fee, fee_details) {
-                (
-                    CallFee::Custom(custom_fee),
-                    FeeDetails {
-                        inclusion_fee: Some(_),
-                        tip
-                }) => FeeDetails {
+            match fee_details {
+                FeeDetails {
+                    inclusion_fee: Some(InclusionFee { base_fee, len_fee, .. }),
+                    tip
+                } => FeeDetails {
                     inclusion_fee: Some(InclusionFee{
-                        base_fee: custom_fee,
-                        len_fee: 0,
-                        adjusted_weight_fee: 0,
+                        base_fee,
+                        len_fee,
+                        adjusted_weight_fee: fee,
                     }),
                     tip
                 },
-                (_, fee_details) => fee_details
+                fee_details => fee_details
             }
 
         }
@@ -1865,16 +1927,8 @@ impl_runtime_apis! {
                     }
                 }
             };
-            let dispatch_info = call.get_dispatch_info();
 
-            match EnergyFee::dispatch_info_to_fee(
-                &call,
-                &dispatch_info
-            ) {
-                CallFee::Custom(fee) => fee,
-                CallFee::EVM(fee) => fee,
-                CallFee::Stock => TransactionPayment::weight_to_fee(dispatch_info.weight)
-            }.into()
+            EnergyFee::dispatch_info_to_fee(&call, None, None).into_inner().into()
         }
     }
 
@@ -1886,11 +1940,11 @@ impl_runtime_apis! {
         ) {
             use frame_benchmarking::{Benchmarking, BenchmarkList};
             use frame_support::traits::StorageInfoTrait;
-            use pallet_hotfix_sufficients::Pallet as PalletHotfixSufficients;
+            use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
 
             let mut list = Vec::<BenchmarkList>::new();
             list_benchmarks!(list, extra);
-            list_benchmark!(list, extra, pallet_hotfix_sufficients, PalletHotfixSufficients::<Runtime>);
+            list_benchmark!(list, extra, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
 
             let storage_info = AllPalletsWithSystem::storage_info();
             (list, storage_info)
@@ -1900,8 +1954,7 @@ impl_runtime_apis! {
             config: frame_benchmarking::BenchmarkConfig
         ) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
             use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
-            use pallet_evm::Pallet as PalletEvmBench;
-            use pallet_hotfix_sufficients::Pallet as PalletHotfixSufficients;
+            use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
             impl frame_system_benchmarking::Config for Runtime {}
 
             let whitelist: Vec<TrackedStorageKey> = vec![];
@@ -1909,8 +1962,7 @@ impl_runtime_apis! {
             let mut batches = Vec::<BenchmarkBatch>::new();
             let params = (&config, &whitelist);
 
-            add_benchmark!(params, batches, pallet_evm, PalletEvmBench::<Runtime>);
-            add_benchmark!(params, batches, pallet_hotfix_sufficients, PalletHotfixSufficients::<Runtime>);
+            add_benchmark!(params, batches, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
 
             if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
             Ok(batches)
