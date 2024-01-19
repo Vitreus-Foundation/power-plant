@@ -7,7 +7,7 @@ use pallet_energy_fee::{CallFee, CustomFee};
 use pallet_evm::{runner::stack::Runner, AddressMapping, Call};
 use pallet_evm::{CallInfo, CreateInfo, Runner as EvmRunner, RunnerError};
 use pallet_nac_managing;
-use pallet_transaction_payment::{OnChargeTransaction, Pallet as TransactionPayment};
+use pallet_transaction_payment::OnChargeTransaction;
 use sp_core::{H160, H256, U256};
 use sp_runtime::traits::Dispatchable;
 use sp_std::{marker::PhantomData, vec::Vec};
@@ -236,15 +236,11 @@ where
     }
 
     fn calculate_gas(call: T::RuntimeCall) -> UsedGas {
-        let dispatch_info = call.get_dispatch_info();
-        let call_fee = <T as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(
-            &call,
-            &dispatch_info,
-        );
+        let call_fee =
+            <T as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(&call, None, None);
         let gas = match call_fee {
-            CallFee::Custom(fee) => fee,
+            CallFee::Regular(fee) => fee,
             CallFee::EVM(fee) => fee,
-            CallFee::Stock => TransactionPayment::<T>::weight_to_fee(dispatch_info.weight),
         }
         .into();
         UsedGas { standard: gas, effective: gas }

@@ -39,10 +39,18 @@ pub(crate) type BalanceOf<T> = <T as pallet_asset_rate::Config>::Balance;
 /// Fee type inferred from call info
 #[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CallFee<Balance> {
-    Custom(Balance),
-    Stock,
+    Regular(Balance),
     // The EVM fee is charged separately
     EVM(Balance),
+}
+
+impl<Balance> CallFee<Balance> {
+    pub fn into_inner(self) -> Balance {
+        match self {
+            Self::Regular(fee) => fee,
+            Self::EVM(fee) => fee,
+        }
+    }
 }
 
 // TODO: remove possibility to pay tips and increase call priority
@@ -220,15 +228,15 @@ pub mod pallet {
                 return Ok(None);
             }
 
-            let fee = match T::CustomFee::dispatch_info_to_fee(call, dispatch_info) {
-                CallFee::Custom(custom_fee) => custom_fee,
-                CallFee::EVM(custom_fee) => {
-                    Self::on_low_balance_exchange(who, custom_fee).map_err(|_| {
+            let fee = match T::CustomFee::dispatch_info_to_fee(call, Some(dispatch_info), Some(fee))
+            {
+                CallFee::Regular(fee) => fee,
+                CallFee::EVM(fee) => {
+                    Self::on_low_balance_exchange(who, fee).map_err(|_| {
                         TransactionValidityError::Invalid(InvalidTransaction::Payment)
                     })?;
                     return Ok(None);
                 },
-                _ => fee,
             };
 
             Self::on_low_balance_exchange(who, fee)
@@ -276,7 +284,7 @@ pub mod pallet {
                 return Ok(None);
             }
 
-            let const_energy_fee = T::GetConstantFee::get();
+            let const_energy_fee = T::CustomFee::ethereum_fee();
             let account_id = <T as pallet_evm::Config>::AddressMapping::into_account_id(*who);
 
             Self::on_low_balance_exchange(&account_id, const_energy_fee)

@@ -157,7 +157,7 @@ fn basic_setup_works() {
         // ValidatorPrefs are default
         assert_eq_uvec!(
             <Validators<Test>>::iter().collect::<Vec<_>>(),
-            vec![
+            [
                 (31, ValidatorPrefs::default()),
                 (21, ValidatorPrefs::default_collaborative()),
                 (11, ValidatorPrefs::default_collaborative())
@@ -271,7 +271,7 @@ fn rewards_should_work() {
         let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
 
         start_session(1);
-        assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
+        assert_eq_uvec!(Session::validators(), [31, 21, 11]);
 
         let part_for_10 = FixedU128::from_rational(1000, 3000) * FixedU128::from_float(1.08);
         assert_eq!(controller_stash_reputation_tier(&10), Some(ReputationTier::Trailblazer(1)));
@@ -308,7 +308,7 @@ fn rewards_should_work() {
         );
         assert_eq_error_rate!(Balances::total_balance(&101), init_balance_101, 2);
 
-        assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
+        assert_eq_uvec!(Session::validators(), [31, 21, 11]);
         Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
 
         // Compute total payout now for whole duration as other parameter won't change
@@ -349,7 +349,7 @@ fn rewards_should_work() {
 fn staking_should_work() {
     ExtBuilder::default().cooperate(false).build_and_execute(|| {
         // remember + compare this along with the test.
-        assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+        assert_eq_uvec!(validator_controllers(), [30, 20, 10]);
 
         // put some money and reputation in account that we'll use.
         for i in 1..5 {
@@ -379,13 +379,13 @@ fn staking_should_work() {
         ));
 
         // No effects will be seen so far.
-        assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+        assert_eq_uvec!(validator_controllers(), [30, 20, 10]);
 
         // --- Block 3:
         start_session(3);
 
         // No effects will be seen so far. Era has not been yet triggered.
-        assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+        assert_eq_uvec!(validator_controllers(), [30, 20, 10]);
 
         // --- Block 4: the validators will now be queued.
         start_session(4);
@@ -397,21 +397,21 @@ fn staking_should_work() {
         // --- Block 6: the validators will now be changed.
         start_session(6);
 
-        assert_eq_uvec!(validator_controllers(), vec![4, 30, 20, 10]);
+        assert_eq_uvec!(validator_controllers(), [4, 30, 20, 10]);
         // --- Block 6: Unstake 4 as a validator, freeing up the balance stashed in 3
         // 4 will chill
         PowerPlant::chill(RuntimeOrigin::signed(4)).unwrap();
 
         // --- Block 7: nothing. 4 is still there.
         start_session(7);
-        assert_eq_uvec!(validator_controllers(), vec![4, 30, 20, 10]);
+        assert_eq_uvec!(validator_controllers(), [4, 30, 20, 10]);
 
         // --- Block 8:
         start_session(8);
 
         // --- Block 9: 4 will not be a validator.
         start_session(9);
-        assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+        assert_eq_uvec!(validator_controllers(), [30, 20, 10]);
 
         // Note: the stashed value of 4 is still lock
         assert_eq!(
@@ -470,12 +470,12 @@ fn less_than_needed_candidates_works() {
         .build_and_execute(|| {
             assert_eq!(PowerPlant::validator_count(), 4);
             assert_eq!(PowerPlant::minimum_validator_count(), 1);
-            assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+            assert_eq_uvec!(validator_controllers(), [30, 20, 10]);
 
             mock::start_active_era(1);
 
             // Previous set is selected. NO election algorithm is even executed.
-            assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+            assert_eq_uvec!(validator_controllers(), [30, 20, 10]);
 
             // But the exposure is updated in a simple way. No external votes exists.
             // This is purely self-vote.
@@ -493,7 +493,7 @@ fn no_candidate_emergency_condition() {
         .cooperate(false)
         .build_and_execute(|| {
             // initial validators
-            assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
+            assert_eq_uvec!(validator_controllers(), [10, 20, 30, 40]);
             let prefs = ValidatorPrefs { commission: Perbill::one(), ..Default::default() };
             Validators::<Test>::insert(11, prefs.clone());
 
@@ -517,7 +517,7 @@ fn no_candidate_emergency_condition() {
 
             // Previous ones are elected. chill is not effective in active era (as era hasn't
             // changed)
-            assert_eq_uvec!(validator_controllers(), vec![10, 20, 30, 40]);
+            assert_eq_uvec!(validator_controllers(), [10, 20, 30, 40]);
             // The chill is still pending.
             assert!(!Validators::<Test>::contains_key(11));
             // No new era is created.
@@ -534,7 +534,7 @@ fn cooperating_and_rewards_should_work() {
         .set_status(31, StakerStatus::Idle)
         .build_and_execute(|| {
             // initial validators.
-            assert_eq_uvec!(validator_controllers(), vec![40, 20]);
+            assert_eq_uvec!(validator_controllers(), [40, 20]);
 
             // re-validate with 11 and 31.
             assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(10), Default::default()));
@@ -639,7 +639,7 @@ fn cooperating_and_rewards_should_work() {
 
             mock::start_active_era(1);
 
-            assert_eq_uvec!(validator_controllers(), vec![30, 40, 20, 10]);
+            assert_eq_uvec!(validator_controllers(), [30, 40, 20, 10]);
             let eras_total_stake = ErasTotalStake::<Test>::get(0);
 
             let energy_reward_40 =
@@ -1898,7 +1898,7 @@ fn switching_roles() {
                 ));
             }
 
-            assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+            assert_eq_uvec!(validator_controllers(), [30, 20, 10]);
 
             // put some money in account that we'll use.
             for i in 1..7 {
@@ -1946,7 +1946,7 @@ fn switching_roles() {
             mock::start_active_era(1);
 
             // with current cooperators 10 and 5 have the most stake
-            assert_eq_uvec!(validator_controllers(), vec![6, 30, 20, 10]);
+            assert_eq_uvec!(validator_controllers(), [6, 30, 20, 10]);
 
             // 2 decides to be a validator. Consequences:
             // first we need to make it have enough reputation
@@ -1965,7 +1965,7 @@ fn switching_roles() {
 
             mock::start_active_era(2);
 
-            assert_eq_uvec!(validator_controllers(), vec![6, 30, 2, 20, 10]);
+            assert_eq_uvec!(validator_controllers(), [6, 30, 2, 20, 10]);
         });
 }
 
@@ -1980,7 +1980,7 @@ fn wrong_vote_is_moot() {
             mock::start_active_era(1);
 
             // new validators
-            assert_eq_uvec!(validator_controllers(), vec![30, 20, 10]);
+            assert_eq_uvec!(validator_controllers(), [30, 20, 10]);
 
             // our new voter is taken into account
             assert!(PowerPlant::eras_stakers(active_era(), 11).others.iter().any(|i| i.who == 61));
@@ -2089,7 +2089,7 @@ fn bond_with_little_staked_value_bounded() {
             mock::make_all_reward_payment(0);
 
             // 2 is elected.
-            assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
+            assert_eq_uvec!(validator_controllers(), [20, 10, 2]);
             assert_eq!(PowerPlant::eras_stakers(active_era(), 2).total, 0);
 
             // Account 10 reward check
@@ -2118,7 +2118,7 @@ fn bond_with_little_staked_value_bounded() {
             mock::start_active_era(2);
             mock::make_all_reward_payment(1);
 
-            assert_eq_uvec!(validator_controllers(), vec![20, 10, 2]);
+            assert_eq_uvec!(validator_controllers(), [20, 10, 2]);
             assert_eq!(PowerPlant::eras_stakers(active_era(), 2).total, 0);
 
             let total_stake = ErasTotalStake::<Test>::get(1);
@@ -2228,7 +2228,7 @@ fn reward_from_authorship_event_handler_works() {
         Pallet::<Test>::note_author(11);
 
         // Not mandatory but must be coherent with rewards
-        assert_eq_uvec!(Session::validators(), vec![31, 11, 21]);
+        assert_eq_uvec!(Session::validators(), [31, 11, 21]);
 
         assert_eq!(
             *ReputationPallet::reputation(11).unwrap().reputation.points(),
@@ -3009,17 +3009,17 @@ fn deferred_slashes_are_deferred() {
             1
         );
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         Event::StakersElected,
-        //         ..,
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(3399277,) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(3399277,) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::StakersElected,
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798535,) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(6798535,) },
+            ]
+        ));
     })
 }
 
@@ -3048,16 +3048,16 @@ fn retroactive_deferred_slashes_two_eras_before() {
 
         mock::start_active_era(4);
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         ..,
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(3399313) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(54) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798571) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(54) },
+            ]
+        ));
     })
 }
 
@@ -3095,15 +3095,15 @@ fn retroactive_deferred_slashes_one_before() {
         // slash happens after the next line.
 
         mock::start_active_era(5);
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         Event::SlashReported { validator: 11, slash_era: 2, .. },
-        //         ..,
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(3399313) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(54) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::SlashReported { validator: 11, slash_era: 2, .. },
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798571) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(54) },
+            ]
+        ));
     })
 }
 
@@ -3282,15 +3282,15 @@ fn remove_deferred() {
         mock::start_active_era(4);
 
         // the first slash for 10% was cancelled, but the 15% one not.
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         ..,
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(1699665) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(1699647) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                ..,
+                Event::Slashed { staker: 11, amount: ReputationPoint(3399295) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(3399277) },
+            ]
+        ));
     })
 }
 
@@ -3372,7 +3372,7 @@ fn remove_multi_deferred() {
 fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_validator() {
     ExtBuilder::default().build_and_execute(|| {
         mock::start_active_era(1);
-        assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
+        assert_eq_uvec!(Session::validators(), [31, 21, 11]);
 
         let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         let initial_reputation_101 = initial_reputation_11;
@@ -3397,16 +3397,16 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
             &[Perbill::from_percent(10)],
         );
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         ..,
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         Event::Slashed { staker: 11, amount: ReputationPoint(3399277) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(3399277) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::Slashed { staker: 11, amount: ReputationPoint(6798535) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(6798535) },
+            ]
+        ));
 
         // post-slash balance
         let slash_11 = *max_slash_amount(&initial_reputation_11.into()) / 10;
@@ -3434,7 +3434,7 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
 fn non_slashable_offence_doesnt_disable_validator() {
     ExtBuilder::default().build_and_execute(|| {
         mock::start_active_era(1);
-        assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
+        assert_eq_uvec!(Session::validators(), [31, 21, 11]);
 
         let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
         let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
@@ -3463,19 +3463,19 @@ fn non_slashable_offence_doesnt_disable_validator() {
             vec![&11, &21]
         );
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         ..,
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         Event::Chilled { stash: 21 },
-        //         Event::ForceEra { mode: Forcing::ForceNew },
-        //         Event::SlashReported { validator: 21, slash_era: 1, .. },
-        //         Event::Slashed { staker: 21, amount: ReputationPoint(8498191) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(45) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::Chilled { stash: 21 },
+                Event::ForceEra { mode: Forcing::ForceNew },
+                Event::SlashReported { validator: 21, slash_era: 1, .. },
+                Event::Slashed { staker: 21, amount: ReputationPoint(16996338) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(45) },
+            ]
+        ));
 
         // the offence for validator 10 wasn't slashable so it wasn't disabled
         assert!(!is_disabled(10));
@@ -3488,7 +3488,7 @@ fn non_slashable_offence_doesnt_disable_validator() {
 fn slashing_independent_of_disabling_validator() {
     ExtBuilder::default().build_and_execute(|| {
         mock::start_active_era(1);
-        assert_eq_uvec!(Session::validators(), vec![31, 21, 11]);
+        assert_eq_uvec!(Session::validators(), [31, 21, 11]);
 
         let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
         let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
@@ -3523,19 +3523,19 @@ fn slashing_independent_of_disabling_validator() {
             vec![&11, &21]
         );
 
-        // assert!(matches!(
-        //     staking_events_since_last_call().as_slice(),
-        //     &[
-        //         ..,
-        //         Event::Chilled { stash: 11 },
-        //         Event::SlashReported { validator: 11, slash_era: 1, .. },
-        //         Event::Chilled { stash: 21 },
-        //         Event::ForceEra { mode: Forcing::ForceNew },
-        //         Event::SlashReported { validator: 21, slash_era: 1, .. },
-        //         Event::Slashed { staker: 21, amount: ReputationPoint(8498191) },
-        //         Event::Slashed { staker: 101, amount: ReputationPoint(45) },
-        //     ]
-        // ));
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Chilled { stash: 11 },
+                Event::SlashReported { validator: 11, slash_era: 1, .. },
+                Event::Chilled { stash: 21 },
+                Event::ForceEra { mode: Forcing::ForceNew },
+                Event::SlashReported { validator: 21, slash_era: 1, .. },
+                Event::Slashed { staker: 21, amount: ReputationPoint(16996338) },
+                Event::Slashed { staker: 101, amount: ReputationPoint(45) },
+            ]
+        ));
 
         // the offence for validator 10 was explicitly disabled
         assert!(is_disabled(10));
@@ -3551,7 +3551,7 @@ fn offence_threshold_triggers_new_era() {
         .set_status(41, StakerStatus::Validator)
         .build_and_execute(|| {
             mock::start_active_era(1);
-            assert_eq_uvec!(Session::validators(), vec![41, 31, 21, 11]);
+            assert_eq_uvec!(Session::validators(), [41, 31, 21, 11]);
 
             assert_eq!(
                 <Test as Config>::OffendingValidatorsThreshold::get(),
@@ -3595,7 +3595,7 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
         .set_status(41, StakerStatus::Validator)
         .build_and_execute(|| {
             mock::start_active_era(1);
-            assert_eq_uvec!(Session::validators(), vec![41, 31, 21, 11]);
+            assert_eq_uvec!(Session::validators(), [41, 31, 21, 11]);
             assert_eq!(<Test as Config>::SessionsPerEra::get(), 3);
 
             let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
@@ -5395,7 +5395,7 @@ fn reducing_max_unlocking_chunks_abrupt() {
         MaxUnlockingChunks::set(2);
         start_active_era(10);
         assert_ok!(PowerPlant::bond(RuntimeOrigin::signed(3), 4, 300, RewardDestination::Stash));
-        assert!(matches!(PowerPlant::ledger(4), Some(_)));
+        assert!(PowerPlant::ledger(4).is_some());
 
         // when staker unbonds
         assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(4), 20));

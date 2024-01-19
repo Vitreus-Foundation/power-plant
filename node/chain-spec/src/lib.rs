@@ -6,15 +6,16 @@ use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
 use sp_core::{storage::Storage, Pair, Public};
-use sp_runtime::traits::{IdentifyAccount, Verify};
+use sp_runtime::traits::{AccountIdConversion, IdentifyAccount, Verify};
 use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, EVMChainIdConfig,
-    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix,
-    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, BABE_GENESIS_EPOCH_CONFIG,
+    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, CouncilConfig,
+    EVMChainIdConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
+    ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig,
+    SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
+    TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -66,7 +67,16 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
                     // Sudo account
                     alith(),
                     // Pre-funded accounts
-                    vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
+                    vec![
+                        alith(),
+                        baltathar(),
+                        charleth(),
+                        dorothy(),
+                        ethan(),
+                        faith(),
+                        goliath(),
+                        treasury(),
+                    ],
                     // Initial Validators
                     vec![authority_keys_from_seed("Alice")],
                     vec![],
@@ -102,6 +112,53 @@ pub fn devnet_config() -> ChainSpec {
         // ID
         "devnet",
         ChainType::Custom("Devnet".to_string()),
+        move || {
+            testnet_genesis(
+                wasm_binary,
+                // Sudo account
+                alith(),
+                // Pre-funded accounts
+                vec![
+                    alith(),
+                    baltathar(),
+                    charleth(),
+                    dorothy(),
+                    ethan(),
+                    faith(),
+                    goliath(),
+                    treasury(),
+                ],
+                // Initial Validators
+                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+                vec![],
+                SS58Prefix::get() as u64,
+            )
+        },
+        // Bootnodes
+        vec![],
+        // Telemetry
+        None,
+        // Protocol ID
+        None,
+        None,
+        // Properties
+        Some(properties()),
+        // Extensions
+        None,
+    )
+}
+
+pub fn stagenet_config() -> ChainSpec {
+    use devnet_keys::*;
+
+    let wasm_binary = WASM_BINARY.expect("WASM not available");
+
+    ChainSpec::from_genesis(
+        // Name
+        "Stagenet",
+        // ID
+        "stagenet",
+        ChainType::Custom("Stagenet".to_string()),
         move || {
             testnet_genesis(
                 wasm_binary,
@@ -146,7 +203,16 @@ pub fn localnet_config() -> ChainSpec {
                 // Sudo account
                 alith(),
                 // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
+                vec![
+                    alith(),
+                    baltathar(),
+                    charleth(),
+                    dorothy(),
+                    ethan(),
+                    faith(),
+                    goliath(),
+                    treasury(),
+                ],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
@@ -265,6 +331,11 @@ fn testnet_genesis(
             balances: endowed_accounts.iter().cloned().map(|k| (k, ENDOWMENT)).collect(),
         },
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
+        council: CouncilConfig {
+            members: endowed_accounts.iter().cloned().take(3).collect(),
+            ..Default::default()
+        },
+        democracy: Default::default(),
         grandpa: Default::default(),
         transaction_payment: Default::default(),
 
@@ -313,6 +384,12 @@ fn testnet_genesis(
                 .map(|x| (x.1, x.0, session_keys(x.2.clone(), x.3.clone(), x.4.clone())))
                 .collect::<Vec<_>>(),
         },
+        technical_committee: TechnicalCommitteeConfig {
+            members: endowed_accounts.iter().cloned().skip(3).take(3).collect(),
+            ..Default::default()
+        },
+        technical_membership: Default::default(),
+        treasury: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32,
@@ -354,6 +431,10 @@ pub mod devnet_keys {
 
     pub fn goliath() -> AccountId {
         AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
+    }
+
+    pub fn treasury() -> AccountId {
+        vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()
     }
 
     pub fn authority_keys_from_seed(

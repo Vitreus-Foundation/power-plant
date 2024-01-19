@@ -27,7 +27,7 @@ use sc_cli::Result;
 use sc_client_api::BlockBackend;
 use sp_core::{ecdsa, Pair};
 use sp_inherents::{InherentData, InherentDataProvider};
-use sp_runtime::{generic::Era, OpaqueExtrinsic, SaturatedConversion};
+use sp_runtime::{generic::Era, OpaqueExtrinsic};
 // Frontier
 use fp_account::AccountId20;
 use vitreus_power_plant_runtime::{self as runtime, AccountId, Balance, BalancesCall, SystemCall};
@@ -127,18 +127,19 @@ pub fn create_benchmark_extrinsic(
         .checked_next_power_of_two()
         .map(|c| c / 2)
         .unwrap_or(2) as u64;
+
+    let era = Era::mortal(period, best_block as u64);
+
     let extra: runtime::SignedExtra = (
         frame_system::CheckNonZeroSender::<runtime::Runtime>::new(),
         frame_system::CheckSpecVersion::<runtime::Runtime>::new(),
         frame_system::CheckTxVersion::<runtime::Runtime>::new(),
         frame_system::CheckGenesis::<runtime::Runtime>::new(),
-        frame_system::CheckMortality::<runtime::Runtime>::from(Era::mortal(
-            period,
-            best_block.saturated_into(),
-        )),
+        frame_system::CheckEra::<runtime::Runtime>::from(era),
         frame_system::CheckNonce::<runtime::Runtime>::from(nonce),
         frame_system::CheckWeight::<runtime::Runtime>::new(),
         pallet_transaction_payment::ChargeTransactionPayment::<runtime::Runtime>::from(0),
+        pallet_energy_fee::CheckEnergyFee::<runtime::Runtime>::new(),
     );
 
     let raw_payload = runtime::SignedPayload::from_raw(
@@ -150,6 +151,7 @@ pub fn create_benchmark_extrinsic(
             runtime::VERSION.transaction_version,
             genesis_hash,
             best_hash,
+            (),
             (),
             (),
             (),

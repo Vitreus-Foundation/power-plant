@@ -34,7 +34,7 @@ rand_chacha = { workspace = true, optional = true }
 [dev-dependencies]
 sp-tracing = { workspace = true }
 sp-core = { workspace = true }
-pallet-assets = { workspace = true }
+pallet-assets = { workspace = true, default-features = true }
 pallet-balances = { workspace = true }
 pallet-ethereum = { workspace = true }
 pallet-evm-chain-id = { workspace = true }
@@ -50,15 +50,17 @@ pallet-base-fee = { workspace = true }
 [features]
 default = ["std"]
 std = [
+    "ethereum-types/std",
+    "fp-account/std",
     "frame-benchmarking/std",
     "frame-support/std",
     "frame-system/std",
     "log/std",
     "ethereum-types/std",
+    "pallet-asset-rate/std",
     "pallet-balances/std",
     "pallet-ethereum/std",
     "pallet-evm/std",
-    "fp-account/std",
     "pallet-base-fee/std",
     "pallet-evm-chain-id/std",
     "parity-scale-codec/std",
@@ -66,6 +68,7 @@ std = [
     "pallet-transaction-payment/std",
     "scale-info/std",
     "serde/std",
+    "sp-arithmetic/std",
     "sp-application-crypto/std",
     "sp-io/std",
     "sp-runtime/std",
@@ -73,5 +76,6 @@ std = [
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
+    "pallet-assets/runtime-benchmarks",
     "pallet-ethereum/runtime-benchmarks",
 ]

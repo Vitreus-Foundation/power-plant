@@ -22,8 +22,21 @@ where
 {
     fn dispatch_info_to_fee(
         runtime_call: &RuntimeCall,
-        dispatch_info: &DispatchInfo,
+        dispatch_info: Option<&DispatchInfo>,
+        calculated_fee: Option<Balance>,
     ) -> CallFee<Balance>;
+
+    fn custom_fee() -> Balance;
+
+    fn weight_fee(
+        runtime_call: &RuntimeCall,
+        dispatch_info: Option<&DispatchInfo>,
+        calculated_fee: Option<Balance>,
+    ) -> Balance;
+
+    fn ethereum_fee() -> Balance {
+        Self::custom_fee()
+    }
 }
 
 pub trait TokenExchange<AccountId, SourceToken, TargetToken, TokenBalance>

@@ -3,6 +3,7 @@ use crate::traits::{AssetsBalancesConverter, NativeExchange};
 use crate::{CallFee, CustomFee};
 use fp_account::AccountId20;
 
+use frame_support::dispatch::GetDispatchInfo;
 use frame_support::traits::fungible::ItemOf;
 use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
@@ -13,9 +14,9 @@ use frame_support::{
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_ethereum::PostLogContent;
 use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
-use parity_scale_codec::Compact;
+use parity_scale_codec::{Compact, Encode};
 
-use sp_arithmetic::FixedU128;
+use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Perquintill};
 use sp_core::{H256, U256};
 
 use sp_runtime::{
@@ -26,7 +27,7 @@ use sp_runtime::{
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub(crate) type AccountId = AccountId20;
-pub(crate) type AssetId = u128;
+pub(crate) type AssetId = u32;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
@@ -61,6 +62,9 @@ frame_support::construct_runtime!(
     }
 );
 
+const MAXIMUM_BLOCK_WEIGHT: Weight = Weight::from_parts(1_000_000_000, 1_000_000_u64);
+const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(100);
+
 parameter_types! {
     pub const GetVNRG: AssetId = VNRG;
     pub const AssetDeposit: Balance = 0;
@@ -69,6 +73,8 @@ parameter_types! {
     pub const AssetsStringLimit: u32 = 50;
     pub const MetadataDepositBase: Balance = 0;
     pub const MetadataDepositPerByte: Balance = 0;
+    pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
+        ::with_sensible_defaults(MAXIMUM_BLOCK_WEIGHT, NORMAL_DISPATCH_RATIO);
     pub BlockGasLimit: U256 = U256::from(75_000_000);
     pub const WeightPerGas: Weight = Weight::from_all(1_000_000);
     pub const GetPostLogContent: PostLogContent = PostLogContent::BlockAndTxnHashes;
@@ -78,7 +84,7 @@ parameter_types! {
 
 impl frame_system::Config for Test {
     type BaseCallFilter = Everything;
-    type BlockWeights = ();
+    type BlockWeights = BlockWeights;
     type BlockLength = ();
     type DbWeight = ();
     type RuntimeOrigin = RuntimeOrigin;
@@ -209,14 +215,41 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 {
     fn dispatch_info_to_fee(
         runtime_call: &RuntimeCall,
-        _dispatch_info: &DispatchInfoOf<RuntimeCall>,
+        dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
+        calculated_fee: Option<Balance>,
     ) -> CallFee<Balance> {
         match runtime_call {
             RuntimeCall::BalancesVTRS(..) | RuntimeCall::Assets(..) => {
-                CallFee::Custom(GetConstantEnergyFee::get())
+                CallFee::Regular(Self::custom_fee())
             },
-            RuntimeCall::EVM(..) => CallFee::EVM(GetConstantEnergyFee::get()),
-            _ => CallFee::Stock,
+            RuntimeCall::EVM(..) => CallFee::EVM(Self::custom_fee()),
+            _ => {
+                let fee = Self::weight_fee(runtime_call, dispatch_info, calculated_fee);
+                CallFee::Regular(fee)
+            },
+        }
+    }
+
+    fn custom_fee() -> Balance {
+        let next_multiplier = TransactionPayment::next_fee_multiplier();
+        next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+    }
+
+    fn weight_fee(
+        runtime_call: &RuntimeCall,
+        dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
+        calculated_fee: Option<Balance>,
+    ) -> Balance {
+        if let Some(fee) = calculated_fee {
+            fee
+        } else {
+            let len = runtime_call.encode().len() as u32;
+            if let Some(info) = dispatch_info {
+                pallet_transaction_payment::Pallet::<Test>::compute_fee(len, info, Zero::zero())
+            } else {
+                let info = &runtime_call.get_dispatch_info();
+                pallet_transaction_payment::Pallet::<Test>::compute_fee(len, info, Zero::zero())
+            }
         }
     }
 }
@@ -240,6 +273,8 @@ impl pallet_assets::Config for Test {
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type CallbackHandle = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
 }
 
 parameter_types! {
@@ -252,7 +287,7 @@ impl pallet_transaction_payment::Config for Test {
     type OperationalFeeMultiplier = ();
     type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
-    type FeeMultiplierUpdate = ();
+    type FeeMultiplierUpdate = EnergyFee;
 }
 
 impl pallet_sudo::Config for Test {
@@ -277,10 +312,7 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     .unwrap();
 
     pallet_assets::GenesisConfig::<Test> {
-        accounts: vec![(GetVNRG::get(), BOB, 1000)]
-            .into_iter()
-            .chain(alice_account.into_iter())
-            .collect(),
+        accounts: vec![(GetVNRG::get(), BOB, 1000)].into_iter().chain(alice_account).collect(),
         assets: vec![(GetVNRG::get(), BOB, false, 1)],
         metadata: vec![(GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
     }
@@ -299,4 +331,13 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
         .unwrap();
 
     t.into()
+}
+
+pub(crate) fn calculate_block_weight_based_on_threshold(threshold: Perquintill) -> Weight {
+    let max_block_weight = <Test as frame_system::Config>::BlockWeights::get().max_block;
+    let (ref_time, proof_size) = (
+        threshold.mul_ceil(max_block_weight.ref_time()),
+        threshold.mul_ceil(max_block_weight.proof_size()),
+    );
+    Weight::from_parts(ref_time, proof_size)
 }
