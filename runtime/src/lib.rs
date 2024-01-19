@@ -558,9 +558,9 @@ pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
     pub const SessionsPerEra: SessionIndex = prod_or_fast!(5, 1);
-    pub const BondingDuration: EraIndex = prod_or_fast!(24 * 28, 5);
+    pub const BondingDuration: EraIndex = prod_or_fast!(7 * 28, 5);
     // TODO: consider removing, since the slash defer feature was removed
-    pub const SlashDeferDuration: EraIndex = 24 * 7; // 1/4 the bonding duration.
+    pub const SlashDeferDuration: EraIndex = 7 * 7; // 1/4 the bonding duration.
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const VNRG: AssetId = 1;
