@@ -187,7 +187,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 4,
+    spec_version: 5,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -573,7 +573,7 @@ parameter_types! {
     // it takes a month to become a validator from 0
     pub const ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     // it takes 2 months to become a collaborative validator from 0
-    pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Trailblazer(1);
+    pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     pub const RewardRemainderUnbalanced: u128 = 0;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 
