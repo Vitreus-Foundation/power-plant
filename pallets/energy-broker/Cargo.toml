@@ -1,0 +1,85 @@
+[package]
+name = "pallet-energy-broker"
+version = "0.1.0"
+authors = ["Innowise FinTech Team"]
+edition = "2021"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+bitmaps = { workspace = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+log = { workspace = true }
+pallet-asset-rate = { workspace = true }
+pallet-evm = { workspace = true }
+pallet-ethereum = { workspace = true }
+pallet-transaction-payment = { workspace = true }
+pallet-sudo = { workspace = true }
+parity-scale-codec = { workspace = true }
+scale-info = { workspace = true }
+serde = { workspace = true }
+sp-application-crypto = { workspace = true }
+sp-arithmetic = { workspace = true }
+sp-core = { workspace = true }
+sp-io = { workspace = true }
+sp-runtime = { workspace = true }
+sp-std = { workspace = true }
+smallvec = { workspace = true }
+
+ethereum = { workspace = true }
+
+# Optional imports for benchmarking
+frame-benchmarking = { workspace = true, optional = true }
+rand_chacha = { workspace = true, optional = true }
+
+[dev-dependencies]
+sp-tracing = { workspace = true }
+sp-core = { workspace = true }
+pallet-assets = { workspace = true, default-features = true }
+pallet-balances = { workspace = true }
+pallet-ethereum = { workspace = true }
+pallet-evm-chain-id = { workspace = true }
+pallet-timestamp = { workspace = true }
+pallet-staking-reward-curve = { workspace = true }
+substrate-test-utils = { workspace = true }
+frame-benchmarking = { workspace = true }
+rand_chacha = { workspace = true }
+ethereum-types = { workspace = true }
+fp-account = { workspace = true }
+pallet-base-fee = { workspace = true }
+
+[features]
+default = ["std"]
+std = [
+    "ethereum-types/std",
+    "fp-account/std",
+    "frame-benchmarking/std",
+    "frame-support/std",
+    "frame-system/std",
+    "log/std",
+    "ethereum-types/std",
+    "pallet-asset-rate/std",
+    "pallet-balances/std",
+    "pallet-ethereum/std",
+    "pallet-evm/std",
+    "pallet-base-fee/std",
+    "pallet-evm-chain-id/std",
+    "parity-scale-codec/std",
+    "pallet-sudo/std",
+    "pallet-transaction-payment/std",
+    "scale-info/std",
+    "serde/std",
+    "sp-arithmetic/std",
+    "sp-application-crypto/std",
+    "sp-io/std",
+    "sp-runtime/std",
+    "sp-std/std",
+]
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+    "pallet-assets/runtime-benchmarks",
+    "pallet-ethereum/runtime-benchmarks",
+]

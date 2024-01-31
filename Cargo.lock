@@ -586,6 +586,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b4682ae6287fcf752ecaabbfcc7b6f9b72aa33933dc23a554d853aea8eea8635"
 
 [[package]]
+name = "bitmaps"
+version = "3.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "703642b98a00b3b90513279a8ede3fcfa479c126c5fb46e78f3051522f021403"
+
+[[package]]
 name = "bitvec"
 version = "1.0.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5510,6 +5516,44 @@ dependencies = [
  "sp-inherents",
  "sp-runtime",
  "sp-std",
+]
+
+[[package]]
+name = "pallet-energy-broker"
+version = "0.1.0"
+dependencies = [
+ "bitmaps",
+ "ethereum",
+ "ethereum-types",
+ "fp-account",
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-asset-rate",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-base-fee",
+ "pallet-ethereum",
+ "pallet-evm",
+ "pallet-evm-chain-id",
+ "pallet-staking-reward-curve",
+ "pallet-sudo",
+ "pallet-timestamp",
+ "pallet-transaction-payment",
+ "parity-scale-codec",
+ "rand_chacha 0.2.2",
+ "scale-info",
+ "serde",
+ "smallvec",
+ "sp-application-crypto",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+ "sp-tracing",
+ "substrate-test-utils",
 ]
 
 [[package]]

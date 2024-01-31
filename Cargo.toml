@@ -5,6 +5,7 @@ members = [
     "node/eth-rpc-server",
     "node/node-rpc-server",
     "pallets/claiming",
+    "pallets/energy-broker",
     "pallets/energy-fee",
     "pallets/energy-fee/runtime-api",
     "pallets/energy-fee/rpc",
@@ -31,6 +32,7 @@ repository = "https://bitbucket.org/innowise-group/vitreus-power-plant"
 [workspace.dependencies]
 affix = "0.1"
 bn = { package = "substrate-bn", version = "0.6", default-features = false }
+bitmaps = { version = "3.2.0", default-features = false }
 derive_more = "0.99"
 environmental = { version = "1.1", default-features = false }
 ethereum = { version = "0.14", default-features = false }
@@ -209,6 +211,7 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
 vitreus-utility-runtime-api = { path = "runtime/runtime-api", default-features = false}
 
+pallet-energy-broker = { path = "pallets/energy-broker", default-features = false }
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
 pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }
