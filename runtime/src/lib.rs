@@ -570,13 +570,12 @@ parameter_types! {
     pub const MaxUnlockingChunks: u32 = 64;
     pub const RewardOnUnbalanceWasCalled: bool = false;
     pub const MaxWinners: u32 = 100;
-    // it takes a month to become a validator from
-    pub const ValidatorReputationTier: ReputationTier = VALIDATOR_REPUTATION_THRESHOLD;
+    // it takes a month to become a validator from 0
+    pub const ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     // it takes 2 months to become a collaborative validator from 0
-    pub const CollaborativeValidatorReputationTier: ReputationTier = COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD;
+    pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     pub const RewardRemainderUnbalanced: u128 = 0;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
-
 }
 
 pub struct EnergyPerStakeCurrency;
