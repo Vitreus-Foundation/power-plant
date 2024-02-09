@@ -553,21 +553,21 @@ pub const VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
     ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 30);
 // it takes 2 months to become a collaborative validator from 0
 pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
-    ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 60);
+    ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 30);
 
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
     pub const SessionsPerEra: SessionIndex = prod_or_fast!(5, 1);
-    pub const BondingDuration: EraIndex = prod_or_fast!(7 * 28, 5);
+    pub const BondingDuration: EraIndex = prod_or_fast!(7, 5);
     // TODO: consider removing, since the slash defer feature was removed
-    pub const SlashDeferDuration: EraIndex = 7 * 7; // 1/4 the bonding duration.
+    pub const SlashDeferDuration: EraIndex = 4; // 1/4 the bonding duration.
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const VNRG: AssetId = 1;
     pub const BatterySlotCapacity: Energy = 100_000_000_000;
     pub const MaxCooperations: u32 = 1024;
     pub const HistoryDepth: u32 = 84;
-    pub const MaxUnlockingChunks: u32 = 32;
+    pub const MaxUnlockingChunks: u32 = 64;
     pub const RewardOnUnbalanceWasCalled: bool = false;
     pub const MaxWinners: u32 = 100;
     // it takes a month to become a validator from 0
@@ -576,7 +576,6 @@ parameter_types! {
     pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     pub const RewardRemainderUnbalanced: u128 = 0;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
-
 }
 
 pub struct EnergyPerStakeCurrency;
