@@ -132,8 +132,8 @@ members = [
     "pallets/reputation",
     "pallets/treasury-extension",
 
-#    "runtime",
-#    "runtime/runtime-api",
+    "runtime/vitreus",
+    "runtime/vitreus/runtime-api",
 
     # "pallets/simple-staking",
     # "precompiles/balances-erc20",
@@ -325,8 +325,8 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # precompile-utils = { path = "precompiles/utils", default-features = false }
 # pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
 # Runtime
-vitreus-power-plant-runtime = { path = "runtime", default-features = false }
-vitreus-utility-runtime-api = { path = "runtime/runtime-api", default-features = false}
+vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
+vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false}
 
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
