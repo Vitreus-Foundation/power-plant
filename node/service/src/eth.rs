@@ -8,9 +8,9 @@ use std::{
 use futures::{future, prelude::*};
 // Substrate
 use sc_client_api::{BlockchainEvents, StateBackendFor};
-use sc_executor::NativeExecutionDispatch;
+use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
 use sc_network_sync::SyncingService;
-use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
+use service::{error::Error as ServiceError, Configuration, TaskManager};
 use sp_api::ConstructRuntimeApi;
 use sp_runtime::traits::BlakeTwo256;
 // Frontier
@@ -20,7 +20,10 @@ pub use fc_rpc_core::types::{FeeHistoryCache, FeeHistoryCacheLimit, FilterPool};
 // Local
 use vitreus_power_plant_runtime::opaque::Block;
 
-use crate::client::{FullBackend, FullClient};
+use super::FullBackend;
+
+type FullClient<RuntimeApi, Executor> =
+    service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<Executor>>;
 
 /// Frontier DB backend type.
 pub type FrontierBackend = fc_db::Backend<Block>;
