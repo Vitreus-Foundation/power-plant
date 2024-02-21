@@ -1,9 +1,125 @@
+[[bin]]
+name = "polkadot"
+path = "src/main.rs"
+
+[package]
+name = "polkadot"
+description = "Implementation of a `https://polkadot.network` node in Rust based on the Substrate framework."
+#license = "GPL-3.0-only"
+#rust-version = "1.64.0" # workspace properties
+readme = "README.md"
+authors.workspace = true
+edition.workspace = true
+version.workspace = true
+
+[dependencies]
+color-eyre = { version = "0.6.1", default-features = false }
+tikv-jemallocator = "0.5.0"
+
+# Crates in our workspace, defined as dependencies so we can pass them feature flags.
+polkadot-cli = { path = "cli", features = [ "polkadot-native", "kusama-native", "westend-native", "rococo-native" ]  }
+polkadot-node-core-pvf = { path = "node/core/pvf" }
+polkadot-node-core-pvf-prepare-worker = { path = "node/core/pvf/prepare-worker" }
+polkadot-overseer = { path = "node/overseer" }
+
+[dev-dependencies]
+assert_cmd = "2.0.4"
+nix = { version = "0.26.1", features = ["signal"] }
+tempfile = "3.2.0"
+tokio = "1.24.2"
+substrate-rpc-client = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+polkadot-core-primitives = { path = "core-primitives" }
+
 [workspace]
 members = [
-    "node",
-    "node/chain-spec",
-    "node/eth-rpc-server",
-    "node/node-rpc-server",
+    "cli",
+    "core-primitives",
+    "erasure-coding",
+    "erasure-coding/fuzzer",
+    "primitives",
+    "primitives/test-helpers",
+    "runtime/common",
+    "runtime/common/slot_range_helper",
+    "runtime/metrics",
+    "runtime/parachains",
+    "runtime/polkadot",
+    "runtime/polkadot/constants",
+    "runtime/kusama",
+    "runtime/kusama/constants",
+    "runtime/rococo",
+    "runtime/rococo/constants",
+    "runtime/westend",
+    "runtime/westend/constants",
+    "runtime/test-runtime",
+    "runtime/test-runtime/constants",
+    "statement-table",
+    "xcm",
+    "xcm/xcm-builder",
+    "xcm/xcm-executor",
+    "xcm/xcm-executor/integration-tests",
+    "xcm/xcm-simulator",
+    "xcm/xcm-simulator/example",
+    "xcm/xcm-simulator/fuzzer",
+    "xcm/pallet-xcm",
+    "xcm/pallet-xcm-benchmarks",
+    "xcm/procedural",
+    "node/collation-generation",
+    "node/core/approval-voting",
+    "node/core/av-store",
+    "node/core/backing",
+    "node/core/bitfield-signing",
+    "node/core/candidate-validation",
+    "node/core/chain-api",
+    "node/core/chain-selection",
+    "node/core/dispute-coordinator",
+    "node/core/parachains-inherent",
+    "node/core/provisioner",
+    "node/core/pvf",
+    "node/core/pvf/common",
+    "node/core/pvf/execute-worker",
+    "node/core/pvf/prepare-worker",
+    "node/core/pvf-checker",
+    "node/core/runtime-api",
+    "node/network/approval-distribution",
+    "node/network/bridge",
+    "node/network/protocol",
+    "node/network/statement-distribution",
+    "node/network/bitfield-distribution",
+    "node/network/availability-distribution",
+    "node/network/availability-recovery",
+    "node/network/collator-protocol",
+    "node/network/gossip-support",
+    "node/network/dispute-distribution",
+    "node/overseer",
+    "node/malus",
+    "node/primitives",
+    "node/service",
+    "node/subsystem",
+    "node/subsystem-types",
+    "node/subsystem-test-helpers",
+    "node/subsystem-util",
+    "node/jaeger",
+    "node/gum",
+    "node/gum/proc-macro",
+    "node/metrics",
+    "node/test/client",
+    "node/test/performance-test",
+    "node/test/service",
+    "node/zombienet-backchannel",
+    "rpc",
+    "parachain",
+    "parachain/test-parachains",
+    "parachain/test-parachains/adder",
+    "parachain/test-parachains/adder/collator",
+    "parachain/test-parachains/halt",
+    "parachain/test-parachains/undying",
+    "parachain/test-parachains/undying/collator",
+
+#    "node",
+#    "node/chain-spec",
+#    "node/eth-rpc-server",
+#    "node/node-rpc-server",
+
     "pallets/claiming",
     "pallets/energy-fee",
     "pallets/energy-fee/runtime-api",
@@ -15,8 +131,10 @@ members = [
     "pallets/nac-managing",
     "pallets/reputation",
     "pallets/treasury-extension",
-    "runtime",
-    "runtime/runtime-api",
+
+#    "runtime",
+#    "runtime/runtime-api",
+
     # "pallets/simple-staking",
     # "precompiles/balances-erc20",
     # "precompiles/utils",
@@ -27,6 +145,7 @@ resolver = "2"
 authors = ["Innowise FinTech Team"]
 edition = "2021"
 repository = "https://bitbucket.org/innowise-group/vitreus-power-plant"
+version = "1.0.0"
 
 [workspace.dependencies]
 affix = "0.1"
