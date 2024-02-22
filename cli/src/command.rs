@@ -634,6 +634,7 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			Ok(runner.sync_run(|config| cmd.run::<service::Block>(&config))?)
 		},
+		Some(Subcommand::FrontierDb(_)) => todo!(),
 	}?;
 
 	#[cfg(feature = "pyroscope")]

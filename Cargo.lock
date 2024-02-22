@@ -8123,6 +8123,7 @@ name = "polkadot-cli"
 version = "1.0.0"
 dependencies = [
  "clap 4.4.2",
+ "fc-cli",
  "frame-benchmarking-cli",
  "futures",
  "log",
