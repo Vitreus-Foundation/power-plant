@@ -8,6 +8,14 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use polkadot_primitives::{
+    runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
+    CommittedCandidateReceipt, CoreState, DisputeState, ExecutorParams, GroupRotationInfo,
+    Id as ParaId, InboundDownwardMessage, InboundHrmpMessage, OccupiedCoreAssumption,
+    PersistedValidationData, PvfCheckStatement, ScrapedOnChainVotes, SessionInfo, ValidationCode,
+    ValidationCodeHash, ValidatorId, ValidatorIndex, ValidatorSignature,
+};
+
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_support::traits::tokens::{
@@ -40,7 +48,7 @@ use sp_runtime::{
     ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Permill,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::{marker::PhantomData, prelude::*};
+use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
 use sp_version::RuntimeVersion;
 // Substrate FRAME
 use energy_fee_runtime_api::CallRequest;
@@ -1978,6 +1986,186 @@ impl_runtime_apis! {
     impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
         fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
             ReputationTierEnergyRewardAdditionalPercentMapping::get(&tier)
+        }
+    }
+
+    impl runtime_api::ParachainHost<Block, Hash, BlockNumber> for Runtime {
+        fn validators() -> Vec<ValidatorId> {
+            unimplemented!()
+        }
+
+        fn validator_groups() -> (Vec<Vec<ValidatorIndex>>, GroupRotationInfo<BlockNumber>) {
+            unimplemented!()
+        }
+
+        fn availability_cores() -> Vec<CoreState<Hash, BlockNumber>> {
+            unimplemented!()
+        }
+
+        fn persisted_validation_data(_: ParaId, _: OccupiedCoreAssumption)
+            -> Option<PersistedValidationData<Hash, BlockNumber>> {
+            unimplemented!()
+        }
+
+        fn assumed_validation_data(
+            _: ParaId,
+            _: Hash,
+        ) -> Option<(PersistedValidationData<Hash, BlockNumber>, ValidationCodeHash)> {
+            unimplemented!()
+        }
+
+        fn check_validation_outputs(
+            _: ParaId,
+            _: CandidateCommitments,
+        ) -> bool {
+            unimplemented!()
+        }
+
+        fn session_index_for_child() -> SessionIndex {
+            unimplemented!()
+        }
+
+        fn validation_code(_: ParaId, _: OccupiedCoreAssumption)
+            -> Option<ValidationCode> {
+            unimplemented!()
+        }
+
+        fn candidate_pending_availability(_: ParaId) -> Option<CommittedCandidateReceipt<Hash>> {
+            unimplemented!()
+        }
+
+        fn candidate_events() -> Vec<CandidateEvent<Hash>> {
+            unimplemented!()
+        }
+
+        fn session_info(_: SessionIndex) -> Option<SessionInfo> {
+            unimplemented!()
+        }
+
+        fn session_executor_params(_: SessionIndex) -> Option<ExecutorParams> {
+            unimplemented!()
+        }
+
+        fn dmq_contents(_: ParaId) -> Vec<InboundDownwardMessage<BlockNumber>> {
+            unimplemented!()
+        }
+
+        fn inbound_hrmp_channels_contents(
+            _: ParaId
+        ) -> BTreeMap<ParaId, Vec<InboundHrmpMessage<BlockNumber>>> {
+            unimplemented!()
+        }
+
+        fn validation_code_by_hash(_: ValidationCodeHash) -> Option<ValidationCode> {
+            unimplemented!()
+        }
+
+        fn on_chain_votes() -> Option<ScrapedOnChainVotes<Hash>> {
+            unimplemented!()
+        }
+
+        fn submit_pvf_check_statement(
+            _: PvfCheckStatement,
+            _: ValidatorSignature,
+        ) {
+            unimplemented!()
+        }
+
+        fn pvfs_require_precheck() -> Vec<ValidationCodeHash> {
+            unimplemented!()
+        }
+
+        fn validation_code_hash(_: ParaId, _: OccupiedCoreAssumption)
+            -> Option<ValidationCodeHash>
+        {
+            unimplemented!()
+        }
+
+        fn disputes() -> Vec<(SessionIndex, CandidateHash, DisputeState<BlockNumber>)> {
+            unimplemented!()
+        }
+
+        fn unapplied_slashes(
+        ) -> Vec<(SessionIndex, CandidateHash, slashing::PendingSlashes)> {
+            unimplemented!()
+        }
+
+        fn key_ownership_proof(
+            _: ValidatorId,
+        ) -> Option<slashing::OpaqueKeyOwnershipProof> {
+            unimplemented!()
+        }
+
+        fn submit_report_dispute_lost(
+            _: slashing::DisputeProof,
+            _: slashing::OpaqueKeyOwnershipProof,
+        ) -> Option<()> {
+            unimplemented!()
+        }
+    }
+
+    impl sp_authority_discovery::AuthorityDiscoveryApi<Block> for Runtime {
+        fn authorities() -> Vec<sp_authority_discovery::AuthorityId> {
+            unimplemented!()
+        }
+    }
+
+    impl sp_consensus_beefy::BeefyApi<Block> for Runtime {
+        fn beefy_genesis() -> Option<BlockNumber> {
+            None
+        }
+
+        fn validator_set() -> Option<sp_consensus_beefy::ValidatorSet<sp_consensus_beefy::crypto::AuthorityId>> {
+            None
+        }
+
+        fn submit_report_equivocation_unsigned_extrinsic(
+            _equivocation_proof: sp_consensus_beefy::EquivocationProof<
+                BlockNumber,
+                sp_consensus_beefy::crypto::AuthorityId,
+                sp_consensus_beefy::crypto::Signature,
+            >,
+            _key_owner_proof: sp_consensus_beefy::OpaqueKeyOwnershipProof,
+        ) -> Option<()> {
+            None
+        }
+
+        fn generate_key_ownership_proof(
+            _set_id: sp_consensus_beefy::ValidatorSetId,
+            _authority_id: sp_consensus_beefy::crypto::AuthorityId,
+        ) -> Option<sp_consensus_beefy::OpaqueKeyOwnershipProof> {
+            None
+        }
+    }
+
+    impl sp_mmr_primitives::MmrApi<Block, Hash, BlockNumber> for Runtime {
+        fn mmr_root() -> Result<Hash, sp_mmr_primitives::Error> {
+            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+        }
+
+        fn mmr_leaf_count() -> Result<sp_mmr_primitives::LeafIndex, sp_mmr_primitives::Error> {
+            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+        }
+
+        fn generate_proof(
+            _block_numbers: Vec<BlockNumber>,
+            _best_known_block_number: Option<BlockNumber>,
+        ) -> Result<(Vec<sp_mmr_primitives::EncodableOpaqueLeaf>, sp_mmr_primitives::Proof<Hash>), sp_mmr_primitives::Error> {
+            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+        }
+
+        fn verify_proof(_leaves: Vec<sp_mmr_primitives::EncodableOpaqueLeaf>, _proof: sp_mmr_primitives::Proof<Hash>)
+            -> Result<(), sp_mmr_primitives::Error>
+        {
+            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+        }
+
+        fn verify_proof_stateless(
+            _root: Hash,
+            _leaves: Vec<sp_mmr_primitives::EncodableOpaqueLeaf>,
+            _proof: sp_mmr_primitives::Proof<Hash>
+        ) -> Result<(), sp_mmr_primitives::Error> {
+            Err(sp_mmr_primitives::Error::PalletNotIncluded)
         }
     }
 }
