@@ -21,7 +21,7 @@
 use std::sync::Arc;
 
 use jsonrpsee::RpcModule;
-use polkadot_primitives::{AccountId, Balance, Block, BlockNumber, Hash, Nonce};
+
 use sc_client_api::AuxStore;
 use sc_consensus_beefy::communication::notification::{
 	BeefyBestBlockStream, BeefyVersionedFinalityProofStream,
@@ -35,6 +35,8 @@ use sp_consensus::SelectChain;
 use sp_consensus_babe::BabeApi;
 use sp_keystore::KeystorePtr;
 use txpool_api::TransactionPool;
+
+use vitreus_power_plant_runtime::{opaque::Block, AccountId, Balance, BlockNumber, Hash, Nonce};
 
 /// A type representing all RPC extensions.
 pub type RpcExtension = RpcModule<()>;

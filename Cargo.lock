@@ -8124,6 +8124,7 @@ version = "1.0.0"
 dependencies = [
  "clap 4.4.2",
  "fc-cli",
+ "fc-db",
  "frame-benchmarking-cli",
  "futures",
  "log",
@@ -8999,6 +9000,7 @@ dependencies = [
  "sp-runtime",
  "substrate-frame-rpc-system",
  "substrate-state-trie-migration-rpc",
+ "vitreus-power-plant-runtime",
 ]
 
 [[package]]

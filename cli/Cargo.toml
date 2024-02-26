@@ -41,6 +41,7 @@ sc-executor = { git = "https://github.com/paritytech/substrate", branch = "polka
 sc-storage-monitor = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 
 fc-cli = { workspace = true }
+fc-db = { workspace = true }
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }

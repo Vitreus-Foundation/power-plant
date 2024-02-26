@@ -30,3 +30,5 @@ mmr-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-
 pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-block-builder = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 substrate-state-trie-migration-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+
+vitreus-power-plant-runtime = { workspace = true }

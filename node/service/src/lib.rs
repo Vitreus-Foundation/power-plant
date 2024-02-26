@@ -54,7 +54,7 @@ use {
     },
     sc_client_api::BlockBackend,
     sc_transaction_pool_api::OffchainTransactionPoolFactory,
-    sp_core::traits::SpawnNamed,
+    sp_core::traits::SpawnNamed, sp_core::U256,
     sp_trie::PrefixedMemoryDB,
 };
 
@@ -75,6 +75,7 @@ pub use {
 use polkadot_node_subsystem::jaeger;
 
 use std::{sync::Arc, time::Duration};
+use std::path::Path;
 
 use prometheus_endpoint::Registry;
 #[cfg(feature = "full-node")]
@@ -86,6 +87,7 @@ use telemetry::{Telemetry, TelemetryWorkerHandle};
 
 pub use chain_spec::{KusamaChainSpec, PolkadotChainSpec, RococoChainSpec, WestendChainSpec};
 pub use consensus_common::{Proposal, SelectChain};
+use fc_consensus::FrontierBlockImport;
 use frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
 use mmr_gadget::MmrGadget;
 pub use polkadot_primitives::{Block, BlockId, BlockNumber, CollatorPair, Hash, Id as ParaId};
@@ -106,6 +108,9 @@ pub use sp_runtime::{
     },
 };
 
+use eth::{BackendType, db_config_dir, EthConfiguration, FrontierBackend, FrontierPartialComponents, new_frontier_partial, spawn_frontier_tasks};
+use vitreus_power_plant_runtime::RuntimeApi;
+
 #[cfg(feature = "kusama-native")]
 pub use {kusama_runtime, kusama_runtime_constants};
 #[cfg(feature = "polkadot-native")]
@@ -114,8 +119,6 @@ pub use {polkadot_runtime, polkadot_runtime_constants};
 pub use {rococo_runtime, rococo_runtime_constants};
 #[cfg(feature = "westend-native")]
 pub use {westend_runtime, westend_runtime_constants};
-
-pub use fake_runtime_api::{GetLastTimestamp, RuntimeApi};
 
 #[cfg(feature = "full-node")]
 pub type FullBackend = service::TFullBackend<Block>;
@@ -445,6 +448,7 @@ fn new_partial_basics(
 #[cfg(feature = "full-node")]
 fn new_partial<ChainSelection>(
     config: &mut Configuration,
+    eth_config: &EthConfiguration,
     Basics { task_manager, backend, client, keystore_container, telemetry }: Basics,
     select_chain: ChainSelection,
 ) -> Result<
@@ -472,6 +476,8 @@ fn new_partial<ChainSelection>(
             grandpa::SharedVoterState,
             sp_consensus_babe::SlotDuration,
             Option<Telemetry>,
+            FrontierBackend,
+            Arc<fc_rpc::OverrideHandle<Block>>,
         ),
     >,
     Error,
@@ -502,6 +508,39 @@ where
     )?;
     let justification_import = grandpa_block_import.clone();
 
+    let overrides = fc_storage::overrides_handle(client.clone());
+    let frontier_backend = match eth_config.frontier_backend_type {
+        BackendType::KeyValue => FrontierBackend::KeyValue(fc_db::kv::Backend::open(
+            Arc::clone(&client),
+            &config.database,
+            &db_config_dir(config),
+        ).map_err(SubstrateServiceError::Other)?),
+        BackendType::Sql => {
+            let db_path = db_config_dir(config).join("sql");
+            std::fs::create_dir_all(&db_path).expect("failed creating sql db directory");
+            let backend = futures::executor::block_on(fc_db::sql::Backend::new(
+                fc_db::sql::BackendConfig::Sqlite(fc_db::sql::SqliteBackendConfig {
+                    path: Path::new("sqlite:///")
+                        .join(db_path)
+                        .join("frontier.db3")
+                        .to_str()
+                        .unwrap(),
+                    create_if_missing: true,
+                    thread_count: eth_config.frontier_sql_backend_thread_count,
+                    cache_size: eth_config.frontier_sql_backend_cache_size,
+                }),
+                eth_config.frontier_sql_backend_pool_size,
+                std::num::NonZeroU32::new(eth_config.frontier_sql_backend_num_ops_timeout),
+                overrides.clone(),
+            ))
+                .unwrap_or_else(|err| panic!("failed creating sql backend: {:?}", err));
+            FrontierBackend::Sql(backend)
+        },
+    };
+
+    let _frontier_block_import =
+        FrontierBlockImport::new(grandpa_block_import.clone(), client.clone());
+
     let (beefy_block_import, beefy_voter_links, beefy_rpc_links) =
         beefy::beefy_block_import_and_links(
             grandpa_block_import,
@@ -515,6 +554,7 @@ where
         babe::block_import(babe_config.clone(), beefy_block_import, client.clone())?;
 
     let slot_duration = babe_link.config().slot_duration();
+    let target_gas_price = eth_config.target_gas_price;
     let (import_queue, babe_worker_handle) = babe::import_queue(babe::ImportQueueParams {
         link: babe_link.clone(),
         block_import: block_import.clone(),
@@ -529,8 +569,9 @@ where
 					*timestamp,
 					slot_duration,
 				);
+            let dynamic_fee = fp_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
 
-            Ok((slot, timestamp))
+            Ok((slot, timestamp, dynamic_fee))
         },
         spawner: &task_manager.spawn_essential_handle(),
         registry: config.prometheus_registry(),
@@ -597,7 +638,7 @@ where
         select_chain,
         import_queue,
         transaction_pool,
-        other: (rpc_extensions_builder, import_setup, rpc_setup, slot_duration, telemetry),
+        other: (rpc_extensions_builder, import_setup, rpc_setup, slot_duration, telemetry, frontier_backend, overrides),
     })
 }
 
@@ -657,6 +698,7 @@ pub const AVAILABILITY_CONFIG: AvailabilityConfig = AvailabilityConfig {
 #[cfg(feature = "full-node")]
 pub fn new_full<OverseerGenerator>(
     mut config: Configuration,
+    eth_config: EthConfiguration,
     is_collator: IsCollator,
     grandpa_pause: Option<(u32, u32)>,
     enable_beefy: bool,
@@ -741,8 +783,10 @@ where
         select_chain,
         import_queue,
         transaction_pool,
-        other: (rpc_extensions_builder, import_setup, rpc_setup, slot_duration, mut telemetry),
-    } = new_partial::<SelectRelayChain<_>>(&mut config, basics, select_chain)?;
+        other: (rpc_extensions_builder, import_setup, rpc_setup, slot_duration, mut telemetry, frontier_backend, overrides),
+    } = new_partial::<SelectRelayChain<_>>(&mut config, &eth_config, basics, select_chain)?;
+
+    let FrontierPartialComponents { filter_pool, fee_history_cache, fee_history_cache_limit } = new_frontier_partial(&eth_config)?;
 
     let shared_voter_state = rpc_setup;
     let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
@@ -893,6 +937,28 @@ where
         tx_handler_controller,
         telemetry: telemetry.as_mut(),
     })?;
+
+    // Sinks for pubsub notifications.
+    // Everytime a new subscription is created, a new mpsc channel is added to the sink pool.
+    // The MappingSyncWorker sends through the channel on block import and the subscription emits a notification to the subscriber on receiving a message through this channel.
+    // This way we avoid race conditions when using native substrate block import notification stream.
+    let pubsub_notification_sinks: fc_mapping_sync::EthereumBlockNotificationSinks<
+        fc_mapping_sync::EthereumBlockNotification<Block>,
+    > = Default::default();
+    let pubsub_notification_sinks = Arc::new(pubsub_notification_sinks);
+
+    spawn_frontier_tasks(
+        &task_manager,
+        client.clone(),
+        backend.clone(),
+        frontier_backend,
+        filter_pool,
+        overrides,
+        fee_history_cache,
+        fee_history_cache_limit,
+        sync_service.clone(),
+        pubsub_notification_sinks,
+    );
 
     if let Some(hwbench) = hwbench {
         sc_sysinfo::print_hwbench(&hwbench);
@@ -1219,28 +1285,11 @@ where
     })
 }
 
-#[cfg(feature = "full-node")]
-macro_rules! chain_ops {
-    ($config:expr, $jaeger_agent:expr, $telemetry_worker_handle:expr) => {{
-        let telemetry_worker_handle = $telemetry_worker_handle;
-        let jaeger_agent = $jaeger_agent;
-        let mut config = $config;
-        let basics = new_partial_basics(config, jaeger_agent, telemetry_worker_handle)?;
-
-        use ::sc_consensus::LongestChain;
-        // use the longest chain selection, since there is no overseer available
-        let chain_selection = LongestChain::new(basics.backend.clone());
-
-        let service::PartialComponents { client, backend, import_queue, task_manager, .. } =
-            new_partial::<LongestChain<_, Block>>(&mut config, basics, chain_selection)?;
-        Ok((client, backend, import_queue, task_manager))
-    }};
-}
-
 /// Builds a new object suitable for chain operations.
 #[cfg(feature = "full-node")]
 pub fn new_chain_ops(
     config: &mut Configuration,
+    eth_config: &EthConfiguration,
     jaeger_agent: Option<std::net::SocketAddr>,
 ) -> Result<
     (
@@ -1248,23 +1297,21 @@ pub fn new_chain_ops(
         Arc<FullBackend>,
         sc_consensus::BasicQueue<Block, PrefixedMemoryDB<BlakeTwo256>>,
         TaskManager,
+        FrontierBackend,
     ),
     Error,
 > {
     config.keystore = service::config::KeystoreConfig::InMemory;
 
-    if config.chain_spec.is_rococo()
-        || config.chain_spec.is_wococo()
-        || config.chain_spec.is_versi()
-    {
-        chain_ops!(config, jaeger_agent, None)
-    } else if config.chain_spec.is_kusama() {
-        chain_ops!(config, jaeger_agent, None)
-    } else if config.chain_spec.is_westend() {
-        return chain_ops!(config, jaeger_agent, None);
-    } else {
-        chain_ops!(config, jaeger_agent, None)
-    }
+    let basics = new_partial_basics(config, jaeger_agent, None)?;
+
+    use ::sc_consensus::LongestChain;
+    // use the longest chain selection, since there is no overseer available
+    let chain_selection = LongestChain::new(basics.backend.clone());
+
+    let service::PartialComponents { client, backend, import_queue, task_manager, other, .. } =
+        new_partial::<LongestChain<_, Block>>(config, eth_config, basics, chain_selection)?;
+    Ok((client, backend, import_queue, task_manager, other.5))
 }
 
 /// Build a full node.
@@ -1278,6 +1325,7 @@ pub fn new_chain_ops(
 #[cfg(feature = "full-node")]
 pub fn build_full(
     config: Configuration,
+    eth_config: EthConfiguration,
     is_collator: IsCollator,
     grandpa_pause: Option<(u32, u32)>,
     enable_beefy: bool,
@@ -1293,6 +1341,7 @@ pub fn build_full(
 
     new_full(
         config,
+        eth_config,
         is_collator,
         grandpa_pause,
         enable_beefy,

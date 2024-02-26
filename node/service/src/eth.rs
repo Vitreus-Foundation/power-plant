@@ -7,11 +7,9 @@ use std::{
 
 use futures::{future, prelude::*};
 // Substrate
-use sc_client_api::{BlockchainEvents, StateBackendFor};
-use sc_executor::{NativeElseWasmExecutor, NativeExecutionDispatch};
+use sc_client_api::BlockchainEvents;
 use sc_network_sync::SyncingService;
 use service::{error::Error as ServiceError, Configuration, TaskManager};
-use sp_api::ConstructRuntimeApi;
 use sp_runtime::traits::BlakeTwo256;
 // Frontier
 pub use fc_consensus::FrontierBlockImport;
@@ -20,10 +18,7 @@ pub use fc_rpc_core::types::{FeeHistoryCache, FeeHistoryCacheLimit, FilterPool};
 // Local
 use vitreus_power_plant_runtime::opaque::Block;
 
-use super::FullBackend;
-
-type FullClient<RuntimeApi, Executor> =
-    service::TFullClient<Block, RuntimeApi, NativeElseWasmExecutor<Executor>>;
+use super::{FullBackend, FullClient};
 
 /// Frontier DB backend type.
 pub type FrontierBackend = fc_db::Backend<Block>;
@@ -130,9 +125,9 @@ where
 {
 }
 
-pub async fn spawn_frontier_tasks<RuntimeApi, Executor>(
+pub fn spawn_frontier_tasks(
     task_manager: &TaskManager,
-    client: Arc<FullClient<RuntimeApi, Executor>>,
+    client: Arc<FullClient>,
     backend: Arc<FullBackend>,
     frontier_backend: FrontierBackend,
     filter_pool: Option<FilterPool>,
@@ -145,13 +140,7 @@ pub async fn spawn_frontier_tasks<RuntimeApi, Executor>(
             fc_mapping_sync::EthereumBlockNotification<Block>,
         >,
     >,
-) where
-    RuntimeApi: ConstructRuntimeApi<Block, FullClient<RuntimeApi, Executor>>,
-    RuntimeApi: Send + Sync + 'static,
-    RuntimeApi::RuntimeApi:
-        EthCompatRuntimeApiCollection<StateBackend = StateBackendFor<FullBackend, Block>>,
-    Executor: NativeExecutionDispatch + 'static,
-{
+) {
     // Spawn main mapping sync worker background task.
     match frontier_backend {
         fc_db::Backend::KeyValue(b) => {

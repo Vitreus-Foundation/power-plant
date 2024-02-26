@@ -19,14 +19,17 @@ use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE
 use futures::future::TryFutureExt;
 use log::info;
 use sc_cli::SubstrateCli;
+use sc_service::DatabaseSource;
 use service::{
 	self,
 	benchmarking::{benchmark_inherent_data, RemarkBuilder, TransferKeepAliveBuilder},
+	eth::db_config_dir,
 	HeaderBackend, IdentifyVariant,
 };
 use sp_core::crypto::Ss58AddressFormatRegistry;
 use sp_keyring::Sr25519Keyring;
 use std::net::ToSocketAddrs;
+use fc_db::kv::frontier_database_dir;
 
 pub use crate::{error::Error, service::BlockId};
 #[cfg(feature = "hostperfcheck")]
@@ -285,6 +288,7 @@ where
 		let database_source = config.database.clone();
 		let task_manager = service::build_full(
 			config,
+			cli.eth,
 			service::IsCollator::No,
 			grandpa_pause,
 			enable_beefy,
@@ -354,8 +358,8 @@ pub fn run() -> Result<()> {
 			set_default_ss58_version(chain_spec);
 
 			runner.async_run(|mut config| {
-				let (client, _, import_queue, task_manager) =
-					service::new_chain_ops(&mut config, None)?;
+				let (client, _, import_queue, task_manager, _) =
+					service::new_chain_ops(&mut config, &cli.eth, None)?;
 				Ok((cmd.run(client, import_queue).map_err(Error::SubstrateCli), task_manager))
 			})
 		},
@@ -366,8 +370,8 @@ pub fn run() -> Result<()> {
 			set_default_ss58_version(chain_spec);
 
 			Ok(runner.async_run(|mut config| {
-				let (client, _, _, task_manager) =
-					service::new_chain_ops(&mut config, None).map_err(Error::PolkadotService)?;
+				let (client, _, _, task_manager, _) =
+					service::new_chain_ops(&mut config, &cli.eth, None).map_err(Error::PolkadotService)?;
 				Ok((cmd.run(client, config.database).map_err(Error::SubstrateCli), task_manager))
 			})?)
 		},
@@ -378,7 +382,7 @@ pub fn run() -> Result<()> {
 			set_default_ss58_version(chain_spec);
 
 			Ok(runner.async_run(|mut config| {
-				let (client, _, _, task_manager) = service::new_chain_ops(&mut config, None)?;
+				let (client, _, _, task_manager, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
 				Ok((cmd.run(client, config.chain_spec).map_err(Error::SubstrateCli), task_manager))
 			})?)
 		},
@@ -389,14 +393,57 @@ pub fn run() -> Result<()> {
 			set_default_ss58_version(chain_spec);
 
 			Ok(runner.async_run(|mut config| {
-				let (client, _, import_queue, task_manager) =
-					service::new_chain_ops(&mut config, None)?;
+				let (client, _, import_queue, task_manager, _) =
+					service::new_chain_ops(&mut config, &cli.eth, None)?;
 				Ok((cmd.run(client, import_queue).map_err(Error::SubstrateCli), task_manager))
 			})?)
 		},
 		Some(Subcommand::PurgeChain(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			Ok(runner.sync_run(|config| cmd.run(config.database))?)
+			Ok(runner.sync_run(|config| {
+				// Remove Frontier offchain db
+				let db_config_dir = db_config_dir(&config);
+				match cli.eth.frontier_backend_type {
+					service::eth::BackendType::KeyValue => {
+						let frontier_database_config = match config.database {
+							DatabaseSource::RocksDb { .. } => DatabaseSource::RocksDb {
+								path: frontier_database_dir(&db_config_dir, "db"),
+								cache_size: 0,
+							},
+							DatabaseSource::ParityDb { .. } => DatabaseSource::ParityDb {
+								path: frontier_database_dir(&db_config_dir, "paritydb"),
+							},
+							_ => {
+								return Err(format!(
+									"Cannot purge `{:?}` database",
+									config.database
+								)
+									.into())
+							},
+						};
+						cmd.run(frontier_database_config)?;
+					},
+					service::eth::BackendType::Sql => {
+						let db_path = db_config_dir.join("sql");
+						match std::fs::remove_dir_all(&db_path) {
+							Ok(_) => {
+								println!("{:?} removed.", &db_path);
+							},
+							Err(ref err) if err.kind() == std::io::ErrorKind::NotFound => {
+								eprintln!("{:?} did not exist.", &db_path);
+							},
+							Err(err) => {
+								return Err(format!(
+									"Cannot purge `{:?}` database: {:?}",
+									db_path, err,
+								)
+									.into())
+							},
+						};
+					},
+				};
+				cmd.run(config.database)
+			})?)
 		},
 		Some(Subcommand::Revert(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
@@ -405,7 +452,7 @@ pub fn run() -> Result<()> {
 			set_default_ss58_version(chain_spec);
 
 			Ok(runner.async_run(|mut config| {
-				let (client, backend, _, task_manager) = service::new_chain_ops(&mut config, None)?;
+				let (client, backend, _, task_manager, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
 				let aux_revert = Box::new(|client, backend, blocks| {
 					service::revert_backend(client, backend, blocks, config).map_err(|err| {
 						match err {
@@ -480,14 +527,14 @@ pub fn run() -> Result<()> {
 					.into()),
 				#[cfg(feature = "runtime-benchmarks")]
 				BenchmarkCmd::Storage(cmd) => runner.sync_run(|mut config| {
-					let (client, backend, _, _) = service::new_chain_ops(&mut config, None)?;
+					let (client, backend, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
 					let db = backend.expose_db();
 					let storage = backend.expose_storage();
 
 					cmd.run(config, client.clone(), db, storage).map_err(Error::SubstrateCli)
 				}),
 				BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
-					let (client, _, _, _) = service::new_chain_ops(&mut config, None)?;
+					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
 
 					cmd.run(client.clone()).map_err(Error::SubstrateCli)
 				}),
@@ -495,7 +542,7 @@ pub fn run() -> Result<()> {
 				BenchmarkCmd::Extrinsic(_) | BenchmarkCmd::Overhead(_) => {
 					ensure_dev(chain_spec).map_err(Error::Other)?;
 					runner.sync_run(|mut config| {
-						let (client, _, _, _) = service::new_chain_ops(&mut config, None)?;
+						let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
 						let header = client.header(client.info().genesis_hash).unwrap().unwrap();
 						let inherent_data = benchmark_inherent_data(header)
 							.map_err(|e| format!("generating inherent data: {:?}", e))?;
@@ -634,7 +681,18 @@ pub fn run() -> Result<()> {
 			let runner = cli.create_runner(cmd)?;
 			Ok(runner.sync_run(|config| cmd.run::<service::Block>(&config))?)
 		},
-		Some(Subcommand::FrontierDb(_)) => todo!(),
+		Some(Subcommand::FrontierDb(cmd)) => {
+			let runner = cli.create_runner(cmd)?;
+			Ok(runner.sync_run(|mut config| {
+				let (client, _, _, _, frontier_backend) =
+					service::new_chain_ops(&mut config, &cli.eth, None).map_err(Error::PolkadotService)?;
+				let frontier_backend = match frontier_backend {
+					fc_db::Backend::KeyValue(kv) => std::sync::Arc::new(kv),
+					_ => panic!("Only fc_db::Backend::KeyValue supported"),
+				};
+				cmd.run(client, frontier_backend).map_err(Error::SubstrateCli)
+			})?)
+		},
 	}?;
 
 	#[cfg(feature = "pyroscope")]
