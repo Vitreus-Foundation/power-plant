@@ -42,6 +42,7 @@ sc-storage-monitor = { git = "https://github.com/paritytech/substrate", branch =
 
 fc-cli = { workspace = true }
 fc-db = { workspace = true }
+vitreus-power-plant-runtime = { workspace = true, features = ["default"] }
 
 [build-dependencies]
 substrate-build-script-utils = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
@@ -63,7 +64,8 @@ cli = [
 runtime-benchmarks = [
 	"service/runtime-benchmarks",
 	"polkadot-node-metrics/runtime-benchmarks",
-	"polkadot-performance-test?/runtime-benchmarks"
+	"polkadot-performance-test?/runtime-benchmarks",
+	"vitreus-power-plant-runtime/runtime-benchmarks",
 ]
 full-node = ["service/full-node"]
 try-runtime = ["service/try-runtime", "try-runtime-cli/try-runtime"]

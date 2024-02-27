@@ -15,14 +15,12 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use crate::cli::{Cli, Subcommand};
-use frame_benchmarking_cli::{BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE};
 use futures::future::TryFutureExt;
 use log::info;
 use sc_cli::SubstrateCli;
 use sc_service::DatabaseSource;
 use service::{
 	self,
-	benchmarking::{benchmark_inherent_data, RemarkBuilder, TransferKeepAliveBuilder},
 	eth::db_config_dir,
 	HeaderBackend, IdentifyVariant,
 };
@@ -513,100 +511,60 @@ pub fn run() -> Result<()> {
 				Ok(())
 			}
 		},
+		#[cfg(feature = "runtime-benchmarks")]
 		Some(Subcommand::Benchmark(cmd)) => {
-			let runner = cli.create_runner(cmd)?;
-			let chain_spec = &runner.config().chain_spec;
+			use service::benchmarking::{
+				inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder,
+			};
+			use frame_benchmarking_cli::{
+				BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE,
+			};
+			use vitreus_power_plant_runtime::{Block, ExistentialDeposit};
 
+			let runner = cli.create_runner(cmd)?;
 			match cmd {
-				#[cfg(not(feature = "runtime-benchmarks"))]
-				BenchmarkCmd::Storage(_) =>
-					return Err(sc_cli::Error::Input(
-						"Compile with --features=runtime-benchmarks \
-						to enable storage benchmarks."
-							.into(),
-					)
-					.into()),
-				#[cfg(feature = "runtime-benchmarks")]
+				BenchmarkCmd::Pallet(cmd) => runner.sync_run(|config| cmd.run::<Block, ()>(config)),
+				BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
+					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
+					cmd.run(client)
+				}),
 				BenchmarkCmd::Storage(cmd) => runner.sync_run(|mut config| {
 					let (client, backend, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
 					let db = backend.expose_db();
 					let storage = backend.expose_storage();
-
-					cmd.run(config, client.clone(), db, storage).map_err(Error::SubstrateCli)
+					cmd.run(config, client, db, storage)
 				}),
-				BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
+				BenchmarkCmd::Overhead(cmd) => runner.sync_run(|mut config| {
 					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
-
-					cmd.run(client.clone()).map_err(Error::SubstrateCli)
+					let ext_builder = RemarkBuilder::new(client.clone());
+					let header = client.header(client.info().genesis_hash).unwrap().unwrap();
+					cmd.run(config, client, inherent_benchmark_data(header)?, Vec::new(), &ext_builder)
 				}),
-				// These commands are very similar and can be handled in nearly the same way.
-				BenchmarkCmd::Extrinsic(_) | BenchmarkCmd::Overhead(_) => {
-					ensure_dev(chain_spec).map_err(Error::Other)?;
-					runner.sync_run(|mut config| {
-						let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
-						let header = client.header(client.info().genesis_hash).unwrap().unwrap();
-						let inherent_data = benchmark_inherent_data(header)
-							.map_err(|e| format!("generating inherent data: {:?}", e))?;
-						let remark_builder =
-							RemarkBuilder::new(client.clone(), config.chain_spec.identify_chain());
-
-						match cmd {
-							BenchmarkCmd::Extrinsic(cmd) => {
-								let tka_builder = TransferKeepAliveBuilder::new(
-									client.clone(),
-									Sr25519Keyring::Alice.to_account_id(),
-									config.chain_spec.identify_chain(),
-								);
-
-								let ext_factory = ExtrinsicFactory(vec![
-									Box::new(remark_builder),
-									Box::new(tka_builder),
-								]);
-
-								cmd.run(client.clone(), inherent_data, Vec::new(), &ext_factory)
-									.map_err(Error::SubstrateCli)
-							},
-							BenchmarkCmd::Overhead(cmd) => cmd
-								.run(
-									config,
-									client.clone(),
-									inherent_data,
-									Vec::new(),
-									&remark_builder,
-								)
-								.map_err(Error::SubstrateCli),
-							_ => unreachable!("Ensured by the outside match; qed"),
-						}
-					})
-				},
-				BenchmarkCmd::Pallet(cmd) => {
-					set_default_ss58_version(chain_spec);
-					ensure_dev(chain_spec).map_err(Error::Other)?;
-
-					if cfg!(feature = "runtime-benchmarks") {
-						runner.sync_run(|config| {
-							cmd.run::<service::Block, ()>(config)
-								.map_err(|e| Error::SubstrateCli(e))
-						})
-					} else {
-						Err(sc_cli::Error::Input(
-							"Benchmarking wasn't enabled when building the node. \
-				You can enable it with `--features runtime-benchmarks`."
-								.into(),
-						)
-						.into())
-					}
-				},
-				BenchmarkCmd::Machine(cmd) => runner.sync_run(|config| {
-					cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone())
-						.map_err(Error::SubstrateCli)
+				BenchmarkCmd::Extrinsic(cmd) => runner.sync_run(|mut config| {
+					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
+					// Register the *Remark* and *TKA* builders.
+					let ext_factory = ExtrinsicFactory(vec![
+						Box::new(RemarkBuilder::new(client.clone())),
+						// TODO: fix it
+						// Box::new(TransferKeepAliveBuilder::new(
+						// 	client.clone(),
+						// 	get_account_id_from_seed::<sp_core::ecdsa::Public>("Alice"),
+						// 	ExistentialDeposit::get(),
+						// )),
+					]);
+					let header = client.header(client.info().genesis_hash).unwrap().unwrap();
+					cmd.run(client, inherent_benchmark_data(header)?, Vec::new(), &ext_factory)
 				}),
-				// NOTE: this allows the Polkadot client to leniently implement
-				// new benchmark commands.
-				#[allow(unreachable_patterns)]
-				_ => Err(Error::CommandNotImplemented),
+				BenchmarkCmd::Machine(cmd) => {
+					runner.sync_run(|config| cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()))
+				},
 			}
 		},
+		#[cfg(not(feature = "runtime-benchmarks"))]
+		Some(Subcommand::Benchmark(_)) => Err(sc_cli::Error::Input(
+			"Benchmarking wasn't enabled when building the node. \
+			You can enable it with `--features runtime-benchmarks`."
+			.into()).into()),
 		Some(Subcommand::HostPerfCheck) => {
 			let mut builder = sc_cli::LoggerBuilder::new("");
 			builder.with_colors(true);

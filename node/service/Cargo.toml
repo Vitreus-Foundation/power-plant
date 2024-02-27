@@ -15,6 +15,7 @@ mmr-gadget = { git = "https://github.com/paritytech/substrate", branch = "polkad
 sp-mmr-primitives = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-block-builder = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-chain-spec = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-cli = { workspace = true }
 sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-client-db = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-consensus = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
@@ -73,6 +74,8 @@ prometheus-endpoint = { package = "substrate-prometheus-endpoint", git = "https:
 frame-support = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 frame-benchmarking-cli = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 frame-benchmarking = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+
+pallet-energy-fee = { workspace = true }
 
 # Frontier
 fc-cli = { workspace = true }
@@ -173,6 +176,7 @@ rpc-binary-search-estimate = ["fc-rpc/rpc-binary-search-estimate"]
 
 db = [
 	"service/rocksdb",
+	"sc-cli/rocksdb",
 	"fc-cli/rocksdb",
 	"fc-db/rocksdb",
 	"fc-mapping-sync/rocksdb",
