@@ -9372,6 +9372,7 @@ dependencies = [
  "sc-consensus-babe",
  "sc-consensus-beefy",
  "sc-consensus-grandpa",
+ "sc-consensus-manual-seal",
  "sc-consensus-slots",
  "sc-executor",
  "sc-keystore",

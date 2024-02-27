@@ -17,17 +17,7 @@
 //! Polkadot CLI library.
 
 use clap::Parser;
-use service::eth::EthConfiguration;
-
-/// Available Sealing methods.
-#[derive(Copy, Clone, Debug, Default, clap::ValueEnum)]
-pub enum Sealing {
-    /// Seal using rpc method.
-    #[default]
-    Manual,
-    /// Seal when transaction is executed.
-    Instant,
-}
+use service::{eth::EthConfiguration, Sealing};
 
 #[allow(missing_docs)]
 #[derive(Debug, Parser)]

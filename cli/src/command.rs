@@ -299,6 +299,7 @@ where
 			cli.run.overseer_channel_capacity_override,
 			maybe_malus_finality_delay,
 			hwbench,
+			cli.sealing
 		)
 		.map(|full| full.task_manager)?;
 
