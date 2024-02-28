@@ -1,16 +1,16 @@
 [[bin]]
-name = "polkadot"
+name = "vitreus-power-plant-node"
 path = "src/main.rs"
 
 [package]
-name = "polkadot"
-description = "Implementation of a `https://polkadot.network` node in Rust based on the Substrate framework."
-#license = "GPL-3.0-only"
-#rust-version = "1.64.0" # workspace properties
-readme = "README.md"
-authors.workspace = true
-edition.workspace = true
-version.workspace = true
+name = "vitreus-power-plant-node"
+version = "0.0.0"
+license = "Unlicense"
+description = "A fresh FRAME-based Substrate node, ready for hacking."
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
 
 [dependencies]
 color-eyre = { version = "0.6.1", default-features = false }
@@ -18,6 +18,7 @@ tikv-jemallocator = "0.5.0"
 
 # Crates in our workspace, defined as dependencies so we can pass them feature flags.
 polkadot-cli = { path = "cli", features = [ "polkadot-native", "kusama-native", "westend-native", "rococo-native" ]  }
+polkadot-service = { path = "node/service" }
 polkadot-node-core-pvf = { path = "node/core/pvf" }
 polkadot-node-core-pvf-prepare-worker = { path = "node/core/pvf/prepare-worker" }
 polkadot-overseer = { path = "node/overseer" }
@@ -29,6 +30,22 @@ tempfile = "3.2.0"
 tokio = "1.24.2"
 substrate-rpc-client = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 polkadot-core-primitives = { path = "core-primitives" }
+
+[features]
+default = ["with-rocksdb-weights", "rocksdb", "sql", "txpool"]
+with-rocksdb-weights = ["polkadot-service/with-rocksdb-weights"]
+with-paritydb-weights = ["polkadot-service/with-paritydb-weights"]
+rocksdb = [
+    "polkadot-cli/db",
+    "polkadot-service/db",
+]
+sql = ["polkadot-service/sql"]
+txpool = ["polkadot-service/txpool"]
+rpc-binary-search-estimate = ["polkadot-service/rpc-binary-search-estimate"]
+runtime-benchmarks = [
+    "polkadot-cli/runtime-benchmarks",
+    "polkadot-service/runtime-benchmarks",
+]
 
 [workspace]
 members = [

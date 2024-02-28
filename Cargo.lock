@@ -8018,24 +8018,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4503fa043bf02cee09a9582e9554b4c6403b2ef55e4612e96561d294419429f8"
 
 [[package]]
-name = "polkadot"
-version = "1.0.0"
-dependencies = [
- "assert_cmd",
- "color-eyre",
- "nix 0.26.4",
- "polkadot-cli",
- "polkadot-core-primitives",
- "polkadot-node-core-pvf",
- "polkadot-node-core-pvf-prepare-worker",
- "polkadot-overseer",
- "substrate-rpc-client",
- "tempfile",
- "tikv-jemallocator",
- "tokio",
-]
-
-[[package]]
 name = "polkadot-approval-distribution"
 version = "1.0.0"
 dependencies = [
@@ -14798,6 +14780,25 @@ name = "version_check"
 version = "0.9.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "49874b5167b65d7193b8aba1567f5c7d93d001cafc34600cee003eda787e483f"
+
+[[package]]
+name = "vitreus-power-plant-node"
+version = "0.0.0"
+dependencies = [
+ "assert_cmd",
+ "color-eyre",
+ "nix 0.26.4",
+ "polkadot-cli",
+ "polkadot-core-primitives",
+ "polkadot-node-core-pvf",
+ "polkadot-node-core-pvf-prepare-worker",
+ "polkadot-overseer",
+ "polkadot-service",
+ "substrate-rpc-client",
+ "tempfile",
+ "tikv-jemallocator",
+ "tokio",
+]
 
 [[package]]
 name = "vitreus-power-plant-runtime"
