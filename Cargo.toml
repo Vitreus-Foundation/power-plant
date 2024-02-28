@@ -63,6 +63,7 @@ members = [
     "xcm/pallet-xcm",
     "xcm/pallet-xcm-benchmarks",
     "xcm/procedural",
+    "node/chain-spec",
     "node/collation-generation",
     "node/core/approval-voting",
     "node/core/av-store",
@@ -116,10 +117,6 @@ members = [
     "parachain/test-parachains/halt",
     "parachain/test-parachains/undying",
     "parachain/test-parachains/undying/collator",
-
-#    "node",
-#    "node/chain-spec",
-
     "pallets/claiming",
     "pallets/energy-fee",
     "pallets/energy-fee/runtime-api",

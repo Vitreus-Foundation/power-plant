@@ -19,7 +19,6 @@
 #![deny(unused_results)]
 
 pub mod benchmarking;
-pub mod chain_spec;
 pub mod eth;
 mod fake_runtime_api;
 mod grandpa_support;
@@ -85,7 +84,6 @@ use telemetry::TelemetryWorker;
 #[cfg(feature = "full-node")]
 use telemetry::{Telemetry, TelemetryWorkerHandle};
 
-pub use chain_spec::{KusamaChainSpec, PolkadotChainSpec, RococoChainSpec, WestendChainSpec};
 pub use consensus_common::{Proposal, SelectChain};
 use fc_consensus::FrontierBlockImport;
 use frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
@@ -249,82 +247,15 @@ pub enum Error {
     NoRuntime,
 }
 
-/// Identifies the variant of the chain.
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum Chain {
-    /// Polkadot.
-    Polkadot,
-    /// Kusama.
-    Kusama,
-    /// Rococo or one of its derivations.
-    Rococo,
-    /// Westend.
-    Westend,
-    /// Unknown chain?
-    Unknown,
-}
-
 /// Can be called for a `Configuration` to identify which network the configuration targets.
 pub trait IdentifyVariant {
-    /// Returns if this is a configuration for the `Polkadot` network.
-    fn is_polkadot(&self) -> bool;
-
-    /// Returns if this is a configuration for the `Kusama` network.
-    fn is_kusama(&self) -> bool;
-
-    /// Returns if this is a configuration for the `Westend` network.
-    fn is_westend(&self) -> bool;
-
-    /// Returns if this is a configuration for the `Rococo` network.
-    fn is_rococo(&self) -> bool;
-
-    /// Returns if this is a configuration for the `Wococo` test network.
-    fn is_wococo(&self) -> bool;
-
-    /// Returns if this is a configuration for the `Versi` test network.
-    fn is_versi(&self) -> bool;
-
     /// Returns true if this configuration is for a development network.
     fn is_dev(&self) -> bool;
-
-    /// Identifies the variant of the chain.
-    fn identify_chain(&self) -> Chain;
 }
 
 impl IdentifyVariant for Box<dyn ChainSpec> {
-    fn is_polkadot(&self) -> bool {
-        self.id().starts_with("polkadot") || self.id().starts_with("dot")
-    }
-    fn is_kusama(&self) -> bool {
-        self.id().starts_with("kusama") || self.id().starts_with("ksm")
-    }
-    fn is_westend(&self) -> bool {
-        self.id().starts_with("westend") || self.id().starts_with("wnd")
-    }
-    fn is_rococo(&self) -> bool {
-        self.id().starts_with("rococo") || self.id().starts_with("rco")
-    }
-    fn is_wococo(&self) -> bool {
-        self.id().starts_with("wococo") || self.id().starts_with("wco")
-    }
-    fn is_versi(&self) -> bool {
-        self.id().starts_with("versi") || self.id().starts_with("vrs")
-    }
     fn is_dev(&self) -> bool {
         self.id().ends_with("dev")
-    }
-    fn identify_chain(&self) -> Chain {
-        if self.is_polkadot() {
-            Chain::Polkadot
-        } else if self.is_kusama() {
-            Chain::Kusama
-        } else if self.is_westend() {
-            Chain::Westend
-        } else if self.is_rococo() || self.is_versi() || self.is_wococo() {
-            Chain::Rococo
-        } else {
-            Chain::Unknown
-        }
     }
 }
 
@@ -504,17 +435,11 @@ where
         client.clone(),
     );
 
-    let grandpa_hard_forks = if config.chain_spec.is_kusama() {
-        grandpa_support::kusama_hard_forks()
-    } else {
-        Vec::new()
-    };
-
     let (grandpa_block_import, grandpa_link) = grandpa::block_import_with_authority_set_hard_forks(
         client.clone(),
         &(client.clone() as Arc<_>),
         select_chain.clone(),
-        grandpa_hard_forks,
+        Vec::new(),
         telemetry.as_ref().map(|x| x.handle()),
     )?;
     let justification_import = grandpa_block_import.clone();
@@ -719,28 +644,10 @@ where
     let is_offchain_indexing_enabled = config.offchain_worker.indexing_enabled;
     let role = config.role.clone();
     let force_authoring = config.force_authoring;
-    let backoff_authoring_blocks = {
-        let mut backoff = sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default();
+    let backoff_authoring_blocks = Some(sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default());
 
-        if config.chain_spec.is_rococo()
-            || config.chain_spec.is_wococo()
-            || config.chain_spec.is_versi()
-        {
-            // it's a testnet that's in flux, finality has stalled sometimes due
-            // to operational issues and it's annoying to slow down block
-            // production to 1 block per hour.
-            backoff.max_interval = 10;
-        }
-
-        Some(backoff)
-    };
-
-    // If not on a known test network, warn the user that BEEFY is still experimental.
-    if enable_beefy
-        && !config.chain_spec.is_rococo()
-        && !config.chain_spec.is_wococo()
-        && !config.chain_spec.is_versi()
-    {
+    // Warn the user that BEEFY is still experimental.
+    if enable_beefy {
         gum::warn!("BEEFY is still experimental, usage on a production network is discouraged.");
     }
 
@@ -753,8 +660,6 @@ where
 
     let overseer_connector = OverseerConnector::default();
     let overseer_handle = Handle::new(overseer_connector.handle());
-
-    let chain_spec = config.chain_spec.cloned_box();
 
     let keystore = basics.keystore_container.local_keystore();
     let auth_or_collator = role.is_authority() || is_collator.is_collator();
@@ -848,18 +753,12 @@ where
     let (dispute_req_receiver, cfg) = IncomingRequest::get_config_receiver(&req_protocol_names);
     net_config.add_request_response_protocol(cfg);
 
-    let grandpa_hard_forks = if config.chain_spec.is_kusama() {
-        grandpa_support::kusama_hard_forks()
-    } else {
-        Vec::new()
-    };
-
     let warp_sync_params = if sealing.is_none() {
         let warp_sync: Arc<dyn sc_network::config::WarpSyncProvider<Block>> =
             Arc::new(grandpa::warp_proof::NetworkProvider::new(
                 backend.clone(),
                 import_setup.1.shared_authority_set().clone(),
-                grandpa_hard_forks,
+                Vec::new(),
             ));
         Some(WarpSyncParams::WithProvider(warp_sync))
     } else {
@@ -1275,7 +1174,7 @@ where
             runtime: client.clone(),
             key_store: keystore_opt.clone(),
             network_params,
-            min_block_delta: if chain_spec.is_wococo() { 4 } else { 8 },
+            min_block_delta: 8,
             prometheus_registry: prometheus_registry.clone(),
             links: beefy_links,
             on_demand_justifications_handler: beefy_on_demand_justifications_handler,
@@ -1438,8 +1337,6 @@ pub fn build_full(
     hwbench: Option<sc_sysinfo::HwBench>,
     sealing: Option<Sealing>,
 ) -> Result<NewFull, Error> {
-    let is_polkadot = config.chain_spec.is_polkadot();
-
     new_full(
         config,
         eth_config,
@@ -1451,12 +1348,7 @@ pub fn build_full(
         None,
         overseer_enable_anyways,
         overseer_gen,
-        overseer_message_channel_override.map(move |capacity| {
-            if is_polkadot {
-                gum::warn!("Channel capacity should _never_ be tampered with on polkadot!");
-            }
-            capacity
-        }),
+        overseer_message_channel_override,
         malus_finality_delay,
         hwbench,
         sealing

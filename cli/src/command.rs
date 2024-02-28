@@ -19,11 +19,7 @@ use futures::future::TryFutureExt;
 use log::info;
 use sc_cli::SubstrateCli;
 use sc_service::DatabaseSource;
-use service::{
-	self,
-	eth::db_config_dir,
-	HeaderBackend, IdentifyVariant,
-};
+use service::{self, ChainSpec, eth::db_config_dir, HeaderBackend, IdentifyVariant};
 use sp_core::crypto::Ss58AddressFormatRegistry;
 use sp_keyring::Sr25519Keyring;
 use std::net::ToSocketAddrs;
@@ -34,6 +30,8 @@ pub use crate::{error::Error, service::BlockId};
 pub use polkadot_performance_test::PerfCheckError;
 #[cfg(feature = "pyroscope")]
 use pyroscope_pprofrs::{pprof_backend, PprofConfig};
+#[cfg(feature = "runtime-benchmarks")]
+use chain_spec::devnet_keys::get_account_id_from_seed;
 
 impl From<String> for Error {
 	fn from(s: String) -> Self {
@@ -43,16 +41,9 @@ impl From<String> for Error {
 
 type Result<T> = std::result::Result<T, Error>;
 
-fn get_exec_name() -> Option<String> {
-	std::env::current_exe()
-		.ok()
-		.and_then(|pb| pb.file_name().map(|s| s.to_os_string()))
-		.and_then(|s| s.into_string().ok())
-}
-
 impl SubstrateCli for Cli {
 	fn impl_name() -> String {
-		"Parity Polkadot".into()
+		"Vitreus Power Plant Node".into()
 	}
 
 	fn impl_version() -> String {
@@ -68,120 +59,28 @@ impl SubstrateCli for Cli {
 	}
 
 	fn support_url() -> String {
-		"https://github.com/paritytech/polkadot/issues/new".into()
+		"support.anonymous.an".into()
 	}
 
 	fn copyright_start_year() -> i32 {
-		2017
+		2023
 	}
 
-	fn executable_name() -> String {
-		"polkadot".into()
-	}
-
-	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn sc_service::ChainSpec>, String> {
-		let id = if id == "" {
-			let n = get_exec_name().unwrap_or_default();
-			["polkadot", "kusama", "westend", "rococo", "versi"]
-				.iter()
-				.cloned()
-				.find(|&chain| n.starts_with(chain))
-				.unwrap_or("polkadot")
-		} else {
-			id
-		};
+	fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
 		Ok(match id {
-			"kusama" => Box::new(service::chain_spec::kusama_config()?),
-			#[cfg(feature = "kusama-native")]
-			"kusama-dev" => Box::new(service::chain_spec::kusama_development_config()?),
-			#[cfg(feature = "kusama-native")]
-			"kusama-local" => Box::new(service::chain_spec::kusama_local_testnet_config()?),
-			#[cfg(feature = "kusama-native")]
-			"kusama-staging" => Box::new(service::chain_spec::kusama_staging_testnet_config()?),
-			#[cfg(not(feature = "kusama-native"))]
-			name if name.starts_with("kusama-") && !name.ends_with(".json") =>
-				Err(format!("`{}` only supported with `kusama-native` feature enabled.", name))?,
-			"polkadot" => Box::new(service::chain_spec::polkadot_config()?),
-			#[cfg(feature = "polkadot-native")]
-			"polkadot-dev" | "dev" => Box::new(service::chain_spec::polkadot_development_config()?),
-			#[cfg(feature = "polkadot-native")]
-			"polkadot-local" => Box::new(service::chain_spec::polkadot_local_testnet_config()?),
-			#[cfg(feature = "polkadot-native")]
-			"polkadot-staging" => Box::new(service::chain_spec::polkadot_staging_testnet_config()?),
-			"rococo" => Box::new(service::chain_spec::rococo_config()?),
-			#[cfg(feature = "rococo-native")]
-			"rococo-dev" => Box::new(service::chain_spec::rococo_development_config()?),
-			#[cfg(feature = "rococo-native")]
-			"rococo-local" => Box::new(service::chain_spec::rococo_local_testnet_config()?),
-			#[cfg(feature = "rococo-native")]
-			"rococo-staging" => Box::new(service::chain_spec::rococo_staging_testnet_config()?),
-			#[cfg(not(feature = "rococo-native"))]
-			name if name.starts_with("rococo-") && !name.ends_with(".json") =>
-				Err(format!("`{}` only supported with `rococo-native` feature enabled.", name))?,
-			"westend" => Box::new(service::chain_spec::westend_config()?),
-			#[cfg(feature = "westend-native")]
-			"westend-dev" => Box::new(service::chain_spec::westend_development_config()?),
-			#[cfg(feature = "westend-native")]
-			"westend-local" => Box::new(service::chain_spec::westend_local_testnet_config()?),
-			#[cfg(feature = "westend-native")]
-			"westend-staging" => Box::new(service::chain_spec::westend_staging_testnet_config()?),
-			#[cfg(not(feature = "westend-native"))]
-			name if name.starts_with("westend-") && !name.ends_with(".json") =>
-				Err(format!("`{}` only supported with `westend-native` feature enabled.", name))?,
-			"wococo" => Box::new(service::chain_spec::wococo_config()?),
-			#[cfg(feature = "rococo-native")]
-			"wococo-dev" => Box::new(service::chain_spec::wococo_development_config()?),
-			#[cfg(feature = "rococo-native")]
-			"wococo-local" => Box::new(service::chain_spec::wococo_local_testnet_config()?),
-			#[cfg(not(feature = "rococo-native"))]
-			name if name.starts_with("wococo-") =>
-				Err(format!("`{}` only supported with `rococo-native` feature enabled.", name))?,
-			#[cfg(feature = "rococo-native")]
-			"versi-dev" => Box::new(service::chain_spec::versi_development_config()?),
-			#[cfg(feature = "rococo-native")]
-			"versi-local" => Box::new(service::chain_spec::versi_local_testnet_config()?),
-			#[cfg(feature = "rococo-native")]
-			"versi-staging" => Box::new(service::chain_spec::versi_staging_testnet_config()?),
-			#[cfg(not(feature = "rococo-native"))]
-			name if name.starts_with("versi-") =>
-				Err(format!("`{}` only supported with `rococo-native` feature enabled.", name))?,
+			"dev" => {
+				let enable_manual_seal = self.sealing.map(|_| true);
+				Box::new(chain_spec::development_config(enable_manual_seal))
+			},
+			"devnet" => Box::new(chain_spec::devnet_config()),
+			"stagenet" => Box::new(chain_spec::stagenet_config()),
+			"" | "localnet" => Box::new(chain_spec::localnet_config()),
+			"testnet" => Box::new(chain_spec::testnet_config()),
 			path => {
-				let path = std::path::PathBuf::from(path);
-
-				let chain_spec = Box::new(service::PolkadotChainSpec::from_json_file(path.clone())?)
-					as Box<dyn service::ChainSpec>;
-
-				// When `force_*` is given or the file name starts with the name of one of the known chains,
-				// we use the chain spec for the specific chain.
-				if self.run.force_rococo ||
-					chain_spec.is_rococo() ||
-					chain_spec.is_wococo() ||
-					chain_spec.is_versi()
-				{
-					Box::new(service::RococoChainSpec::from_json_file(path)?)
-				} else if self.run.force_kusama || chain_spec.is_kusama() {
-					Box::new(service::KusamaChainSpec::from_json_file(path)?)
-				} else if self.run.force_westend || chain_spec.is_westend() {
-					Box::new(service::WestendChainSpec::from_json_file(path)?)
-				} else {
-					chain_spec
-				}
+				Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?)
 			},
 		})
 	}
-}
-
-fn set_default_ss58_version(spec: &Box<dyn service::ChainSpec>) {
-	let ss58_version = if spec.is_kusama() {
-		Ss58AddressFormatRegistry::KusamaAccount
-	} else if spec.is_westend() {
-		Ss58AddressFormatRegistry::SubstrateAccount
-	} else {
-		Ss58AddressFormatRegistry::PolkadotAccount
-	}
-	.into();
-
-	sp_core::crypto::set_default_ss58_version(ss58_version);
 }
 
 const DEV_ONLY_ERROR_PATTERN: &'static str =
@@ -241,27 +140,14 @@ where
 	let runner = cli
 		.create_runner_with_logger_hook::<sc_cli::RunCmd, F>(&cli.run.base, logger_hook)
 		.map_err(Error::from)?;
-	let chain_spec = &runner.config().chain_spec;
 
-	// By default, enable BEEFY on test networks.
-	let enable_beefy = (chain_spec.is_rococo() || chain_spec.is_wococo() || chain_spec.is_versi()) &&
-		!cli.run.no_beefy;
-
-	set_default_ss58_version(chain_spec);
+	let enable_beefy = !cli.run.no_beefy;
 
 	let grandpa_pause = if cli.run.grandpa_pause.is_empty() {
 		None
 	} else {
 		Some((cli.run.grandpa_pause[0], cli.run.grandpa_pause[1]))
 	};
-
-	if chain_spec.is_kusama() {
-		info!("----------------------------");
-		info!("This chain is not in any way");
-		info!("      endorsed by the       ");
-		info!("     KUSAMA FOUNDATION      ");
-		info!("----------------------------");
-	}
 
 	let jaeger_agent = if let Some(ref jaeger_agent) = cli.run.jaeger_agent {
 		Some(
@@ -352,9 +238,6 @@ pub fn run() -> Result<()> {
 		},
 		Some(Subcommand::CheckBlock(cmd)) => {
 			let runner = cli.create_runner(cmd).map_err(Error::SubstrateCli)?;
-			let chain_spec = &runner.config().chain_spec;
-
-			set_default_ss58_version(chain_spec);
 
 			runner.async_run(|mut config| {
 				let (client, _, import_queue, task_manager, _) =
@@ -364,9 +247,6 @@ pub fn run() -> Result<()> {
 		},
 		Some(Subcommand::ExportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			let chain_spec = &runner.config().chain_spec;
-
-			set_default_ss58_version(chain_spec);
 
 			Ok(runner.async_run(|mut config| {
 				let (client, _, _, task_manager, _) =
@@ -376,9 +256,6 @@ pub fn run() -> Result<()> {
 		},
 		Some(Subcommand::ExportState(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			let chain_spec = &runner.config().chain_spec;
-
-			set_default_ss58_version(chain_spec);
 
 			Ok(runner.async_run(|mut config| {
 				let (client, _, _, task_manager, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
@@ -387,9 +264,6 @@ pub fn run() -> Result<()> {
 		},
 		Some(Subcommand::ImportBlocks(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			let chain_spec = &runner.config().chain_spec;
-
-			set_default_ss58_version(chain_spec);
 
 			Ok(runner.async_run(|mut config| {
 				let (client, _, import_queue, task_manager, _) =
@@ -446,9 +320,6 @@ pub fn run() -> Result<()> {
 		},
 		Some(Subcommand::Revert(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
-			let chain_spec = &runner.config().chain_spec;
-
-			set_default_ss58_version(chain_spec);
 
 			Ok(runner.async_run(|mut config| {
 				let (client, backend, _, task_manager, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
@@ -545,12 +416,11 @@ pub fn run() -> Result<()> {
 					// Register the *Remark* and *TKA* builders.
 					let ext_factory = ExtrinsicFactory(vec![
 						Box::new(RemarkBuilder::new(client.clone())),
-						// TODO: fix it
-						// Box::new(TransferKeepAliveBuilder::new(
-						// 	client.clone(),
-						// 	get_account_id_from_seed::<sp_core::ecdsa::Public>("Alice"),
-						// 	ExistentialDeposit::get(),
-						// )),
+						Box::new(TransferKeepAliveBuilder::new(
+							client.clone(),
+							get_account_id_from_seed::<sp_core::ecdsa::Public>("Alice"),
+							ExistentialDeposit::get(),
+						)),
 					]);
 					let header = client.header(client.info().genesis_hash).unwrap().unwrap();
 					cmd.run(client, inherent_benchmark_data(header)?, Vec::new(), &ext_factory)
@@ -580,7 +450,6 @@ pub fn run() -> Result<()> {
 
 			let runner = cli.create_runner(cmd)?;
 			let chain_spec = &runner.config().chain_spec;
-			set_default_ss58_version(chain_spec);
 
 			let registry = &runner.config().prometheus_config.as_ref().map(|cfg| &cfg.registry);
 			let task_manager = TaskManager::new(runner.config().tokio_handle.clone(), *registry)
