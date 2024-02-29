@@ -97,9 +97,11 @@ pallet-evm-precompile-sha3fips = { workspace = true }
 pallet-evm-precompile-simple = { workspace = true }
 pallet-hotfix-sufficients = { workspace = true }
 # moonbean
-# precompile-utils = { workspace = true }
-# pallet-evm-precompile-balances-erc20 = { workspace = true }
+precompile-utils = { workspace = true }
+pallet-evm-precompile-balances-erc20 = { workspace = true }
+pallet-evm-precompileset-assets-erc20 = { workspace = true }
 
+pallet-dex = { workspace = true }
 [dev-dependencies]
 chain-spec = { workspace = true }
 energy-generation-runtime-api = { workspace = true, default-features = true }

@@ -5,6 +5,8 @@ members = [
     "node/eth-rpc-server",
     "node/node-rpc-server",
     "pallets/claiming",
+    "pallets/dex",
+    "pallets/dex/contracts-api",
     "pallets/energy-fee",
     "pallets/energy-fee/runtime-api",
     "pallets/energy-fee/rpc",
@@ -18,8 +20,9 @@ members = [
     "runtime",
     "runtime/runtime-api",
     # "pallets/simple-staking",
-    # "precompiles/balances-erc20",
-    # "precompiles/utils",
+    "precompiles/balances-erc20",
+    "precompiles/assets-erc20",
+    "precompiles/utils",
 ]
 resolver = "2"
 
@@ -30,9 +33,11 @@ repository = "https://bitbucket.org/innowise-group/vitreus-power-plant"
 
 [workspace.dependencies]
 affix = "0.1"
+alloy-sol-types = { version = "0.6.2", default-features = false }
+alloy-primitives = { version = "0.6.2", default-features = false }
 bn = { package = "substrate-bn", version = "0.6", default-features = false }
 derive_more = "0.99"
-environmental = { version = "1.1", default-features = false }
+environmental = { version = "1.1.3", default-features = false }
 ethereum = { version = "0.14", default-features = false }
 ethereum-types = { version = "0.14", default-features = false }
 evm = { version = "0.39", default-features = false }
@@ -109,6 +114,7 @@ sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "polk
 sp-consensus-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-consensus-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+sp-externalities = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-database = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-inherents = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
@@ -127,6 +133,7 @@ sp-transaction-pool = { git = "https://github.com/paritytech/substrate", branch 
 sp-transaction-storage-proof = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-trie = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-version = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+sp-weights = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 # Substrate FRAME
 frame-benchmarking = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 frame-executive = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
@@ -203,12 +210,15 @@ pallet-evm-precompile-simple = { git = "https://github.com/paritytech/frontier",
 pallet-evm-test-vector-support = { git = "https://github.com/paritytech/frontier", branch = "polkadot-v1.0.0" }
 pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", branch = "polkadot-v1.0.0", default-features = false }
 # Moonbeam
-# precompile-utils = { path = "precompiles/utils", default-features = false }
-# pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
+precompile-utils = { path = "precompiles/utils", default-features = false }
+pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
+pallet-evm-precompileset-assets-erc20 = { path = "precompiles/assets-erc20", default-features = false }
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime", default-features = false }
 vitreus-utility-runtime-api = { path = "runtime/runtime-api", default-features = false}
 
+pallet-dex = { path = "pallets/dex", default-features = false }
+pallet-dex-contracts-api = { path = "pallets/dex/contracts-api", default-features = false }
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
 pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }

@@ -1,21 +1,24 @@
+use std::collections::BTreeMap;
+
+use fp_evm::GenesisAccount;
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 // Substrate
 use sc_chain_spec::{ChainType, Properties};
 use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
-use sp_core::ecdsa;
+use sp_core::{ecdsa, H160};
 use sp_core::{storage::Storage, Pair, Public};
 use sp_runtime::traits::{AccountIdConversion, IdentifyAccount, Verify};
 use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, CouncilConfig,
-    EVMChainIdConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
-    ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig,
-    SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
-    TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, CouncilConfig, DexConfig,
+    EVMChainIdConfig, EVMConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig,
+    ImOnlineConfig, ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig,
+    RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig,
+    SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -76,6 +79,7 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
                         faith(),
                         goliath(),
                         treasury(),
+                        dex_deployer(),
                     ],
                     // Initial Validators
                     vec![authority_keys_from_seed("Alice")],
@@ -212,6 +216,7 @@ pub fn localnet_config() -> ChainSpec {
                     faith(),
                     goliath(),
                     treasury(),
+                    dex_deployer(),
                 ],
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
@@ -341,8 +346,21 @@ fn testnet_genesis(
 
         // EVM compatibility
         evm_chain_id: EVMChainIdConfig { chain_id, ..Default::default() },
-        evm: Default::default(),
+        evm: EVMConfig {
+            accounts: BTreeMap::from_iter(vec![(
+                H160::from_low_u64_be(4096),
+                GenesisAccount { nonce: 0.into(), balance: 0.into(), storage: Default::default(), code: include_bytes!("../nft-descriptor.bin").to_vec()},
+            )].into_iter()),
+            ..Default::default()
+        },
         ethereum: Default::default(),
+        dex: DexConfig {
+            factory_bytecode: include_bytes!("../v3factory.bin").to_vec(),
+            router_bytecode: include_bytes!("../v3router.bin").to_vec(),
+            position_manager_bytecode: include_bytes!("../v3position-manager.bin").to_vec(),
+            position_descriptor_bytecode: include_bytes!("../v3position-descriptor.bin").to_vec(),
+            ..Default::default()
+        },
         energy_fee: EnergyFeeConfig {
             initial_energy_rate: INITIAL_ENERGY_RATE,
             ..Default::default()
@@ -375,7 +393,7 @@ fn testnet_genesis(
                 .collect::<Vec<_>>(),
         },
         nac_managing: NacManagingConfig {
-            accounts: endowed_accounts.iter().map(|x| (*x, 1)).collect(),
+            accounts: endowed_accounts.iter().map(|x| (*x, 3)).collect(),
             owners: vec![root_key],
         },
         session: SessionConfig {
@@ -435,6 +453,10 @@ pub mod devnet_keys {
 
     pub fn treasury() -> AccountId {
         vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()
+    }
+
+    pub fn dex_deployer() -> AccountId {
+        vitreus_power_plant_runtime::EnergyBrokerPalletId::get().into_account_truncating()
     }
 
     pub fn authority_keys_from_seed(

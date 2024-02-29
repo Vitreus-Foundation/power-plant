@@ -9,6 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
+use frame_support::PalletId;
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
@@ -18,6 +19,7 @@ use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
+use pallet_evm_precompileset_assets_erc20::AccountIdAssetIdConversion;
 use parity_scale_codec::{Compact, Decode, Encode};
 use sp_api::impl_runtime_apis;
 use sp_core::{
@@ -103,7 +105,7 @@ pub mod areas;
 #[cfg(test)]
 mod tests;
 
-use precompiles::VitreusPrecompiles;
+use precompiles::{VitreusPrecompiles, FOREIGN_ASSET_PRECOMPILE_ADDRESS_PREFIX, LOCAL_ASSET_PRECOMPILE_ADDRESS_PREFIX, BalancesPrecompileAddress};
 
 /// Type of block number.
 pub type BlockNumber = u32;
@@ -357,6 +359,19 @@ impl pallet_timestamp::Config for Runtime {
     type WeightInfo = ();
 }
 
+parameter_types! {
+    pub const IndexDepositOffset: Balance = 0;
+    pub const EnergyBrokerPalletId: PalletId = PalletId(*b"py/brokr"); 
+    pub CurrencyLabel: Vec<u8> = b"VTRS".to_vec();
+}
+
+impl pallet_dex::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type PalletId = EnergyBrokerPalletId;
+    type BalancesPrecompileAddress = BalancesPrecompileAddress;
+    type CurrencyLabel = CurrencyLabel;
+}
+
 const EXISTENTIAL_DEPOSIT: u128 = 1;
 
 parameter_types! {
@@ -391,6 +406,35 @@ parameter_types! {
     pub const AssetsStringLimit: u32 = 50;
     pub const MetadataDepositBase: Balance = 100;
     pub const MetadataDepositPerByte: Balance = 2;
+}
+
+// Instruct how to go from an H160 to an AssetID
+// We just take the lowest 128 bits
+impl AccountIdAssetIdConversion<AccountId, AssetId> for Runtime {
+	/// The way to convert an account to assetId is by ensuring that the prefix is 0XFFFFFFFF
+	/// and by taking the lowest 128 bits as the assetId
+	fn account_to_asset_id(account: AccountId) -> Option<(Vec<u8>, AssetId)> {
+		let h160_account: H160 = account.into();
+		let mut data = [0u8; 16];
+		let (prefix_part, id_part) = h160_account.as_fixed_bytes().split_at(4);
+		if prefix_part == FOREIGN_ASSET_PRECOMPILE_ADDRESS_PREFIX
+			|| prefix_part == LOCAL_ASSET_PRECOMPILE_ADDRESS_PREFIX
+		{
+			data.copy_from_slice(id_part);
+			let asset_id: AssetId = u128::from_be_bytes(data).into();
+			Some((prefix_part.to_vec(), asset_id))
+		} else {
+			None
+		}
+	}
+
+	// The opposite conversion
+	fn asset_id_to_account(prefix: &[u8], asset_id: AssetId) -> AccountId {
+		let mut data = [0u8; 20];
+		data[0..4].copy_from_slice(prefix);
+		data[4..20].copy_from_slice(&asset_id.to_be_bytes());
+		AccountId::from(data)
+	}
 }
 
 impl pallet_assets::Config for Runtime {
@@ -783,7 +827,7 @@ impl pallet_asset_rate::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-    pub GetConstantGasLimit: U256 = U256::from(56_000);
+    pub GetConstantGasLimit: U256 = U256::from(7_000_000);
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
@@ -1175,6 +1219,7 @@ construct_runtime!(
         TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>},
         Bounties: pallet_bounties,
         Democracy: pallet_democracy,
+        Dex: pallet_dex,
     }
 );
 
