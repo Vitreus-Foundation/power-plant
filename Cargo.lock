@@ -978,6 +978,8 @@ name = "chain-spec"
 version = "0.1.0"
 dependencies = [
  "hex-literal 0.3.4",
+ "polkadot-primitives",
+ "polkadot-runtime-parachains",
  "rand 0.8.5",
  "sc-chain-spec",
  "sc-service",
@@ -14825,6 +14827,7 @@ dependencies = [
  "pallet-asset-rate",
  "pallet-assets",
  "pallet-atomic-swap",
+ "pallet-authority-discovery",
  "pallet-authorship",
  "pallet-babe",
  "pallet-balances",
@@ -14866,6 +14869,8 @@ dependencies = [
  "pallet-utility",
  "parity-scale-codec",
  "polkadot-primitives",
+ "polkadot-runtime-common",
+ "polkadot-runtime-parachains",
  "scale-info",
  "sp-api",
  "sp-authority-discovery",

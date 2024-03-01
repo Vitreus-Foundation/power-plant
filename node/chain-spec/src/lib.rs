@@ -11,12 +11,12 @@ use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, CouncilConfig,
-    EVMChainIdConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
-    ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig,
-    SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
-    TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
+    BalancesConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig, EnableManualSeal,
+    EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
+    NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix, SessionConfig,
+    Signature, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
@@ -399,6 +399,10 @@ fn testnet_genesis(
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },
+        authority_discovery: AuthorityDiscoveryConfig { keys: vec![], ..Default::default() },
+        hrmp: Default::default(),
+        configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
+        paras: Default::default(),
     }
 }
 
@@ -565,4 +569,45 @@ fn properties() -> Properties {
     properties.insert("tokenDecimals".into(), 18.into());
     properties.insert("ss58Format".into(), SS58Prefix::get().into());
     properties
+}
+
+fn default_parachains_host_configuration(
+) -> polkadot_runtime_parachains::configuration::HostConfiguration<polkadot_primitives::BlockNumber>
+{
+    use polkadot_primitives::{MAX_CODE_SIZE, MAX_POV_SIZE};
+
+    polkadot_runtime_parachains::configuration::HostConfiguration {
+        validation_upgrade_cooldown: 2u32,
+        validation_upgrade_delay: 2,
+        code_retention_period: 1200,
+        max_code_size: MAX_CODE_SIZE,
+        max_pov_size: MAX_POV_SIZE,
+        max_head_data_size: 32 * 1024,
+        group_rotation_frequency: 20,
+        chain_availability_period: 4,
+        thread_availability_period: 4,
+        max_upward_queue_count: 8,
+        max_upward_queue_size: 1024 * 1024,
+        max_downward_message_size: 1024 * 1024,
+        max_upward_message_size: 50 * 1024,
+        max_upward_message_num_per_candidate: 5,
+        hrmp_sender_deposit: 0,
+        hrmp_recipient_deposit: 0,
+        hrmp_channel_max_capacity: 8,
+        hrmp_channel_max_total_size: 8 * 1024,
+        hrmp_max_parachain_inbound_channels: 4,
+        hrmp_max_parathread_inbound_channels: 4,
+        hrmp_channel_max_message_size: 1024 * 1024,
+        hrmp_max_parachain_outbound_channels: 4,
+        hrmp_max_parathread_outbound_channels: 4,
+        hrmp_max_message_num_per_candidate: 5,
+        dispute_period: 6,
+        no_show_slots: 2,
+        n_delay_tranches: 25,
+        needed_approvals: 2,
+        relay_vrf_modulo_samples: 2,
+        zeroth_delay_tranche_width: 0,
+        minimum_validation_upgrade_delay: 5,
+        ..Default::default()
+    }
 }

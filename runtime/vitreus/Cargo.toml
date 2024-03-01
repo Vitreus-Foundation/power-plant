@@ -50,6 +50,7 @@ frame-system-rpc-runtime-api = { workspace = true }
 pallet-assets = { workspace = true }
 pallet-asset-rate = { workspace = true }
 pallet-atomic-swap = { workspace = true }
+pallet-authority-discovery = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-babe = { workspace = true }
 pallet-balances = { workspace = true }
@@ -106,6 +107,9 @@ pallet-hotfix-sufficients = { workspace = true }
 # precompile-utils = { workspace = true }
 # pallet-evm-precompile-balances-erc20 = { workspace = true }
 
+runtime-common = { package = "polkadot-runtime-common", path = "../common", default-features = false }
+runtime-parachains = { package = "polkadot-runtime-parachains", path = "../parachains", default-features = false }
+
 [dev-dependencies]
 chain-spec = { workspace = true }
 energy-generation-runtime-api = { workspace = true, default-features = true }
@@ -129,6 +133,7 @@ std = [
     "orml-traits/std",
     # Polkadot
     "polkadot-primitives/std",
+    "runtime-common/std",
     # Substrate
     "sp-api/std",
     "sp-authority-discovery/std",
@@ -158,6 +163,7 @@ std = [
     "pallet-atomic-swap/std",
     "pallet-assets/std",
     "pallet-asset-rate/std",
+    "pallet-authority-discovery/std",
     "pallet-authorship/std",
     "pallet-babe/std",
     "pallet-balances/std",

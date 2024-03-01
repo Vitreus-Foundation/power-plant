@@ -1,6 +1,6 @@
 #![cfg_attr(not(feature = "std"), no_std)]
-// `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256.
-#![recursion_limit = "256"]
+// `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256 (well, actually to 512).
+#![recursion_limit = "512"]
 #![allow(clippy::new_without_default, clippy::or_fun_call)]
 // #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
@@ -13,7 +13,21 @@ use polkadot_primitives::{
     CommittedCandidateReceipt, CoreState, DisputeState, ExecutorParams, GroupRotationInfo,
     Id as ParaId, InboundDownwardMessage, InboundHrmpMessage, OccupiedCoreAssumption,
     PersistedValidationData, PvfCheckStatement, ScrapedOnChainVotes, SessionInfo, ValidationCode,
-    ValidationCodeHash, ValidatorId, ValidatorIndex, ValidatorSignature,
+    ValidationCodeHash, ValidatorId, ValidatorIndex, ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
+};
+
+use runtime_common::{paras_registrar, slots};
+
+use runtime_parachains::{
+    configuration as parachains_configuration, disputes as parachains_disputes,
+    disputes::slashing as parachains_slashing,
+    dmp as parachains_dmp, hrmp as parachains_hrmp, inclusion as parachains_inclusion,
+    inclusion::{AggregateMessageOrigin, UmpQueueId},
+    initializer as parachains_initializer, origin as parachains_origin, paras as parachains_paras,
+    paras_inherent as parachains_paras_inherent, reward_points as parachains_reward_points,
+    runtime_api_impl::v5 as parachains_runtime_api_impl,
+    scheduler as parachains_scheduler, session_info as parachains_session_info,
+    shared as parachains_shared,
 };
 
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
@@ -23,7 +37,8 @@ use frame_support::traits::tokens::{
     Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, SignedImbalance, WithdrawReasons,
+    Currency, EitherOfDiverse, ExistenceRequirement, ProcessMessage, ProcessMessageError,
+    SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
@@ -107,9 +122,9 @@ mod helpers {
     pub mod runner;
 }
 pub mod areas;
-
 #[cfg(test)]
 mod tests;
+mod weights;
 
 use precompiles::VitreusPrecompiles;
 
@@ -480,6 +495,10 @@ impl pallet_offences::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type IdentificationTuple = pallet_session::historical::IdentificationTuple<Self>;
     type OnOffenceHandler = EnergyGeneration;
+}
+
+impl pallet_authority_discovery::Config for Runtime {
+    type MaxAuthorities = MaxAuthorities;
 }
 
 parameter_types! {
@@ -1134,6 +1153,119 @@ impl pallet_hotfix_sufficients::Config for Runtime {
     type WeightInfo = pallet_hotfix_sufficients::weights::SubstrateWeight<Runtime>;
 }
 
+impl parachains_origin::Config for Runtime {}
+
+impl parachains_configuration::Config for Runtime {
+    type WeightInfo = weights::runtime_parachains_configuration::WeightInfo<Runtime>;
+}
+
+impl parachains_shared::Config for Runtime {}
+
+impl parachains_session_info::Config for Runtime {
+    type ValidatorSet = Historical;
+}
+
+/// Special `RewardValidators` that does nothing ;)
+pub struct RewardValidators;
+impl runtime_parachains::inclusion::RewardValidators for RewardValidators {
+    fn reward_backing(_: impl IntoIterator<Item = ValidatorIndex>) {}
+    fn reward_bitfields(_: impl IntoIterator<Item = ValidatorIndex>) {}
+}
+
+impl parachains_inclusion::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type DisputesHandler = ParasDisputes;
+    type RewardValidators = RewardValidators;
+    type MessageQueue = ();
+    type WeightInfo = weights::runtime_parachains_inclusion::WeightInfo<Runtime>;
+}
+
+parameter_types! {
+    pub const ParasUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
+}
+
+impl parachains_paras::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = weights::runtime_parachains_paras::WeightInfo<Runtime>;
+    type UnsignedPriority = ParasUnsignedPriority;
+    type QueueFootprinter = ParaInclusion;
+    type NextSessionRotation = Babe;
+}
+
+impl parachains_dmp::Config for Runtime {}
+
+impl parachains_hrmp::Config for Runtime {
+    type RuntimeOrigin = RuntimeOrigin;
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type WeightInfo = weights::runtime_parachains_hrmp::WeightInfo<Self>;
+}
+
+impl parachains_paras_inherent::Config for Runtime {
+    type WeightInfo = weights::runtime_parachains_paras_inherent::WeightInfo<Runtime>;
+}
+
+impl parachains_scheduler::Config for Runtime {}
+
+impl parachains_initializer::Config for Runtime {
+    type Randomness = pallet_babe::RandomnessFromOneEpochAgo<Runtime>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type WeightInfo = weights::runtime_parachains_initializer::WeightInfo<Runtime>;
+}
+
+impl parachains_disputes::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type RewardValidators = ();
+    type SlashingHandler = parachains_slashing::SlashValidatorsForDisputes<ParasSlashing>;
+    type WeightInfo = weights::runtime_parachains_disputes::WeightInfo<Runtime>;
+}
+
+impl parachains_slashing::Config for Runtime {
+    type KeyOwnerProofSystem = Historical;
+    type KeyOwnerProof =
+        <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(KeyTypeId, ValidatorId)>>::Proof;
+    type KeyOwnerIdentification = <Self::KeyOwnerProofSystem as KeyOwnerProofSystem<(
+        KeyTypeId,
+        ValidatorId,
+    )>>::IdentificationTuple;
+    type HandleReports = parachains_slashing::SlashingReportHandler<
+        Self::KeyOwnerIdentification,
+        Offences,
+        ReportLongevity,
+    >;
+    type WeightInfo = weights::runtime_parachains_disputes_slashing::WeightInfo<Runtime>;
+    type BenchmarkingConfig = parachains_slashing::BenchConfig<1000>;
+}
+
+parameter_types! {
+    pub const ParaDeposit: Balance = 0;
+    pub const ParaDataByteDeposit: Balance = 0;
+}
+
+impl paras_registrar::Config for Runtime {
+    type RuntimeOrigin = RuntimeOrigin;
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type OnSwap = Slots;
+    type ParaDeposit = ParaDeposit;
+    type DataDepositPerByte = ParaDataByteDeposit;
+    type WeightInfo = weights::runtime_common_paras_registrar::WeightInfo<Runtime>;
+}
+
+parameter_types! {
+    pub LeasePeriod: BlockNumber = prod_or_fast!(1 * DAYS, 1 * DAYS, "VITREUS_LEASE_PERIOD");
+}
+
+impl slots::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type Registrar = Registrar;
+    type LeasePeriod = LeasePeriod;
+    type LeaseOffset = ();
+    type ForceOrigin = EnsureRoot<Self::AccountId>;
+    type WeightInfo = weights::runtime_common_slots::WeightInfo<Runtime>;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -1170,6 +1302,7 @@ construct_runtime!(
         Session: pallet_session,
         Utility: pallet_utility,
         Historical: pallet_session::historical,
+        AuthorityDiscovery: pallet_authority_discovery,
         NacManaging: pallet_nac_managing,
 
         // Governance-related pallets
@@ -1182,6 +1315,25 @@ construct_runtime!(
         TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>},
         Bounties: pallet_bounties,
         Democracy: pallet_democracy,
+
+        // Parachains pallets
+        ParachainsOrigin: parachains_origin::{Pallet, Origin} = 50,
+        Configuration: parachains_configuration::{Pallet, Call, Storage, Config<T>} = 51,
+        ParasShared: parachains_shared::{Pallet, Call, Storage} = 52,
+        ParaInclusion: parachains_inclusion::{Pallet, Call, Storage, Event<T>} = 53,
+        ParaInherent: parachains_paras_inherent::{Pallet, Call, Storage, Inherent} = 54,
+        ParaScheduler: parachains_scheduler::{Pallet, Storage} = 55,
+        Paras: parachains_paras::{Pallet, Call, Storage, Event, Config<T>, ValidateUnsigned} = 56,
+        Initializer: parachains_initializer::{Pallet, Call, Storage} = 57,
+        Dmp: parachains_dmp::{Pallet, Storage} = 58,
+        Hrmp: parachains_hrmp::{Pallet, Call, Storage, Event<T>, Config<T>} = 60,
+        ParaSessionInfo: parachains_session_info::{Pallet, Storage} = 61,
+        ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 62,
+        ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 63,
+
+        // Parachain Onboarding Pallets. Start indices at 70 to leave room.
+        Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 70,
+        Slots: slots::{Pallet, Call, Storage, Event<T>} = 71,
     }
 );
 
@@ -1991,122 +2143,139 @@ impl_runtime_apis! {
 
     impl runtime_api::ParachainHost<Block, Hash, BlockNumber> for Runtime {
         fn validators() -> Vec<ValidatorId> {
-            unimplemented!()
+            parachains_runtime_api_impl::validators::<Runtime>()
         }
 
         fn validator_groups() -> (Vec<Vec<ValidatorIndex>>, GroupRotationInfo<BlockNumber>) {
-            unimplemented!()
+            parachains_runtime_api_impl::validator_groups::<Runtime>()
         }
 
         fn availability_cores() -> Vec<CoreState<Hash, BlockNumber>> {
-            unimplemented!()
+            parachains_runtime_api_impl::availability_cores::<Runtime>()
         }
 
-        fn persisted_validation_data(_: ParaId, _: OccupiedCoreAssumption)
+        fn persisted_validation_data(para_id: ParaId, assumption: OccupiedCoreAssumption)
             -> Option<PersistedValidationData<Hash, BlockNumber>> {
-            unimplemented!()
+            parachains_runtime_api_impl::persisted_validation_data::<Runtime>(para_id, assumption)
         }
 
         fn assumed_validation_data(
-            _: ParaId,
-            _: Hash,
+            para_id: ParaId,
+            expected_persisted_validation_data_hash: Hash,
         ) -> Option<(PersistedValidationData<Hash, BlockNumber>, ValidationCodeHash)> {
-            unimplemented!()
+            parachains_runtime_api_impl::assumed_validation_data::<Runtime>(
+                para_id,
+                expected_persisted_validation_data_hash,
+            )
         }
 
         fn check_validation_outputs(
-            _: ParaId,
-            _: CandidateCommitments,
+            para_id: ParaId,
+            outputs: CandidateCommitments,
         ) -> bool {
-            unimplemented!()
+            parachains_runtime_api_impl::check_validation_outputs::<Runtime>(para_id, outputs)
         }
 
         fn session_index_for_child() -> SessionIndex {
-            unimplemented!()
+            parachains_runtime_api_impl::session_index_for_child::<Runtime>()
         }
 
-        fn validation_code(_: ParaId, _: OccupiedCoreAssumption)
+        fn validation_code(para_id: ParaId, assumption: OccupiedCoreAssumption)
             -> Option<ValidationCode> {
-            unimplemented!()
+            parachains_runtime_api_impl::validation_code::<Runtime>(para_id, assumption)
         }
 
-        fn candidate_pending_availability(_: ParaId) -> Option<CommittedCandidateReceipt<Hash>> {
-            unimplemented!()
+        fn candidate_pending_availability(para_id: ParaId) -> Option<CommittedCandidateReceipt<Hash>> {
+            parachains_runtime_api_impl::candidate_pending_availability::<Runtime>(para_id)
         }
 
         fn candidate_events() -> Vec<CandidateEvent<Hash>> {
-            unimplemented!()
+            parachains_runtime_api_impl::candidate_events::<Runtime, _>(|ev| {
+                match ev {
+                    RuntimeEvent::ParaInclusion(ev) => {
+                        Some(ev)
+                    }
+                    _ => None,
+                }
+            })
         }
 
-        fn session_info(_: SessionIndex) -> Option<SessionInfo> {
-            unimplemented!()
+        fn session_info(index: SessionIndex) -> Option<SessionInfo> {
+            parachains_runtime_api_impl::session_info::<Runtime>(index)
         }
 
-        fn session_executor_params(_: SessionIndex) -> Option<ExecutorParams> {
-            unimplemented!()
+        fn session_executor_params(session_index: SessionIndex) -> Option<ExecutorParams> {
+            parachains_runtime_api_impl::session_executor_params::<Runtime>(session_index)
         }
 
-        fn dmq_contents(_: ParaId) -> Vec<InboundDownwardMessage<BlockNumber>> {
-            unimplemented!()
+        fn dmq_contents(recipient: ParaId) -> Vec<InboundDownwardMessage<BlockNumber>> {
+            parachains_runtime_api_impl::dmq_contents::<Runtime>(recipient)
         }
 
         fn inbound_hrmp_channels_contents(
-            _: ParaId
+            recipient: ParaId
         ) -> BTreeMap<ParaId, Vec<InboundHrmpMessage<BlockNumber>>> {
-            unimplemented!()
+            parachains_runtime_api_impl::inbound_hrmp_channels_contents::<Runtime>(recipient)
         }
 
-        fn validation_code_by_hash(_: ValidationCodeHash) -> Option<ValidationCode> {
-            unimplemented!()
+        fn validation_code_by_hash(hash: ValidationCodeHash) -> Option<ValidationCode> {
+            parachains_runtime_api_impl::validation_code_by_hash::<Runtime>(hash)
         }
 
         fn on_chain_votes() -> Option<ScrapedOnChainVotes<Hash>> {
-            unimplemented!()
+            parachains_runtime_api_impl::on_chain_votes::<Runtime>()
         }
 
         fn submit_pvf_check_statement(
-            _: PvfCheckStatement,
-            _: ValidatorSignature,
+            stmt: PvfCheckStatement,
+            signature: ValidatorSignature,
         ) {
-            unimplemented!()
+            parachains_runtime_api_impl::submit_pvf_check_statement::<Runtime>(stmt, signature)
         }
 
         fn pvfs_require_precheck() -> Vec<ValidationCodeHash> {
-            unimplemented!()
+            parachains_runtime_api_impl::pvfs_require_precheck::<Runtime>()
         }
 
-        fn validation_code_hash(_: ParaId, _: OccupiedCoreAssumption)
+        fn validation_code_hash(para_id: ParaId, assumption: OccupiedCoreAssumption)
             -> Option<ValidationCodeHash>
         {
-            unimplemented!()
+            parachains_runtime_api_impl::validation_code_hash::<Runtime>(para_id, assumption)
         }
 
         fn disputes() -> Vec<(SessionIndex, CandidateHash, DisputeState<BlockNumber>)> {
-            unimplemented!()
+            parachains_runtime_api_impl::get_session_disputes::<Runtime>()
         }
 
         fn unapplied_slashes(
         ) -> Vec<(SessionIndex, CandidateHash, slashing::PendingSlashes)> {
-            unimplemented!()
+            parachains_runtime_api_impl::unapplied_slashes::<Runtime>()
         }
 
         fn key_ownership_proof(
-            _: ValidatorId,
+            validator_id: ValidatorId,
         ) -> Option<slashing::OpaqueKeyOwnershipProof> {
-            unimplemented!()
+            use parity_scale_codec::Encode;
+
+            Historical::prove((PARACHAIN_KEY_TYPE_ID, validator_id))
+                .map(|p| p.encode())
+                .map(slashing::OpaqueKeyOwnershipProof::new)
         }
 
         fn submit_report_dispute_lost(
-            _: slashing::DisputeProof,
-            _: slashing::OpaqueKeyOwnershipProof,
+            dispute_proof: slashing::DisputeProof,
+            key_ownership_proof: slashing::OpaqueKeyOwnershipProof,
         ) -> Option<()> {
-            unimplemented!()
+            parachains_runtime_api_impl::submit_unsigned_slashing_report::<Runtime>(
+                dispute_proof,
+                key_ownership_proof,
+            )
         }
     }
 
     impl sp_authority_discovery::AuthorityDiscoveryApi<Block> for Runtime {
         fn authorities() -> Vec<sp_authority_discovery::AuthorityId> {
-            unimplemented!()
+            parachains_runtime_api_impl::relevant_authority_ids::<Runtime>()
         }
     }
 
