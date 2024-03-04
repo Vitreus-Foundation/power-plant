@@ -1,7 +1,7 @@
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 // Substrate
-use sc_chain_spec::{ChainType, Properties};
+use sc_chain_spec::{ChainSpecExtension, ChainType, Properties};
 use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
@@ -19,11 +19,24 @@ use vitreus_power_plant_runtime::{
     BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
+/// Node `ChainSpec` extensions.
+///
+/// Additional parameters for some Substrate core modules,
+/// customizable from the chain spec.
+#[derive(Default, Clone, Serialize, Deserialize, ChainSpecExtension)]
+#[serde(rename_all = "camelCase")]
+pub struct Extensions {
+    /// The light sync state.
+    ///
+    /// This value will be set by the `sync-state rpc` implementation.
+    pub light_sync_state: sc_sync_state_rpc::LightSyncStateExtension,
+}
+
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig, Extensions>;
 
 /// Specialized `ChainSpec` for development.
-pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt>;
+pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt, Extensions>;
 
 const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 /// 10^9 with 18 decimals
@@ -97,7 +110,7 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
@@ -144,7 +157,7 @@ pub fn devnet_config() -> ChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
@@ -182,7 +195,7 @@ pub fn stagenet_config() -> ChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
@@ -229,7 +242,7 @@ pub fn localnet_config() -> ChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
@@ -267,7 +280,7 @@ pub fn testnet_config() -> ChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 

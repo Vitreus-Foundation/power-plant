@@ -983,6 +983,7 @@ dependencies = [
  "rand 0.8.5",
  "sc-chain-spec",
  "sc-service",
+ "sc-sync-state-rpc",
  "serde",
  "sp-consensus-babe",
  "sp-consensus-grandpa",
