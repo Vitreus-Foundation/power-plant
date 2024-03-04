@@ -29,7 +29,7 @@ services:
       --validator
       --prometheus-external
       --rpc-cors all
-      --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 9"
+      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
