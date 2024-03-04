@@ -194,6 +194,9 @@ pub mod opaque {
             pub babe: Babe,
             pub grandpa: Grandpa,
             pub im_online: ImOnline,
+            pub para_validator: Initializer,
+		    pub para_assignment: ParaSessionInfo,
+		    pub authority_discovery: AuthorityDiscovery,
         }
     }
 }

@@ -1,6 +1,7 @@
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 // Substrate
+use polkadot_primitives::{AssignmentId, AuthorityDiscoveryId, ValidatorId};
 use sc_chain_spec::{ChainSpecExtension, ChainType, Properties};
 use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
@@ -289,7 +290,16 @@ fn testnet_genesis(
     wasm_binary: &[u8],
     root_key: AccountId,
     mut endowed_accounts: Vec<AccountId>,
-    initial_validators: Vec<(AccountId, AccountId, BabeId, GrandpaId, ImOnlineId)>,
+    initial_validators: Vec<(
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    )>,
     initial_cooperators: Vec<AccountId>,
     chain_id: u64,
 ) -> RuntimeGenesisConfig {
@@ -394,7 +404,20 @@ fn testnet_genesis(
         session: SessionConfig {
             keys: initial_validators
                 .iter()
-                .map(|x| (x.1, x.0, session_keys(x.2.clone(), x.3.clone(), x.4.clone())))
+                .map(|x| {
+                    (
+                        x.1,
+                        x.0,
+                        session_keys(
+                            x.2.clone(),
+                            x.3.clone(),
+                            x.4.clone(),
+                            x.5.clone(),
+                            x.6.clone(),
+                            x.7.clone(),
+                        ),
+                    )
+                })
                 .collect::<Vec<_>>(),
         },
         technical_committee: TechnicalCommitteeConfig {
@@ -456,13 +479,25 @@ pub mod devnet_keys {
 
     pub fn authority_keys_from_seed(
         s: &str,
-    ) -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    ) -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
         (
             get_account_id_from_seed::<ecdsa::Public>(&format!("{}//stash", s)),
             get_account_id_from_seed::<ecdsa::Public>(s),
             derive_dev::<BabeId>(s),
             derive_dev::<GrandpaId>(s),
             derive_dev::<ImOnlineId>(s),
+            derive_dev::<ValidatorId>(s),
+            derive_dev::<AssignmentId>(s),
+            derive_dev::<AuthorityDiscoveryId>(s),
         )
     }
     /// Generate a crypto pair.
@@ -514,7 +549,16 @@ pub mod testnet_keys {
         AccountId::from(hex!("E0E337F0753CB3099B17c6Af6D3E7C41e99FF83D"))
     }
 
-    pub(super) fn validator_1_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_1_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
         (
             AccountId::from(hex!("784e69Feba8a2FCCc938A722D5a66E9EbfA3A14A")), // Stash
             validator_1(),
@@ -530,10 +574,22 @@ pub mod testnet_keys {
                 "408300338038bb359afc7f32a0622d3be520988b5a89c3af5af0272e6745de5e"
             ))
             .into(),
+            todo!(),
+            todo!(),
+            todo!(),
         )
     }
 
-    pub(super) fn validator_2_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_2_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
         (
             AccountId::from(hex!("309753d1BAc45489B9C4BdDEf28963d862AdCb13")), // Stash
             validator_2(),
@@ -549,10 +605,22 @@ pub mod testnet_keys {
                 "527844f460f369100ca67a1fa084b9a29b71d984cd90479ce5bcd7efb74bde1c"
             ))
             .into(),
+            todo!(),
+            todo!(),
+            todo!(),
         )
     }
 
-    pub(super) fn validator_3_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_3_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
         (
             AccountId::from(hex!("A6543B65DD9cFA7e324AF616A339D3c1a13fa685")), // Stash
             validator_3(),
@@ -568,12 +636,29 @@ pub mod testnet_keys {
                 "3e99fe54593eeaf568029ec4989106286fd3384fc9c7b723d0e60bc3c3c02479"
             ))
             .into(),
+            todo!(),
+            todo!(),
+            todo!(),
         )
     }
 }
 
-fn session_keys(babe: BabeId, grandpa: GrandpaId, im_online: ImOnlineId) -> opaque::SessionKeys {
-    opaque::SessionKeys { babe, grandpa, im_online }
+fn session_keys(
+    babe: BabeId,
+    grandpa: GrandpaId,
+    im_online: ImOnlineId,
+    para_validator: ValidatorId,
+    para_assignment: AssignmentId,
+    authority_discovery: AuthorityDiscoveryId,
+) -> opaque::SessionKeys {
+    opaque::SessionKeys {
+        babe,
+        grandpa,
+        im_online,
+        para_validator,
+        para_assignment,
+        authority_discovery,
+    }
 }
 
 fn properties() -> Properties {
