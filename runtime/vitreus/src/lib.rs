@@ -205,7 +205,7 @@ pub mod opaque {
 pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
     sp_consensus_babe::BabeEpochConfiguration {
         c: PRIMARY_PROBABILITY,
-        allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryPlainSlots,
+        allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryVRFSlots,
     };
 
 #[sp_version::runtime_version]
