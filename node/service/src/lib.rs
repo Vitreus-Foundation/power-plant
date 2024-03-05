@@ -1125,7 +1125,7 @@ where
                 async move {
                     let parachain =
                         polkadot_node_core_parachains_inherent::ParachainsInherentDataProvider::new(
-                            client_clone,
+                            client_clone.clone(),
                             overseer_handle,
                             parent,
                         );
@@ -1133,12 +1133,18 @@ where
                     let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
                     let slot =
-						sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-							*timestamp,
-							slot_duration,
-						);
+                        sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+                            *timestamp,
+                            slot_duration,
+                        );
 
-                    Ok((slot, timestamp, parachain))
+                    let storage_proof =
+                        sp_transaction_storage_proof::registration::new_data_provider(
+                            &*client_clone,
+                            &parent,
+                        )?;
+
+                    Ok((slot, timestamp, parachain, storage_proof))
                 }
             },
             force_authoring,
