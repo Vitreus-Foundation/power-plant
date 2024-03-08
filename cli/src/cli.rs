@@ -52,9 +52,13 @@ pub enum Subcommand {
     PvfExecuteWorker(ValidationWorkerCommand),
 
     /// Sub-commands concerned with benchmarking.
-    /// The pallet benchmarking moved to the `pallet` sub-command.
+    #[cfg(feature = "runtime-benchmarks")]
     #[command(subcommand)]
     Benchmark(frame_benchmarking_cli::BenchmarkCmd),
+
+    /// Sub-commands concerned with benchmarking.
+    #[cfg(not(feature = "runtime-benchmarks"))]
+    Benchmark,
 
     /// Runs performance checks such as PVF compilation in order to measure machine
     /// capabilities of running a validator.

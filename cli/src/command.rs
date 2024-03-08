@@ -16,12 +16,9 @@
 
 use crate::cli::{Cli, Subcommand};
 use futures::future::TryFutureExt;
-use log::info;
 use sc_cli::SubstrateCli;
 use sc_service::DatabaseSource;
-use service::{self, ChainSpec, eth::db_config_dir, HeaderBackend, IdentifyVariant};
-use sp_core::crypto::Ss58AddressFormatRegistry;
-use sp_keyring::Sr25519Keyring;
+use service::{self, ChainSpec, eth::db_config_dir, IdentifyVariant};
 use std::net::ToSocketAddrs;
 use fc_db::kv::frontier_database_dir;
 
@@ -384,8 +381,11 @@ pub fn run() -> Result<()> {
 		},
 		#[cfg(feature = "runtime-benchmarks")]
 		Some(Subcommand::Benchmark(cmd)) => {
-			use service::benchmarking::{
-				inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder,
+			use service::{
+				HeaderBackend,
+				benchmarking::{
+					inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder,
+				}
 			};
 			use frame_benchmarking_cli::{
 				BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE,
@@ -394,22 +394,24 @@ pub fn run() -> Result<()> {
 
 			let runner = cli.create_runner(cmd)?;
 			match cmd {
-				BenchmarkCmd::Pallet(cmd) => runner.sync_run(|config| cmd.run::<Block, ()>(config)),
+				BenchmarkCmd::Pallet(cmd) => runner.sync_run(|config| cmd.run::<Block, ()>(config).map_err(Error::SubstrateCli)),
 				BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
 					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
-					cmd.run(client)
+					cmd.run(client).map_err(Error::SubstrateCli)
 				}),
 				BenchmarkCmd::Storage(cmd) => runner.sync_run(|mut config| {
 					let (client, backend, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
 					let db = backend.expose_db();
 					let storage = backend.expose_storage();
-					cmd.run(config, client, db, storage)
+					cmd.run(config, client, db, storage).map_err(Error::SubstrateCli)
 				}),
 				BenchmarkCmd::Overhead(cmd) => runner.sync_run(|mut config| {
 					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
 					let ext_builder = RemarkBuilder::new(client.clone());
 					let header = client.header(client.info().genesis_hash).unwrap().unwrap();
-					cmd.run(config, client, inherent_benchmark_data(header)?, Vec::new(), &ext_builder)
+					let inherent_data = inherent_benchmark_data(header)
+						.map_err(|e| format!("generating inherent data: {:?}", e))?;
+					cmd.run(config, client, inherent_data, Vec::new(), &ext_builder).map_err(Error::SubstrateCli)
 				}),
 				BenchmarkCmd::Extrinsic(cmd) => runner.sync_run(|mut config| {
 					let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
@@ -423,15 +425,17 @@ pub fn run() -> Result<()> {
 						)),
 					]);
 					let header = client.header(client.info().genesis_hash).unwrap().unwrap();
-					cmd.run(client, inherent_benchmark_data(header)?, Vec::new(), &ext_factory)
+					let inherent_data = inherent_benchmark_data(header)
+						.map_err(|e| format!("generating inherent data: {:?}", e))?;
+					cmd.run(client, inherent_data, Vec::new(), &ext_factory).map_err(Error::SubstrateCli)
 				}),
 				BenchmarkCmd::Machine(cmd) => {
-					runner.sync_run(|config| cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()))
+					runner.sync_run(|config| cmd.run(&config, SUBSTRATE_REFERENCE_HARDWARE.clone()).map_err(Error::SubstrateCli))
 				},
 			}
 		},
 		#[cfg(not(feature = "runtime-benchmarks"))]
-		Some(Subcommand::Benchmark(_)) => Err(sc_cli::Error::Input(
+		Some(Subcommand::Benchmark) => Err(sc_cli::Error::Input(
 			"Benchmarking wasn't enabled when building the node. \
 			You can enable it with `--features runtime-benchmarks`."
 			.into()).into()),
