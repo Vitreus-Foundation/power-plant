@@ -16,7 +16,7 @@ use polkadot_primitives::{
     ValidationCodeHash, ValidatorId, ValidatorIndex, ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
 };
 
-use runtime_common::{paras_registrar, slots};
+use runtime_common::{paras_registrar, paras_sudo_wrapper, slots};
 
 use runtime_parachains::{
     configuration as parachains_configuration, disputes as parachains_disputes,
@@ -195,8 +195,8 @@ pub mod opaque {
             pub grandpa: Grandpa,
             pub im_online: ImOnline,
             pub para_validator: Initializer,
-		    pub para_assignment: ParaSessionInfo,
-		    pub authority_discovery: AuthorityDiscovery,
+            pub para_assignment: ParaSessionInfo,
+            pub authority_discovery: AuthorityDiscovery,
         }
     }
 }
@@ -1269,6 +1269,8 @@ impl slots::Config for Runtime {
     type WeightInfo = weights::runtime_common_slots::WeightInfo<Runtime>;
 }
 
+impl paras_sudo_wrapper::Config for Runtime {}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -1337,6 +1339,7 @@ construct_runtime!(
         // Parachain Onboarding Pallets. Start indices at 70 to leave room.
         Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 70,
         Slots: slots::{Pallet, Call, Storage, Event<T>} = 71,
+        ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 72,
     }
 );
 
