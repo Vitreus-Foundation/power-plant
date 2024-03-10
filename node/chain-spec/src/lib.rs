@@ -286,7 +286,7 @@ pub fn testnet_config() -> ChainSpec {
 }
 
 /// Configure initial storage state for FRAME modules.
-fn testnet_genesis(
+pub fn testnet_genesis(
     wasm_binary: &[u8],
     root_key: AccountId,
     mut endowed_accounts: Vec<AccountId>,

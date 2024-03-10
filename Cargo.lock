@@ -9460,7 +9460,6 @@ dependencies = [
  "parity-scale-codec",
  "polkadot-node-subsystem",
  "polkadot-primitives",
- "polkadot-test-runtime",
  "polkadot-test-service",
  "sc-block-builder",
  "sc-consensus",
@@ -9478,6 +9477,7 @@ dependencies = [
  "sp-state-machine",
  "sp-timestamp",
  "substrate-test-client",
+ "vitreus-power-plant-runtime",
 ]
 
 [[package]]
@@ -9578,10 +9578,12 @@ dependencies = [
 name = "polkadot-test-service"
 version = "1.0.0"
 dependencies = [
+ "chain-spec",
  "frame-system",
  "futures",
  "hex",
  "pallet-balances",
+ "pallet-energy-fee",
  "pallet-staking",
  "pallet-transaction-payment",
  "polkadot-node-primitives",
@@ -9593,7 +9595,6 @@ dependencies = [
  "polkadot-runtime-common",
  "polkadot-runtime-parachains",
  "polkadot-service",
- "polkadot-test-runtime",
  "rand 0.8.5",
  "sc-authority-discovery",
  "sc-chain-spec",
@@ -9621,9 +9622,9 @@ dependencies = [
  "substrate-test-client",
  "substrate-test-utils",
  "tempfile",
- "test-runtime-constants",
  "tokio",
  "tracing-gum",
+ "vitreus-power-plant-runtime",
 ]
 
 [[package]]

@@ -13,6 +13,7 @@ tempfile = "3.2.0"
 tokio = "1.24.2"
 
 # Polkadot dependencies
+chain-spec = { path = "../../chain-spec" }
 polkadot-overseer = { path = "../../overseer" }
 polkadot-primitives = { path = "../../../primitives" }
 polkadot-parachain = { path = "../../../parachain" }
@@ -21,9 +22,8 @@ polkadot-runtime-common = { path = "../../../runtime/common" }
 polkadot-service = { path = "../../service" }
 polkadot-node-subsystem = { path = "../../subsystem" }
 polkadot-node-primitives = { path = "../../primitives" }
-polkadot-test-runtime = { path = "../../../runtime/test-runtime" }
-test-runtime-constants = { path = "../../../runtime/test-runtime/constants" }
 polkadot-runtime-parachains = { path = "../../../runtime/parachains" }
+vitreus-power-plant-runtime = { path = "../../../runtime/vitreus" }
 
 # Substrate dependencies
 sp-authority-discovery = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
@@ -38,6 +38,7 @@ inherents = { package = "sp-inherents", git = "https://github.com/paritytech/sub
 pallet-staking = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+pallet-energy-fee = { workspace = true }
 sc-chain-spec = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-cli = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
@@ -61,8 +62,7 @@ substrate-test-utils = { git = "https://github.com/paritytech/substrate", branch
 tokio = { version = "1.24.2", features = ["macros"] }
 
 [features]
-runtime-metrics=["polkadot-test-runtime/runtime-metrics"]
+runtime-metrics=[]
 runtime-benchmarks=[
-	"polkadot-test-runtime/runtime-benchmarks",
 	"polkadot-service/runtime-benchmarks",
 ]

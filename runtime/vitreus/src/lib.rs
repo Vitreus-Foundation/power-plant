@@ -114,6 +114,10 @@ pub use frame_system::Call as SystemCall;
 pub use pallet_balances::Call as BalancesCall;
 pub use pallet_timestamp::Call as TimestampCall;
 
+pub use parachains_paras::Call as ParasCall;
+pub use paras_sudo_wrapper::Call as ParasSudoWrapperCall;
+pub use pallet_sudo::Call as SudoCall;
+
 pub use areas::{CouncilCollective, TechnicalCollective};
 
 mod precompiles;
