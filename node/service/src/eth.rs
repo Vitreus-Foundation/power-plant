@@ -24,7 +24,7 @@ use super::{FullBackend, FullClient};
 pub type FrontierBackend = fc_db::Backend<Block>;
 
 pub fn db_config_dir(config: &Configuration) -> PathBuf {
-    config.base_path.config_dir(config.chain_spec.id())
+    config.data_path.clone()
 }
 
 /// Avalailable frontier backend types.
