@@ -41,6 +41,15 @@ generate_session_keys() {
         echo "# IMON (I'm Online)"
         generate_session_key imon sr25519
         printf "\n"
+        echo "# PARA (Parachain Validator)"
+        generate_session_key para sr25519
+        printf "\n"
+        echo "# ASGN (Parachain Assignment)"
+        generate_session_key asgn sr25519
+        printf "\n"
+        echo "# AUDI (Authority Discovery)"
+        generate_session_key audi sr25519
+        printf "\n"
     done
 }
 
