@@ -13833,88 +13833,11 @@ dependencies = [
 ]
 
 [[package]]
-name = "test-parachain-adder-collator"
-version = "1.0.0"
-dependencies = [
- "clap 4.4.2",
- "futures",
- "futures-timer",
- "log",
- "parity-scale-codec",
- "polkadot-cli",
- "polkadot-node-core-pvf",
- "polkadot-node-primitives",
- "polkadot-node-subsystem",
- "polkadot-parachain",
- "polkadot-primitives",
- "polkadot-service",
- "polkadot-test-service",
- "sc-cli",
- "sc-service",
- "sp-core",
- "sp-keyring",
- "substrate-test-utils",
- "test-parachain-adder",
- "tokio",
-]
-
-[[package]]
 name = "test-parachain-halt"
 version = "1.0.0"
 dependencies = [
  "rustversion",
  "substrate-wasm-builder",
-]
-
-[[package]]
-name = "test-parachain-undying"
-version = "1.0.0"
-dependencies = [
- "dlmalloc",
- "log",
- "parity-scale-codec",
- "polkadot-parachain",
- "sp-io",
- "sp-std",
- "substrate-wasm-builder",
- "tiny-keccak",
-]
-
-[[package]]
-name = "test-parachain-undying-collator"
-version = "1.0.0"
-dependencies = [
- "clap 4.4.2",
- "futures",
- "futures-timer",
- "log",
- "parity-scale-codec",
- "polkadot-cli",
- "polkadot-node-core-pvf",
- "polkadot-node-primitives",
- "polkadot-node-subsystem",
- "polkadot-parachain",
- "polkadot-primitives",
- "polkadot-service",
- "polkadot-test-service",
- "sc-cli",
- "sc-service",
- "sp-core",
- "sp-keyring",
- "substrate-test-utils",
- "test-parachain-undying",
- "tokio",
-]
-
-[[package]]
-name = "test-parachains"
-version = "1.0.0"
-dependencies = [
- "parity-scale-codec",
- "sp-core",
- "test-parachain-adder",
- "test-parachain-halt",
- "tiny-keccak",
 ]
 
 [[package]]
@@ -16170,26 +16093,6 @@ dependencies = [
  "sp-std",
  "sp-weights",
  "xcm 1.0.0",
-]
-
-[[package]]
-name = "xcm-executor-integration-tests"
-version = "1.0.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "futures",
- "pallet-xcm",
- "polkadot-test-client",
- "polkadot-test-runtime",
- "polkadot-test-service",
- "sp-consensus",
- "sp-keyring",
- "sp-runtime",
- "sp-state-machine",
- "sp-tracing",
- "xcm 1.0.0",
- "xcm-executor",
 ]
 
 [[package]]
