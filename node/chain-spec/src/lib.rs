@@ -574,9 +574,18 @@ pub mod testnet_keys {
                 "408300338038bb359afc7f32a0622d3be520988b5a89c3af5af0272e6745de5e"
             ))
             .into(),
-            todo!(),
-            todo!(),
-            todo!(),
+            sp_core::sr25519::Public(hex!(
+                "f870a88d596c9207b9df17fbc7960ba9f7fa25296fc3d17a844bc7680287011e"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "164b92db1487c67254182e9e231823b662fb39ffdee4e1ffe73559f600bebd25"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "7297d91787b2ec39853efaf1a553b4a5b58f834161a11f03575116e0340ada62"
+            ))
+            .into(),
         )
     }
 
@@ -605,9 +614,18 @@ pub mod testnet_keys {
                 "527844f460f369100ca67a1fa084b9a29b71d984cd90479ce5bcd7efb74bde1c"
             ))
             .into(),
-            todo!(),
-            todo!(),
-            todo!(),
+            sp_core::sr25519::Public(hex!(
+                "7aec7e56d3de6cf85d23d38fea64107523ffeb43e17e27de6899cac625199a3d"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "acc2c4d8acefa119eee9a88a880bc490895c0aeb2a661daeccf2b6fcba30da3f"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "d2d0a556d5526c8114e7312a9d7220869894db1ae01f3ef7696f9f784fc58a4f"
+            ))
+            .into(),
         )
     }
 
@@ -636,9 +654,18 @@ pub mod testnet_keys {
                 "3e99fe54593eeaf568029ec4989106286fd3384fc9c7b723d0e60bc3c3c02479"
             ))
             .into(),
-            todo!(),
-            todo!(),
-            todo!(),
+            sp_core::sr25519::Public(hex!(
+                "1eb253fc5186d7ec1bf2d28cc8120d97431745ead18381aca1cff47ebae0a83c"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "0075191c5441c7a2134c234f3ab393866deded809f21a37c9a6025ce26884556"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "5425357e3002c6d2972e803362fe8648156837e70f3951929f13c0b9ba75c93b"
+            ))
+            .into(),
         )
     }
 }
