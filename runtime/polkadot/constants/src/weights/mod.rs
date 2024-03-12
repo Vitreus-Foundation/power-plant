@@ -17,6 +17,8 @@
 
 //! Expose the auto generated weight files.
 
+#![allow(unused_doc_comments)]
+
 pub mod block_weights;
 pub mod extrinsic_weights;
 pub mod paritydb_weights;

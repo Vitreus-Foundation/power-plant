@@ -18,7 +18,7 @@ use crate::cli::{Cli, Subcommand};
 use futures::future::TryFutureExt;
 use sc_cli::SubstrateCli;
 use sc_service::DatabaseSource;
-use service::{self, ChainSpec, eth::db_config_dir, IdentifyVariant};
+use service::{self, ChainSpec, eth::db_config_dir};
 use std::net::ToSocketAddrs;
 use fc_db::kv::frontier_database_dir;
 
@@ -80,9 +80,11 @@ impl SubstrateCli for Cli {
 	}
 }
 
+#[cfg(feature = "try-runtime")]
 const DEV_ONLY_ERROR_PATTERN: &'static str =
 	"can only use subcommand with --chain [polkadot-dev, kusama-dev, westend-dev, rococo-dev, wococo-dev], got ";
 
+#[cfg(feature = "try-runtime")]
 fn ensure_dev(spec: &Box<dyn service::ChainSpec>) -> std::result::Result<(), String> {
 	if spec.is_dev() {
 		Ok(())

@@ -1310,7 +1310,6 @@ pub fn new_chain_ops(
 
     let basics = new_partial_basics(config, jaeger_agent, None)?;
 
-    use ::sc_consensus::LongestChain;
     // use the longest chain selection, since there is no overseer available
     let chain_selection = LongestChain::new(basics.backend.clone());
 
