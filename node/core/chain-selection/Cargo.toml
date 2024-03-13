@@ -5,6 +5,9 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 futures = "0.3.21"
 futures-timer = "3"

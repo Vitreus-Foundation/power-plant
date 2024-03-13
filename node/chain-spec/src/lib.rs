@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 // Substrate

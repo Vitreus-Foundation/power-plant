@@ -5,6 +5,9 @@ authors.workspace = true
 edition.workspace = true
 description = "Primitives types for the Node-side"
 
+[lints]
+workspace = true
+
 [dependencies]
 async-channel = "1.8.0"
 async-trait = "0.1.57"

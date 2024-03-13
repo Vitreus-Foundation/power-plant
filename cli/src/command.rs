@@ -98,7 +98,7 @@ fn ensure_dev(spec: &Box<dyn service::ChainSpec>) -> std::result::Result<(), Str
 fn host_perf_check() -> Result<()> {
 	#[cfg(not(feature = "hostperfcheck"))]
 	{
-		return Err(Error::FeatureNotEnabled { feature: "hostperfcheck" }.into())
+		Err(Error::FeatureNotEnabled { feature: "hostperfcheck" })
 	}
 
 	#[cfg(all(not(build_type = "release"), feature = "hostperfcheck"))]
@@ -163,7 +163,7 @@ where
 	runner.run_node_until_exit(move |config| async move {
 		let hwbench = (!cli.run.no_hardware_benchmarks)
 			.then_some(config.database.path().map(|database_path| {
-				let _ = std::fs::create_dir_all(&database_path);
+				let _ = std::fs::create_dir_all(database_path);
 				sc_sysinfo::gather_hwbench(Some(database_path))
 			}))
 			.flatten();
@@ -509,8 +509,7 @@ pub fn run() -> Result<()> {
 			"TryRuntime wasn't enabled when building the node. \
 				You can enable it with `--features try-runtime`."
 				.into(),
-		)
-		.into()),
+		)),
 		Some(Subcommand::ChainInfo(cmd)) => {
 			let runner = cli.create_runner(cmd)?;
 			Ok(runner.sync_run(|config| cmd.run::<service::Block>(&config))?)

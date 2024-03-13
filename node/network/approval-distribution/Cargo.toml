@@ -4,6 +4,9 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 polkadot-node-metrics = { path = "../../metrics" }
 polkadot-node-network-protocol = { path = "../protocol" }

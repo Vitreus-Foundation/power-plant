@@ -16,6 +16,7 @@
 
 //! Polkadot service. Specialized wrapper over substrate service.
 
+#![allow(clippy::large_enum_variant, clippy::too_many_arguments, clippy::type_complexity)]
 #![deny(unused_results)]
 
 pub mod benchmarking;
@@ -366,7 +367,7 @@ fn new_partial_basics(
 
     let (client, backend, keystore_container, task_manager) =
         service::new_full_parts::<Block, RuntimeApi, _>(
-            &config,
+            config,
             telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
             executor,
         )?;
@@ -709,7 +710,7 @@ where
     }
 
     let beefy_gossip_proto_name =
-        beefy::gossip_protocol_name(&genesis_hash, config.chain_spec.fork_id());
+        beefy::gossip_protocol_name(genesis_hash, config.chain_spec.fork_id());
     // `beefy_on_demand_justifications_handler` is given to `beefy-gadget` task to be run,
     // while `beefy_req_resp_cfg` is added to `config.network.request_response_protocols`.
     let (beefy_on_demand_justifications_handler, beefy_req_resp_cfg) =
@@ -737,7 +738,7 @@ where
         }
     }
 
-    let req_protocol_names = ReqProtocolNames::new(&genesis_hash, config.chain_spec.fork_id());
+    let req_protocol_names = ReqProtocolNames::new(genesis_hash, config.chain_spec.fork_id());
 
     let (pov_req_receiver, cfg) = IncomingRequest::get_config_receiver(&req_protocol_names);
     net_config.add_request_response_protocol(cfg);
@@ -804,7 +805,7 @@ where
 
     let approval_voting_config = ApprovalVotingConfig {
         col_approval_data: parachains_db::REAL_COLUMNS.col_approval_data,
-        slot_duration_millis: slot_duration.as_millis() as u64,
+        slot_duration_millis: slot_duration.as_millis(),
     };
 
     let candidate_validation_config = CandidateValidationConfig {

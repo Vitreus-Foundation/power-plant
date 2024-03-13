@@ -4,6 +4,9 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 impl-trait-for-tuples = "0.2.2"
 bitvec = { version = "1.0.0", default-features = false, features = ["alloc"] }

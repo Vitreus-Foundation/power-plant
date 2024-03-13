@@ -25,7 +25,7 @@ use std::{
 type Version = u32;
 
 /// Version file name.
-const VERSION_FILE_NAME: &'static str = "parachain_db_version";
+const VERSION_FILE_NAME: &str = "parachain_db_version";
 
 /// Current db version.
 const CURRENT_VERSION: Version = 3;
@@ -84,7 +84,7 @@ fn get_db_version(path: &Path) -> Result<Option<Version>, Error> {
 		Err(ref err) if err.kind() == io::ErrorKind::NotFound => Ok(None),
 		Err(err) => Err(err.into()),
 		Ok(content) => u32::from_str(&content)
-			.map(|v| Some(v))
+			.map(Some)
 			.map_err(|_| Error::CorruptedVersionFile),
 	}
 }
@@ -110,9 +110,9 @@ fn migrate_from_version_0_to_1(path: &Path, db_kind: DatabaseKind) -> Result<(),
 		DatabaseKind::ParityDB => paritydb_migrate_from_version_0_to_1(path),
 		DatabaseKind::RocksDB => rocksdb_migrate_from_version_0_to_1(path),
 	}
-	.and_then(|result| {
+	.map(|result| {
 		gum::info!(target: LOG_TARGET, "Migration complete! ");
-		Ok(result)
+		result
 	})
 }
 
@@ -123,9 +123,9 @@ fn migrate_from_version_1_to_2(path: &Path, db_kind: DatabaseKind) -> Result<(),
 		DatabaseKind::ParityDB => paritydb_migrate_from_version_1_to_2(path),
 		DatabaseKind::RocksDB => rocksdb_migrate_from_version_1_to_2(path),
 	}
-	.and_then(|result| {
+	.map(|result| {
 		gum::info!(target: LOG_TARGET, "Migration complete! ");
-		Ok(result)
+		result
 	})
 }
 
@@ -135,9 +135,9 @@ fn migrate_from_version_2_to_3(path: &Path, db_kind: DatabaseKind) -> Result<(),
 		DatabaseKind::ParityDB => paritydb_migrate_from_version_2_to_3(path),
 		DatabaseKind::RocksDB => rocksdb_migrate_from_version_2_to_3(path),
 	}
-	.and_then(|result| {
+	.map(|result| {
 		gum::info!(target: LOG_TARGET, "Migration complete! ");
-		Ok(result)
+		result
 	})
 }
 
@@ -197,7 +197,7 @@ fn paritydb_fix_columns(
 ) -> io::Result<()> {
 	// Figure out which columns to delete. This will be determined by inspecting
 	// the metadata file.
-	if let Some(metadata) = parity_db::Options::load_metadata(&path)
+	if let Some(metadata) = parity_db::Options::load_metadata(path)
 		.map_err(|e| other_io_error(format!("Error reading metadata {:?}", e)))?
 	{
 		let columns_to_clear = metadata
@@ -222,7 +222,7 @@ fn paritydb_fix_columns(
 			})
 			.collect::<Vec<_>>();
 
-		if columns_to_clear.len() > 0 {
+		if !columns_to_clear.is_empty() {
 			gum::debug!(
 				target: LOG_TARGET,
 				"Database column changes detected, need to cleanup {} columns.",
@@ -248,7 +248,7 @@ fn paritydb_fix_columns(
 /// Database configuration for version 1.
 pub(crate) fn paritydb_version_1_config(path: &Path) -> parity_db::Options {
 	let mut options =
-		parity_db::Options::with_columns(&path, super::columns::v1::NUM_COLUMNS as u8);
+		parity_db::Options::with_columns(path, super::columns::v1::NUM_COLUMNS as u8);
 	for i in columns::v3::ORDERED_COL {
 		options.columns[*i as usize].btree_index = true;
 	}
@@ -259,7 +259,7 @@ pub(crate) fn paritydb_version_1_config(path: &Path) -> parity_db::Options {
 /// Database configuration for version 2.
 pub(crate) fn paritydb_version_2_config(path: &Path) -> parity_db::Options {
 	let mut options =
-		parity_db::Options::with_columns(&path, super::columns::v2::NUM_COLUMNS as u8);
+		parity_db::Options::with_columns(path, super::columns::v2::NUM_COLUMNS as u8);
 	for i in columns::v3::ORDERED_COL {
 		options.columns[*i as usize].btree_index = true;
 	}
@@ -270,7 +270,7 @@ pub(crate) fn paritydb_version_2_config(path: &Path) -> parity_db::Options {
 /// Database configuration for version 3.
 pub(crate) fn paritydb_version_3_config(path: &Path) -> parity_db::Options {
 	let mut options =
-		parity_db::Options::with_columns(&path, super::columns::v3::NUM_COLUMNS as u8);
+		parity_db::Options::with_columns(path, super::columns::v3::NUM_COLUMNS as u8);
 	for i in columns::v3::ORDERED_COL {
 		options.columns[*i as usize].btree_index = true;
 	}

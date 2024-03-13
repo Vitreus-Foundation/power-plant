@@ -4,6 +4,9 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }

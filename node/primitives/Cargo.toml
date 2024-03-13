@@ -5,6 +5,9 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 
+[lints]
+workspace = true
+
 [dependencies]
 bounded-vec = "0.7"
 futures = "0.3.21"

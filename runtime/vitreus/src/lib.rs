@@ -1,7 +1,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 // `construct_runtime!` does a lot of recursion and requires us to increase the limit to 256 (well, actually to 512).
 #![recursion_limit = "512"]
-#![allow(clippy::new_without_default, clippy::or_fun_call)]
+#![allow(clippy::identity_op, clippy::new_without_default, clippy::or_fun_call)]
 // #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
 // Make the WASM binary available.
