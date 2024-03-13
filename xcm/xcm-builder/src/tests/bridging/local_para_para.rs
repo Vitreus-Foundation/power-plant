@@ -21,13 +21,13 @@
 use super::*;
 
 parameter_types! {
-	pub UniversalLocation: Junctions = X2(GlobalConsensus(Local::get()), Parachain(1));
-	pub RemoteUniversalLocation: Junctions = X2(GlobalConsensus(Remote::get()), Parachain(1));
+    pub UniversalLocation: Junctions = X2(GlobalConsensus(Local::get()), Parachain(1));
+    pub RemoteUniversalLocation: Junctions = X2(GlobalConsensus(Remote::get()), Parachain(1));
 }
 type TheBridge =
-	TestBridge<BridgeBlobDispatcher<TestRemoteIncomingRouter, RemoteUniversalLocation, ()>>;
+    TestBridge<BridgeBlobDispatcher<TestRemoteIncomingRouter, RemoteUniversalLocation, ()>>;
 type Router =
-	TestTopic<UnpaidLocalExporter<HaulBlobExporter<TheBridge, Remote, Price>, UniversalLocation>>;
+    TestTopic<UnpaidLocalExporter<HaulBlobExporter<TheBridge, Remote, Price>, UniversalLocation>>;
 
 /// ```nocompile
 ///  local                                  |                                      remote
@@ -41,26 +41,26 @@ type Router =
 /// ```
 #[test]
 fn sending_to_bridged_chain_works() {
-	maybe_with_topic(|| {
-		let msg = Xcm(vec![Trap(1)]);
-		let dest = (Parent, Parent, Remote::get(), Parachain(1)).into();
-		assert_eq!(send_xcm::<Router>(dest, msg).unwrap().1, (Here, 100).into());
-		assert_eq!(TheBridge::service(), 1);
-		assert_eq!(
-			take_received_remote_messages(),
-			vec![(
-				Here.into(),
-				xcm_with_topic(
-					[0; 32],
-					vec![
-						UniversalOrigin(Local::get().into()),
-						DescendOrigin(Parachain(1).into()),
-						Trap(1),
-					]
-				)
-			)]
-		);
-	});
+    maybe_with_topic(|| {
+        let msg = Xcm(vec![Trap(1)]);
+        let dest = (Parent, Parent, Remote::get(), Parachain(1)).into();
+        assert_eq!(send_xcm::<Router>(dest, msg).unwrap().1, (Here, 100).into());
+        assert_eq!(TheBridge::service(), 1);
+        assert_eq!(
+            take_received_remote_messages(),
+            vec![(
+                Here.into(),
+                xcm_with_topic(
+                    [0; 32],
+                    vec![
+                        UniversalOrigin(Local::get().into()),
+                        DescendOrigin(Parachain(1).into()),
+                        Trap(1),
+                    ]
+                )
+            )]
+        );
+    });
 }
 
 /// ```nocompile
@@ -75,24 +75,24 @@ fn sending_to_bridged_chain_works() {
 /// ```
 #[test]
 fn sending_to_parachain_of_bridged_chain_works() {
-	maybe_with_topic(|| {
-		let msg = Xcm(vec![Trap(1)]);
-		let dest = (Parent, Parent, Remote::get(), Parachain(1000)).into();
-		assert_eq!(send_xcm::<Router>(dest, msg).unwrap().1, (Here, 100).into());
-		assert_eq!(TheBridge::service(), 1);
-		let expected = vec![(
-			(Parent, Parachain(1000)).into(),
-			xcm_with_topic(
-				[0; 32],
-				vec![
-					UniversalOrigin(Local::get().into()),
-					DescendOrigin(Parachain(1).into()),
-					Trap(1),
-				],
-			),
-		)];
-		assert_eq!(take_received_remote_messages(), expected);
-	});
+    maybe_with_topic(|| {
+        let msg = Xcm(vec![Trap(1)]);
+        let dest = (Parent, Parent, Remote::get(), Parachain(1000)).into();
+        assert_eq!(send_xcm::<Router>(dest, msg).unwrap().1, (Here, 100).into());
+        assert_eq!(TheBridge::service(), 1);
+        let expected = vec![(
+            (Parent, Parachain(1000)).into(),
+            xcm_with_topic(
+                [0; 32],
+                vec![
+                    UniversalOrigin(Local::get().into()),
+                    DescendOrigin(Parachain(1).into()),
+                    Trap(1),
+                ],
+            ),
+        )];
+        assert_eq!(take_received_remote_messages(), expected);
+    });
 }
 
 /// ```nocompile
@@ -107,22 +107,22 @@ fn sending_to_parachain_of_bridged_chain_works() {
 /// ```
 #[test]
 fn sending_to_relay_chain_of_bridged_chain_works() {
-	maybe_with_topic(|| {
-		let msg = Xcm(vec![Trap(1)]);
-		let dest = (Parent, Parent, Remote::get()).into();
-		assert_eq!(send_xcm::<Router>(dest, msg).unwrap().1, (Here, 100).into());
-		assert_eq!(TheBridge::service(), 1);
-		let expected = vec![(
-			Parent.into(),
-			xcm_with_topic(
-				[0; 32],
-				vec![
-					UniversalOrigin(Local::get().into()),
-					DescendOrigin(Parachain(1).into()),
-					Trap(1),
-				],
-			),
-		)];
-		assert_eq!(take_received_remote_messages(), expected);
-	});
+    maybe_with_topic(|| {
+        let msg = Xcm(vec![Trap(1)]);
+        let dest = (Parent, Parent, Remote::get()).into();
+        assert_eq!(send_xcm::<Router>(dest, msg).unwrap().1, (Here, 100).into());
+        assert_eq!(TheBridge::service(), 1);
+        let expected = vec![(
+            Parent.into(),
+            xcm_with_topic(
+                [0; 32],
+                vec![
+                    UniversalOrigin(Local::get().into()),
+                    DescendOrigin(Parachain(1).into()),
+                    Trap(1),
+                ],
+            ),
+        )];
+        assert_eq!(take_received_remote_messages(), expected);
+    });
 }

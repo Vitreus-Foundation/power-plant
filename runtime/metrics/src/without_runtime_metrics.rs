@@ -19,7 +19,7 @@
 //! with `#[cfg(feature = "runtime-metrics")]`.
 
 use primitives::metric_definitions::{
-	CounterDefinition, CounterVecDefinition, HistogramDefinition,
+    CounterDefinition, CounterVecDefinition, HistogramDefinition,
 };
 
 /// A dummy `Counter`.
@@ -32,45 +32,45 @@ pub struct Histogram;
 
 /// Dummy implementation.
 impl CounterVec {
-	/// Constructor.
-	pub const fn new(_definition: CounterVecDefinition) -> Self {
-		CounterVec
-	}
-	/// Sets label values, implementation is a `no op`.
-	pub fn with_label_values(&self, _label_values: &[&'static str]) -> &Self {
-		self
-	}
-	/// Increment counter by value, implementation is a `no op`.
-	pub fn inc_by(&self, _: u64) {}
-	/// Increment counter, implementation is a `no op`.
-	pub fn inc(&self) {}
+    /// Constructor.
+    pub const fn new(_definition: CounterVecDefinition) -> Self {
+        CounterVec
+    }
+    /// Sets label values, implementation is a `no op`.
+    pub fn with_label_values(&self, _label_values: &[&'static str]) -> &Self {
+        self
+    }
+    /// Increment counter by value, implementation is a `no op`.
+    pub fn inc_by(&self, _: u64) {}
+    /// Increment counter, implementation is a `no op`.
+    pub fn inc(&self) {}
 }
 
 /// Dummy implementation.
 impl Counter {
-	/// Constructor.
-	pub const fn new(_definition: CounterDefinition) -> Self {
-		Counter
-	}
-	/// Increment counter by value, implementation is a `no op`.
-	pub fn inc_by(&self, _: u64) {}
-	/// Increment counter, implementation is a `no op`.
-	pub fn inc(&self) {}
+    /// Constructor.
+    pub const fn new(_definition: CounterDefinition) -> Self {
+        Counter
+    }
+    /// Increment counter by value, implementation is a `no op`.
+    pub fn inc_by(&self, _: u64) {}
+    /// Increment counter, implementation is a `no op`.
+    pub fn inc(&self) {}
 }
 
 /// Dummy implementation
 impl Histogram {
-	/// Create a new histogram as specified by `definition`. This metric needs to be registered
-	/// in the client before it can be used.
-	pub const fn new(_definition: HistogramDefinition) -> Self {
-		Histogram
-	}
+    /// Create a new histogram as specified by `definition`. This metric needs to be registered
+    /// in the client before it can be used.
+    pub const fn new(_definition: HistogramDefinition) -> Self {
+        Histogram
+    }
 
-	// Observe a value in the histogram
-	pub fn observe(&self, _value: u128) {}
+    // Observe a value in the histogram
+    pub fn observe(&self, _value: u128) {}
 }
 
 /// Dummy implementation - always 0
 pub fn get_current_time() -> u128 {
-	0
+    0
 }

@@ -20,71 +20,71 @@ use sp_runtime::traits::AccountIdConversion;
 
 /// Migrations for using fund index to create fund accounts instead of para ID.
 pub mod slots_crowdloan_index_migration {
-	use super::*;
+    use super::*;
 
-	// The old way we generated fund accounts.
-	fn old_fund_account_id<T: Config + crowdloan::Config>(index: ParaId) -> T::AccountId {
-		<T as crowdloan::Config>::PalletId::get().into_sub_account_truncating(index)
-	}
+    // The old way we generated fund accounts.
+    fn old_fund_account_id<T: Config + crowdloan::Config>(index: ParaId) -> T::AccountId {
+        <T as crowdloan::Config>::PalletId::get().into_sub_account_truncating(index)
+    }
 
-	pub fn pre_migrate<T: Config + crowdloan::Config>() -> Result<(), &'static str> {
-		for (para_id, leases) in Leases::<T>::iter() {
-			let old_fund_account = old_fund_account_id::<T>(para_id);
+    pub fn pre_migrate<T: Config + crowdloan::Config>() -> Result<(), &'static str> {
+        for (para_id, leases) in Leases::<T>::iter() {
+            let old_fund_account = old_fund_account_id::<T>(para_id);
 
-			for (who, _amount) in leases.iter().flatten() {
-				if *who == old_fund_account {
-					let crowdloan =
-						crowdloan::Funds::<T>::get(para_id).ok_or("no crowdloan found")?;
-					log::info!(
-						target: "runtime",
-						"para_id={:?}, old_fund_account={:?}, fund_id={:?}, leases={:?}",
-						para_id, old_fund_account, crowdloan.fund_index, leases,
-					);
-					break
-				}
-			}
-		}
+            for (who, _amount) in leases.iter().flatten() {
+                if *who == old_fund_account {
+                    let crowdloan =
+                        crowdloan::Funds::<T>::get(para_id).ok_or("no crowdloan found")?;
+                    log::info!(
+                        target: "runtime",
+                        "para_id={:?}, old_fund_account={:?}, fund_id={:?}, leases={:?}",
+                        para_id, old_fund_account, crowdloan.fund_index, leases,
+                    );
+                    break;
+                }
+            }
+        }
 
-		Ok(())
-	}
+        Ok(())
+    }
 
-	pub fn migrate<T: Config + crowdloan::Config>() -> frame_support::weights::Weight {
-		let mut weight = Weight::zero();
+    pub fn migrate<T: Config + crowdloan::Config>() -> frame_support::weights::Weight {
+        let mut weight = Weight::zero();
 
-		for (para_id, mut leases) in Leases::<T>::iter() {
-			weight = weight.saturating_add(T::DbWeight::get().reads(2));
-			// the para id must have a crowdloan
-			if let Some(fund) = crowdloan::Funds::<T>::get(para_id) {
-				let old_fund_account = old_fund_account_id::<T>(para_id);
-				let new_fund_account = crowdloan::Pallet::<T>::fund_account_id(fund.fund_index);
+        for (para_id, mut leases) in Leases::<T>::iter() {
+            weight = weight.saturating_add(T::DbWeight::get().reads(2));
+            // the para id must have a crowdloan
+            if let Some(fund) = crowdloan::Funds::<T>::get(para_id) {
+                let old_fund_account = old_fund_account_id::<T>(para_id);
+                let new_fund_account = crowdloan::Pallet::<T>::fund_account_id(fund.fund_index);
 
-				// look for places the old account is used, and replace with the new account.
-				for (who, _amount) in leases.iter_mut().flatten() {
-					if *who == old_fund_account {
-						*who = new_fund_account.clone();
-					}
-				}
+                // look for places the old account is used, and replace with the new account.
+                for (who, _amount) in leases.iter_mut().flatten() {
+                    if *who == old_fund_account {
+                        *who = new_fund_account.clone();
+                    }
+                }
 
-				// insert the changes.
-				weight = weight.saturating_add(T::DbWeight::get().writes(1));
-				Leases::<T>::insert(para_id, leases);
-			}
-		}
+                // insert the changes.
+                weight = weight.saturating_add(T::DbWeight::get().writes(1));
+                Leases::<T>::insert(para_id, leases);
+            }
+        }
 
-		weight
-	}
+        weight
+    }
 
-	pub fn post_migrate<T: Config + crowdloan::Config>() -> Result<(), &'static str> {
-		for (para_id, leases) in Leases::<T>::iter() {
-			let old_fund_account = old_fund_account_id::<T>(para_id);
-			log::info!(target: "runtime", "checking para_id: {:?}", para_id);
-			// check the old fund account doesn't exist anywhere.
-			for (who, _amount) in leases.iter().flatten() {
-				if *who == old_fund_account {
-					panic!("old fund account found after migration!");
-				}
-			}
-		}
-		Ok(())
-	}
+    pub fn post_migrate<T: Config + crowdloan::Config>() -> Result<(), &'static str> {
+        for (para_id, leases) in Leases::<T>::iter() {
+            let old_fund_account = old_fund_account_id::<T>(para_id);
+            log::info!(target: "runtime", "checking para_id: {:?}", para_id);
+            // check the old fund account doesn't exist anywhere.
+            for (who, _amount) in leases.iter().flatten() {
+                if *who == old_fund_account {
+                    panic!("old fund account found after migration!");
+                }
+            }
+        }
+        Ok(())
+    }
 }

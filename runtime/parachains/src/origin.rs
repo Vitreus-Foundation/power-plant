@@ -26,12 +26,12 @@ pub use pallet::*;
 /// Returns `Ok` with the parachain ID that effected the extrinsic or an `Err` otherwise.
 pub fn ensure_parachain<OuterOrigin>(o: OuterOrigin) -> result::Result<ParaId, BadOrigin>
 where
-	OuterOrigin: Into<result::Result<Origin, OuterOrigin>>,
+    OuterOrigin: Into<result::Result<Origin, OuterOrigin>>,
 {
-	match o.into() {
-		Ok(Origin::Parachain(id)) => Ok(id),
-		_ => Err(BadOrigin),
-	}
+    match o.into() {
+        Ok(Origin::Parachain(id)) => Ok(id),
+        _ => Err(BadOrigin),
+    }
 }
 
 /// There is no way to register an origin type in `construct_runtime` without a pallet the origin
@@ -42,35 +42,35 @@ where
 // ideally, though, the `construct_runtime` should support a free-standing origin.
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
-	use frame_support::pallet_prelude::*;
+    use super::*;
+    use frame_support::pallet_prelude::*;
 
-	#[pallet::pallet]
-	pub struct Pallet<T>(_);
+    #[pallet::pallet]
+    pub struct Pallet<T>(_);
 
-	#[pallet::config]
-	pub trait Config: frame_system::Config {}
+    #[pallet::config]
+    pub trait Config: frame_system::Config {}
 
-	/// Origin for the parachains.
-	#[pallet::origin]
-	#[derive(
-		PartialEq,
-		Eq,
-		Clone,
-		Encode,
-		Decode,
-		sp_core::RuntimeDebug,
-		scale_info::TypeInfo,
-		MaxEncodedLen,
-	)]
-	pub enum Origin {
-		/// It comes from a parachain.
-		Parachain(ParaId),
-	}
+    /// Origin for the parachains.
+    #[pallet::origin]
+    #[derive(
+        PartialEq,
+        Eq,
+        Clone,
+        Encode,
+        Decode,
+        sp_core::RuntimeDebug,
+        scale_info::TypeInfo,
+        MaxEncodedLen,
+    )]
+    pub enum Origin {
+        /// It comes from a parachain.
+        Parachain(ParaId),
+    }
 }
 
 impl From<u32> for Origin {
-	fn from(id: u32) -> Origin {
-		Origin::Parachain(id.into())
-	}
+    fn from(id: u32) -> Origin {
+        Origin::Parachain(id.into())
+    }
 }

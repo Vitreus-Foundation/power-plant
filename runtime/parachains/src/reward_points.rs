@@ -36,57 +36,57 @@ pub struct RewardValidatorsWithEraPoints<C>(sp_std::marker::PhantomData<C>);
 
 impl<C> RewardValidatorsWithEraPoints<C>
 where
-	C: pallet_staking::Config + session_info::Config,
-	C::ValidatorSet: ValidatorSet<C::AccountId, ValidatorId = C::AccountId>,
+    C: pallet_staking::Config + session_info::Config,
+    C::ValidatorSet: ValidatorSet<C::AccountId, ValidatorId = C::AccountId>,
 {
-	/// Reward validators in session with points, but only if they are in the active set.
-	fn reward_only_active(
-		session_index: SessionIndex,
-		indices: impl IntoIterator<Item = ValidatorIndex>,
-		points: u32,
-	) {
-		let validators = session_info::Pallet::<C>::account_keys(&session_index);
-		let validators = match validators
-			.defensive_proof("account_keys are present for dispute_period sessions")
-		{
-			Some(validators) => validators,
-			None => return,
-		};
-		// limit rewards to the active validator set
-		let active_set: BTreeSet<_> = C::ValidatorSet::validators().into_iter().collect();
+    /// Reward validators in session with points, but only if they are in the active set.
+    fn reward_only_active(
+        session_index: SessionIndex,
+        indices: impl IntoIterator<Item = ValidatorIndex>,
+        points: u32,
+    ) {
+        let validators = session_info::Pallet::<C>::account_keys(&session_index);
+        let validators = match validators
+            .defensive_proof("account_keys are present for dispute_period sessions")
+        {
+            Some(validators) => validators,
+            None => return,
+        };
+        // limit rewards to the active validator set
+        let active_set: BTreeSet<_> = C::ValidatorSet::validators().into_iter().collect();
 
-		let rewards = indices
-			.into_iter()
-			.filter_map(|i| validators.get(i.0 as usize).cloned())
-			.filter(|v| active_set.contains(v))
-			.map(|v| (v, points));
+        let rewards = indices
+            .into_iter()
+            .filter_map(|i| validators.get(i.0 as usize).cloned())
+            .filter(|v| active_set.contains(v))
+            .map(|v| (v, points));
 
-		<pallet_staking::Pallet<C>>::reward_by_ids(rewards);
-	}
+        <pallet_staking::Pallet<C>>::reward_by_ids(rewards);
+    }
 }
 
 impl<C> crate::inclusion::RewardValidators for RewardValidatorsWithEraPoints<C>
 where
-	C: pallet_staking::Config + shared::Config + session_info::Config,
-	C::ValidatorSet: ValidatorSet<C::AccountId, ValidatorId = C::AccountId>,
+    C: pallet_staking::Config + shared::Config + session_info::Config,
+    C::ValidatorSet: ValidatorSet<C::AccountId, ValidatorId = C::AccountId>,
 {
-	fn reward_backing(indices: impl IntoIterator<Item = ValidatorIndex>) {
-		let session_index = shared::Pallet::<C>::session_index();
-		Self::reward_only_active(session_index, indices, BACKING_POINTS);
-	}
+    fn reward_backing(indices: impl IntoIterator<Item = ValidatorIndex>) {
+        let session_index = shared::Pallet::<C>::session_index();
+        Self::reward_only_active(session_index, indices, BACKING_POINTS);
+    }
 
-	fn reward_bitfields(_validators: impl IntoIterator<Item = ValidatorIndex>) {}
+    fn reward_bitfields(_validators: impl IntoIterator<Item = ValidatorIndex>) {}
 }
 
 impl<C> crate::disputes::RewardValidators for RewardValidatorsWithEraPoints<C>
 where
-	C: pallet_staking::Config + session_info::Config,
-	C::ValidatorSet: ValidatorSet<C::AccountId, ValidatorId = C::AccountId>,
+    C: pallet_staking::Config + session_info::Config,
+    C::ValidatorSet: ValidatorSet<C::AccountId, ValidatorId = C::AccountId>,
 {
-	fn reward_dispute_statement(
-		session: SessionIndex,
-		validators: impl IntoIterator<Item = ValidatorIndex>,
-	) {
-		Self::reward_only_active(session, validators, DISPUTE_STATEMENT_POINTS);
-	}
+    fn reward_dispute_statement(
+        session: SessionIndex,
+        validators: impl IntoIterator<Item = ValidatorIndex>,
+    ) {
+        Self::reward_only_active(session, validators, DISPUTE_STATEMENT_POINTS);
+    }
 }

@@ -27,52 +27,52 @@ use polkadot_primitives::{BlockNumber, CandidateHash, Hash};
 use std::collections::HashMap;
 
 use super::{
-	approval_db::v1::StoredBlockRange,
-	persisted_entries::{BlockEntry, CandidateEntry},
+    approval_db::v1::StoredBlockRange,
+    persisted_entries::{BlockEntry, CandidateEntry},
 };
 
 #[derive(Debug)]
 pub enum BackendWriteOp {
-	WriteStoredBlockRange(StoredBlockRange),
-	WriteBlocksAtHeight(BlockNumber, Vec<Hash>),
-	WriteBlockEntry(BlockEntry),
-	WriteCandidateEntry(CandidateEntry),
-	DeleteStoredBlockRange,
-	DeleteBlocksAtHeight(BlockNumber),
-	DeleteBlockEntry(Hash),
-	DeleteCandidateEntry(CandidateHash),
+    WriteStoredBlockRange(StoredBlockRange),
+    WriteBlocksAtHeight(BlockNumber, Vec<Hash>),
+    WriteBlockEntry(BlockEntry),
+    WriteCandidateEntry(CandidateEntry),
+    DeleteStoredBlockRange,
+    DeleteBlocksAtHeight(BlockNumber),
+    DeleteBlockEntry(Hash),
+    DeleteCandidateEntry(CandidateHash),
 }
 
 /// An abstraction over backend storage for the logic of this subsystem.
 pub trait Backend {
-	/// Load a block entry from the DB.
-	fn load_block_entry(&self, hash: &Hash) -> SubsystemResult<Option<BlockEntry>>;
-	/// Load a candidate entry from the DB.
-	fn load_candidate_entry(
-		&self,
-		candidate_hash: &CandidateHash,
-	) -> SubsystemResult<Option<CandidateEntry>>;
-	/// Load all blocks at a specific height.
-	fn load_blocks_at_height(&self, height: &BlockNumber) -> SubsystemResult<Vec<Hash>>;
-	/// Load all block from the DB.
-	fn load_all_blocks(&self) -> SubsystemResult<Vec<Hash>>;
-	/// Load stored block range form the DB.
-	fn load_stored_blocks(&self) -> SubsystemResult<Option<StoredBlockRange>>;
-	/// Atomically write the list of operations, with later operations taking precedence over prior.
-	fn write<I>(&mut self, ops: I) -> SubsystemResult<()>
-	where
-		I: IntoIterator<Item = BackendWriteOp>;
+    /// Load a block entry from the DB.
+    fn load_block_entry(&self, hash: &Hash) -> SubsystemResult<Option<BlockEntry>>;
+    /// Load a candidate entry from the DB.
+    fn load_candidate_entry(
+        &self,
+        candidate_hash: &CandidateHash,
+    ) -> SubsystemResult<Option<CandidateEntry>>;
+    /// Load all blocks at a specific height.
+    fn load_blocks_at_height(&self, height: &BlockNumber) -> SubsystemResult<Vec<Hash>>;
+    /// Load all block from the DB.
+    fn load_all_blocks(&self) -> SubsystemResult<Vec<Hash>>;
+    /// Load stored block range form the DB.
+    fn load_stored_blocks(&self) -> SubsystemResult<Option<StoredBlockRange>>;
+    /// Atomically write the list of operations, with later operations taking precedence over prior.
+    fn write<I>(&mut self, ops: I) -> SubsystemResult<()>
+    where
+        I: IntoIterator<Item = BackendWriteOp>;
 }
 
 // Status of block range in the `OverlayedBackend`.
 #[derive(PartialEq)]
 enum BlockRangeStatus {
-	// Value has not been modified.
-	NotModified,
-	// Value has been deleted
-	Deleted,
-	// Value has been updated.
-	Inserted(StoredBlockRange),
+    // Value has not been modified.
+    NotModified,
+    // Value has been deleted
+    Deleted,
+    // Value has been updated.
+    Inserted(StoredBlockRange),
 }
 
 /// An in-memory overlay over the backend.
@@ -81,141 +81,141 @@ enum BlockRangeStatus {
 /// converted into a set of write operations which will, when written to
 /// the underlying backend, give the same view as the state of the overlay.
 pub struct OverlayedBackend<'a, B: 'a> {
-	inner: &'a B,
-	// `Some(None)` means deleted. Missing (`None`) means query inner.
-	stored_block_range: BlockRangeStatus,
-	// `None` means 'deleted', missing means query inner.
-	blocks_at_height: HashMap<BlockNumber, Option<Vec<Hash>>>,
-	// `None` means 'deleted', missing means query inner.
-	block_entries: HashMap<Hash, Option<BlockEntry>>,
-	// `None` means 'deleted', missing means query inner.
-	candidate_entries: HashMap<CandidateHash, Option<CandidateEntry>>,
+    inner: &'a B,
+    // `Some(None)` means deleted. Missing (`None`) means query inner.
+    stored_block_range: BlockRangeStatus,
+    // `None` means 'deleted', missing means query inner.
+    blocks_at_height: HashMap<BlockNumber, Option<Vec<Hash>>>,
+    // `None` means 'deleted', missing means query inner.
+    block_entries: HashMap<Hash, Option<BlockEntry>>,
+    // `None` means 'deleted', missing means query inner.
+    candidate_entries: HashMap<CandidateHash, Option<CandidateEntry>>,
 }
 
 impl<'a, B: 'a + Backend> OverlayedBackend<'a, B> {
-	pub fn new(backend: &'a B) -> Self {
-		OverlayedBackend {
-			inner: backend,
-			stored_block_range: BlockRangeStatus::NotModified,
-			blocks_at_height: HashMap::new(),
-			block_entries: HashMap::new(),
-			candidate_entries: HashMap::new(),
-		}
-	}
+    pub fn new(backend: &'a B) -> Self {
+        OverlayedBackend {
+            inner: backend,
+            stored_block_range: BlockRangeStatus::NotModified,
+            blocks_at_height: HashMap::new(),
+            block_entries: HashMap::new(),
+            candidate_entries: HashMap::new(),
+        }
+    }
 
-	pub fn is_empty(&self) -> bool {
-		self.block_entries.is_empty() &&
-			self.candidate_entries.is_empty() &&
-			self.blocks_at_height.is_empty() &&
-			self.stored_block_range == BlockRangeStatus::NotModified
-	}
+    pub fn is_empty(&self) -> bool {
+        self.block_entries.is_empty()
+            && self.candidate_entries.is_empty()
+            && self.blocks_at_height.is_empty()
+            && self.stored_block_range == BlockRangeStatus::NotModified
+    }
 
-	pub fn load_all_blocks(&self) -> SubsystemResult<Vec<Hash>> {
-		let mut hashes = Vec::new();
-		if let Some(stored_blocks) = self.load_stored_blocks()? {
-			for height in stored_blocks.0..stored_blocks.1 {
-				hashes.extend(self.load_blocks_at_height(&height)?);
-			}
-		}
+    pub fn load_all_blocks(&self) -> SubsystemResult<Vec<Hash>> {
+        let mut hashes = Vec::new();
+        if let Some(stored_blocks) = self.load_stored_blocks()? {
+            for height in stored_blocks.0..stored_blocks.1 {
+                hashes.extend(self.load_blocks_at_height(&height)?);
+            }
+        }
 
-		Ok(hashes)
-	}
+        Ok(hashes)
+    }
 
-	pub fn load_stored_blocks(&self) -> SubsystemResult<Option<StoredBlockRange>> {
-		match self.stored_block_range {
-			BlockRangeStatus::Inserted(ref value) => Ok(Some(value.clone())),
-			BlockRangeStatus::Deleted => Ok(None),
-			BlockRangeStatus::NotModified => self.inner.load_stored_blocks(),
-		}
-	}
+    pub fn load_stored_blocks(&self) -> SubsystemResult<Option<StoredBlockRange>> {
+        match self.stored_block_range {
+            BlockRangeStatus::Inserted(ref value) => Ok(Some(value.clone())),
+            BlockRangeStatus::Deleted => Ok(None),
+            BlockRangeStatus::NotModified => self.inner.load_stored_blocks(),
+        }
+    }
 
-	pub fn load_blocks_at_height(&self, height: &BlockNumber) -> SubsystemResult<Vec<Hash>> {
-		if let Some(val) = self.blocks_at_height.get(&height) {
-			return Ok(val.clone().unwrap_or_default())
-		}
+    pub fn load_blocks_at_height(&self, height: &BlockNumber) -> SubsystemResult<Vec<Hash>> {
+        if let Some(val) = self.blocks_at_height.get(&height) {
+            return Ok(val.clone().unwrap_or_default());
+        }
 
-		self.inner.load_blocks_at_height(height)
-	}
+        self.inner.load_blocks_at_height(height)
+    }
 
-	pub fn load_block_entry(&self, hash: &Hash) -> SubsystemResult<Option<BlockEntry>> {
-		if let Some(val) = self.block_entries.get(&hash) {
-			return Ok(val.clone())
-		}
+    pub fn load_block_entry(&self, hash: &Hash) -> SubsystemResult<Option<BlockEntry>> {
+        if let Some(val) = self.block_entries.get(&hash) {
+            return Ok(val.clone());
+        }
 
-		self.inner.load_block_entry(hash)
-	}
+        self.inner.load_block_entry(hash)
+    }
 
-	pub fn load_candidate_entry(
-		&self,
-		candidate_hash: &CandidateHash,
-	) -> SubsystemResult<Option<CandidateEntry>> {
-		if let Some(val) = self.candidate_entries.get(&candidate_hash) {
-			return Ok(val.clone())
-		}
+    pub fn load_candidate_entry(
+        &self,
+        candidate_hash: &CandidateHash,
+    ) -> SubsystemResult<Option<CandidateEntry>> {
+        if let Some(val) = self.candidate_entries.get(&candidate_hash) {
+            return Ok(val.clone());
+        }
 
-		self.inner.load_candidate_entry(candidate_hash)
-	}
+        self.inner.load_candidate_entry(candidate_hash)
+    }
 
-	pub fn write_stored_block_range(&mut self, range: StoredBlockRange) {
-		self.stored_block_range = BlockRangeStatus::Inserted(range);
-	}
+    pub fn write_stored_block_range(&mut self, range: StoredBlockRange) {
+        self.stored_block_range = BlockRangeStatus::Inserted(range);
+    }
 
-	pub fn delete_stored_block_range(&mut self) {
-		self.stored_block_range = BlockRangeStatus::Deleted;
-	}
+    pub fn delete_stored_block_range(&mut self) {
+        self.stored_block_range = BlockRangeStatus::Deleted;
+    }
 
-	pub fn write_blocks_at_height(&mut self, height: BlockNumber, blocks: Vec<Hash>) {
-		self.blocks_at_height.insert(height, Some(blocks));
-	}
+    pub fn write_blocks_at_height(&mut self, height: BlockNumber, blocks: Vec<Hash>) {
+        self.blocks_at_height.insert(height, Some(blocks));
+    }
 
-	pub fn delete_blocks_at_height(&mut self, height: BlockNumber) {
-		self.blocks_at_height.insert(height, None);
-	}
+    pub fn delete_blocks_at_height(&mut self, height: BlockNumber) {
+        self.blocks_at_height.insert(height, None);
+    }
 
-	pub fn write_block_entry(&mut self, entry: BlockEntry) {
-		self.block_entries.insert(entry.block_hash(), Some(entry));
-	}
+    pub fn write_block_entry(&mut self, entry: BlockEntry) {
+        self.block_entries.insert(entry.block_hash(), Some(entry));
+    }
 
-	pub fn delete_block_entry(&mut self, hash: &Hash) {
-		self.block_entries.insert(*hash, None);
-	}
+    pub fn delete_block_entry(&mut self, hash: &Hash) {
+        self.block_entries.insert(*hash, None);
+    }
 
-	pub fn write_candidate_entry(&mut self, entry: CandidateEntry) {
-		self.candidate_entries.insert(entry.candidate_receipt().hash(), Some(entry));
-	}
+    pub fn write_candidate_entry(&mut self, entry: CandidateEntry) {
+        self.candidate_entries.insert(entry.candidate_receipt().hash(), Some(entry));
+    }
 
-	pub fn delete_candidate_entry(&mut self, hash: &CandidateHash) {
-		self.candidate_entries.insert(*hash, None);
-	}
+    pub fn delete_candidate_entry(&mut self, hash: &CandidateHash) {
+        self.candidate_entries.insert(*hash, None);
+    }
 
-	/// Transform this backend into a set of write-ops to be written to the
-	/// inner backend.
-	pub fn into_write_ops(self) -> impl Iterator<Item = BackendWriteOp> {
-		let blocks_at_height_ops = self.blocks_at_height.into_iter().map(|(h, v)| match v {
-			Some(v) => BackendWriteOp::WriteBlocksAtHeight(h, v),
-			None => BackendWriteOp::DeleteBlocksAtHeight(h),
-		});
+    /// Transform this backend into a set of write-ops to be written to the
+    /// inner backend.
+    pub fn into_write_ops(self) -> impl Iterator<Item = BackendWriteOp> {
+        let blocks_at_height_ops = self.blocks_at_height.into_iter().map(|(h, v)| match v {
+            Some(v) => BackendWriteOp::WriteBlocksAtHeight(h, v),
+            None => BackendWriteOp::DeleteBlocksAtHeight(h),
+        });
 
-		let block_entry_ops = self.block_entries.into_iter().map(|(h, v)| match v {
-			Some(v) => BackendWriteOp::WriteBlockEntry(v),
-			None => BackendWriteOp::DeleteBlockEntry(h),
-		});
+        let block_entry_ops = self.block_entries.into_iter().map(|(h, v)| match v {
+            Some(v) => BackendWriteOp::WriteBlockEntry(v),
+            None => BackendWriteOp::DeleteBlockEntry(h),
+        });
 
-		let candidate_entry_ops = self.candidate_entries.into_iter().map(|(h, v)| match v {
-			Some(v) => BackendWriteOp::WriteCandidateEntry(v),
-			None => BackendWriteOp::DeleteCandidateEntry(h),
-		});
+        let candidate_entry_ops = self.candidate_entries.into_iter().map(|(h, v)| match v {
+            Some(v) => BackendWriteOp::WriteCandidateEntry(v),
+            None => BackendWriteOp::DeleteCandidateEntry(h),
+        });
 
-		let stored_block_range_ops = match self.stored_block_range {
-			BlockRangeStatus::Inserted(val) => Some(BackendWriteOp::WriteStoredBlockRange(val)),
-			BlockRangeStatus::Deleted => Some(BackendWriteOp::DeleteStoredBlockRange),
-			BlockRangeStatus::NotModified => None,
-		};
+        let stored_block_range_ops = match self.stored_block_range {
+            BlockRangeStatus::Inserted(val) => Some(BackendWriteOp::WriteStoredBlockRange(val)),
+            BlockRangeStatus::Deleted => Some(BackendWriteOp::DeleteStoredBlockRange),
+            BlockRangeStatus::NotModified => None,
+        };
 
-		stored_block_range_ops
-			.into_iter()
-			.chain(blocks_at_height_ops)
-			.chain(block_entry_ops)
-			.chain(candidate_entry_ops)
-	}
+        stored_block_range_ops
+            .into_iter()
+            .chain(blocks_at_height_ops)
+            .chain(block_entry_ops)
+            .chain(candidate_entry_ops)
+    }
 }

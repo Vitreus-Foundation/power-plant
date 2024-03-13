@@ -24,22 +24,22 @@ use sp_runtime::DigestItem;
 const DIGEST_MAX_LEN: u32 = 65536;
 
 benchmarks! {
-	force_approve {
-		let d in 0 .. DIGEST_MAX_LEN;
-		for _ in 0 .. d {
-			<frame_system::Pallet<T>>::deposit_log(ConsensusLog::ForceApprove(d).into());
-		}
-	}: _(RawOrigin::Root, d + 1)
-	verify {
-		assert_eq!(
-			<frame_system::Pallet<T>>::digest().logs.last().unwrap(),
-			&DigestItem::from(ConsensusLog::ForceApprove(d + 1)),
-		);
-	}
+    force_approve {
+        let d in 0 .. DIGEST_MAX_LEN;
+        for _ in 0 .. d {
+            <frame_system::Pallet<T>>::deposit_log(ConsensusLog::ForceApprove(d).into());
+        }
+    }: _(RawOrigin::Root, d + 1)
+    verify {
+        assert_eq!(
+            <frame_system::Pallet<T>>::digest().logs.last().unwrap(),
+            &DigestItem::from(ConsensusLog::ForceApprove(d + 1)),
+        );
+    }
 
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::mock::new_test_ext(Default::default()),
-		crate::mock::Test
-	);
+    impl_benchmark_test_suite!(
+        Pallet,
+        crate::mock::new_test_ext(Default::default()),
+        crate::mock::Test
+    );
 }

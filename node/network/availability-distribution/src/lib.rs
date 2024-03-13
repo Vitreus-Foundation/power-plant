@@ -20,8 +20,8 @@ use sp_keystore::KeystorePtr;
 
 use polkadot_node_network_protocol::request_response::{v1, IncomingRequestReceiver};
 use polkadot_node_subsystem::{
-	jaeger, messages::AvailabilityDistributionMessage, overseer, FromOrchestra, OverseerSignal,
-	SpawnedSubsystem, SubsystemError,
+    jaeger, messages::AvailabilityDistributionMessage, overseer, FromOrchestra, OverseerSignal,
+    SpawnedSubsystem, SubsystemError,
 };
 use polkadot_primitives::Hash;
 use std::collections::HashMap;
@@ -54,143 +54,144 @@ const LOG_TARGET: &'static str = "parachain::availability-distribution";
 
 /// The availability distribution subsystem.
 pub struct AvailabilityDistributionSubsystem {
-	/// Easy and efficient runtime access for this subsystem.
-	runtime: RuntimeInfo,
-	/// Receivers to receive messages from.
-	recvs: IncomingRequestReceivers,
-	/// Prometheus metrics.
-	metrics: Metrics,
+    /// Easy and efficient runtime access for this subsystem.
+    runtime: RuntimeInfo,
+    /// Receivers to receive messages from.
+    recvs: IncomingRequestReceivers,
+    /// Prometheus metrics.
+    metrics: Metrics,
 }
 
 /// Receivers to be passed into availability distribution.
 pub struct IncomingRequestReceivers {
-	/// Receiver for incoming PoV requests.
-	pub pov_req_receiver: IncomingRequestReceiver<v1::PoVFetchingRequest>,
-	/// Receiver for incoming availability chunk requests.
-	pub chunk_req_receiver: IncomingRequestReceiver<v1::ChunkFetchingRequest>,
+    /// Receiver for incoming PoV requests.
+    pub pov_req_receiver: IncomingRequestReceiver<v1::PoVFetchingRequest>,
+    /// Receiver for incoming availability chunk requests.
+    pub chunk_req_receiver: IncomingRequestReceiver<v1::ChunkFetchingRequest>,
 }
 
 #[overseer::subsystem(AvailabilityDistribution, error=SubsystemError, prefix=self::overseer)]
 impl<Context> AvailabilityDistributionSubsystem {
-	fn start(self, ctx: Context) -> SpawnedSubsystem {
-		let future = self
-			.run(ctx)
-			.map_err(|e| SubsystemError::with_origin("availability-distribution", e))
-			.boxed();
+    fn start(self, ctx: Context) -> SpawnedSubsystem {
+        let future = self
+            .run(ctx)
+            .map_err(|e| SubsystemError::with_origin("availability-distribution", e))
+            .boxed();
 
-		SpawnedSubsystem { name: "availability-distribution-subsystem", future }
-	}
+        SpawnedSubsystem { name: "availability-distribution-subsystem", future }
+    }
 }
 
 #[overseer::contextbounds(AvailabilityDistribution, prefix = self::overseer)]
 impl AvailabilityDistributionSubsystem {
-	/// Create a new instance of the availability distribution.
-	pub fn new(keystore: KeystorePtr, recvs: IncomingRequestReceivers, metrics: Metrics) -> Self {
-		let runtime = RuntimeInfo::new(Some(keystore));
-		Self { runtime, recvs, metrics }
-	}
+    /// Create a new instance of the availability distribution.
+    pub fn new(keystore: KeystorePtr, recvs: IncomingRequestReceivers, metrics: Metrics) -> Self {
+        let runtime = RuntimeInfo::new(Some(keystore));
+        Self { runtime, recvs, metrics }
+    }
 
-	/// Start processing work as passed on from the Overseer.
-	async fn run<Context>(self, mut ctx: Context) -> std::result::Result<(), FatalError> {
-		let Self { mut runtime, recvs, metrics } = self;
-		let mut spans: HashMap<Hash, jaeger::PerLeafSpan> = HashMap::new();
+    /// Start processing work as passed on from the Overseer.
+    async fn run<Context>(self, mut ctx: Context) -> std::result::Result<(), FatalError> {
+        let Self { mut runtime, recvs, metrics } = self;
+        let mut spans: HashMap<Hash, jaeger::PerLeafSpan> = HashMap::new();
 
-		let IncomingRequestReceivers { pov_req_receiver, chunk_req_receiver } = recvs;
-		let mut requester = Requester::new(metrics.clone()).fuse();
+        let IncomingRequestReceivers { pov_req_receiver, chunk_req_receiver } = recvs;
+        let mut requester = Requester::new(metrics.clone()).fuse();
 
-		{
-			let sender = ctx.sender().clone();
-			ctx.spawn(
-				"pov-receiver",
-				run_pov_receiver(sender.clone(), pov_req_receiver, metrics.clone()).boxed(),
-			)
-			.map_err(FatalError::SpawnTask)?;
+        {
+            let sender = ctx.sender().clone();
+            ctx.spawn(
+                "pov-receiver",
+                run_pov_receiver(sender.clone(), pov_req_receiver, metrics.clone()).boxed(),
+            )
+            .map_err(FatalError::SpawnTask)?;
 
-			ctx.spawn(
-				"chunk-receiver",
-				run_chunk_receiver(sender, chunk_req_receiver, metrics.clone()).boxed(),
-			)
-			.map_err(FatalError::SpawnTask)?;
-		}
+            ctx.spawn(
+                "chunk-receiver",
+                run_chunk_receiver(sender, chunk_req_receiver, metrics.clone()).boxed(),
+            )
+            .map_err(FatalError::SpawnTask)?;
+        }
 
-		loop {
-			let action = {
-				let mut subsystem_next = ctx.recv().fuse();
-				futures::select! {
-					subsystem_msg = subsystem_next => Either::Left(subsystem_msg),
-					from_task = requester.next() => Either::Right(from_task),
-				}
-			};
+        loop {
+            let action = {
+                let mut subsystem_next = ctx.recv().fuse();
+                futures::select! {
+                    subsystem_msg = subsystem_next => Either::Left(subsystem_msg),
+                    from_task = requester.next() => Either::Right(from_task),
+                }
+            };
 
-			// Handle task messages sending:
-			let message = match action {
-				Either::Left(subsystem_msg) =>
-					subsystem_msg.map_err(|e| FatalError::IncomingMessageChannel(e))?,
-				Either::Right(from_task) => {
-					let from_task = from_task.ok_or(FatalError::RequesterExhausted)?;
-					ctx.send_message(from_task).await;
-					continue
-				},
-			};
-			match message {
-				FromOrchestra::Signal(OverseerSignal::ActiveLeaves(update)) => {
-					let cloned_leaf = match update.activated.clone() {
-						Some(activated) => activated,
-						None => continue,
-					};
-					let span =
-						jaeger::PerLeafSpan::new(cloned_leaf.span, "availability-distribution");
-					spans.insert(cloned_leaf.hash, span);
-					log_error(
-						requester
-							.get_mut()
-							.update_fetching_heads(&mut ctx, &mut runtime, update, &spans)
-							.await,
-						"Error in Requester::update_fetching_heads",
-					)?;
-				},
-				FromOrchestra::Signal(OverseerSignal::BlockFinalized(hash, _)) => {
-					spans.remove(&hash);
-				},
-				FromOrchestra::Signal(OverseerSignal::Conclude) => return Ok(()),
-				FromOrchestra::Communication {
-					msg:
-						AvailabilityDistributionMessage::FetchPoV {
-							relay_parent,
-							from_validator,
-							para_id,
-							candidate_hash,
-							pov_hash,
-							tx,
-						},
-				} => {
-					let span = spans
-						.get(&relay_parent)
-						.map(|span| span.child("fetch-pov"))
-						.unwrap_or_else(|| jaeger::Span::new(&relay_parent, "fetch-pov"))
-						.with_trace_id(candidate_hash)
-						.with_candidate(candidate_hash)
-						.with_relay_parent(relay_parent)
-						.with_stage(jaeger::Stage::AvailabilityDistribution);
+            // Handle task messages sending:
+            let message = match action {
+                Either::Left(subsystem_msg) => {
+                    subsystem_msg.map_err(|e| FatalError::IncomingMessageChannel(e))?
+                },
+                Either::Right(from_task) => {
+                    let from_task = from_task.ok_or(FatalError::RequesterExhausted)?;
+                    ctx.send_message(from_task).await;
+                    continue;
+                },
+            };
+            match message {
+                FromOrchestra::Signal(OverseerSignal::ActiveLeaves(update)) => {
+                    let cloned_leaf = match update.activated.clone() {
+                        Some(activated) => activated,
+                        None => continue,
+                    };
+                    let span =
+                        jaeger::PerLeafSpan::new(cloned_leaf.span, "availability-distribution");
+                    spans.insert(cloned_leaf.hash, span);
+                    log_error(
+                        requester
+                            .get_mut()
+                            .update_fetching_heads(&mut ctx, &mut runtime, update, &spans)
+                            .await,
+                        "Error in Requester::update_fetching_heads",
+                    )?;
+                },
+                FromOrchestra::Signal(OverseerSignal::BlockFinalized(hash, _)) => {
+                    spans.remove(&hash);
+                },
+                FromOrchestra::Signal(OverseerSignal::Conclude) => return Ok(()),
+                FromOrchestra::Communication {
+                    msg:
+                        AvailabilityDistributionMessage::FetchPoV {
+                            relay_parent,
+                            from_validator,
+                            para_id,
+                            candidate_hash,
+                            pov_hash,
+                            tx,
+                        },
+                } => {
+                    let span = spans
+                        .get(&relay_parent)
+                        .map(|span| span.child("fetch-pov"))
+                        .unwrap_or_else(|| jaeger::Span::new(&relay_parent, "fetch-pov"))
+                        .with_trace_id(candidate_hash)
+                        .with_candidate(candidate_hash)
+                        .with_relay_parent(relay_parent)
+                        .with_stage(jaeger::Stage::AvailabilityDistribution);
 
-					log_error(
-						pov_requester::fetch_pov(
-							&mut ctx,
-							&mut runtime,
-							relay_parent,
-							from_validator,
-							para_id,
-							candidate_hash,
-							pov_hash,
-							tx,
-							metrics.clone(),
-							&span,
-						)
-						.await,
-						"pov_requester::fetch_pov",
-					)?;
-				},
-			}
-		}
-	}
+                    log_error(
+                        pov_requester::fetch_pov(
+                            &mut ctx,
+                            &mut runtime,
+                            relay_parent,
+                            from_validator,
+                            para_id,
+                            candidate_hash,
+                            pov_hash,
+                            tx,
+                            metrics.clone(),
+                            &span,
+                        )
+                        .await,
+                        "pov_requester::fetch_pov",
+                    )?;
+                },
+            }
+        }
+    }
 }

@@ -38,47 +38,47 @@ pub use self::runtime::logger_hook;
 /// Export a dummy logger hook when the `runtime-metrics` feature is not enabled.
 #[cfg(not(feature = "runtime-metrics"))]
 pub fn logger_hook() -> impl FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration) {
-	|_logger_builder, _config| {}
+    |_logger_builder, _config| {}
 }
 
 /// This module reexports Prometheus types and defines the [`Metrics`](metrics::Metrics) trait.
 pub mod metrics {
-	/// Reexport Substrate Prometheus types.
-	pub use substrate_prometheus_endpoint as prometheus;
+    /// Reexport Substrate Prometheus types.
+    pub use substrate_prometheus_endpoint as prometheus;
 
-	/// Subsystem- or job-specific Prometheus metrics.
-	///
-	/// Usually implemented as a wrapper for `Option<ActualMetrics>`
-	/// to ensure `Default` bounds or as a dummy type ().
-	/// Prometheus metrics internally hold an `Arc` reference, so cloning them is fine.
-	pub trait Metrics: Default + Clone {
-		/// Try to register metrics in the Prometheus registry.
-		fn try_register(
-			registry: &prometheus::Registry,
-		) -> Result<Self, prometheus::PrometheusError>;
+    /// Subsystem- or job-specific Prometheus metrics.
+    ///
+    /// Usually implemented as a wrapper for `Option<ActualMetrics>`
+    /// to ensure `Default` bounds or as a dummy type ().
+    /// Prometheus metrics internally hold an `Arc` reference, so cloning them is fine.
+    pub trait Metrics: Default + Clone {
+        /// Try to register metrics in the Prometheus registry.
+        fn try_register(
+            registry: &prometheus::Registry,
+        ) -> Result<Self, prometheus::PrometheusError>;
 
-		/// Convenience method to register metrics in the optional Prometheus registry.
-		///
-		/// If no registry is provided, returns `Default::default()`. Otherwise, returns the same
-		/// thing that `try_register` does.
-		fn register(
-			registry: Option<&prometheus::Registry>,
-		) -> Result<Self, prometheus::PrometheusError> {
-			match registry {
-				None => Ok(Self::default()),
-				Some(registry) => Self::try_register(registry),
-			}
-		}
-	}
+        /// Convenience method to register metrics in the optional Prometheus registry.
+        ///
+        /// If no registry is provided, returns `Default::default()`. Otherwise, returns the same
+        /// thing that `try_register` does.
+        fn register(
+            registry: Option<&prometheus::Registry>,
+        ) -> Result<Self, prometheus::PrometheusError> {
+            match registry {
+                None => Ok(Self::default()),
+                Some(registry) => Self::try_register(registry),
+            }
+        }
+    }
 
-	// dummy impl
-	impl Metrics for () {
-		fn try_register(
-			_registry: &prometheus::Registry,
-		) -> Result<(), prometheus::PrometheusError> {
-			Ok(())
-		}
-	}
+    // dummy impl
+    impl Metrics for () {
+        fn try_register(
+            _registry: &prometheus::Registry,
+        ) -> Result<(), prometheus::PrometheusError> {
+            Ok(())
+        }
+    }
 }
 
 #[cfg(all(feature = "runtime-metrics", not(feature = "runtime-benchmarks"), test))]

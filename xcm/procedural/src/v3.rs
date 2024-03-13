@@ -21,22 +21,22 @@ use syn::{Result, Token};
 const MAX_JUNCTIONS: usize = 8;
 
 pub mod multilocation {
-	use super::*;
+    use super::*;
 
-	pub fn generate_conversion_functions(input: proc_macro::TokenStream) -> Result<TokenStream> {
-		if !input.is_empty() {
-			return Err(syn::Error::new(Span::call_site(), "No arguments expected"))
-		}
+    pub fn generate_conversion_functions(input: proc_macro::TokenStream) -> Result<TokenStream> {
+        if !input.is_empty() {
+            return Err(syn::Error::new(Span::call_site(), "No arguments expected"));
+        }
 
-		let from_tuples = generate_conversion_from_tuples(8, 8);
+        let from_tuples = generate_conversion_from_tuples(8, 8);
 
-		Ok(quote! {
-			#from_tuples
-		})
-	}
+        Ok(quote! {
+            #from_tuples
+        })
+    }
 
-	fn generate_conversion_from_tuples(max_junctions: usize, max_parents: usize) -> TokenStream {
-		let mut from_tuples = (0..=max_junctions)
+    fn generate_conversion_from_tuples(max_junctions: usize, max_parents: usize) -> TokenStream {
+        let mut from_tuples = (0..=max_junctions)
 			.map(|num_junctions| {
 				let types = (0..num_junctions).map(|i| format_ident!("J{}", i)).collect::<Vec<_>>();
 				let idents =
@@ -86,101 +86,101 @@ pub mod multilocation {
 			})
 			.collect::<TokenStream>();
 
-		let from_parent_junctions_tuples = (0..=max_parents).map(|cur_parents| {
-			let parents = (0..cur_parents).map(|_| format_ident!("Parent")).collect::<Vec<_>>();
-			let underscores =
-				(0..cur_parents).map(|_| Token![_](Span::call_site())).collect::<Vec<_>>();
+        let from_parent_junctions_tuples = (0..=max_parents).map(|cur_parents| {
+            let parents = (0..cur_parents).map(|_| format_ident!("Parent")).collect::<Vec<_>>();
+            let underscores =
+                (0..cur_parents).map(|_| Token![_](Span::call_site())).collect::<Vec<_>>();
 
-			quote! {
-				impl From<( #(#parents,)* Junctions )> for MultiLocation {
-					fn from( (#(#underscores,)* junctions): ( #(#parents,)* Junctions ) ) -> Self {
-						MultiLocation { parents: #cur_parents as u8, interior: junctions }
-					}
-				}
-			}
-		});
-		from_tuples.extend(from_parent_junctions_tuples);
+            quote! {
+                impl From<( #(#parents,)* Junctions )> for MultiLocation {
+                    fn from( (#(#underscores,)* junctions): ( #(#parents,)* Junctions ) ) -> Self {
+                        MultiLocation { parents: #cur_parents as u8, interior: junctions }
+                    }
+                }
+            }
+        });
+        from_tuples.extend(from_parent_junctions_tuples);
 
-		quote! {
-			impl From<(Ancestor, Junctions)> for MultiLocation {
-				fn from((Ancestor(parents), interior): (Ancestor, Junctions)) -> Self {
-					MultiLocation { parents, interior }
-				}
-			}
+        quote! {
+            impl From<(Ancestor, Junctions)> for MultiLocation {
+                fn from((Ancestor(parents), interior): (Ancestor, Junctions)) -> Self {
+                    MultiLocation { parents, interior }
+                }
+            }
 
-			impl From<Junction> for MultiLocation {
-				fn from(x: Junction) -> Self {
-					MultiLocation { parents: 0, interior: Junctions::X1(x) }
-				}
-			}
+            impl From<Junction> for MultiLocation {
+                fn from(x: Junction) -> Self {
+                    MultiLocation { parents: 0, interior: Junctions::X1(x) }
+                }
+            }
 
-			#from_tuples
-		}
-	}
+            #from_tuples
+        }
+    }
 }
 
 pub mod junctions {
-	use super::*;
+    use super::*;
 
-	pub fn generate_conversion_functions(input: proc_macro::TokenStream) -> Result<TokenStream> {
-		if !input.is_empty() {
-			return Err(syn::Error::new(Span::call_site(), "No arguments expected"))
-		}
+    pub fn generate_conversion_functions(input: proc_macro::TokenStream) -> Result<TokenStream> {
+        if !input.is_empty() {
+            return Err(syn::Error::new(Span::call_site(), "No arguments expected"));
+        }
 
-		// Support up to 8 Parents in a tuple, assuming that most use cases don't go past 8 parents.
-		let from_v2 = generate_conversion_from_v2(MAX_JUNCTIONS);
-		let from_tuples = generate_conversion_from_tuples(MAX_JUNCTIONS);
+        // Support up to 8 Parents in a tuple, assuming that most use cases don't go past 8 parents.
+        let from_v2 = generate_conversion_from_v2(MAX_JUNCTIONS);
+        let from_tuples = generate_conversion_from_tuples(MAX_JUNCTIONS);
 
-		Ok(quote! {
-			#from_v2
-			#from_tuples
-		})
-	}
+        Ok(quote! {
+            #from_v2
+            #from_tuples
+        })
+    }
 
-	fn generate_conversion_from_tuples(max_junctions: usize) -> TokenStream {
-		(1..=max_junctions)
-			.map(|num_junctions| {
-				let idents =
-					(0..num_junctions).map(|i| format_ident!("j{}", i)).collect::<Vec<_>>();
-				let types = (0..num_junctions).map(|i| format_ident!("J{}", i)).collect::<Vec<_>>();
-				let variant = &format_ident!("X{}", num_junctions);
+    fn generate_conversion_from_tuples(max_junctions: usize) -> TokenStream {
+        (1..=max_junctions)
+            .map(|num_junctions| {
+                let idents =
+                    (0..num_junctions).map(|i| format_ident!("j{}", i)).collect::<Vec<_>>();
+                let types = (0..num_junctions).map(|i| format_ident!("J{}", i)).collect::<Vec<_>>();
+                let variant = &format_ident!("X{}", num_junctions);
 
-				quote! {
-					impl<#(#types : Into<Junction>,)*> From<( #(#types,)* )> for Junctions {
-						fn from( ( #(#idents,)* ): ( #(#types,)* ) ) -> Self {
-							Self::#variant( #(#idents .into()),* )
-						}
-					}
-				}
-			})
-			.collect()
-	}
+                quote! {
+                    impl<#(#types : Into<Junction>,)*> From<( #(#types,)* )> for Junctions {
+                        fn from( ( #(#idents,)* ): ( #(#types,)* ) ) -> Self {
+                            Self::#variant( #(#idents .into()),* )
+                        }
+                    }
+                }
+            })
+            .collect()
+    }
 
-	fn generate_conversion_from_v2(max_junctions: usize) -> TokenStream {
-		let match_variants = (0..max_junctions)
-			.map(|cur_num| {
-				let num_ancestors = cur_num + 1;
-				let variant = format_ident!("X{}", num_ancestors);
-				let idents = (0..=cur_num).map(|i| format_ident!("j{}", i)).collect::<Vec<_>>();
+    fn generate_conversion_from_v2(max_junctions: usize) -> TokenStream {
+        let match_variants = (0..max_junctions)
+            .map(|cur_num| {
+                let num_ancestors = cur_num + 1;
+                let variant = format_ident!("X{}", num_ancestors);
+                let idents = (0..=cur_num).map(|i| format_ident!("j{}", i)).collect::<Vec<_>>();
 
-				quote! {
-					crate::v2::Junctions::#variant( #(#idents),* ) =>
-						#variant( #( core::convert::TryInto::try_into(#idents)? ),* ),
-				}
-			})
-			.collect::<TokenStream>();
+                quote! {
+                    crate::v2::Junctions::#variant( #(#idents),* ) =>
+                        #variant( #( core::convert::TryInto::try_into(#idents)? ),* ),
+                }
+            })
+            .collect::<TokenStream>();
 
-		quote! {
-			impl core::convert::TryFrom<crate::v2::Junctions> for Junctions {
-				type Error = ();
-				fn try_from(mut old: crate::v2::Junctions) -> core::result::Result<Self, ()> {
-					use Junctions::*;
-					Ok(match old {
-						crate::v2::Junctions::Here => Here,
-						#match_variants
-					})
-				}
-			}
-		}
-	}
+        quote! {
+            impl core::convert::TryFrom<crate::v2::Junctions> for Junctions {
+                type Error = ();
+                fn try_from(mut old: crate::v2::Junctions) -> core::result::Result<Self, ()> {
+                    use Junctions::*;
+                    Ok(match old {
+                        crate::v2::Junctions::Here => Here,
+                        #match_variants
+                    })
+                }
+            }
+        }
+    }
 }

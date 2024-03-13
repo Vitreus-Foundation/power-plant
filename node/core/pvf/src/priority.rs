@@ -17,20 +17,20 @@
 /// A priority assigned to execution of a PVF.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Priority {
-	/// Normal priority for things that do not require immediate response, but still need to be
-	/// done pretty quick.
-	///
-	/// Approvals and disputes fall into this category.
-	Normal,
-	/// This priority is used for requests that are required to be processed as soon as possible.
-	///
-	/// For example, backing is on a critical path and requires execution as soon as possible.
-	Critical,
+    /// Normal priority for things that do not require immediate response, but still need to be
+    /// done pretty quick.
+    ///
+    /// Approvals and disputes fall into this category.
+    Normal,
+    /// This priority is used for requests that are required to be processed as soon as possible.
+    ///
+    /// For example, backing is on a critical path and requires execution as soon as possible.
+    Critical,
 }
 
 impl Priority {
-	/// Returns `true` if `self` is `Crticial`
-	pub fn is_critical(self) -> bool {
-		self == Priority::Critical
-	}
+    /// Returns `true` if `self` is `Crticial`
+    pub fn is_critical(self) -> bool {
+        self == Priority::Critical
+    }
 }

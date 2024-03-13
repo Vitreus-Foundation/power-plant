@@ -28,8 +28,8 @@ use parking_lot::Mutex;
 use sp_consensus::SyncOracle;
 
 use polkadot_node_network_protocol::{
-	peer_set::{PeerSet, ProtocolVersion},
-	PeerId, UnifiedReputationChange as Rep, View,
+    peer_set::{PeerSet, ProtocolVersion},
+    PeerId, UnifiedReputationChange as Rep, View,
 };
 
 /// Peer set info for network initialization.
@@ -66,7 +66,7 @@ pub(crate) const MAX_VIEW_HEADS: usize = 5;
 
 pub(crate) const MALFORMED_MESSAGE_COST: Rep = Rep::CostMajor("Malformed Network-bridge message");
 pub(crate) const UNCONNECTED_PEERSET_COST: Rep =
-	Rep::CostMinor("Message sent to un-connected peer-set");
+    Rep::CostMinor("Message sent to un-connected peer-set");
 pub(crate) const MALFORMED_VIEW_COST: Rep = Rep::CostMajor("Malformed view");
 pub(crate) const EMPTY_VIEW_COST: Rep = Rep::CostMajor("Peer sent us an empty view");
 
@@ -75,18 +75,18 @@ pub(crate) const EMPTY_VIEW_COST: Rep = Rep::CostMajor("Peer sent us an empty vi
 /// As transmitted to and received from subsystems.
 #[derive(Debug, Encode, Decode, Clone)]
 pub(crate) enum WireMessage<M> {
-	/// A message from a peer on a specific protocol.
-	#[codec(index = 1)]
-	ProtocolMessage(M),
-	/// A view update from a peer.
-	#[codec(index = 2)]
-	ViewUpdate(View),
+    /// A message from a peer on a specific protocol.
+    #[codec(index = 1)]
+    ProtocolMessage(M),
+    /// A view update from a peer.
+    #[codec(index = 2)]
+    ViewUpdate(View),
 }
 
 pub(crate) struct PeerData {
-	/// The Latest view sent by the peer.
-	view: View,
-	version: ProtocolVersion,
+    /// The Latest view sent by the peer.
+    view: View,
+    version: ProtocolVersion,
 }
 
 /// Shared state between incoming and outgoing.
@@ -96,12 +96,12 @@ pub(crate) struct Shared(Arc<Mutex<SharedInner>>);
 
 #[derive(Default)]
 struct SharedInner {
-	local_view: Option<View>,
-	validation_peers: HashMap<PeerId, PeerData>,
-	collation_peers: HashMap<PeerId, PeerData>,
+    local_view: Option<View>,
+    validation_peers: HashMap<PeerId, PeerData>,
+    collation_peers: HashMap<PeerId, PeerData>,
 }
 
 pub(crate) enum Mode {
-	Syncing(Box<dyn SyncOracle + Send>),
-	Active,
+    Syncing(Box<dyn SyncOracle + Send>),
+    Active,
 }

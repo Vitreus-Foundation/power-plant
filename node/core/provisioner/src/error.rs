@@ -28,87 +28,87 @@ pub type Result<T> = std::result::Result<T, Error>;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	#[error(transparent)]
-	Util(#[from] util::Error),
+    #[error(transparent)]
+    Util(#[from] util::Error),
 
-	#[error("failed to get availability cores")]
-	CanceledAvailabilityCores(#[source] oneshot::Canceled),
+    #[error("failed to get availability cores")]
+    CanceledAvailabilityCores(#[source] oneshot::Canceled),
 
-	#[error("failed to get persisted validation data")]
-	CanceledPersistedValidationData(#[source] oneshot::Canceled),
+    #[error("failed to get persisted validation data")]
+    CanceledPersistedValidationData(#[source] oneshot::Canceled),
 
-	#[error("failed to get block number")]
-	CanceledBlockNumber(#[source] oneshot::Canceled),
+    #[error("failed to get block number")]
+    CanceledBlockNumber(#[source] oneshot::Canceled),
 
-	#[error("failed to get backed candidates")]
-	CanceledBackedCandidates(#[source] oneshot::Canceled),
+    #[error("failed to get backed candidates")]
+    CanceledBackedCandidates(#[source] oneshot::Canceled),
 
-	#[error("failed to get votes on dispute")]
-	CanceledCandidateVotes(#[source] oneshot::Canceled),
+    #[error("failed to get votes on dispute")]
+    CanceledCandidateVotes(#[source] oneshot::Canceled),
 
-	#[error(transparent)]
-	ChainApi(#[from] ChainApiError),
+    #[error(transparent)]
+    ChainApi(#[from] ChainApiError),
 
-	#[error(transparent)]
-	Runtime(#[from] RuntimeApiError),
+    #[error(transparent)]
+    Runtime(#[from] RuntimeApiError),
 
-	#[error("failed to send message to ChainAPI")]
-	ChainApiMessageSend(#[source] mpsc::SendError),
+    #[error("failed to send message to ChainAPI")]
+    ChainApiMessageSend(#[source] mpsc::SendError),
 
-	#[error("failed to send message to CandidateBacking to get backed candidates")]
-	GetBackedCandidatesSend(#[source] mpsc::SendError),
+    #[error("failed to send message to CandidateBacking to get backed candidates")]
+    GetBackedCandidatesSend(#[source] mpsc::SendError),
 
-	#[error("Send inherent data timeout.")]
-	SendInherentDataTimeout,
+    #[error("Send inherent data timeout.")]
+    SendInherentDataTimeout,
 
-	#[error("failed to send return message with Inherents")]
-	InherentDataReturnChannel,
+    #[error("failed to send return message with Inherents")]
+    InherentDataReturnChannel,
 
-	#[error(
-		"backed candidate does not correspond to selected candidate; check logic in provisioner"
-	)]
-	BackedCandidateOrderingProblem,
+    #[error(
+        "backed candidate does not correspond to selected candidate; check logic in provisioner"
+    )]
+    BackedCandidateOrderingProblem,
 
-	#[fatal]
-	#[error("Failed to spawn background task")]
-	FailedToSpawnBackgroundTask,
+    #[fatal]
+    #[error("Failed to spawn background task")]
+    FailedToSpawnBackgroundTask,
 
-	#[error(transparent)]
-	SubsystemError(#[from] SubsystemError),
+    #[error(transparent)]
+    SubsystemError(#[from] SubsystemError),
 
-	#[fatal]
-	#[error(transparent)]
-	OverseerExited(SubsystemError),
+    #[fatal]
+    #[error(transparent)]
+    OverseerExited(SubsystemError),
 }
 
 /// Used by `get_onchain_disputes` to represent errors related to fetching on-chain disputes from the Runtime
 #[allow(dead_code)] // Remove when promoting to stable
 #[fatality::fatality]
 pub enum GetOnchainDisputesError {
-	#[fatal]
-	#[error("runtime subsystem is down")]
-	Channel,
+    #[fatal]
+    #[error("runtime subsystem is down")]
+    Channel,
 
-	#[error("runtime execution error occurred while fetching onchain disputes for parent {1}")]
-	Execution(#[source] RuntimeApiError, Hash),
+    #[error("runtime execution error occurred while fetching onchain disputes for parent {1}")]
+    Execution(#[source] RuntimeApiError, Hash),
 
-	#[error("runtime doesn't support RuntimeApiRequest::Disputes for parent {1}")]
-	NotSupported(#[source] RuntimeApiError, Hash),
+    #[error("runtime doesn't support RuntimeApiRequest::Disputes for parent {1}")]
+    NotSupported(#[source] RuntimeApiError, Hash),
 }
 
 pub fn log_error(result: Result<()>) -> std::result::Result<(), FatalError> {
-	match result.into_nested()? {
-		Ok(()) => Ok(()),
-		Err(jfyi) => {
-			jfyi.log();
-			Ok(())
-		},
-	}
+    match result.into_nested()? {
+        Ok(()) => Ok(()),
+        Err(jfyi) => {
+            jfyi.log();
+            Ok(())
+        },
+    }
 }
 
 impl JfyiError {
-	/// Log a `JfyiError`.
-	pub fn log(self) {
-		gum::debug!(target: super::LOG_TARGET, error = ?self);
-	}
+    /// Log a `JfyiError`.
+    pub fn log(self) {
+        gum::debug!(target: super::LOG_TARGET, error = ?self);
+    }
 }

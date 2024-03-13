@@ -22,13 +22,13 @@ use xcm::latest::{MultiAsset, MultiLocation};
 /// Can be amalgamated into tuples. If any item returns `true`, it short-circuits, else `false` is returned.
 #[deprecated = "Use `frame_support::traits::ContainsPair<MultiAsset, MultiLocation>` instead"]
 pub trait FilterAssetLocation {
-	/// A filter to distinguish between asset/location pairs.
-	fn contains(asset: &MultiAsset, origin: &MultiLocation) -> bool;
+    /// A filter to distinguish between asset/location pairs.
+    fn contains(asset: &MultiAsset, origin: &MultiLocation) -> bool;
 }
 
 #[allow(deprecated)]
 impl<T: ContainsPair<MultiAsset, MultiLocation>> FilterAssetLocation for T {
-	fn contains(asset: &MultiAsset, origin: &MultiLocation) -> bool {
-		T::contains(asset, origin)
-	}
+    fn contains(asset: &MultiAsset, origin: &MultiLocation) -> bool {
+        T::contains(asset, origin)
+    }
 }

@@ -15,8 +15,8 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use polkadot_node_subsystem_util::metrics::{
-	self,
-	prometheus::{self, Counter, CounterVec, Histogram, Opts, PrometheusError, Registry, U64},
+    self,
+    prometheus::{self, Counter, CounterVec, Histogram, Opts, PrometheusError, Registry, U64},
 };
 
 /// Availability Distribution metrics.
@@ -25,145 +25,145 @@ pub struct Metrics(Option<MetricsInner>);
 
 #[derive(Clone)]
 struct MetricsInner {
-	/// Number of sent chunk requests.
-	///
-	/// Gets incremented on each sent chunk requests.
-	chunk_requests_issued: Counter<U64>,
+    /// Number of sent chunk requests.
+    ///
+    /// Gets incremented on each sent chunk requests.
+    chunk_requests_issued: Counter<U64>,
 
-	/// A counter for finished chunk requests.
-	///
-	/// Split by result:
-	/// - `no_such_chunk` ... peer did not have the requested chunk
-	/// - `timeout` ... request timed out.
-	/// - `network_error` ... Some networking issue except timeout
-	/// - `invalid` ... Chunk was received, but not valid.
-	/// - `success`
-	chunk_requests_finished: CounterVec<U64>,
+    /// A counter for finished chunk requests.
+    ///
+    /// Split by result:
+    /// - `no_such_chunk` ... peer did not have the requested chunk
+    /// - `timeout` ... request timed out.
+    /// - `network_error` ... Some networking issue except timeout
+    /// - `invalid` ... Chunk was received, but not valid.
+    /// - `success`
+    chunk_requests_finished: CounterVec<U64>,
 
-	/// The duration of request to response.
-	time_chunk_request: Histogram,
+    /// The duration of request to response.
+    time_chunk_request: Histogram,
 
-	/// The duration between the pure recovery and verification.
-	time_erasure_recovery: Histogram,
+    /// The duration between the pure recovery and verification.
+    time_erasure_recovery: Histogram,
 
-	/// How much time it takes to re-encode the data into erasure chunks in order to verify
-	/// the root hash of the provided Merkle tree. See `reconstructed_data_matches_root`.
-	time_reencode_chunks: Histogram,
+    /// How much time it takes to re-encode the data into erasure chunks in order to verify
+    /// the root hash of the provided Merkle tree. See `reconstructed_data_matches_root`.
+    time_reencode_chunks: Histogram,
 
-	/// Time of a full recovery, including erasure decoding or until we gave
-	/// up.
-	time_full_recovery: Histogram,
+    /// Time of a full recovery, including erasure decoding or until we gave
+    /// up.
+    time_full_recovery: Histogram,
 
-	/// Number of full recoveries that have been finished one way or the other.
-	full_recoveries_finished: CounterVec<U64>,
+    /// Number of full recoveries that have been finished one way or the other.
+    full_recoveries_finished: CounterVec<U64>,
 
-	/// Number of full recoveries that have been started on this subsystem.
-	///
-	/// Note: Those are only recoveries which could not get served locally already - so in other
-	/// words: Only real recoveries.
-	full_recoveries_started: Counter<U64>,
+    /// Number of full recoveries that have been started on this subsystem.
+    ///
+    /// Note: Those are only recoveries which could not get served locally already - so in other
+    /// words: Only real recoveries.
+    full_recoveries_started: Counter<U64>,
 }
 
 impl Metrics {
-	/// Create new dummy metrics, not reporting anything.
-	pub fn new_dummy() -> Self {
-		Metrics(None)
-	}
+    /// Create new dummy metrics, not reporting anything.
+    pub fn new_dummy() -> Self {
+        Metrics(None)
+    }
 
-	/// Increment counter on fetched labels.
-	pub fn on_chunk_request_issued(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.chunk_requests_issued.inc()
-		}
-	}
+    /// Increment counter on fetched labels.
+    pub fn on_chunk_request_issued(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.chunk_requests_issued.inc()
+        }
+    }
 
-	/// A chunk request timed out.
-	pub fn on_chunk_request_timeout(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.chunk_requests_finished.with_label_values(&["timeout"]).inc()
-		}
-	}
+    /// A chunk request timed out.
+    pub fn on_chunk_request_timeout(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.chunk_requests_finished.with_label_values(&["timeout"]).inc()
+        }
+    }
 
-	/// A chunk request failed because validator did not have its chunk.
-	pub fn on_chunk_request_no_such_chunk(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.chunk_requests_finished.with_label_values(&["no_such_chunk"]).inc()
-		}
-	}
+    /// A chunk request failed because validator did not have its chunk.
+    pub fn on_chunk_request_no_such_chunk(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.chunk_requests_finished.with_label_values(&["no_such_chunk"]).inc()
+        }
+    }
 
-	/// A chunk request failed for some non timeout related network error.
-	pub fn on_chunk_request_error(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.chunk_requests_finished.with_label_values(&["error"]).inc()
-		}
-	}
+    /// A chunk request failed for some non timeout related network error.
+    pub fn on_chunk_request_error(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.chunk_requests_finished.with_label_values(&["error"]).inc()
+        }
+    }
 
-	/// A chunk request succeeded, but was not valid.
-	pub fn on_chunk_request_invalid(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.chunk_requests_finished.with_label_values(&["invalid"]).inc()
-		}
-	}
+    /// A chunk request succeeded, but was not valid.
+    pub fn on_chunk_request_invalid(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.chunk_requests_finished.with_label_values(&["invalid"]).inc()
+        }
+    }
 
-	/// A chunk request succeeded.
-	pub fn on_chunk_request_succeeded(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.chunk_requests_finished.with_label_values(&["success"]).inc()
-		}
-	}
+    /// A chunk request succeeded.
+    pub fn on_chunk_request_succeeded(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.chunk_requests_finished.with_label_values(&["success"]).inc()
+        }
+    }
 
-	/// Get a timer to time request/response duration.
-	pub fn time_chunk_request(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.time_chunk_request.start_timer())
-	}
+    /// Get a timer to time request/response duration.
+    pub fn time_chunk_request(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.time_chunk_request.start_timer())
+    }
 
-	/// Get a timer to time erasure code recover.
-	pub fn time_erasure_recovery(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.time_erasure_recovery.start_timer())
-	}
+    /// Get a timer to time erasure code recover.
+    pub fn time_erasure_recovery(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.time_erasure_recovery.start_timer())
+    }
 
-	/// Get a timer to time chunk encoding.
-	pub fn time_reencode_chunks(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.time_reencode_chunks.start_timer())
-	}
+    /// Get a timer to time chunk encoding.
+    pub fn time_reencode_chunks(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.time_reencode_chunks.start_timer())
+    }
 
-	/// Get a timer to measure the time of the complete recovery process.
-	pub fn time_full_recovery(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.time_full_recovery.start_timer())
-	}
+    /// Get a timer to measure the time of the complete recovery process.
+    pub fn time_full_recovery(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.time_full_recovery.start_timer())
+    }
 
-	/// A full recovery succeeded.
-	pub fn on_recovery_succeeded(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.full_recoveries_finished.with_label_values(&["success"]).inc()
-		}
-	}
+    /// A full recovery succeeded.
+    pub fn on_recovery_succeeded(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.full_recoveries_finished.with_label_values(&["success"]).inc()
+        }
+    }
 
-	/// A full recovery failed (data not available).
-	pub fn on_recovery_failed(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.full_recoveries_finished.with_label_values(&["failure"]).inc()
-		}
-	}
+    /// A full recovery failed (data not available).
+    pub fn on_recovery_failed(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.full_recoveries_finished.with_label_values(&["failure"]).inc()
+        }
+    }
 
-	/// A full recovery failed (data was recovered, but invalid).
-	pub fn on_recovery_invalid(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.full_recoveries_finished.with_label_values(&["invalid"]).inc()
-		}
-	}
+    /// A full recovery failed (data was recovered, but invalid).
+    pub fn on_recovery_invalid(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.full_recoveries_finished.with_label_values(&["invalid"]).inc()
+        }
+    }
 
-	/// A recover was started.
-	pub fn on_recovery_started(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.full_recoveries_started.inc()
-		}
-	}
+    /// A recover was started.
+    pub fn on_recovery_started(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.full_recoveries_started.inc()
+        }
+    }
 }
 
 impl metrics::Metrics for Metrics {
-	fn try_register(registry: &Registry) -> Result<Self, PrometheusError> {
-		let metrics = MetricsInner {
+    fn try_register(registry: &Registry) -> Result<Self, PrometheusError> {
+        let metrics = MetricsInner {
 			chunk_requests_issued: prometheus::register(
 				Counter::new(
 					"polkadot_parachain_availability_recovery_chunk_requests_issued",
@@ -227,6 +227,6 @@ impl metrics::Metrics for Metrics {
 				registry,
 			)?,
 		};
-		Ok(Metrics(Some(metrics)))
-	}
+        Ok(Metrics(Some(metrics)))
+    }
 }

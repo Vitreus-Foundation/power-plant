@@ -22,114 +22,114 @@ use polkadot_node_metrics::metrics::{self, prometheus};
 pub struct Metrics(pub(crate) Option<MetricsInner>);
 
 fn peer_set_label(peer_set: PeerSet, version: ProtocolVersion) -> &'static str {
-	// Higher level code is meant to protect against this ever happening.
-	peer_set.get_protocol_label(version).unwrap_or("<internal error>")
+    // Higher level code is meant to protect against this ever happening.
+    peer_set.get_protocol_label(version).unwrap_or("<internal error>")
 }
 
 #[allow(missing_docs)]
 impl Metrics {
-	pub fn on_peer_connected(&self, peer_set: PeerSet, version: ProtocolVersion) {
-		self.0.as_ref().map(|metrics| {
-			metrics
-				.connected_events
-				.with_label_values(&[peer_set_label(peer_set, version)])
-				.inc()
-		});
-	}
+    pub fn on_peer_connected(&self, peer_set: PeerSet, version: ProtocolVersion) {
+        self.0.as_ref().map(|metrics| {
+            metrics
+                .connected_events
+                .with_label_values(&[peer_set_label(peer_set, version)])
+                .inc()
+        });
+    }
 
-	pub fn on_peer_disconnected(&self, peer_set: PeerSet, version: ProtocolVersion) {
-		self.0.as_ref().map(|metrics| {
-			metrics
-				.disconnected_events
-				.with_label_values(&[peer_set_label(peer_set, version)])
-				.inc()
-		});
-	}
+    pub fn on_peer_disconnected(&self, peer_set: PeerSet, version: ProtocolVersion) {
+        self.0.as_ref().map(|metrics| {
+            metrics
+                .disconnected_events
+                .with_label_values(&[peer_set_label(peer_set, version)])
+                .inc()
+        });
+    }
 
-	pub fn note_peer_count(&self, peer_set: PeerSet, version: ProtocolVersion, count: usize) {
-		self.0.as_ref().map(|metrics| {
-			metrics
-				.peer_count
-				.with_label_values(&[peer_set_label(peer_set, version)])
-				.set(count as u64)
-		});
-	}
+    pub fn note_peer_count(&self, peer_set: PeerSet, version: ProtocolVersion, count: usize) {
+        self.0.as_ref().map(|metrics| {
+            metrics
+                .peer_count
+                .with_label_values(&[peer_set_label(peer_set, version)])
+                .set(count as u64)
+        });
+    }
 
-	pub fn on_notification_received(
-		&self,
-		peer_set: PeerSet,
-		version: ProtocolVersion,
-		size: usize,
-	) {
-		if let Some(metrics) = self.0.as_ref() {
-			metrics
-				.notifications_received
-				.with_label_values(&[peer_set_label(peer_set, version)])
-				.inc();
+    pub fn on_notification_received(
+        &self,
+        peer_set: PeerSet,
+        version: ProtocolVersion,
+        size: usize,
+    ) {
+        if let Some(metrics) = self.0.as_ref() {
+            metrics
+                .notifications_received
+                .with_label_values(&[peer_set_label(peer_set, version)])
+                .inc();
 
-			metrics
-				.bytes_received
-				.with_label_values(&[peer_set_label(peer_set, version)])
-				.inc_by(size as u64);
-		}
-	}
+            metrics
+                .bytes_received
+                .with_label_values(&[peer_set_label(peer_set, version)])
+                .inc_by(size as u64);
+        }
+    }
 
-	pub fn on_notification_sent(
-		&self,
-		peer_set: PeerSet,
-		version: ProtocolVersion,
-		size: usize,
-		to_peers: usize,
-	) {
-		if let Some(metrics) = self.0.as_ref() {
-			metrics
-				.notifications_sent
-				.with_label_values(&[peer_set_label(peer_set, version)])
-				.inc_by(to_peers as u64);
+    pub fn on_notification_sent(
+        &self,
+        peer_set: PeerSet,
+        version: ProtocolVersion,
+        size: usize,
+        to_peers: usize,
+    ) {
+        if let Some(metrics) = self.0.as_ref() {
+            metrics
+                .notifications_sent
+                .with_label_values(&[peer_set_label(peer_set, version)])
+                .inc_by(to_peers as u64);
 
-			metrics
-				.bytes_sent
-				.with_label_values(&[peer_set_label(peer_set, version)])
-				.inc_by((size * to_peers) as u64);
-		}
-	}
+            metrics
+                .bytes_sent
+                .with_label_values(&[peer_set_label(peer_set, version)])
+                .inc_by((size * to_peers) as u64);
+        }
+    }
 
-	pub fn note_desired_peer_count(&self, peer_set: PeerSet, size: usize) {
-		self.0.as_ref().map(|metrics| {
-			metrics
-				.desired_peer_count
-				.with_label_values(&[peer_set.get_label()])
-				.set(size as u64)
-		});
-	}
+    pub fn note_desired_peer_count(&self, peer_set: PeerSet, size: usize) {
+        self.0.as_ref().map(|metrics| {
+            metrics
+                .desired_peer_count
+                .with_label_values(&[peer_set.get_label()])
+                .set(size as u64)
+        });
+    }
 
-	pub fn on_report_event(&self) {
-		if let Some(metrics) = self.0.as_ref() {
-			metrics.report_events.inc()
-		}
-	}
+    pub fn on_report_event(&self) {
+        if let Some(metrics) = self.0.as_ref() {
+            metrics.report_events.inc()
+        }
+    }
 }
 
 #[derive(Clone)]
 pub(crate) struct MetricsInner {
-	peer_count: prometheus::GaugeVec<prometheus::U64>,
-	connected_events: prometheus::CounterVec<prometheus::U64>,
-	disconnected_events: prometheus::CounterVec<prometheus::U64>,
-	desired_peer_count: prometheus::GaugeVec<prometheus::U64>,
-	report_events: prometheus::Counter<prometheus::U64>,
+    peer_count: prometheus::GaugeVec<prometheus::U64>,
+    connected_events: prometheus::CounterVec<prometheus::U64>,
+    disconnected_events: prometheus::CounterVec<prometheus::U64>,
+    desired_peer_count: prometheus::GaugeVec<prometheus::U64>,
+    report_events: prometheus::Counter<prometheus::U64>,
 
-	notifications_received: prometheus::CounterVec<prometheus::U64>,
-	notifications_sent: prometheus::CounterVec<prometheus::U64>,
+    notifications_received: prometheus::CounterVec<prometheus::U64>,
+    notifications_sent: prometheus::CounterVec<prometheus::U64>,
 
-	bytes_received: prometheus::CounterVec<prometheus::U64>,
-	bytes_sent: prometheus::CounterVec<prometheus::U64>,
+    bytes_received: prometheus::CounterVec<prometheus::U64>,
+    bytes_sent: prometheus::CounterVec<prometheus::U64>,
 }
 
 impl metrics::Metrics for Metrics {
-	fn try_register(
-		registry: &prometheus::Registry,
-	) -> std::result::Result<Self, prometheus::PrometheusError> {
-		let metrics = MetricsInner {
+    fn try_register(
+        registry: &prometheus::Registry,
+    ) -> std::result::Result<Self, prometheus::PrometheusError> {
+        let metrics = MetricsInner {
 			peer_count: prometheus::register(
 				prometheus::GaugeVec::new(
 					prometheus::Opts::new(
@@ -219,6 +219,6 @@ impl metrics::Metrics for Metrics {
 			)?,
 		};
 
-		Ok(Metrics(Some(metrics)))
-	}
+        Ok(Metrics(Some(metrics)))
+    }
 }

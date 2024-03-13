@@ -20,38 +20,38 @@ use sp_keyring::Sr25519Keyring;
 
 #[substrate_test_utils::test(flavor = "multi_thread")]
 async fn ensure_test_service_build_blocks() {
-	let mut builder = sc_cli::LoggerBuilder::new("");
-	builder.with_colors(false);
-	builder.init().expect("Sets up logger");
-	let alice_config = node_config(
-		|| {},
-		tokio::runtime::Handle::current(),
-		Sr25519Keyring::Alice,
-		Vec::new(),
-		true,
-	);
-	let mut alice = run_validator_node(alice_config, None);
+    let mut builder = sc_cli::LoggerBuilder::new("");
+    builder.with_colors(false);
+    builder.init().expect("Sets up logger");
+    let alice_config = node_config(
+        || {},
+        tokio::runtime::Handle::current(),
+        Sr25519Keyring::Alice,
+        Vec::new(),
+        true,
+    );
+    let mut alice = run_validator_node(alice_config, None);
 
-	let bob_config = node_config(
-		|| {},
-		tokio::runtime::Handle::current(),
-		Sr25519Keyring::Bob,
-		vec![alice.addr.clone()],
-		true,
-	);
-	let mut bob = run_validator_node(bob_config, None);
+    let bob_config = node_config(
+        || {},
+        tokio::runtime::Handle::current(),
+        Sr25519Keyring::Bob,
+        vec![alice.addr.clone()],
+        true,
+    );
+    let mut bob = run_validator_node(bob_config, None);
 
-	{
-		let t1 = future::join(alice.wait_for_blocks(3), bob.wait_for_blocks(3)).fuse();
-		let t2 = alice.task_manager.future().fuse();
-		let t3 = bob.task_manager.future().fuse();
+    {
+        let t1 = future::join(alice.wait_for_blocks(3), bob.wait_for_blocks(3)).fuse();
+        let t2 = alice.task_manager.future().fuse();
+        let t3 = bob.task_manager.future().fuse();
 
-		pin_mut!(t1, t2, t3);
+        pin_mut!(t1, t2, t3);
 
-		select! {
-			_ = t1 => {},
-			_ = t2 => panic!("service Alice failed"),
-			_ = t3 => panic!("service Bob failed"),
-		}
-	}
+        select! {
+            _ = t1 => {},
+            _ = t2 => panic!("service Alice failed"),
+            _ = t3 => panic!("service Bob failed"),
+        }
+    }
 }

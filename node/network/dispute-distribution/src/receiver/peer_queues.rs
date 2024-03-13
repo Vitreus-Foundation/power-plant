@@ -46,96 +46,96 @@ pub const PEER_QUEUE_CAPACITY: usize = 2;
 ///    than once for every `RECEIVE_RATE_LIMIT`, but it will always return Ready eventually.
 /// 4. If empty `pop_reqs` will never return `Ready`, but will always be `Pending`.
 pub struct PeerQueues {
-	/// Actual queues.
-	queues: HashMap<AuthorityDiscoveryId, VecDeque<IncomingRequest<DisputeRequest>>>,
+    /// Actual queues.
+    queues: HashMap<AuthorityDiscoveryId, VecDeque<IncomingRequest<DisputeRequest>>>,
 
-	/// Delay timer for establishing the rate limit.
-	rate_limit_timer: Option<Delay>,
+    /// Delay timer for establishing the rate limit.
+    rate_limit_timer: Option<Delay>,
 }
 
 impl PeerQueues {
-	/// New empty `PeerQueues`.
-	pub fn new() -> Self {
-		Self { queues: HashMap::new(), rate_limit_timer: None }
-	}
+    /// New empty `PeerQueues`.
+    pub fn new() -> Self {
+        Self { queues: HashMap::new(), rate_limit_timer: None }
+    }
 
-	/// Push an incoming request for a given authority.
-	///
-	/// Returns: `Ok(())` if succeeded, `Err((args))` if capacity is reached.
-	pub fn push_req(
-		&mut self,
-		peer: AuthorityDiscoveryId,
-		req: IncomingRequest<DisputeRequest>,
-	) -> Result<(), (AuthorityDiscoveryId, IncomingRequest<DisputeRequest>)> {
-		let queue = match self.queues.entry(peer) {
-			Entry::Vacant(vacant) => vacant.insert(VecDeque::new()),
-			Entry::Occupied(occupied) => {
-				if occupied.get().len() >= PEER_QUEUE_CAPACITY {
-					return Err((occupied.key().clone(), req))
-				}
-				occupied.into_mut()
-			},
-		};
-		queue.push_back(req);
+    /// Push an incoming request for a given authority.
+    ///
+    /// Returns: `Ok(())` if succeeded, `Err((args))` if capacity is reached.
+    pub fn push_req(
+        &mut self,
+        peer: AuthorityDiscoveryId,
+        req: IncomingRequest<DisputeRequest>,
+    ) -> Result<(), (AuthorityDiscoveryId, IncomingRequest<DisputeRequest>)> {
+        let queue = match self.queues.entry(peer) {
+            Entry::Vacant(vacant) => vacant.insert(VecDeque::new()),
+            Entry::Occupied(occupied) => {
+                if occupied.get().len() >= PEER_QUEUE_CAPACITY {
+                    return Err((occupied.key().clone(), req));
+                }
+                occupied.into_mut()
+            },
+        };
+        queue.push_back(req);
 
-		// We have at least one element to process - rate limit `timer` needs to exist now:
-		self.ensure_timer();
-		Ok(())
-	}
+        // We have at least one element to process - rate limit `timer` needs to exist now:
+        self.ensure_timer();
+        Ok(())
+    }
 
-	/// Pop all heads and return them for processing.
-	///
-	/// This gets one message from each peer that has sent at least one.
-	///
-	/// This function is rate limited, if called in sequence it will not return more often than
-	/// every `RECEIVE_RATE_LIMIT`.
-	///
-	/// NOTE: If empty this function will not return `Ready` at all, but will always be `Pending`.
-	pub async fn pop_reqs(&mut self) -> Vec<IncomingRequest<DisputeRequest>> {
-		self.wait_for_timer().await;
+    /// Pop all heads and return them for processing.
+    ///
+    /// This gets one message from each peer that has sent at least one.
+    ///
+    /// This function is rate limited, if called in sequence it will not return more often than
+    /// every `RECEIVE_RATE_LIMIT`.
+    ///
+    /// NOTE: If empty this function will not return `Ready` at all, but will always be `Pending`.
+    pub async fn pop_reqs(&mut self) -> Vec<IncomingRequest<DisputeRequest>> {
+        self.wait_for_timer().await;
 
-		let mut heads = Vec::with_capacity(self.queues.len());
-		let old_queues = std::mem::replace(&mut self.queues, HashMap::new());
-		for (k, mut queue) in old_queues.into_iter() {
-			let front = queue.pop_front();
-			debug_assert!(front.is_some(), "Invariant that queues are never empty is broken.");
+        let mut heads = Vec::with_capacity(self.queues.len());
+        let old_queues = std::mem::replace(&mut self.queues, HashMap::new());
+        for (k, mut queue) in old_queues.into_iter() {
+            let front = queue.pop_front();
+            debug_assert!(front.is_some(), "Invariant that queues are never empty is broken.");
 
-			if let Some(front) = front {
-				heads.push(front);
-			}
-			if !queue.is_empty() {
-				self.queues.insert(k, queue);
-			}
-		}
+            if let Some(front) = front {
+                heads.push(front);
+            }
+            if !queue.is_empty() {
+                self.queues.insert(k, queue);
+            }
+        }
 
-		if !self.is_empty() {
-			// Still not empty - we should get woken at some point.
-			self.ensure_timer();
-		}
+        if !self.is_empty() {
+            // Still not empty - we should get woken at some point.
+            self.ensure_timer();
+        }
 
-		heads
-	}
+        heads
+    }
 
-	/// Whether or not all queues are empty.
-	pub fn is_empty(&self) -> bool {
-		self.queues.is_empty()
-	}
+    /// Whether or not all queues are empty.
+    pub fn is_empty(&self) -> bool {
+        self.queues.is_empty()
+    }
 
-	/// Ensure there is an active `timer`.
-	///
-	/// Checks whether one exists and if not creates one.
-	fn ensure_timer(&mut self) -> &mut Delay {
-		self.rate_limit_timer.get_or_insert(Delay::new(RECEIVE_RATE_LIMIT))
-	}
+    /// Ensure there is an active `timer`.
+    ///
+    /// Checks whether one exists and if not creates one.
+    fn ensure_timer(&mut self) -> &mut Delay {
+        self.rate_limit_timer.get_or_insert(Delay::new(RECEIVE_RATE_LIMIT))
+    }
 
-	/// Wait for `timer` if it exists, or be `Pending` forever.
-	///
-	/// Afterwards it gets set back to `None`.
-	async fn wait_for_timer(&mut self) {
-		match self.rate_limit_timer.as_mut() {
-			None => pending().await,
-			Some(timer) => timer.await,
-		}
-		self.rate_limit_timer = None;
-	}
+    /// Wait for `timer` if it exists, or be `Pending` forever.
+    ///
+    /// Afterwards it gets set back to `None`.
+    async fn wait_for_timer(&mut self) {
+        match self.rate_limit_timer.as_mut() {
+            None => pending().await,
+            Some(timer) => timer.await,
+        }
+        self.rate_limit_timer = None;
+    }
 }

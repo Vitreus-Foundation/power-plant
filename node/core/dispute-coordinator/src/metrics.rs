@@ -18,30 +18,30 @@ use polkadot_node_subsystem_util::metrics::{self, prometheus};
 
 #[derive(Clone)]
 struct MetricsInner {
-	/// Number of opened disputes.
-	open: prometheus::Counter<prometheus::U64>,
-	/// Votes of all disputes.
-	votes: prometheus::CounterVec<prometheus::U64>,
-	/// Number of approval votes explicitly fetched from approval voting.
-	approval_votes: prometheus::Counter<prometheus::U64>,
-	/// Conclusion across all disputes.
-	concluded: prometheus::CounterVec<prometheus::U64>,
-	/// Number of participations that have been queued.
-	queued_participations: prometheus::CounterVec<prometheus::U64>,
-	/// How long vote cleanup batches take.
-	vote_cleanup_time: prometheus::Histogram,
-	/// Number of refrained participations.
-	refrained_participations: prometheus::Counter<prometheus::U64>,
-	/// Distribution of participation durations.
-	participation_durations: prometheus::Histogram,
-	/// Measures the duration of the full participation pipeline: From when
-	/// a participation request is first queued to when participation in the
-	/// requested dispute is complete.
-	participation_pipeline_durations: prometheus::Histogram,
-	/// Size of participation priority queue
-	participation_priority_queue_size: prometheus::Gauge<prometheus::U64>,
-	/// Size of participation best effort queue
-	participation_best_effort_queue_size: prometheus::Gauge<prometheus::U64>,
+    /// Number of opened disputes.
+    open: prometheus::Counter<prometheus::U64>,
+    /// Votes of all disputes.
+    votes: prometheus::CounterVec<prometheus::U64>,
+    /// Number of approval votes explicitly fetched from approval voting.
+    approval_votes: prometheus::Counter<prometheus::U64>,
+    /// Conclusion across all disputes.
+    concluded: prometheus::CounterVec<prometheus::U64>,
+    /// Number of participations that have been queued.
+    queued_participations: prometheus::CounterVec<prometheus::U64>,
+    /// How long vote cleanup batches take.
+    vote_cleanup_time: prometheus::Histogram,
+    /// Number of refrained participations.
+    refrained_participations: prometheus::Counter<prometheus::U64>,
+    /// Distribution of participation durations.
+    participation_durations: prometheus::Histogram,
+    /// Measures the duration of the full participation pipeline: From when
+    /// a participation request is first queued to when participation in the
+    /// requested dispute is complete.
+    participation_pipeline_durations: prometheus::Histogram,
+    /// Size of participation priority queue
+    participation_priority_queue_size: prometheus::Gauge<prometheus::U64>,
+    /// Size of participation best effort queue
+    participation_best_effort_queue_size: prometheus::Gauge<prometheus::U64>,
 }
 
 /// Candidate validation metrics.
@@ -49,98 +49,98 @@ struct MetricsInner {
 pub struct Metrics(Option<MetricsInner>);
 
 impl Metrics {
-	pub(crate) fn on_open(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.open.inc();
-		}
-	}
+    pub(crate) fn on_open(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.open.inc();
+        }
+    }
 
-	pub(crate) fn on_valid_votes(&self, vote_count: u32) {
-		if let Some(metrics) = &self.0 {
-			metrics.votes.with_label_values(&["valid"]).inc_by(vote_count as _);
-		}
-	}
+    pub(crate) fn on_valid_votes(&self, vote_count: u32) {
+        if let Some(metrics) = &self.0 {
+            metrics.votes.with_label_values(&["valid"]).inc_by(vote_count as _);
+        }
+    }
 
-	pub(crate) fn on_invalid_votes(&self, vote_count: u32) {
-		if let Some(metrics) = &self.0 {
-			metrics.votes.with_label_values(&["invalid"]).inc_by(vote_count as _);
-		}
-	}
+    pub(crate) fn on_invalid_votes(&self, vote_count: u32) {
+        if let Some(metrics) = &self.0 {
+            metrics.votes.with_label_values(&["invalid"]).inc_by(vote_count as _);
+        }
+    }
 
-	pub(crate) fn on_approval_votes(&self, vote_count: u32) {
-		if let Some(metrics) = &self.0 {
-			metrics.approval_votes.inc_by(vote_count as _);
-		}
-	}
+    pub(crate) fn on_approval_votes(&self, vote_count: u32) {
+        if let Some(metrics) = &self.0 {
+            metrics.approval_votes.inc_by(vote_count as _);
+        }
+    }
 
-	pub(crate) fn on_concluded_valid(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.concluded.with_label_values(&["valid"]).inc();
-		}
-	}
+    pub(crate) fn on_concluded_valid(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.concluded.with_label_values(&["valid"]).inc();
+        }
+    }
 
-	pub(crate) fn on_concluded_invalid(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.concluded.with_label_values(&["invalid"]).inc();
-		}
-	}
+    pub(crate) fn on_concluded_invalid(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.concluded.with_label_values(&["invalid"]).inc();
+        }
+    }
 
-	pub(crate) fn on_queued_priority_participation(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.queued_participations.with_label_values(&["priority"]).inc();
-		}
-	}
+    pub(crate) fn on_queued_priority_participation(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.queued_participations.with_label_values(&["priority"]).inc();
+        }
+    }
 
-	pub(crate) fn on_queued_best_effort_participation(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.queued_participations.with_label_values(&["best-effort"]).inc();
-		}
-	}
+    pub(crate) fn on_queued_best_effort_participation(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.queued_participations.with_label_values(&["best-effort"]).inc();
+        }
+    }
 
-	pub(crate) fn time_vote_cleanup(&self) -> Option<prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.vote_cleanup_time.start_timer())
-	}
+    pub(crate) fn time_vote_cleanup(&self) -> Option<prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.vote_cleanup_time.start_timer())
+    }
 
-	pub(crate) fn on_refrained_participation(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.refrained_participations.inc();
-		}
-	}
+    pub(crate) fn on_refrained_participation(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.refrained_participations.inc();
+        }
+    }
 
-	/// Provide a timer for participation durations which updates on drop.
-	pub(crate) fn time_participation(
-		&self,
-	) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.participation_durations.start_timer())
-	}
+    /// Provide a timer for participation durations which updates on drop.
+    pub(crate) fn time_participation(
+        &self,
+    ) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.participation_durations.start_timer())
+    }
 
-	/// Provide a timer for participation pipeline durations which updates on drop.
-	pub(crate) fn time_participation_pipeline(
-		&self,
-	) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0
-			.as_ref()
-			.map(|metrics| metrics.participation_pipeline_durations.start_timer())
-	}
+    /// Provide a timer for participation pipeline durations which updates on drop.
+    pub(crate) fn time_participation_pipeline(
+        &self,
+    ) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0
+            .as_ref()
+            .map(|metrics| metrics.participation_pipeline_durations.start_timer())
+    }
 
-	/// Set the priority_queue_size metric
-	pub fn report_priority_queue_size(&self, size: u64) {
-		if let Some(metrics) = &self.0 {
-			metrics.participation_priority_queue_size.set(size);
-		}
-	}
+    /// Set the priority_queue_size metric
+    pub fn report_priority_queue_size(&self, size: u64) {
+        if let Some(metrics) = &self.0 {
+            metrics.participation_priority_queue_size.set(size);
+        }
+    }
 
-	/// Set the best_effort_queue_size metric
-	pub fn report_best_effort_queue_size(&self, size: u64) {
-		if let Some(metrics) = &self.0 {
-			metrics.participation_best_effort_queue_size.set(size);
-		}
-	}
+    /// Set the best_effort_queue_size metric
+    pub fn report_best_effort_queue_size(&self, size: u64) {
+        if let Some(metrics) = &self.0 {
+            metrics.participation_best_effort_queue_size.set(size);
+        }
+    }
 }
 
 impl metrics::Metrics for Metrics {
-	fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
-		let metrics = MetricsInner {
+    fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
+        let metrics = MetricsInner {
 			open: prometheus::register(
 				prometheus::Counter::with_opts(prometheus::Opts::new(
 					"polkadot_parachain_candidate_disputes_total",
@@ -232,6 +232,6 @@ impl metrics::Metrics for Metrics {
 				registry,
 			)?,
 		};
-		Ok(Metrics(Some(metrics)))
-	}
+        Ok(Metrics(Some(metrics)))
+    }
 }

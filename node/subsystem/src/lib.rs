@@ -27,17 +27,17 @@ pub use polkadot_node_jaeger as jaeger;
 pub use polkadot_overseer::{self as overseer, *};
 
 pub use polkadot_node_subsystem_types::{
-	errors::{self, *},
-	ActivatedLeaf, LeafStatus,
+    errors::{self, *},
+    ActivatedLeaf, LeafStatus,
 };
 
 /// Re-export of all messages type, including the wrapper type.
 pub mod messages {
-	pub use super::overseer::AllMessages;
-	// generated, empty message types
-	pub use super::overseer::messages::*;
-	// deliberately defined messages
-	pub use polkadot_node_subsystem_types::messages::*;
+    pub use super::overseer::AllMessages;
+    // generated, empty message types
+    pub use super::overseer::messages::*;
+    // deliberately defined messages
+    pub use polkadot_node_subsystem_types::messages::*;
 }
 
 /// A `Result` type that wraps [`SubsystemError`].
@@ -53,7 +53,7 @@ pub type FromOrchestra<M> = polkadot_overseer::gen::FromOrchestra<M, OverseerSig
 
 /// Specialized subsystem instance type of subsystems consuming a particular message type.
 pub type SubsystemInstance<Message> =
-	polkadot_overseer::gen::SubsystemInstance<Message, OverseerSignal>;
+    polkadot_overseer::gen::SubsystemInstance<Message, OverseerSignal>;
 
 /// Spawned subsystem.
 pub type SpawnedSubsystem = polkadot_overseer::gen::SpawnedSubsystem<SubsystemError>;

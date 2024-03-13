@@ -20,64 +20,64 @@ use polkadot_node_subsystem_util::metrics::{self, prometheus};
 
 #[derive(Clone)]
 struct MetricsInner {
-	pre_check_judgement: prometheus::Histogram,
-	votes_total: prometheus::Counter<prometheus::U64>,
-	votes_started: prometheus::Counter<prometheus::U64>,
-	votes_duplicate: prometheus::Counter<prometheus::U64>,
-	pvfs_observed: prometheus::Counter<prometheus::U64>,
-	pvfs_left: prometheus::Counter<prometheus::U64>,
+    pre_check_judgement: prometheus::Histogram,
+    votes_total: prometheus::Counter<prometheus::U64>,
+    votes_started: prometheus::Counter<prometheus::U64>,
+    votes_duplicate: prometheus::Counter<prometheus::U64>,
+    pvfs_observed: prometheus::Counter<prometheus::U64>,
+    pvfs_left: prometheus::Counter<prometheus::U64>,
 }
 
 #[derive(Default, Clone)]
 pub struct Metrics(Option<MetricsInner>);
 
 impl Metrics {
-	/// Time between sending the pre-check request to receiving the response.
-	pub(crate) fn time_pre_check_judgement(
-		&self,
-	) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.pre_check_judgement.start_timer())
-	}
+    /// Time between sending the pre-check request to receiving the response.
+    pub(crate) fn time_pre_check_judgement(
+        &self,
+    ) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.pre_check_judgement.start_timer())
+    }
 
-	/// Called when a PVF vote/statement is submitted.
-	pub(crate) fn on_vote_submitted(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.votes_total.inc();
-		}
-	}
+    /// Called when a PVF vote/statement is submitted.
+    pub(crate) fn on_vote_submitted(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.votes_total.inc();
+        }
+    }
 
-	/// Called when a PVF vote/statement is started submission.
-	pub(crate) fn on_vote_submission_started(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.votes_started.inc();
-		}
-	}
+    /// Called when a PVF vote/statement is started submission.
+    pub(crate) fn on_vote_submission_started(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.votes_started.inc();
+        }
+    }
 
-	/// Called when the vote is a duplicate.
-	pub(crate) fn on_vote_duplicate(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.votes_duplicate.inc();
-		}
-	}
+    /// Called when the vote is a duplicate.
+    pub(crate) fn on_vote_duplicate(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.votes_duplicate.inc();
+        }
+    }
 
-	/// Called when a new PVF is observed.
-	pub(crate) fn on_pvf_observed(&self, num: usize) {
-		if let Some(metrics) = &self.0 {
-			metrics.pvfs_observed.inc_by(num as u64);
-		}
-	}
+    /// Called when a new PVF is observed.
+    pub(crate) fn on_pvf_observed(&self, num: usize) {
+        if let Some(metrics) = &self.0 {
+            metrics.pvfs_observed.inc_by(num as u64);
+        }
+    }
 
-	/// Called when a PVF left the view.
-	pub(crate) fn on_pvf_left(&self, num: usize) {
-		if let Some(metrics) = &self.0 {
-			metrics.pvfs_left.inc_by(num as u64);
-		}
-	}
+    /// Called when a PVF left the view.
+    pub(crate) fn on_pvf_left(&self, num: usize) {
+        if let Some(metrics) = &self.0 {
+            metrics.pvfs_left.inc_by(num as u64);
+        }
+    }
 }
 
 impl metrics::Metrics for Metrics {
-	fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
-		let metrics = MetricsInner {
+    fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
+        let metrics = MetricsInner {
 			pre_check_judgement: prometheus::register(
 				prometheus::Histogram::with_opts(
 					prometheus::HistogramOpts::new(
@@ -125,6 +125,6 @@ the same session.",
 				registry,
 			)?,
 		};
-		Ok(Self(Some(metrics)))
-	}
+        Ok(Self(Some(metrics)))
+    }
 }

@@ -33,57 +33,57 @@ pub use kusama_runtime::WASM_BINARY;
 #[allow(missing_docs)]
 #[derive(thiserror::Error, Debug)]
 pub enum PerfCheckError {
-	#[error("This subcommand is only available in release mode")]
-	WrongBuildType,
+    #[error("This subcommand is only available in release mode")]
+    WrongBuildType,
 
-	#[error("No wasm code found for running the performance test")]
-	WasmBinaryMissing,
+    #[error("No wasm code found for running the performance test")]
+    WasmBinaryMissing,
 
-	#[error("Failed to decompress wasm code")]
-	CodeDecompressionFailed,
+    #[error("Failed to decompress wasm code")]
+    CodeDecompressionFailed,
 
-	#[error(transparent)]
-	Wasm(#[from] sc_executor_common::error::WasmError),
+    #[error(transparent)]
+    Wasm(#[from] sc_executor_common::error::WasmError),
 
-	#[error(transparent)]
-	ErasureCoding(#[from] polkadot_erasure_coding::Error),
+    #[error(transparent)]
+    ErasureCoding(#[from] polkadot_erasure_coding::Error),
 
-	#[error(transparent)]
-	Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 
-	#[error(
-		"Performance check not passed: exceeded the {limit:?} time limit, elapsed: {elapsed:?}"
-	)]
-	TimeOut { elapsed: Duration, limit: Duration },
+    #[error(
+        "Performance check not passed: exceeded the {limit:?} time limit, elapsed: {elapsed:?}"
+    )]
+    TimeOut { elapsed: Duration, limit: Duration },
 }
 
 /// Measures the time it takes to compile arbitrary wasm code.
 pub fn measure_pvf_prepare(wasm_code: &[u8]) -> Result<Duration, PerfCheckError> {
-	let start = Instant::now();
+    let start = Instant::now();
 
-	let code = sp_maybe_compressed_blob::decompress(wasm_code, VALIDATION_CODE_BOMB_LIMIT)
-		.or(Err(PerfCheckError::CodeDecompressionFailed))?;
+    let code = sp_maybe_compressed_blob::decompress(wasm_code, VALIDATION_CODE_BOMB_LIMIT)
+        .or(Err(PerfCheckError::CodeDecompressionFailed))?;
 
-	// Recreate the pipeline from the pvf prepare worker.
-	let blob = polkadot_node_core_pvf_prepare_worker::prevalidate(code.as_ref())
-		.map_err(PerfCheckError::from)?;
-	polkadot_node_core_pvf_prepare_worker::prepare(blob, &ExecutorParams::default())
-		.map_err(PerfCheckError::from)?;
+    // Recreate the pipeline from the pvf prepare worker.
+    let blob = polkadot_node_core_pvf_prepare_worker::prevalidate(code.as_ref())
+        .map_err(PerfCheckError::from)?;
+    polkadot_node_core_pvf_prepare_worker::prepare(blob, &ExecutorParams::default())
+        .map_err(PerfCheckError::from)?;
 
-	Ok(start.elapsed())
+    Ok(start.elapsed())
 }
 
 /// Measure the time it takes to break arbitrary data into chunks and reconstruct it back.
 pub fn measure_erasure_coding(
-	n_validators: usize,
-	data: &[u8],
+    n_validators: usize,
+    data: &[u8],
 ) -> Result<Duration, PerfCheckError> {
-	let start = Instant::now();
+    let start = Instant::now();
 
-	let chunks = obtain_chunks(n_validators, &data)?;
-	let indexed_chunks = chunks.iter().enumerate().map(|(i, chunk)| (chunk.as_slice(), i));
+    let chunks = obtain_chunks(n_validators, &data)?;
+    let indexed_chunks = chunks.iter().enumerate().map(|(i, chunk)| (chunk.as_slice(), i));
 
-	let _: Vec<u8> = reconstruct(n_validators, indexed_chunks)?;
+    let _: Vec<u8> = reconstruct(n_validators, indexed_chunks)?;
 
-	Ok(start.elapsed())
+    Ok(start.elapsed())
 }

@@ -25,18 +25,18 @@ use polkadot_primitives::{AuthorityDiscoveryId, ValidatorId};
 
 /// Get mock keystore with `Ferdie` key.
 pub fn make_ferdie_keystore() -> KeystorePtr {
-	let keystore: KeystorePtr = Arc::new(LocalKeystore::in_memory());
-	Keystore::sr25519_generate_new(
-		&*keystore,
-		ValidatorId::ID,
-		Some(&Sr25519Keyring::Ferdie.to_seed()),
-	)
-	.expect("Insert key into keystore");
-	Keystore::sr25519_generate_new(
-		&*keystore,
-		AuthorityDiscoveryId::ID,
-		Some(&Sr25519Keyring::Ferdie.to_seed()),
-	)
-	.expect("Insert key into keystore");
-	keystore
+    let keystore: KeystorePtr = Arc::new(LocalKeystore::in_memory());
+    Keystore::sr25519_generate_new(
+        &*keystore,
+        ValidatorId::ID,
+        Some(&Sr25519Keyring::Ferdie.to_seed()),
+    )
+    .expect("Insert key into keystore");
+    Keystore::sr25519_generate_new(
+        &*keystore,
+        AuthorityDiscoveryId::ID,
+        Some(&Sr25519Keyring::Ferdie.to_seed()),
+    )
+    .expect("Insert key into keystore");
+    keystore
 }

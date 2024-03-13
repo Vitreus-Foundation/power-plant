@@ -17,8 +17,8 @@
 //! `PayOverXcm` struct for paying through XCM and getting the status back.
 
 use frame_support::traits::{
-	tokens::{Pay, PaymentStatus},
-	Get,
+    tokens::{Pay, PaymentStatus},
+    Get,
 };
 use sp_runtime::traits::Convert;
 use sp_std::{marker::PhantomData, vec};
@@ -44,111 +44,111 @@ use xcm_executor::traits::{QueryHandler, QueryResponseStatus};
 /// See also `PayAccountId32OverXcm` which is similar to this except that `BeneficiaryRefToLocation`
 /// need not be supplied and `Beneficiary` must implement `Into<[u8; 32]>`.
 pub struct PayOverXcm<
-	Interior,
-	Router,
-	Querier,
-	Timeout,
-	Beneficiary,
-	AssetKind,
-	AssetKindToLocatableAsset,
-	BeneficiaryRefToLocation,
+    Interior,
+    Router,
+    Querier,
+    Timeout,
+    Beneficiary,
+    AssetKind,
+    AssetKindToLocatableAsset,
+    BeneficiaryRefToLocation,
 >(
-	PhantomData<(
-		Interior,
-		Router,
-		Querier,
-		Timeout,
-		Beneficiary,
-		AssetKind,
-		AssetKindToLocatableAsset,
-		BeneficiaryRefToLocation,
-	)>,
+    PhantomData<(
+        Interior,
+        Router,
+        Querier,
+        Timeout,
+        Beneficiary,
+        AssetKind,
+        AssetKindToLocatableAsset,
+        BeneficiaryRefToLocation,
+    )>,
 );
 impl<
-		Interior: Get<InteriorMultiLocation>,
-		Router: SendXcm,
-		Querier: QueryHandler,
-		Timeout: Get<Querier::BlockNumber>,
-		Beneficiary: Clone,
-		AssetKind,
-		AssetKindToLocatableAsset: Convert<AssetKind, LocatableAssetId>,
-		BeneficiaryRefToLocation: for<'a> Convert<&'a Beneficiary, MultiLocation>,
-	> Pay
-	for PayOverXcm<
-		Interior,
-		Router,
-		Querier,
-		Timeout,
-		Beneficiary,
-		AssetKind,
-		AssetKindToLocatableAsset,
-		BeneficiaryRefToLocation,
-	>
+        Interior: Get<InteriorMultiLocation>,
+        Router: SendXcm,
+        Querier: QueryHandler,
+        Timeout: Get<Querier::BlockNumber>,
+        Beneficiary: Clone,
+        AssetKind,
+        AssetKindToLocatableAsset: Convert<AssetKind, LocatableAssetId>,
+        BeneficiaryRefToLocation: for<'a> Convert<&'a Beneficiary, MultiLocation>,
+    > Pay
+    for PayOverXcm<
+        Interior,
+        Router,
+        Querier,
+        Timeout,
+        Beneficiary,
+        AssetKind,
+        AssetKindToLocatableAsset,
+        BeneficiaryRefToLocation,
+    >
 {
-	type Beneficiary = Beneficiary;
-	type AssetKind = AssetKind;
-	type Balance = u128;
-	type Id = Querier::QueryId;
-	type Error = xcm::latest::Error;
+    type Beneficiary = Beneficiary;
+    type AssetKind = AssetKind;
+    type Balance = u128;
+    type Id = Querier::QueryId;
+    type Error = xcm::latest::Error;
 
-	fn pay(
-		who: &Self::Beneficiary,
-		asset_kind: Self::AssetKind,
-		amount: Self::Balance,
-	) -> Result<Self::Id, Self::Error> {
-		let locatable = AssetKindToLocatableAsset::convert(asset_kind);
-		let LocatableAssetId { asset_id, location: asset_location } = locatable;
-		let destination = Querier::UniversalLocation::get()
-			.invert_target(&asset_location)
-			.map_err(|()| Self::Error::LocationNotInvertible)?;
-		let beneficiary = BeneficiaryRefToLocation::convert(&who);
+    fn pay(
+        who: &Self::Beneficiary,
+        asset_kind: Self::AssetKind,
+        amount: Self::Balance,
+    ) -> Result<Self::Id, Self::Error> {
+        let locatable = AssetKindToLocatableAsset::convert(asset_kind);
+        let LocatableAssetId { asset_id, location: asset_location } = locatable;
+        let destination = Querier::UniversalLocation::get()
+            .invert_target(&asset_location)
+            .map_err(|()| Self::Error::LocationNotInvertible)?;
+        let beneficiary = BeneficiaryRefToLocation::convert(&who);
 
-		let query_id = Querier::new_query(asset_location, Timeout::get(), Interior::get());
+        let query_id = Querier::new_query(asset_location, Timeout::get(), Interior::get());
 
-		let message = Xcm(vec![
-			DescendOrigin(Interior::get()),
-			UnpaidExecution { weight_limit: Unlimited, check_origin: None },
-			SetAppendix(Xcm(vec![ReportError(QueryResponseInfo {
-				destination,
-				query_id,
-				max_weight: Weight::zero(),
-			})])),
-			TransferAsset {
-				beneficiary,
-				assets: vec![MultiAsset { id: asset_id, fun: Fungibility::Fungible(amount) }]
-					.into(),
-			},
-		]);
+        let message = Xcm(vec![
+            DescendOrigin(Interior::get()),
+            UnpaidExecution { weight_limit: Unlimited, check_origin: None },
+            SetAppendix(Xcm(vec![ReportError(QueryResponseInfo {
+                destination,
+                query_id,
+                max_weight: Weight::zero(),
+            })])),
+            TransferAsset {
+                beneficiary,
+                assets: vec![MultiAsset { id: asset_id, fun: Fungibility::Fungible(amount) }]
+                    .into(),
+            },
+        ]);
 
-		let (ticket, _) = Router::validate(&mut Some(asset_location), &mut Some(message))?;
-		Router::deliver(ticket)?;
-		Ok(query_id.into())
-	}
+        let (ticket, _) = Router::validate(&mut Some(asset_location), &mut Some(message))?;
+        Router::deliver(ticket)?;
+        Ok(query_id.into())
+    }
 
-	fn check_payment(id: Self::Id) -> PaymentStatus {
-		use QueryResponseStatus::*;
-		match Querier::take_response(id) {
-			Ready { response, .. } => match response {
-				Response::ExecutionResult(None) => PaymentStatus::Success,
-				Response::ExecutionResult(Some(_)) => PaymentStatus::Failure,
-				_ => PaymentStatus::Unknown,
-			},
-			Pending { .. } => PaymentStatus::InProgress,
-			NotFound | UnexpectedVersion => PaymentStatus::Unknown,
-		}
-	}
+    fn check_payment(id: Self::Id) -> PaymentStatus {
+        use QueryResponseStatus::*;
+        match Querier::take_response(id) {
+            Ready { response, .. } => match response {
+                Response::ExecutionResult(None) => PaymentStatus::Success,
+                Response::ExecutionResult(Some(_)) => PaymentStatus::Failure,
+                _ => PaymentStatus::Unknown,
+            },
+            Pending { .. } => PaymentStatus::InProgress,
+            NotFound | UnexpectedVersion => PaymentStatus::Unknown,
+        }
+    }
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_successful(_: &Self::Beneficiary, _: Self::AssetKind, _: Self::Balance) {
-		// We cannot generally guarantee this will go through successfully since we don't have any
-		// control over the XCM transport layers. We just assume that the benchmark environment
-		// will be sending it somewhere sensible.
-	}
+    #[cfg(feature = "runtime-benchmarks")]
+    fn ensure_successful(_: &Self::Beneficiary, _: Self::AssetKind, _: Self::Balance) {
+        // We cannot generally guarantee this will go through successfully since we don't have any
+        // control over the XCM transport layers. We just assume that the benchmark environment
+        // will be sending it somewhere sensible.
+    }
 
-	#[cfg(feature = "runtime-benchmarks")]
-	fn ensure_concluded(id: Self::Id) {
-		Querier::expect_response(id, Response::ExecutionResult(None));
-	}
+    #[cfg(feature = "runtime-benchmarks")]
+    fn ensure_concluded(id: Self::Id) {
+        Querier::expect_response(id, Response::ExecutionResult(None));
+    }
 }
 
 /// Specialization of the [PayOverXcm] trait to allow `[u8; 32]`-based `AccountId` values to be
@@ -166,40 +166,40 @@ impl<
 /// `PayOverXcm::pay` is asynchronous, and returns a `QueryId` which can then be used in
 /// `check_payment` to check the status of the XCM transaction.
 pub type PayAccountId32OnChainOverXcm<
-	DestinationChain,
-	Interior,
-	Router,
-	Querier,
-	Timeout,
-	Beneficiary,
-	AssetKind,
+    DestinationChain,
+    Interior,
+    Router,
+    Querier,
+    Timeout,
+    Beneficiary,
+    AssetKind,
 > = PayOverXcm<
-	Interior,
-	Router,
-	Querier,
-	Timeout,
-	Beneficiary,
-	AssetKind,
-	crate::AliasesIntoAccountId32<(), Beneficiary>,
-	FixedLocation<DestinationChain>,
+    Interior,
+    Router,
+    Querier,
+    Timeout,
+    Beneficiary,
+    AssetKind,
+    crate::AliasesIntoAccountId32<(), Beneficiary>,
+    FixedLocation<DestinationChain>,
 >;
 
 /// Simple struct which contains both an XCM `location` and `asset_id` to identift an asset which
 /// exists on some chain.
 pub struct LocatableAssetId {
-	/// The asset's ID.
-	pub asset_id: AssetId,
-	/// The (relative) location in which the asset ID is meaningful.
-	pub location: MultiLocation,
+    /// The asset's ID.
+    pub asset_id: AssetId,
+    /// The (relative) location in which the asset ID is meaningful.
+    pub location: MultiLocation,
 }
 
 /// Adapter `struct` which implements a conversion from any `AssetKind` into a [LocatableAsset]
 /// value using a fixed `Location` for the `location` field.
 pub struct FixedLocation<Location>(sp_std::marker::PhantomData<Location>);
 impl<Location: Get<MultiLocation>, AssetKind: Into<AssetId>> Convert<AssetKind, LocatableAssetId>
-	for FixedLocation<Location>
+    for FixedLocation<Location>
 {
-	fn convert(value: AssetKind) -> LocatableAssetId {
-		LocatableAssetId { asset_id: value.into(), location: Location::get() }
-	}
+    fn convert(value: AssetKind) -> LocatableAssetId {
+        LocatableAssetId { asset_id: value.into(), location: Location::get() }
+    }
 }

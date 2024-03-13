@@ -33,7 +33,7 @@ mod filter_asset_location;
 pub use filter_asset_location::FilterAssetLocation;
 mod token_matching;
 pub use token_matching::{
-	Error, MatchesFungible, MatchesFungibles, MatchesNonFungible, MatchesNonFungibles,
+    Error, MatchesFungible, MatchesFungibles, MatchesNonFungible, MatchesNonFungibles,
 };
 mod on_response;
 pub use on_response::{OnResponse, QueryHandler, QueryResponseStatus, VersionChangeNotifier};
@@ -47,12 +47,12 @@ pub use sp_runtime::traits::{Identity, TryConvertInto as JustTry};
 pub use weight::{WeightBounds, WeightTrader};
 
 pub mod prelude {
-	pub use super::{
-		export_xcm, validate_export, AssetExchange, AssetLock, ClaimAssets, ConvertOrigin,
-		DropAssets, Enact, Error, ExportXcm, FeeManager, FeeReason, LockError, MatchesFungible,
-		MatchesFungibles, MatchesNonFungible, MatchesNonFungibles, OnResponse, ShouldExecute,
-		TransactAsset, VersionChangeNotifier, WeightBounds, WeightTrader, WithOriginFilter,
-	};
-	#[allow(deprecated)]
-	pub use super::{Identity, JustTry};
+    pub use super::{
+        export_xcm, validate_export, AssetExchange, AssetLock, ClaimAssets, ConvertOrigin,
+        DropAssets, Enact, Error, ExportXcm, FeeManager, FeeReason, LockError, MatchesFungible,
+        MatchesFungibles, MatchesNonFungible, MatchesNonFungibles, OnResponse, ShouldExecute,
+        TransactAsset, VersionChangeNotifier, WeightBounds, WeightTrader, WithOriginFilter,
+    };
+    #[allow(deprecated)]
+    pub use super::{Identity, JustTry};
 }

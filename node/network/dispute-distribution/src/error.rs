@@ -27,30 +27,30 @@ use fatality::Nested;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	/// Receiving subsystem message from overseer failed.
-	#[fatal]
-	#[error("Receiving message from overseer failed")]
-	SubsystemReceive(#[source] SubsystemError),
+    /// Receiving subsystem message from overseer failed.
+    #[fatal]
+    #[error("Receiving message from overseer failed")]
+    SubsystemReceive(#[source] SubsystemError),
 
-	/// Spawning a running task failed.
-	#[fatal]
-	#[error("Spawning subsystem task failed")]
-	SpawnTask(#[source] SubsystemError),
+    /// Spawning a running task failed.
+    #[fatal]
+    #[error("Spawning subsystem task failed")]
+    SpawnTask(#[source] SubsystemError),
 
-	/// `DisputeSender` mpsc receiver exhausted.
-	#[fatal]
-	#[error("Erasure chunk requester stream exhausted")]
-	SenderExhausted,
+    /// `DisputeSender` mpsc receiver exhausted.
+    #[fatal]
+    #[error("Erasure chunk requester stream exhausted")]
+    SenderExhausted,
 
-	/// Errors coming from `runtime::Runtime`.
-	#[fatal(forward)]
-	#[error("Error while accessing runtime information")]
-	Runtime(#[from] runtime::Error),
+    /// Errors coming from `runtime::Runtime`.
+    #[fatal(forward)]
+    #[error("Error while accessing runtime information")]
+    Runtime(#[from] runtime::Error),
 
-	/// Errors coming from `DisputeSender`
-	#[fatal(forward)]
-	#[error("Error while accessing runtime information")]
-	Sender(#[from] sender::Error),
+    /// Errors coming from `DisputeSender`
+    #[fatal(forward)]
+    #[error("Error while accessing runtime information")]
+    Sender(#[from] sender::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -62,11 +62,11 @@ pub type FatalResult<T> = std::result::Result<T, FatalError>;
 /// We basically always want to try and continue on error. This utility function is meant to
 /// consume top-level errors by simply logging them
 pub fn log_error(result: Result<()>, ctx: &'static str) -> std::result::Result<(), FatalError> {
-	match result.into_nested()? {
-		Err(jfyi) => {
-			gum::warn!(target: LOG_TARGET, error = ?jfyi, ctx);
-			Ok(())
-		},
-		Ok(()) => Ok(()),
-	}
+    match result.into_nested()? {
+        Err(jfyi) => {
+            gum::warn!(target: LOG_TARGET, error = ?jfyi, ctx);
+            Ok(())
+        },
+        Ok(()) => Ok(()),
+    }
 }

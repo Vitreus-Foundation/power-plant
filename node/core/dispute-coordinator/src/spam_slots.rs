@@ -44,92 +44,92 @@ const MAX_SPAM_VOTES: SpamCount = 1;
 
 /// Spam slots for raised disputes concerning unknown candidates.
 pub struct SpamSlots {
-	/// Counts per validator and session.
-	///
-	/// Must not exceed `MAX_SPAM_VOTES`.
-	slots: HashMap<(SessionIndex, ValidatorIndex), SpamCount>,
+    /// Counts per validator and session.
+    ///
+    /// Must not exceed `MAX_SPAM_VOTES`.
+    slots: HashMap<(SessionIndex, ValidatorIndex), SpamCount>,
 
-	/// All unconfirmed candidates we are aware of right now.
-	unconfirmed: UnconfirmedDisputes,
+    /// All unconfirmed candidates we are aware of right now.
+    unconfirmed: UnconfirmedDisputes,
 }
 
 /// Unconfirmed disputes to be passed at initialization.
 pub type UnconfirmedDisputes = HashMap<(SessionIndex, CandidateHash), BTreeSet<ValidatorIndex>>;
 
 impl SpamSlots {
-	/// Recover `SpamSlots` from state on startup.
-	///
-	/// Initialize based on already existing active disputes.
-	pub fn recover_from_state(unconfirmed_disputes: UnconfirmedDisputes) -> Self {
-		let mut slots: HashMap<(SessionIndex, ValidatorIndex), SpamCount> = HashMap::new();
-		for ((session, _), validators) in unconfirmed_disputes.iter() {
-			for validator in validators {
-				let spam_vote_count = slots.entry((*session, *validator)).or_default();
-				*spam_vote_count += 1;
-				if *spam_vote_count > MAX_SPAM_VOTES {
-					gum::debug!(
-						target: LOG_TARGET,
-						?session,
-						?validator,
-						count = ?spam_vote_count,
-						"Import exceeded spam slot for validator"
-					);
-				}
-			}
-		}
+    /// Recover `SpamSlots` from state on startup.
+    ///
+    /// Initialize based on already existing active disputes.
+    pub fn recover_from_state(unconfirmed_disputes: UnconfirmedDisputes) -> Self {
+        let mut slots: HashMap<(SessionIndex, ValidatorIndex), SpamCount> = HashMap::new();
+        for ((session, _), validators) in unconfirmed_disputes.iter() {
+            for validator in validators {
+                let spam_vote_count = slots.entry((*session, *validator)).or_default();
+                *spam_vote_count += 1;
+                if *spam_vote_count > MAX_SPAM_VOTES {
+                    gum::debug!(
+                        target: LOG_TARGET,
+                        ?session,
+                        ?validator,
+                        count = ?spam_vote_count,
+                        "Import exceeded spam slot for validator"
+                    );
+                }
+            }
+        }
 
-		Self { slots, unconfirmed: unconfirmed_disputes }
-	}
+        Self { slots, unconfirmed: unconfirmed_disputes }
+    }
 
-	/// Increase a "voting invalid" validator's spam slot.
-	///
-	/// This function should get called for any validator's invalidity vote for any not yet
-	/// confirmed dispute.
-	///
-	/// Returns: `true` if validator still had vacant spam slots, `false` otherwise.
-	pub fn add_unconfirmed(
-		&mut self,
-		session: SessionIndex,
-		candidate: CandidateHash,
-		validator: ValidatorIndex,
-	) -> bool {
-		let spam_vote_count = self.slots.entry((session, validator)).or_default();
-		if *spam_vote_count >= MAX_SPAM_VOTES {
-			return false
-		}
-		let validators = self.unconfirmed.entry((session, candidate)).or_default();
+    /// Increase a "voting invalid" validator's spam slot.
+    ///
+    /// This function should get called for any validator's invalidity vote for any not yet
+    /// confirmed dispute.
+    ///
+    /// Returns: `true` if validator still had vacant spam slots, `false` otherwise.
+    pub fn add_unconfirmed(
+        &mut self,
+        session: SessionIndex,
+        candidate: CandidateHash,
+        validator: ValidatorIndex,
+    ) -> bool {
+        let spam_vote_count = self.slots.entry((session, validator)).or_default();
+        if *spam_vote_count >= MAX_SPAM_VOTES {
+            return false;
+        }
+        let validators = self.unconfirmed.entry((session, candidate)).or_default();
 
-		if validators.insert(validator) {
-			// We only increment spam slots once per candidate, as each validator has to provide an
-			// opposing vote for sending out its own vote. Therefore, receiving multiple votes for
-			// a single candidate is expected and should not get punished here.
-			*spam_vote_count += 1;
-		}
+        if validators.insert(validator) {
+            // We only increment spam slots once per candidate, as each validator has to provide an
+            // opposing vote for sending out its own vote. Therefore, receiving multiple votes for
+            // a single candidate is expected and should not get punished here.
+            *spam_vote_count += 1;
+        }
 
-		true
-	}
+        true
+    }
 
-	/// Clear out spam slots for a given candidate in a session.
-	///
-	/// This effectively reduces the spam slot count for all validators participating in a dispute
-	/// for that candidate. You should call this function once a dispute became obsolete or got
-	/// confirmed and thus votes for it should no longer be treated as potential spam.
-	pub fn clear(&mut self, key: &(SessionIndex, CandidateHash)) {
-		if let Some(validators) = self.unconfirmed.remove(key) {
-			let (session, _) = key;
-			for validator in validators {
-				if let Some(spam_vote_count) = self.slots.remove(&(*session, validator)) {
-					let new = spam_vote_count - 1;
-					if new > 0 {
-						self.slots.insert((*session, validator), new);
-					}
-				}
-			}
-		}
-	}
-	/// Prune all spam slots for sessions older than the given index.
-	pub fn prune_old(&mut self, oldest_index: SessionIndex) {
-		self.unconfirmed.retain(|(session, _), _| *session >= oldest_index);
-		self.slots.retain(|(session, _), _| *session >= oldest_index);
-	}
+    /// Clear out spam slots for a given candidate in a session.
+    ///
+    /// This effectively reduces the spam slot count for all validators participating in a dispute
+    /// for that candidate. You should call this function once a dispute became obsolete or got
+    /// confirmed and thus votes for it should no longer be treated as potential spam.
+    pub fn clear(&mut self, key: &(SessionIndex, CandidateHash)) {
+        if let Some(validators) = self.unconfirmed.remove(key) {
+            let (session, _) = key;
+            for validator in validators {
+                if let Some(spam_vote_count) = self.slots.remove(&(*session, validator)) {
+                    let new = spam_vote_count - 1;
+                    if new > 0 {
+                        self.slots.insert((*session, validator), new);
+                    }
+                }
+            }
+        }
+    }
+    /// Prune all spam slots for sessions older than the given index.
+    pub fn prune_old(&mut self, oldest_index: SessionIndex) {
+        self.unconfirmed.retain(|(session, _), _| *session >= oldest_index);
+        self.slots.retain(|(session, _), _| *session >= oldest_index);
+    }
 }

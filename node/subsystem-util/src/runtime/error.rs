@@ -25,30 +25,30 @@ use polkadot_primitives::SessionIndex;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	/// Runtime API subsystem is down, which means we're shutting down.
-	#[fatal]
-	#[error("Runtime request got canceled")]
-	RuntimeRequestCanceled(oneshot::Canceled),
+    /// Runtime API subsystem is down, which means we're shutting down.
+    #[fatal]
+    #[error("Runtime request got canceled")]
+    RuntimeRequestCanceled(oneshot::Canceled),
 
-	/// Some request to the runtime failed.
-	/// For example if we prune a block we're requesting info about.
-	#[error("Runtime API error {0}")]
-	RuntimeRequest(RuntimeApiError),
+    /// Some request to the runtime failed.
+    /// For example if we prune a block we're requesting info about.
+    #[error("Runtime API error {0}")]
+    RuntimeRequest(RuntimeApiError),
 
-	/// We tried fetching a session info which was not available.
-	#[error("There was no session with the given index {0}")]
-	NoSuchSession(SessionIndex),
+    /// We tried fetching a session info which was not available.
+    #[error("There was no session with the given index {0}")]
+    NoSuchSession(SessionIndex),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// Receive a response from a runtime request and convert errors.
 pub(crate) async fn recv_runtime<V>(
-	r: oneshot::Receiver<std::result::Result<V, RuntimeApiError>>,
+    r: oneshot::Receiver<std::result::Result<V, RuntimeApiError>>,
 ) -> Result<V> {
-	let result = r
-		.await
-		.map_err(FatalError::RuntimeRequestCanceled)?
-		.map_err(JfyiError::RuntimeRequest)?;
-	Ok(result)
+    let result = r
+        .await
+        .map_err(FatalError::RuntimeRequestCanceled)?
+        .map_err(JfyiError::RuntimeRequest)?;
+    Ok(result)
 }

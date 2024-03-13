@@ -35,8 +35,8 @@ use sp_keystore::KeystorePtr;
 use polkadot_node_network_protocol::request_response::{incoming::IncomingRequestReceiver, v1};
 use polkadot_node_primitives::DISPUTE_WINDOW;
 use polkadot_node_subsystem::{
-	messages::DisputeDistributionMessage, overseer, FromOrchestra, OverseerSignal,
-	SpawnedSubsystem, SubsystemError,
+    messages::DisputeDistributionMessage, overseer, FromOrchestra, OverseerSignal,
+    SpawnedSubsystem, SubsystemError,
 };
 use polkadot_node_subsystem_util::{runtime, runtime::RuntimeInfo};
 
@@ -115,184 +115,186 @@ pub const SEND_RATE_LIMIT: Duration = RECEIVE_RATE_LIMIT.saturating_add(Duration
 
 /// The dispute distribution subsystem.
 pub struct DisputeDistributionSubsystem<AD> {
-	/// Easy and efficient runtime access for this subsystem.
-	runtime: RuntimeInfo,
+    /// Easy and efficient runtime access for this subsystem.
+    runtime: RuntimeInfo,
 
-	/// Sender for our dispute requests.
-	disputes_sender: DisputeSender<DisputeSenderMessage>,
+    /// Sender for our dispute requests.
+    disputes_sender: DisputeSender<DisputeSenderMessage>,
 
-	/// Receive messages from `DisputeSender` background tasks.
-	sender_rx: mpsc::Receiver<DisputeSenderMessage>,
+    /// Receive messages from `DisputeSender` background tasks.
+    sender_rx: mpsc::Receiver<DisputeSenderMessage>,
 
-	/// Receiver for incoming requests.
-	req_receiver: Option<IncomingRequestReceiver<v1::DisputeRequest>>,
+    /// Receiver for incoming requests.
+    req_receiver: Option<IncomingRequestReceiver<v1::DisputeRequest>>,
 
-	/// Authority discovery service.
-	authority_discovery: AD,
+    /// Authority discovery service.
+    authority_discovery: AD,
 
-	/// Metrics for this subsystem.
-	metrics: Metrics,
+    /// Metrics for this subsystem.
+    metrics: Metrics,
 }
 
 #[overseer::subsystem(DisputeDistribution, error = SubsystemError, prefix = self::overseer)]
 impl<Context, AD> DisputeDistributionSubsystem<AD>
 where
-	<Context as overseer::DisputeDistributionContextTrait>::Sender:
-		overseer::DisputeDistributionSenderTrait + Sync + Send,
-	AD: AuthorityDiscovery + Clone,
+    <Context as overseer::DisputeDistributionContextTrait>::Sender:
+        overseer::DisputeDistributionSenderTrait + Sync + Send,
+    AD: AuthorityDiscovery + Clone,
 {
-	fn start(self, ctx: Context) -> SpawnedSubsystem {
-		let future = self
-			.run(ctx)
-			.map_err(|e| SubsystemError::with_origin("dispute-distribution", e))
-			.boxed();
+    fn start(self, ctx: Context) -> SpawnedSubsystem {
+        let future = self
+            .run(ctx)
+            .map_err(|e| SubsystemError::with_origin("dispute-distribution", e))
+            .boxed();
 
-		SpawnedSubsystem { name: "dispute-distribution-subsystem", future }
-	}
+        SpawnedSubsystem { name: "dispute-distribution-subsystem", future }
+    }
 }
 
 #[overseer::contextbounds(DisputeDistribution, prefix = self::overseer)]
 impl<AD> DisputeDistributionSubsystem<AD>
 where
-	AD: AuthorityDiscovery + Clone,
+    AD: AuthorityDiscovery + Clone,
 {
-	/// Create a new instance of the dispute distribution.
-	pub fn new(
-		keystore: KeystorePtr,
-		req_receiver: IncomingRequestReceiver<v1::DisputeRequest>,
-		authority_discovery: AD,
-		metrics: Metrics,
-	) -> Self {
-		let runtime = RuntimeInfo::new_with_config(runtime::Config {
-			keystore: Some(keystore),
-			session_cache_lru_size: NonZeroUsize::new(DISPUTE_WINDOW.get() as usize)
-				.expect("Dispute window can not be 0; qed"),
-		});
-		let (tx, sender_rx) = NestingSender::new_root(1);
-		let disputes_sender = DisputeSender::new(tx, metrics.clone());
-		Self {
-			runtime,
-			disputes_sender,
-			sender_rx,
-			req_receiver: Some(req_receiver),
-			authority_discovery,
-			metrics,
-		}
-	}
+    /// Create a new instance of the dispute distribution.
+    pub fn new(
+        keystore: KeystorePtr,
+        req_receiver: IncomingRequestReceiver<v1::DisputeRequest>,
+        authority_discovery: AD,
+        metrics: Metrics,
+    ) -> Self {
+        let runtime = RuntimeInfo::new_with_config(runtime::Config {
+            keystore: Some(keystore),
+            session_cache_lru_size: NonZeroUsize::new(DISPUTE_WINDOW.get() as usize)
+                .expect("Dispute window can not be 0; qed"),
+        });
+        let (tx, sender_rx) = NestingSender::new_root(1);
+        let disputes_sender = DisputeSender::new(tx, metrics.clone());
+        Self {
+            runtime,
+            disputes_sender,
+            sender_rx,
+            req_receiver: Some(req_receiver),
+            authority_discovery,
+            metrics,
+        }
+    }
 
-	/// Start processing work as passed on from the Overseer.
-	async fn run<Context>(mut self, mut ctx: Context) -> std::result::Result<(), FatalError> {
-		let receiver = DisputesReceiver::new(
-			ctx.sender().clone(),
-			self.req_receiver
-				.take()
-				.expect("Must be provided on `new` and we take ownership here. qed."),
-			self.authority_discovery.clone(),
-			self.metrics.clone(),
-		);
-		ctx.spawn("disputes-receiver", receiver.run().boxed())
-			.map_err(FatalError::SpawnTask)?;
+    /// Start processing work as passed on from the Overseer.
+    async fn run<Context>(mut self, mut ctx: Context) -> std::result::Result<(), FatalError> {
+        let receiver = DisputesReceiver::new(
+            ctx.sender().clone(),
+            self.req_receiver
+                .take()
+                .expect("Must be provided on `new` and we take ownership here. qed."),
+            self.authority_discovery.clone(),
+            self.metrics.clone(),
+        );
+        ctx.spawn("disputes-receiver", receiver.run().boxed())
+            .map_err(FatalError::SpawnTask)?;
 
-		// Process messages for sending side.
-		//
-		// Note: We want the sender to be rate limited and we are currently taking advantage of the
-		// fact that the root task of this subsystem is only concerned with sending: Functions of
-		// `DisputeSender` might back pressure if the rate limit is hit, which will slow down this
-		// loop. If this fact ever changes, we will likely need another task.
-		loop {
-			let message = MuxedMessage::receive(&mut ctx, &mut self.sender_rx).await;
-			match message {
-				MuxedMessage::Subsystem(result) => {
-					let result = match result? {
-						FromOrchestra::Signal(signal) => {
-							match self.handle_signals(&mut ctx, signal).await {
-								Ok(SignalResult::Conclude) => return Ok(()),
-								Ok(SignalResult::Continue) => Ok(()),
-								Err(f) => Err(f),
-							}
-						},
-						FromOrchestra::Communication { msg } =>
-							self.handle_subsystem_message(&mut ctx, msg).await,
-					};
-					log_error(result, "on FromOrchestra")?;
-				},
-				MuxedMessage::Sender(result) => {
-					let result = self
-						.disputes_sender
-						.on_message(
-							&mut ctx,
-							&mut self.runtime,
-							result.ok_or(FatalError::SenderExhausted)?,
-						)
-						.await
-						.map_err(Error::Sender);
-					log_error(result, "on_message")?;
-				},
-			}
-		}
-	}
+        // Process messages for sending side.
+        //
+        // Note: We want the sender to be rate limited and we are currently taking advantage of the
+        // fact that the root task of this subsystem is only concerned with sending: Functions of
+        // `DisputeSender` might back pressure if the rate limit is hit, which will slow down this
+        // loop. If this fact ever changes, we will likely need another task.
+        loop {
+            let message = MuxedMessage::receive(&mut ctx, &mut self.sender_rx).await;
+            match message {
+                MuxedMessage::Subsystem(result) => {
+                    let result = match result? {
+                        FromOrchestra::Signal(signal) => {
+                            match self.handle_signals(&mut ctx, signal).await {
+                                Ok(SignalResult::Conclude) => return Ok(()),
+                                Ok(SignalResult::Continue) => Ok(()),
+                                Err(f) => Err(f),
+                            }
+                        },
+                        FromOrchestra::Communication { msg } => {
+                            self.handle_subsystem_message(&mut ctx, msg).await
+                        },
+                    };
+                    log_error(result, "on FromOrchestra")?;
+                },
+                MuxedMessage::Sender(result) => {
+                    let result = self
+                        .disputes_sender
+                        .on_message(
+                            &mut ctx,
+                            &mut self.runtime,
+                            result.ok_or(FatalError::SenderExhausted)?,
+                        )
+                        .await
+                        .map_err(Error::Sender);
+                    log_error(result, "on_message")?;
+                },
+            }
+        }
+    }
 
-	/// Handle overseer signals.
-	async fn handle_signals<Context>(
-		&mut self,
-		ctx: &mut Context,
-		signal: OverseerSignal,
-	) -> Result<SignalResult> {
-		match signal {
-			OverseerSignal::Conclude => return Ok(SignalResult::Conclude),
-			OverseerSignal::ActiveLeaves(update) => {
-				self.disputes_sender.update_leaves(ctx, &mut self.runtime, update).await?;
-			},
-			OverseerSignal::BlockFinalized(_, _) => {},
-		};
-		Ok(SignalResult::Continue)
-	}
+    /// Handle overseer signals.
+    async fn handle_signals<Context>(
+        &mut self,
+        ctx: &mut Context,
+        signal: OverseerSignal,
+    ) -> Result<SignalResult> {
+        match signal {
+            OverseerSignal::Conclude => return Ok(SignalResult::Conclude),
+            OverseerSignal::ActiveLeaves(update) => {
+                self.disputes_sender.update_leaves(ctx, &mut self.runtime, update).await?;
+            },
+            OverseerSignal::BlockFinalized(_, _) => {},
+        };
+        Ok(SignalResult::Continue)
+    }
 
-	/// Handle `DisputeDistributionMessage`s.
-	async fn handle_subsystem_message<Context>(
-		&mut self,
-		ctx: &mut Context,
-		msg: DisputeDistributionMessage,
-	) -> Result<()> {
-		match msg {
-			DisputeDistributionMessage::SendDispute(dispute_msg) =>
-				self.disputes_sender.start_sender(ctx, &mut self.runtime, dispute_msg).await?,
-		}
-		Ok(())
-	}
+    /// Handle `DisputeDistributionMessage`s.
+    async fn handle_subsystem_message<Context>(
+        &mut self,
+        ctx: &mut Context,
+        msg: DisputeDistributionMessage,
+    ) -> Result<()> {
+        match msg {
+            DisputeDistributionMessage::SendDispute(dispute_msg) => {
+                self.disputes_sender.start_sender(ctx, &mut self.runtime, dispute_msg).await?
+            },
+        }
+        Ok(())
+    }
 }
 
 /// Messages to be handled in this subsystem.
 #[derive(Debug)]
 enum MuxedMessage {
-	/// Messages from other subsystems.
-	Subsystem(FatalResult<FromOrchestra<DisputeDistributionMessage>>),
-	/// Messages from spawned sender background tasks.
-	Sender(Option<DisputeSenderMessage>),
+    /// Messages from other subsystems.
+    Subsystem(FatalResult<FromOrchestra<DisputeDistributionMessage>>),
+    /// Messages from spawned sender background tasks.
+    Sender(Option<DisputeSenderMessage>),
 }
 
 #[overseer::contextbounds(DisputeDistribution, prefix = self::overseer)]
 impl MuxedMessage {
-	async fn receive<Context>(
-		ctx: &mut Context,
-		from_sender: &mut mpsc::Receiver<DisputeSenderMessage>,
-	) -> Self {
-		// We are only fusing here to make `select` happy, in reality we will quit if the stream
-		// ends.
-		let from_overseer = ctx.recv().fuse();
-		futures::pin_mut!(from_overseer, from_sender);
-		// We select biased to make sure we finish up loose ends, before starting new work.
-		futures::select_biased!(
-			msg = from_sender.next() => MuxedMessage::Sender(msg),
-			msg = from_overseer => MuxedMessage::Subsystem(msg.map_err(FatalError::SubsystemReceive)),
-		)
-	}
+    async fn receive<Context>(
+        ctx: &mut Context,
+        from_sender: &mut mpsc::Receiver<DisputeSenderMessage>,
+    ) -> Self {
+        // We are only fusing here to make `select` happy, in reality we will quit if the stream
+        // ends.
+        let from_overseer = ctx.recv().fuse();
+        futures::pin_mut!(from_overseer, from_sender);
+        // We select biased to make sure we finish up loose ends, before starting new work.
+        futures::select_biased!(
+            msg = from_sender.next() => MuxedMessage::Sender(msg),
+            msg = from_overseer => MuxedMessage::Subsystem(msg.map_err(FatalError::SubsystemReceive)),
+        )
+    }
 }
 
 /// Result of handling signal from overseer.
 enum SignalResult {
-	/// Overseer asked us to conclude.
-	Conclude,
-	/// We can continue processing events.
-	Continue,
+    /// Overseer asked us to conclude.
+    Conclude,
+    /// We can continue processing events.
+    Continue,
 }

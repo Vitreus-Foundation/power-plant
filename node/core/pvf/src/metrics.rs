@@ -24,100 +24,100 @@ use polkadot_node_metrics::metrics::{self, prometheus};
 pub struct Metrics(Option<MetricsInner>);
 
 impl Metrics {
-	/// Returns a handle to submit prepare workers metrics.
-	pub(crate) fn prepare_worker(&'_ self) -> WorkerRelatedMetrics<'_> {
-		WorkerRelatedMetrics { metrics: self, flavor: WorkerFlavor::Prepare }
-	}
+    /// Returns a handle to submit prepare workers metrics.
+    pub(crate) fn prepare_worker(&'_ self) -> WorkerRelatedMetrics<'_> {
+        WorkerRelatedMetrics { metrics: self, flavor: WorkerFlavor::Prepare }
+    }
 
-	/// Returns a handle to submit execute workers metrics.
-	pub(crate) fn execute_worker(&'_ self) -> WorkerRelatedMetrics<'_> {
-		WorkerRelatedMetrics { metrics: self, flavor: WorkerFlavor::Execute }
-	}
+    /// Returns a handle to submit execute workers metrics.
+    pub(crate) fn execute_worker(&'_ self) -> WorkerRelatedMetrics<'_> {
+        WorkerRelatedMetrics { metrics: self, flavor: WorkerFlavor::Execute }
+    }
 
-	/// When preparation pipeline had a new item enqueued.
-	pub(crate) fn prepare_enqueued(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.prepare_enqueued.inc();
-		}
-	}
+    /// When preparation pipeline had a new item enqueued.
+    pub(crate) fn prepare_enqueued(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.prepare_enqueued.inc();
+        }
+    }
 
-	/// When preparation pipeline concluded working on an item.
-	pub(crate) fn prepare_concluded(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.prepare_concluded.inc();
-		}
-	}
+    /// When preparation pipeline concluded working on an item.
+    pub(crate) fn prepare_concluded(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.prepare_concluded.inc();
+        }
+    }
 
-	/// When execution pipeline had a new item enqueued.
-	pub(crate) fn execute_enqueued(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.execute_enqueued.inc();
-		}
-	}
+    /// When execution pipeline had a new item enqueued.
+    pub(crate) fn execute_enqueued(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.execute_enqueued.inc();
+        }
+    }
 
-	/// When execution pipeline finished executing a request.
-	pub(crate) fn execute_finished(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.execute_finished.inc();
-		}
-	}
+    /// When execution pipeline finished executing a request.
+    pub(crate) fn execute_finished(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.execute_finished.inc();
+        }
+    }
 
-	/// Time between sending preparation request to a worker to having the response.
-	pub(crate) fn time_preparation(
-		&self,
-	) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.preparation_time.start_timer())
-	}
+    /// Time between sending preparation request to a worker to having the response.
+    pub(crate) fn time_preparation(
+        &self,
+    ) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.preparation_time.start_timer())
+    }
 
-	/// Time between sending execution request to a worker to having the response.
-	pub(crate) fn time_execution(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.execution_time.start_timer())
-	}
+    /// Time between sending execution request to a worker to having the response.
+    pub(crate) fn time_execution(&self) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.execution_time.start_timer())
+    }
 
-	/// Observe memory stats for preparation.
-	#[allow(unused_variables)]
-	pub(crate) fn observe_preparation_memory_metrics(&self, memory_stats: MemoryStats) {
-		if let Some(metrics) = &self.0 {
-			#[cfg(target_os = "linux")]
-			if let Some(max_rss) = memory_stats.max_rss {
-				metrics.preparation_max_rss.observe(max_rss as f64);
-			}
+    /// Observe memory stats for preparation.
+    #[allow(unused_variables)]
+    pub(crate) fn observe_preparation_memory_metrics(&self, memory_stats: MemoryStats) {
+        if let Some(metrics) = &self.0 {
+            #[cfg(target_os = "linux")]
+            if let Some(max_rss) = memory_stats.max_rss {
+                metrics.preparation_max_rss.observe(max_rss as f64);
+            }
 
-			#[cfg(any(target_os = "linux", feature = "jemalloc-allocator"))]
-			if let Some(tracker_stats) = memory_stats.memory_tracker_stats {
-				// We convert these stats from B to KB to match the unit of `ru_maxrss` from `getrusage`.
-				let max_resident_kb = (tracker_stats.resident / 1024) as f64;
-				let max_allocated_kb = (tracker_stats.allocated / 1024) as f64;
+            #[cfg(any(target_os = "linux", feature = "jemalloc-allocator"))]
+            if let Some(tracker_stats) = memory_stats.memory_tracker_stats {
+                // We convert these stats from B to KB to match the unit of `ru_maxrss` from `getrusage`.
+                let max_resident_kb = (tracker_stats.resident / 1024) as f64;
+                let max_allocated_kb = (tracker_stats.allocated / 1024) as f64;
 
-				metrics.preparation_max_resident.observe(max_resident_kb);
-				metrics.preparation_max_allocated.observe(max_allocated_kb);
-			}
-		}
-	}
+                metrics.preparation_max_resident.observe(max_resident_kb);
+                metrics.preparation_max_allocated.observe(max_allocated_kb);
+            }
+        }
+    }
 }
 
 #[derive(Clone)]
 struct MetricsInner {
-	worker_spawning: prometheus::CounterVec<prometheus::U64>,
-	worker_spawned: prometheus::CounterVec<prometheus::U64>,
-	worker_retired: prometheus::CounterVec<prometheus::U64>,
-	prepare_enqueued: prometheus::Counter<prometheus::U64>,
-	prepare_concluded: prometheus::Counter<prometheus::U64>,
-	execute_enqueued: prometheus::Counter<prometheus::U64>,
-	execute_finished: prometheus::Counter<prometheus::U64>,
-	preparation_time: prometheus::Histogram,
-	execution_time: prometheus::Histogram,
-	#[cfg(target_os = "linux")]
-	preparation_max_rss: prometheus::Histogram,
-	#[cfg(any(target_os = "linux", feature = "jemalloc-allocator"))]
-	preparation_max_allocated: prometheus::Histogram,
-	#[cfg(any(target_os = "linux", feature = "jemalloc-allocator"))]
-	preparation_max_resident: prometheus::Histogram,
+    worker_spawning: prometheus::CounterVec<prometheus::U64>,
+    worker_spawned: prometheus::CounterVec<prometheus::U64>,
+    worker_retired: prometheus::CounterVec<prometheus::U64>,
+    prepare_enqueued: prometheus::Counter<prometheus::U64>,
+    prepare_concluded: prometheus::Counter<prometheus::U64>,
+    execute_enqueued: prometheus::Counter<prometheus::U64>,
+    execute_finished: prometheus::Counter<prometheus::U64>,
+    preparation_time: prometheus::Histogram,
+    execution_time: prometheus::Histogram,
+    #[cfg(target_os = "linux")]
+    preparation_max_rss: prometheus::Histogram,
+    #[cfg(any(target_os = "linux", feature = "jemalloc-allocator"))]
+    preparation_max_allocated: prometheus::Histogram,
+    #[cfg(any(target_os = "linux", feature = "jemalloc-allocator"))]
+    preparation_max_resident: prometheus::Histogram,
 }
 
 impl metrics::Metrics for Metrics {
-	fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
-		let inner = MetricsInner {
+    fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
+        let inner = MetricsInner {
 			worker_spawning: prometheus::register(
 				prometheus::CounterVec::new(
 					prometheus::Opts::new(
@@ -271,48 +271,48 @@ impl metrics::Metrics for Metrics {
 				registry,
 			)?,
 		};
-		Ok(Metrics(Some(inner)))
-	}
+        Ok(Metrics(Some(inner)))
+    }
 }
 
 enum WorkerFlavor {
-	Prepare,
-	Execute,
+    Prepare,
+    Execute,
 }
 
 impl WorkerFlavor {
-	fn as_label(&self) -> &'static str {
-		match *self {
-			WorkerFlavor::Prepare => "prepare",
-			WorkerFlavor::Execute => "execute",
-		}
-	}
+    fn as_label(&self) -> &'static str {
+        match *self {
+            WorkerFlavor::Prepare => "prepare",
+            WorkerFlavor::Execute => "execute",
+        }
+    }
 }
 
 pub(crate) struct WorkerRelatedMetrics<'a> {
-	metrics: &'a Metrics,
-	flavor: WorkerFlavor,
+    metrics: &'a Metrics,
+    flavor: WorkerFlavor,
 }
 
 impl<'a> WorkerRelatedMetrics<'a> {
-	/// When the spawning of a worker started.
-	pub(crate) fn on_begin_spawn(&self) {
-		if let Some(metrics) = &self.metrics.0 {
-			metrics.worker_spawning.with_label_values(&[self.flavor.as_label()]).inc();
-		}
-	}
+    /// When the spawning of a worker started.
+    pub(crate) fn on_begin_spawn(&self) {
+        if let Some(metrics) = &self.metrics.0 {
+            metrics.worker_spawning.with_label_values(&[self.flavor.as_label()]).inc();
+        }
+    }
 
-	/// When the worker successfully spawned.
-	pub(crate) fn on_spawned(&self) {
-		if let Some(metrics) = &self.metrics.0 {
-			metrics.worker_spawned.with_label_values(&[self.flavor.as_label()]).inc();
-		}
-	}
+    /// When the worker successfully spawned.
+    pub(crate) fn on_spawned(&self) {
+        if let Some(metrics) = &self.metrics.0 {
+            metrics.worker_spawned.with_label_values(&[self.flavor.as_label()]).inc();
+        }
+    }
 
-	/// When the worker was killed or died.
-	pub(crate) fn on_retired(&self) {
-		if let Some(metrics) = &self.metrics.0 {
-			metrics.worker_retired.with_label_values(&[self.flavor.as_label()]).inc();
-		}
-	}
+    /// When the worker was killed or died.
+    pub(crate) fn on_retired(&self) {
+        if let Some(metrics) = &self.metrics.0 {
+            metrics.worker_retired.with_label_values(&[self.flavor.as_label()]).inc();
+        }
+    }
 }

@@ -21,35 +21,35 @@ use primitives::{ExecutorParam, ExecutorParams, PvfExecTimeoutKind, PvfPrepTimeo
 use sp_runtime::traits::One;
 
 benchmarks! {
-	set_config_with_block_number {}: set_code_retention_period(RawOrigin::Root, One::one())
+    set_config_with_block_number {}: set_code_retention_period(RawOrigin::Root, One::one())
 
-	set_config_with_u32 {}: set_max_code_size(RawOrigin::Root, 100)
+    set_config_with_u32 {}: set_max_code_size(RawOrigin::Root, 100)
 
-	set_config_with_option_u32 {}: set_max_validators(RawOrigin::Root, Some(10))
+    set_config_with_option_u32 {}: set_max_validators(RawOrigin::Root, Some(10))
 
-	set_hrmp_open_request_ttl {}: {
-		Err(BenchmarkError::Override(
-			BenchmarkResult::from_weight(T::BlockWeights::get().max_block)
-		))?;
-	}
+    set_hrmp_open_request_ttl {}: {
+        Err(BenchmarkError::Override(
+            BenchmarkResult::from_weight(T::BlockWeights::get().max_block)
+        ))?;
+    }
 
-	set_config_with_balance {}: set_hrmp_sender_deposit(RawOrigin::Root, 100_000_000_000)
+    set_config_with_balance {}: set_hrmp_sender_deposit(RawOrigin::Root, 100_000_000_000)
 
-	set_config_with_executor_params {}: set_executor_params(RawOrigin::Root, ExecutorParams::from(&[
-		ExecutorParam::MaxMemoryPages(2080),
-		ExecutorParam::StackLogicalMax(65536),
-		ExecutorParam::StackNativeMax(256 * 1024 * 1024),
-		ExecutorParam::WasmExtBulkMemory,
-		ExecutorParam::PrecheckingMaxMemory(2 * 1024 * 1024 * 1024),
-		ExecutorParam::PvfPrepTimeout(PvfPrepTimeoutKind::Precheck, 60_000),
-		ExecutorParam::PvfPrepTimeout(PvfPrepTimeoutKind::Lenient, 360_000),
-		ExecutorParam::PvfExecTimeout(PvfExecTimeoutKind::Backing, 2_000),
-		ExecutorParam::PvfExecTimeout(PvfExecTimeoutKind::Approval, 12_000),
-	][..]))
+    set_config_with_executor_params {}: set_executor_params(RawOrigin::Root, ExecutorParams::from(&[
+        ExecutorParam::MaxMemoryPages(2080),
+        ExecutorParam::StackLogicalMax(65536),
+        ExecutorParam::StackNativeMax(256 * 1024 * 1024),
+        ExecutorParam::WasmExtBulkMemory,
+        ExecutorParam::PrecheckingMaxMemory(2 * 1024 * 1024 * 1024),
+        ExecutorParam::PvfPrepTimeout(PvfPrepTimeoutKind::Precheck, 60_000),
+        ExecutorParam::PvfPrepTimeout(PvfPrepTimeoutKind::Lenient, 360_000),
+        ExecutorParam::PvfExecTimeout(PvfExecTimeoutKind::Backing, 2_000),
+        ExecutorParam::PvfExecTimeout(PvfExecTimeoutKind::Approval, 12_000),
+    ][..]))
 
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::mock::new_test_ext(Default::default()),
-		crate::mock::Test
-	);
+    impl_benchmark_test_suite!(
+        Pallet,
+        crate::mock::new_test_ext(Default::default()),
+        crate::mock::Test
+    );
 }

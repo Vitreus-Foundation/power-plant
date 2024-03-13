@@ -29,23 +29,23 @@ use polkadot_primitives::{CandidateHash, SessionIndex};
 
 /// Request the relevant dispute statements for a set of disputes identified by `CandidateHash` and the `SessionIndex`.
 async fn request_votes(
-	sender: &mut impl overseer::ProvisionerSenderTrait,
-	disputes_to_query: Vec<(SessionIndex, CandidateHash)>,
+    sender: &mut impl overseer::ProvisionerSenderTrait,
+    disputes_to_query: Vec<(SessionIndex, CandidateHash)>,
 ) -> Vec<(SessionIndex, CandidateHash, CandidateVotes)> {
-	let (tx, rx) = oneshot::channel();
-	// Bounded by block production - `ProvisionerMessage::RequestInherentData`.
-	sender.send_unbounded_message(DisputeCoordinatorMessage::QueryCandidateVotes(
-		disputes_to_query,
-		tx,
-	));
+    let (tx, rx) = oneshot::channel();
+    // Bounded by block production - `ProvisionerMessage::RequestInherentData`.
+    sender.send_unbounded_message(DisputeCoordinatorMessage::QueryCandidateVotes(
+        disputes_to_query,
+        tx,
+    ));
 
-	match rx.await {
-		Ok(v) => v,
-		Err(oneshot::Canceled) => {
-			gum::warn!(target: LOG_TARGET, "Unable to query candidate votes");
-			Vec::new()
-		},
-	}
+    match rx.await {
+        Ok(v) => v,
+        Err(oneshot::Canceled) => {
+            gum::warn!(target: LOG_TARGET, "Unable to query candidate votes");
+            Vec::new()
+        },
+    }
 }
 
 pub(crate) mod prioritized_selection;

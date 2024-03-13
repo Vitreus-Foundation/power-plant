@@ -27,40 +27,40 @@ use std::{future::Future, pin::Pin};
 /// Filter incoming and outgoing messages.
 pub trait MessageInterceptor<Sender>: Send + Sync + Clone + 'static
 where
-	Sender: overseer::SubsystemSender<<Self::Message as overseer::AssociateOutgoing>::OutgoingMessages>
-		+ Clone
-		+ 'static,
+    Sender: overseer::SubsystemSender<<Self::Message as overseer::AssociateOutgoing>::OutgoingMessages>
+        + Clone
+        + 'static,
 {
-	/// The message type the original subsystem handles incoming.
-	type Message: overseer::AssociateOutgoing + Send + 'static;
+    /// The message type the original subsystem handles incoming.
+    type Message: overseer::AssociateOutgoing + Send + 'static;
 
-	/// Filter messages that are to be received by
-	/// the subsystem.
-	///
-	/// For non-trivial cases, the `sender` can be used to send
-	/// multiple messages after doing some additional processing.
-	fn intercept_incoming(
-		&self,
-		_sender: &mut Sender,
-		msg: FromOrchestra<Self::Message>,
-	) -> Option<FromOrchestra<Self::Message>> {
-		Some(msg)
-	}
+    /// Filter messages that are to be received by
+    /// the subsystem.
+    ///
+    /// For non-trivial cases, the `sender` can be used to send
+    /// multiple messages after doing some additional processing.
+    fn intercept_incoming(
+        &self,
+        _sender: &mut Sender,
+        msg: FromOrchestra<Self::Message>,
+    ) -> Option<FromOrchestra<Self::Message>> {
+        Some(msg)
+    }
 
-	/// Modify outgoing messages.
-	fn intercept_outgoing(
-		&self,
-		msg: <Self::Message as overseer::AssociateOutgoing>::OutgoingMessages,
-	) -> Option<<Self::Message as overseer::AssociateOutgoing>::OutgoingMessages> {
-		Some(msg)
-	}
+    /// Modify outgoing messages.
+    fn intercept_outgoing(
+        &self,
+        msg: <Self::Message as overseer::AssociateOutgoing>::OutgoingMessages,
+    ) -> Option<<Self::Message as overseer::AssociateOutgoing>::OutgoingMessages> {
+        Some(msg)
+    }
 }
 
 /// A sender with the outgoing messages filtered.
 #[derive(Clone)]
 pub struct InterceptedSender<Sender, Fil> {
-	inner: Sender,
-	message_filter: Fil,
+    inner: Sender,
+    message_filter: Fil,
 }
 
 #[async_trait::async_trait]
@@ -220,14 +220,14 @@ where
 
 /// A subsystem to which incoming and outgoing filters are applied.
 pub struct InterceptedSubsystem<Sub, Interceptor> {
-	pub subsystem: Sub,
-	pub message_interceptor: Interceptor,
+    pub subsystem: Sub,
+    pub message_interceptor: Interceptor,
 }
 
 impl<Sub, Interceptor> InterceptedSubsystem<Sub, Interceptor> {
-	pub fn new(subsystem: Sub, message_interceptor: Interceptor) -> Self {
-		Self { subsystem, message_interceptor }
-	}
+    pub fn new(subsystem: Sub, message_interceptor: Interceptor) -> Self {
+        Self { subsystem, message_interceptor }
+    }
 }
 
 impl<Context, Sub, Interceptor> overseer::Subsystem<Context, SubsystemError> for InterceptedSubsystem<Sub, Interceptor>

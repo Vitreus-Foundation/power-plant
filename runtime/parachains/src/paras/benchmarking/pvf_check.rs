@@ -27,10 +27,10 @@ const SESSION_INDEX: SessionIndex = 1;
 const VALIDATOR_NUM: usize = 800;
 const CAUSES_NUM: usize = 100;
 fn validation_code() -> ValidationCode {
-	ValidationCode(vec![0])
+    ValidationCode(vec![0])
 }
 fn old_validation_code() -> ValidationCode {
-	ValidationCode(vec![1])
+    ValidationCode(vec![1])
 }
 
 /// Prepares the PVF check statement and the validator signature to pass into
@@ -40,19 +40,19 @@ fn old_validation_code() -> ValidationCode {
 /// of only vote accounting.
 pub fn prepare_inclusion_bench<T>() -> (PvfCheckStatement, ValidatorSignature)
 where
-	T: Config + shared::Config,
+    T: Config + shared::Config,
 {
-	initialize::<T>();
-	// we do not plan to trigger finalization, thus the cause is inconsequential.
-	initialize_pvf_active_vote::<T>(VoteCause::Onboarding, CAUSES_NUM);
+    initialize::<T>();
+    // we do not plan to trigger finalization, thus the cause is inconsequential.
+    initialize_pvf_active_vote::<T>(VoteCause::Onboarding, CAUSES_NUM);
 
-	// `unwrap` cannot panic here since the `initialize` function should initialize validators count
-	// to be more than 0.
-	//
-	// VoteDirection doesn't matter here as well.
-	let stmt_n_sig = generate_statements::<T>(VoteOutcome::Accept).next().unwrap();
+    // `unwrap` cannot panic here since the `initialize` function should initialize validators count
+    // to be more than 0.
+    //
+    // VoteDirection doesn't matter here as well.
+    let stmt_n_sig = generate_statements::<T>(VoteOutcome::Accept).next().unwrap();
 
-	stmt_n_sig
+    stmt_n_sig
 }
 
 /// Prepares conditions for benchmarking of the finalization part of `include_pvf_check_statement`.
@@ -62,84 +62,84 @@ where
 /// from this function and is expected to be passed into `include_pvf_check_statement` during the
 /// benchmarking phase.
 pub fn prepare_finalization_bench<T>(
-	cause: VoteCause,
-	outcome: VoteOutcome,
+    cause: VoteCause,
+    outcome: VoteOutcome,
 ) -> (PvfCheckStatement, ValidatorSignature)
 where
-	T: Config + shared::Config,
+    T: Config + shared::Config,
 {
-	initialize::<T>();
-	initialize_pvf_active_vote::<T>(cause, CAUSES_NUM);
+    initialize::<T>();
+    initialize_pvf_active_vote::<T>(cause, CAUSES_NUM);
 
-	let mut stmts = generate_statements::<T>(outcome).collect::<Vec<_>>();
-	// this should be ensured by the `initialize` function.
-	assert!(stmts.len() > 2);
+    let mut stmts = generate_statements::<T>(outcome).collect::<Vec<_>>();
+    // this should be ensured by the `initialize` function.
+    assert!(stmts.len() > 2);
 
-	// stash the last statement to be used in the benchmarking phase.
-	let stmt_n_sig = stmts.pop().unwrap();
+    // stash the last statement to be used in the benchmarking phase.
+    let stmt_n_sig = stmts.pop().unwrap();
 
-	for (stmt, sig) in stmts {
-		let r = Pallet::<T>::include_pvf_check_statement(RawOrigin::None.into(), stmt, sig);
-		assert!(r.is_ok());
-	}
+    for (stmt, sig) in stmts {
+        let r = Pallet::<T>::include_pvf_check_statement(RawOrigin::None.into(), stmt, sig);
+        assert!(r.is_ok());
+    }
 
-	stmt_n_sig
+    stmt_n_sig
 }
 
 /// Prepares storage for invoking `add_trusted_validation_code` with several paras initializing to
 /// the same code.
 pub fn prepare_bypassing_bench<T>(validation_code: ValidationCode)
 where
-	T: Config + shared::Config,
+    T: Config + shared::Config,
 {
-	// Suppose a sensible number of paras initialize to the same code.
-	const PARAS_NUM: usize = 10;
+    // Suppose a sensible number of paras initialize to the same code.
+    const PARAS_NUM: usize = 10;
 
-	initialize::<T>();
-	for i in 0..PARAS_NUM {
-		let id = ParaId::from(i as u32);
-		assert_ok!(Pallet::<T>::schedule_para_initialize(
-			id,
-			ParaGenesisArgs {
-				para_kind: ParaKind::Parachain,
-				genesis_head: HeadData(vec![1, 2, 3, 4]),
-				validation_code: validation_code.clone(),
-			},
-		));
-	}
+    initialize::<T>();
+    for i in 0..PARAS_NUM {
+        let id = ParaId::from(i as u32);
+        assert_ok!(Pallet::<T>::schedule_para_initialize(
+            id,
+            ParaGenesisArgs {
+                para_kind: ParaKind::Parachain,
+                genesis_head: HeadData(vec![1, 2, 3, 4]),
+                validation_code: validation_code.clone(),
+            },
+        ));
+    }
 }
 
 /// What caused the PVF pre-checking vote?
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum VoteCause {
-	Onboarding,
-	Upgrade,
+    Onboarding,
+    Upgrade,
 }
 
 /// The outcome of the PVF pre-checking vote.
 #[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub enum VoteOutcome {
-	Accept,
-	Reject,
+    Accept,
+    Reject,
 }
 
 fn initialize<T>()
 where
-	T: Config + shared::Config,
+    T: Config + shared::Config,
 {
-	// 0. generate a list of validators
-	let validators = (0..VALIDATOR_NUM)
-		.map(|_| <ValidatorId as RuntimeAppPublic>::generate_pair(None))
-		.collect::<Vec<_>>();
+    // 0. generate a list of validators
+    let validators = (0..VALIDATOR_NUM)
+        .map(|_| <ValidatorId as RuntimeAppPublic>::generate_pair(None))
+        .collect::<Vec<_>>();
 
-	// 1. Make sure PVF pre-checking is enabled in the config.
-	let mut config = configuration::Pallet::<T>::config();
-	config.pvf_checking_enabled = true;
-	configuration::Pallet::<T>::force_set_active_config(config.clone());
+    // 1. Make sure PVF pre-checking is enabled in the config.
+    let mut config = configuration::Pallet::<T>::config();
+    config.pvf_checking_enabled = true;
+    configuration::Pallet::<T>::force_set_active_config(config.clone());
 
-	// 2. initialize a new session with deterministic validator set.
-	ParasShared::<T>::set_active_validators_ascending(validators.clone());
-	ParasShared::<T>::set_session_index(SESSION_INDEX);
+    // 2. initialize a new session with deterministic validator set.
+    ParasShared::<T>::set_active_validators_ascending(validators.clone());
+    ParasShared::<T>::set_session_index(SESSION_INDEX);
 }
 
 /// Creates a new PVF pre-checking active vote.
@@ -148,77 +148,77 @@ where
 /// by the test setup.
 fn initialize_pvf_active_vote<T>(vote_cause: VoteCause, causes_num: usize)
 where
-	T: Config + shared::Config,
+    T: Config + shared::Config,
 {
-	for i in 0..causes_num {
-		let id = ParaId::from(i as u32);
+    for i in 0..causes_num {
+        let id = ParaId::from(i as u32);
 
-		if vote_cause == VoteCause::Upgrade {
-			// we do care about validation code being actually different, since there is a check
-			// that prevents upgrading to the same code.
-			let old_validation_code = old_validation_code();
-			let validation_code = validation_code();
+        if vote_cause == VoteCause::Upgrade {
+            // we do care about validation code being actually different, since there is a check
+            // that prevents upgrading to the same code.
+            let old_validation_code = old_validation_code();
+            let validation_code = validation_code();
 
-			let mut parachains = ParachainsCache::new();
-			Pallet::<T>::initialize_para_now(
-				&mut parachains,
-				id,
-				&ParaGenesisArgs {
-					para_kind: ParaKind::Parachain,
-					genesis_head: HeadData(vec![1, 2, 3, 4]),
-					validation_code: old_validation_code,
-				},
-			);
-			// don't care about performance here, but we do care about robustness. So dump the cache
-			// asap.
-			drop(parachains);
+            let mut parachains = ParachainsCache::new();
+            Pallet::<T>::initialize_para_now(
+                &mut parachains,
+                id,
+                &ParaGenesisArgs {
+                    para_kind: ParaKind::Parachain,
+                    genesis_head: HeadData(vec![1, 2, 3, 4]),
+                    validation_code: old_validation_code,
+                },
+            );
+            // don't care about performance here, but we do care about robustness. So dump the cache
+            // asap.
+            drop(parachains);
 
-			Pallet::<T>::schedule_code_upgrade(
-				id,
-				validation_code,
-				/* relay_parent_number */ 1u32.into(),
-				&configuration::Pallet::<T>::config(),
-			);
-		} else {
-			let r = Pallet::<T>::schedule_para_initialize(
-				id,
-				ParaGenesisArgs {
-					para_kind: ParaKind::Parachain,
-					genesis_head: HeadData(vec![1, 2, 3, 4]),
-					validation_code: validation_code(),
-				},
-			);
-			assert!(r.is_ok());
-		}
-	}
+            Pallet::<T>::schedule_code_upgrade(
+                id,
+                validation_code,
+                /* relay_parent_number */ 1u32.into(),
+                &configuration::Pallet::<T>::config(),
+            );
+        } else {
+            let r = Pallet::<T>::schedule_para_initialize(
+                id,
+                ParaGenesisArgs {
+                    para_kind: ParaKind::Parachain,
+                    genesis_head: HeadData(vec![1, 2, 3, 4]),
+                    validation_code: validation_code(),
+                },
+            );
+            assert!(r.is_ok());
+        }
+    }
 }
 
 /// Generates a list of votes combined with signatures for the active validator set. The number of
 /// votes is equal to the minimum number of votes required to reach the threshold for either accept
 /// or reject.
 fn generate_statements<T>(
-	vote_outcome: VoteOutcome,
+    vote_outcome: VoteOutcome,
 ) -> impl Iterator<Item = (PvfCheckStatement, ValidatorSignature)>
 where
-	T: Config + shared::Config,
+    T: Config + shared::Config,
 {
-	let validators = ParasShared::<T>::active_validator_keys();
+    let validators = ParasShared::<T>::active_validator_keys();
 
-	let accept_threshold = primitives::supermajority_threshold(validators.len());
-	let required_votes = match vote_outcome {
-		VoteOutcome::Accept => accept_threshold,
-		VoteOutcome::Reject => validators.len() - accept_threshold,
-	};
-	(0..required_votes).map(move |validator_index| {
-		let stmt = PvfCheckStatement {
-			accept: vote_outcome == VoteOutcome::Accept,
-			subject: validation_code().hash(),
-			session_index: SESSION_INDEX,
+    let accept_threshold = primitives::supermajority_threshold(validators.len());
+    let required_votes = match vote_outcome {
+        VoteOutcome::Accept => accept_threshold,
+        VoteOutcome::Reject => validators.len() - accept_threshold,
+    };
+    (0..required_votes).map(move |validator_index| {
+        let stmt = PvfCheckStatement {
+            accept: vote_outcome == VoteOutcome::Accept,
+            subject: validation_code().hash(),
+            session_index: SESSION_INDEX,
 
-			validator_index: ValidatorIndex(validator_index as u32),
-		};
-		let signature = validators[validator_index].sign(&stmt.signing_payload()).unwrap();
+            validator_index: ValidatorIndex(validator_index as u32),
+        };
+        let signature = validators[validator_index].sign(&stmt.signing_payload()).unwrap();
 
-		(stmt, signature)
-	})
+        (stmt, signature)
+    })
 }

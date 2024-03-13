@@ -132,76 +132,76 @@ use futures::{channel::mpsc, SinkExt};
 /// `NestingSender::new` with its own sender and a conversion function to provide a further nested
 /// sender, suitable for the child module.
 pub struct NestingSender<M, Mnested> {
-	sender: mpsc::Sender<M>,
-	conversion: Arc<dyn Fn(Mnested) -> M + 'static + Send + Sync>,
+    sender: mpsc::Sender<M>,
+    conversion: Arc<dyn Fn(Mnested) -> M + 'static + Send + Sync>,
 }
 
 impl<M> NestingSender<M, M>
 where
-	M: 'static,
+    M: 'static,
 {
-	/// Create a new "root" sender.
-	///
-	/// This is a sender that directly passes messages to the internal mpsc.
-	///
-	/// Params: The channel size of the created mpsc.
-	/// Returns: The newly constructed `NestingSender` and the corresponding mpsc receiver.
-	pub fn new_root(channel_size: usize) -> (Self, mpsc::Receiver<M>) {
-		let (sender, receiver) = mpsc::channel(channel_size);
-		let s = Self { sender, conversion: Arc::new(identity) };
-		(s, receiver)
-	}
+    /// Create a new "root" sender.
+    ///
+    /// This is a sender that directly passes messages to the internal mpsc.
+    ///
+    /// Params: The channel size of the created mpsc.
+    /// Returns: The newly constructed `NestingSender` and the corresponding mpsc receiver.
+    pub fn new_root(channel_size: usize) -> (Self, mpsc::Receiver<M>) {
+        let (sender, receiver) = mpsc::channel(channel_size);
+        let s = Self { sender, conversion: Arc::new(identity) };
+        (s, receiver)
+    }
 }
 
 impl<M, Mnested> NestingSender<M, Mnested>
 where
-	M: 'static,
-	Mnested: 'static,
+    M: 'static,
+    Mnested: 'static,
 {
-	/// Create a new `NestingSender` which wraps a given "parent" sender.
-	///
-	/// By passing in a necessary conversion from `Mnested` to `Mparent` (the `Mnested` of the
-	/// parent sender), we can construct a derived `NestingSender<M, Mnested>` from a
-	/// `NestingSender<M, Mparent>`.
-	///
-	/// Resulting sender does the following conversion:
-	///
-	/// ```text
-	///    Mnested -> Mparent -> M
-	///    Inputs:
-	///    	F(Mparent) -> M (via parent)
-	///    	F(Mnested) -> Mparent (via child_conversion)
-	///    Result: F(Mnested) -> M
-	/// ```
-	pub fn new<Mparent>(
-		parent: NestingSender<M, Mparent>,
-		child_conversion: fn(Mnested) -> Mparent,
-	) -> Self
-	where
-		Mparent: 'static,
-	{
-		let NestingSender { sender, conversion } = parent;
-		Self { sender, conversion: Arc::new(move |x| conversion(child_conversion(x))) }
-	}
+    /// Create a new `NestingSender` which wraps a given "parent" sender.
+    ///
+    /// By passing in a necessary conversion from `Mnested` to `Mparent` (the `Mnested` of the
+    /// parent sender), we can construct a derived `NestingSender<M, Mnested>` from a
+    /// `NestingSender<M, Mparent>`.
+    ///
+    /// Resulting sender does the following conversion:
+    ///
+    /// ```text
+    ///    Mnested -> Mparent -> M
+    ///    Inputs:
+    ///    	F(Mparent) -> M (via parent)
+    ///    	F(Mnested) -> Mparent (via child_conversion)
+    ///    Result: F(Mnested) -> M
+    /// ```
+    pub fn new<Mparent>(
+        parent: NestingSender<M, Mparent>,
+        child_conversion: fn(Mnested) -> Mparent,
+    ) -> Self
+    where
+        Mparent: 'static,
+    {
+        let NestingSender { sender, conversion } = parent;
+        Self { sender, conversion: Arc::new(move |x| conversion(child_conversion(x))) }
+    }
 
-	/// Send a message via the underlying mpsc.
-	///
-	/// Necessary conversion is accomplished.
-	pub async fn send_message(&mut self, m: Mnested) -> Result<(), mpsc::SendError> {
-		// Flushing on an mpsc means to wait for the receiver to pick up the data - we don't want
-		// to wait for that.
-		self.sender.feed((self.conversion)(m)).await
-	}
+    /// Send a message via the underlying mpsc.
+    ///
+    /// Necessary conversion is accomplished.
+    pub async fn send_message(&mut self, m: Mnested) -> Result<(), mpsc::SendError> {
+        // Flushing on an mpsc means to wait for the receiver to pick up the data - we don't want
+        // to wait for that.
+        self.sender.feed((self.conversion)(m)).await
+    }
 }
 
 // Helper traits and implementations:
 
 impl<M, Mnested> Clone for NestingSender<M, Mnested>
 where
-	M: 'static,
-	Mnested: 'static,
+    M: 'static,
+    Mnested: 'static,
 {
-	fn clone(&self) -> Self {
-		Self { sender: self.sender.clone(), conversion: self.conversion.clone() }
-	}
+    fn clone(&self) -> Self {
+        Self { sender: self.sender.clone(), conversion: self.conversion.clone() }
+    }
 }

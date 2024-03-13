@@ -20,9 +20,9 @@
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum JaegerError {
-	#[error("Already launched the collector thread")]
-	AlreadyLaunched,
+    #[error("Already launched the collector thread")]
+    AlreadyLaunched,
 
-	#[error("Missing jaeger configuration")]
-	MissingConfiguration,
+    #[error("Missing jaeger configuration")]
+    MissingConfiguration,
 }

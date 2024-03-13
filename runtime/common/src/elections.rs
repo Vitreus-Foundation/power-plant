@@ -21,27 +21,27 @@
 /// This macro should not be called directly; use [`impl_runtime_weights`] instead.
 #[macro_export]
 macro_rules! impl_elections_weights {
-	($runtime:ident) => {
-		parameter_types! {
-			/// A limit for off-chain phragmen unsigned solution submission.
-			///
-			/// We want to keep it as high as possible, but can't risk having it reject,
-			/// so we always subtract the base block execution weight.
-			pub OffchainSolutionWeightLimit: Weight = BlockWeights::get()
-				.get(DispatchClass::Normal)
-				.max_extrinsic
-				.expect("Normal extrinsics have weight limit configured by default; qed")
-				.saturating_sub($runtime::weights::BlockExecutionWeight::get());
+    ($runtime:ident) => {
+        parameter_types! {
+            /// A limit for off-chain phragmen unsigned solution submission.
+            ///
+            /// We want to keep it as high as possible, but can't risk having it reject,
+            /// so we always subtract the base block execution weight.
+            pub OffchainSolutionWeightLimit: Weight = BlockWeights::get()
+                .get(DispatchClass::Normal)
+                .max_extrinsic
+                .expect("Normal extrinsics have weight limit configured by default; qed")
+                .saturating_sub($runtime::weights::BlockExecutionWeight::get());
 
-			/// A limit for off-chain phragmen unsigned solution length.
-			///
-			/// We allow up to 90% of the block's size to be consumed by the solution.
-			pub OffchainSolutionLengthLimit: u32 = Perbill::from_rational(90_u32, 100) *
-				*BlockLength::get()
-				.max
-				.get(DispatchClass::Normal);
-		}
-	};
+            /// A limit for off-chain phragmen unsigned solution length.
+            ///
+            /// We allow up to 90% of the block's size to be consumed by the solution.
+            pub OffchainSolutionLengthLimit: u32 = Perbill::from_rational(90_u32, 100) *
+                *BlockLength::get()
+                .max
+                .get(DispatchClass::Normal);
+        }
+    };
 }
 
 /// The numbers configured here could always be more than the the maximum limits of staking pallet
@@ -49,13 +49,13 @@ macro_rules! impl_elections_weights {
 /// since the staking is bounded and the weight pipeline takes hours for this single pallet.
 pub struct BenchmarkConfig;
 impl pallet_election_provider_multi_phase::BenchmarkingConfig for BenchmarkConfig {
-	const VOTERS: [u32; 2] = [1000, 2000];
-	const TARGETS: [u32; 2] = [500, 1000];
-	const ACTIVE_VOTERS: [u32; 2] = [500, 800];
-	const DESIRED_TARGETS: [u32; 2] = [200, 400];
-	const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
-	const MINER_MAXIMUM_VOTERS: u32 = 1000;
-	const MAXIMUM_TARGETS: u32 = 300;
+    const VOTERS: [u32; 2] = [1000, 2000];
+    const TARGETS: [u32; 2] = [500, 1000];
+    const ACTIVE_VOTERS: [u32; 2] = [500, 800];
+    const DESIRED_TARGETS: [u32; 2] = [200, 400];
+    const SNAPSHOT_MAXIMUM_VOTERS: u32 = 1000;
+    const MINER_MAXIMUM_VOTERS: u32 = 1000;
+    const MAXIMUM_TARGETS: u32 = 300;
 }
 
 /// The accuracy type used for genesis election provider;

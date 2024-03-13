@@ -19,12 +19,12 @@ use polkadot_node_metrics::metrics::{self, prometheus};
 
 #[derive(Clone)]
 pub(crate) struct MetricsInner {
-	pub(crate) validation_requests: prometheus::CounterVec<prometheus::U64>,
-	pub(crate) validate_from_chain_state: prometheus::Histogram,
-	pub(crate) validate_from_exhaustive: prometheus::Histogram,
-	pub(crate) validate_candidate_exhaustive: prometheus::Histogram,
-	pub(crate) pov_size: prometheus::Histogram,
-	pub(crate) code_size: prometheus::Histogram,
+    pub(crate) validation_requests: prometheus::CounterVec<prometheus::U64>,
+    pub(crate) validate_from_chain_state: prometheus::Histogram,
+    pub(crate) validate_from_exhaustive: prometheus::Histogram,
+    pub(crate) validate_candidate_exhaustive: prometheus::Histogram,
+    pub(crate) pov_size: prometheus::Histogram,
+    pub(crate) code_size: prometheus::Histogram,
 }
 
 /// Candidate validation metrics.
@@ -32,61 +32,61 @@ pub(crate) struct MetricsInner {
 pub struct Metrics(Option<MetricsInner>);
 
 impl Metrics {
-	pub fn on_validation_event(&self, event: &Result<ValidationResult, ValidationFailed>) {
-		if let Some(metrics) = &self.0 {
-			match event {
-				Ok(ValidationResult::Valid(_, _)) => {
-					metrics.validation_requests.with_label_values(&["valid"]).inc();
-				},
-				Ok(ValidationResult::Invalid(_)) => {
-					metrics.validation_requests.with_label_values(&["invalid"]).inc();
-				},
-				Err(_) => {
-					metrics.validation_requests.with_label_values(&["validation failure"]).inc();
-				},
-			}
-		}
-	}
+    pub fn on_validation_event(&self, event: &Result<ValidationResult, ValidationFailed>) {
+        if let Some(metrics) = &self.0 {
+            match event {
+                Ok(ValidationResult::Valid(_, _)) => {
+                    metrics.validation_requests.with_label_values(&["valid"]).inc();
+                },
+                Ok(ValidationResult::Invalid(_)) => {
+                    metrics.validation_requests.with_label_values(&["invalid"]).inc();
+                },
+                Err(_) => {
+                    metrics.validation_requests.with_label_values(&["validation failure"]).inc();
+                },
+            }
+        }
+    }
 
-	/// Provide a timer for `validate_from_chain_state` which observes on drop.
-	pub fn time_validate_from_chain_state(
-		&self,
-	) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.validate_from_chain_state.start_timer())
-	}
+    /// Provide a timer for `validate_from_chain_state` which observes on drop.
+    pub fn time_validate_from_chain_state(
+        &self,
+    ) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.validate_from_chain_state.start_timer())
+    }
 
-	/// Provide a timer for `validate_from_exhaustive` which observes on drop.
-	pub fn time_validate_from_exhaustive(
-		&self,
-	) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.validate_from_exhaustive.start_timer())
-	}
+    /// Provide a timer for `validate_from_exhaustive` which observes on drop.
+    pub fn time_validate_from_exhaustive(
+        &self,
+    ) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.validate_from_exhaustive.start_timer())
+    }
 
-	/// Provide a timer for `validate_candidate_exhaustive` which observes on drop.
-	pub fn time_validate_candidate_exhaustive(
-		&self,
-	) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
-		self.0
-			.as_ref()
-			.map(|metrics| metrics.validate_candidate_exhaustive.start_timer())
-	}
+    /// Provide a timer for `validate_candidate_exhaustive` which observes on drop.
+    pub fn time_validate_candidate_exhaustive(
+        &self,
+    ) -> Option<metrics::prometheus::prometheus::HistogramTimer> {
+        self.0
+            .as_ref()
+            .map(|metrics| metrics.validate_candidate_exhaustive.start_timer())
+    }
 
-	pub fn observe_code_size(&self, code_size: usize) {
-		if let Some(metrics) = &self.0 {
-			metrics.code_size.observe(code_size as f64);
-		}
-	}
+    pub fn observe_code_size(&self, code_size: usize) {
+        if let Some(metrics) = &self.0 {
+            metrics.code_size.observe(code_size as f64);
+        }
+    }
 
-	pub fn observe_pov_size(&self, pov_size: usize) {
-		if let Some(metrics) = &self.0 {
-			metrics.pov_size.observe(pov_size as f64);
-		}
-	}
+    pub fn observe_pov_size(&self, pov_size: usize) {
+        if let Some(metrics) = &self.0 {
+            metrics.pov_size.observe(pov_size as f64);
+        }
+    }
 }
 
 impl metrics::Metrics for Metrics {
-	fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
-		let metrics = MetricsInner {
+    fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
+        let metrics = MetricsInner {
 			validation_requests: prometheus::register(
 				prometheus::CounterVec::new(
 					prometheus::Opts::new(
@@ -145,6 +145,6 @@ impl metrics::Metrics for Metrics {
 				registry,
 			)?,
 		};
-		Ok(Metrics(Some(metrics)))
-	}
+        Ok(Metrics(Some(metrics)))
+    }
 }

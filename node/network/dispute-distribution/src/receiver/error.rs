@@ -29,41 +29,41 @@ use crate::LOG_TARGET;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	#[fatal(forward)]
-	#[error("Error while accessing runtime information")]
-	Runtime(#[from] runtime::Error),
+    #[fatal(forward)]
+    #[error("Error while accessing runtime information")]
+    Runtime(#[from] runtime::Error),
 
-	#[fatal(forward)]
-	#[error("Retrieving next incoming request failed.")]
-	IncomingRequest(#[from] incoming::Error),
+    #[fatal(forward)]
+    #[error("Retrieving next incoming request failed.")]
+    IncomingRequest(#[from] incoming::Error),
 
-	#[error("Sending back response to peers {0:#?} failed.")]
-	SendResponses(Vec<PeerId>),
+    #[error("Sending back response to peers {0:#?} failed.")]
+    SendResponses(Vec<PeerId>),
 
-	#[error("Changing peer's ({0}) reputation failed.")]
-	SetPeerReputation(PeerId),
+    #[error("Changing peer's ({0}) reputation failed.")]
+    SetPeerReputation(PeerId),
 
-	#[error("Dispute request with invalid signatures, from peer {0}.")]
-	InvalidSignature(PeerId),
+    #[error("Dispute request with invalid signatures, from peer {0}.")]
+    InvalidSignature(PeerId),
 
-	#[error("Received votes from peer {0} have been completely redundant.")]
-	RedundantMessage(PeerId),
+    #[error("Received votes from peer {0} have been completely redundant.")]
+    RedundantMessage(PeerId),
 
-	#[error("Import of dispute got canceled for candidate {0} - import failed for some reason.")]
-	ImportCanceled(CandidateHash),
+    #[error("Import of dispute got canceled for candidate {0} - import failed for some reason.")]
+    ImportCanceled(CandidateHash),
 
-	#[error("Peer {0} attempted to participate in dispute and is not a validator.")]
-	NotAValidator(PeerId),
+    #[error("Peer {0} attempted to participate in dispute and is not a validator.")]
+    NotAValidator(PeerId),
 
-	#[error("Force flush for batch that could not be found attempted, candidate hash: {0}")]
-	ForceFlushBatchDoesNotExist(CandidateHash),
+    #[error("Force flush for batch that could not be found attempted, candidate hash: {0}")]
+    ForceFlushBatchDoesNotExist(CandidateHash),
 
-	// Should never happen in practice:
-	#[error("We needed to drop messages, because we reached limit on concurrent batches.")]
-	MaxBatchLimitReached,
+    // Should never happen in practice:
+    #[error("We needed to drop messages, because we reached limit on concurrent batches.")]
+    MaxBatchLimitReached,
 
-	#[error("Authority {0} sent messages at a too high rate.")]
-	AuthorityFlooding(AuthorityDiscoveryId),
+    #[error("Authority {0} sent messages at a too high rate.")]
+    AuthorityFlooding(AuthorityDiscoveryId),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
@@ -75,23 +75,23 @@ pub type JfyiResult<T> = std::result::Result<T, JfyiError>;
 /// We basically always want to try and continue on error. This utility function is meant to
 /// consume top-level errors by simply logging them.
 pub fn log_error(result: Result<()>) -> std::result::Result<(), FatalError> {
-	match result.into_nested()? {
-		Err(error @ JfyiError::ImportCanceled(_)) => {
-			gum::debug!(target: LOG_TARGET, error = ?error);
-			Ok(())
-		},
-		Err(JfyiError::NotAValidator(peer)) => {
-			gum::debug!(
-				target: LOG_TARGET,
-				?peer,
-				"Dropping message from peer (unknown authority id)"
-			);
-			Ok(())
-		},
-		Err(error) => {
-			gum::warn!(target: LOG_TARGET, error = ?error);
-			Ok(())
-		},
-		Ok(()) => Ok(()),
-	}
+    match result.into_nested()? {
+        Err(error @ JfyiError::ImportCanceled(_)) => {
+            gum::debug!(target: LOG_TARGET, error = ?error);
+            Ok(())
+        },
+        Err(JfyiError::NotAValidator(peer)) => {
+            gum::debug!(
+                target: LOG_TARGET,
+                ?peer,
+                "Dropping message from peer (unknown authority id)"
+            );
+            Ok(())
+        },
+        Err(error) => {
+            gum::warn!(target: LOG_TARGET, error = ?error);
+            Ok(())
+        },
+        Ok(()) => Ok(()),
+    }
 }

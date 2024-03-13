@@ -26,67 +26,68 @@ const DEFAULT_PROMETHEUS_PORT: u16 = 9616;
 
 #[substrate_test_utils::test(flavor = "multi_thread")]
 async fn runtime_can_publish_metrics() {
-	let mut alice_config =
-		node_config(|| {}, tokio::runtime::Handle::current(), Alice, Vec::new(), true);
+    let mut alice_config =
+        node_config(|| {}, tokio::runtime::Handle::current(), Alice, Vec::new(), true);
 
-	// Enable Prometheus metrics for Alice.
-	alice_config.prometheus_config = Some(test_prometheus_config(DEFAULT_PROMETHEUS_PORT));
+    // Enable Prometheus metrics for Alice.
+    alice_config.prometheus_config = Some(test_prometheus_config(DEFAULT_PROMETHEUS_PORT));
 
-	let mut builder = sc_cli::LoggerBuilder::new("");
+    let mut builder = sc_cli::LoggerBuilder::new("");
 
-	// Enable profiling with `wasm_tracing` target.
-	builder.with_profiling(Default::default(), String::from("wasm_tracing=trace"));
+    // Enable profiling with `wasm_tracing` target.
+    builder.with_profiling(Default::default(), String::from("wasm_tracing=trace"));
 
-	// Setup the runtime metrics provider.
-	crate::logger_hook()(&mut builder, &alice_config);
+    // Setup the runtime metrics provider.
+    crate::logger_hook()(&mut builder, &alice_config);
 
-	builder.init().expect("Failed to set up the logger");
+    builder.init().expect("Failed to set up the logger");
 
-	// Start validator Alice.
-	let alice = run_validator_node(alice_config, None);
+    // Start validator Alice.
+    let alice = run_validator_node(alice_config, None);
 
-	let bob_config =
-		node_config(|| {}, tokio::runtime::Handle::current(), Bob, vec![alice.addr.clone()], true);
+    let bob_config =
+        node_config(|| {}, tokio::runtime::Handle::current(), Bob, vec![alice.addr.clone()], true);
 
-	// Start validator Bob.
-	let _bob = run_validator_node(bob_config, None);
+    // Start validator Bob.
+    let _bob = run_validator_node(bob_config, None);
 
-	// Wait for Alice to see two finalized blocks.
-	alice.wait_for_finalized_blocks(2).await;
+    // Wait for Alice to see two finalized blocks.
+    alice.wait_for_finalized_blocks(2).await;
 
-	let metrics_uri = format!("http://localhost:{}/metrics", DEFAULT_PROMETHEUS_PORT);
-	let metrics = scrape_prometheus_metrics(&metrics_uri).await;
+    let metrics_uri = format!("http://localhost:{}/metrics", DEFAULT_PROMETHEUS_PORT);
+    let metrics = scrape_prometheus_metrics(&metrics_uri).await;
 
-	// There should be at least 1 bitfield processed by now.
-	assert!(
-		*metrics
-			.get(&PARACHAIN_INHERENT_DATA_BITFIELDS_PROCESSED.name.to_owned())
-			.unwrap() > 1
-	);
+    // There should be at least 1 bitfield processed by now.
+    assert!(
+        *metrics
+            .get(&PARACHAIN_INHERENT_DATA_BITFIELDS_PROCESSED.name.to_owned())
+            .unwrap()
+            > 1
+    );
 }
 
 async fn scrape_prometheus_metrics(metrics_uri: &str) -> HashMap<String, u64> {
-	let res = Client::new()
-		.get(Uri::try_from(metrics_uri).expect("bad URI"))
-		.await
-		.expect("GET request failed");
+    let res = Client::new()
+        .get(Uri::try_from(metrics_uri).expect("bad URI"))
+        .await
+        .expect("GET request failed");
 
-	// Retrieve the `HTTP` response body.
-	let body = String::from_utf8(
-		hyper::body::to_bytes(res).await.expect("can't get body as bytes").to_vec(),
-	)
-	.expect("body is not an UTF8 string");
+    // Retrieve the `HTTP` response body.
+    let body = String::from_utf8(
+        hyper::body::to_bytes(res).await.expect("can't get body as bytes").to_vec(),
+    )
+    .expect("body is not an UTF8 string");
 
-	let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
-	prometheus_parse::Scrape::parse(lines.into_iter())
-		.expect("Scraper failed to parse Prometheus metrics")
-		.samples
-		.into_iter()
-		.filter_map(|prometheus_parse::Sample { metric, value, .. }| match value {
-			prometheus_parse::Value::Counter(value) => Some((metric, value as u64)),
-			prometheus_parse::Value::Gauge(value) => Some((metric, value as u64)),
-			prometheus_parse::Value::Untyped(value) => Some((metric, value as u64)),
-			_ => None,
-		})
-		.collect()
+    let lines: Vec<_> = body.lines().map(|s| Ok(s.to_owned())).collect();
+    prometheus_parse::Scrape::parse(lines.into_iter())
+        .expect("Scraper failed to parse Prometheus metrics")
+        .samples
+        .into_iter()
+        .filter_map(|prometheus_parse::Sample { metric, value, .. }| match value {
+            prometheus_parse::Value::Counter(value) => Some((metric, value as u64)),
+            prometheus_parse::Value::Gauge(value) => Some((metric, value as u64)),
+            prometheus_parse::Value::Untyped(value) => Some((metric, value as u64)),
+            _ => None,
+        })
+        .collect()
 }

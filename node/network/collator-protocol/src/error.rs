@@ -32,20 +32,20 @@ use fatality::Nested;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	#[fatal]
-	#[error("Receiving message from overseer failed")]
-	SubsystemReceive(#[from] SubsystemError),
+    #[fatal]
+    #[error("Receiving message from overseer failed")]
+    SubsystemReceive(#[from] SubsystemError),
 
-	#[fatal(forward)]
-	#[error("Retrieving next incoming request failed")]
-	IncomingRequest(#[from] incoming::Error),
+    #[fatal(forward)]
+    #[error("Retrieving next incoming request failed")]
+    IncomingRequest(#[from] incoming::Error),
 
-	#[fatal(forward)]
-	#[error("Error while accessing runtime information")]
-	Runtime(#[from] runtime::Error),
+    #[fatal(forward)]
+    #[error("Error while accessing runtime information")]
+    Runtime(#[from] runtime::Error),
 
-	#[error("CollationSeconded contained statement with invalid signature")]
-	InvalidStatementSignature(UncheckedSignedFullStatement),
+    #[error("CollationSeconded contained statement with invalid signature")]
+    InvalidStatementSignature(UncheckedSignedFullStatement),
 }
 
 /// Utility for eating top level errors and log them.
@@ -53,11 +53,11 @@ pub enum Error {
 /// We basically always want to try and continue on error. This utility function is meant to
 /// consume top-level errors by simply logging them.
 pub fn log_error(result: Result<()>, ctx: &'static str) -> std::result::Result<(), FatalError> {
-	match result.into_nested()? {
-		Ok(()) => Ok(()),
-		Err(jfyi) => {
-			gum::warn!(target: LOG_TARGET, error = ?jfyi, ctx);
-			Ok(())
-		},
-	}
+    match result.into_nested()? {
+        Ok(()) => Ok(()),
+        Err(jfyi) => {
+            gum::warn!(target: LOG_TARGET, error = ?jfyi, ctx);
+            Ok(())
+        },
+    }
 }

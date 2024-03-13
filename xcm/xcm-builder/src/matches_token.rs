@@ -19,10 +19,10 @@
 use frame_support::traits::Get;
 use sp_std::marker::PhantomData;
 use xcm::latest::{
-	AssetId::{Abstract, Concrete},
-	AssetInstance,
-	Fungibility::{Fungible, NonFungible},
-	MultiAsset, MultiLocation,
+    AssetId::{Abstract, Concrete},
+    AssetInstance,
+    Fungibility::{Fungible, NonFungible},
+    MultiAsset, MultiLocation,
 };
 use xcm_executor::traits::{MatchesFungible, MatchesNonFungible};
 
@@ -48,21 +48,22 @@ use xcm_executor::traits::{MatchesFungible, MatchesNonFungible};
 /// ```
 pub struct IsConcrete<T>(PhantomData<T>);
 impl<T: Get<MultiLocation>, B: TryFrom<u128>> MatchesFungible<B> for IsConcrete<T> {
-	fn matches_fungible(a: &MultiAsset) -> Option<B> {
-		match (&a.id, &a.fun) {
-			(Concrete(ref id), Fungible(ref amount)) if id == &T::get() =>
-				(*amount).try_into().ok(),
-			_ => None,
-		}
-	}
+    fn matches_fungible(a: &MultiAsset) -> Option<B> {
+        match (&a.id, &a.fun) {
+            (Concrete(ref id), Fungible(ref amount)) if id == &T::get() => {
+                (*amount).try_into().ok()
+            },
+            _ => None,
+        }
+    }
 }
 impl<T: Get<MultiLocation>, I: TryFrom<AssetInstance>> MatchesNonFungible<I> for IsConcrete<T> {
-	fn matches_nonfungible(a: &MultiAsset) -> Option<I> {
-		match (&a.id, &a.fun) {
-			(Concrete(id), NonFungible(instance)) if id == &T::get() => (*instance).try_into().ok(),
-			_ => None,
-		}
-	}
+    fn matches_nonfungible(a: &MultiAsset) -> Option<I> {
+        match (&a.id, &a.fun) {
+            (Concrete(id), NonFungible(instance)) if id == &T::get() => (*instance).try_into().ok(),
+            _ => None,
+        }
+    }
 }
 
 /// Same as [`IsConcrete`] but for a fungible with abstract location.
@@ -91,19 +92,20 @@ impl<T: Get<MultiLocation>, I: TryFrom<AssetInstance>> MatchesNonFungible<I> for
 /// ```
 pub struct IsAbstract<T>(PhantomData<T>);
 impl<T: Get<[u8; 32]>, B: TryFrom<u128>> MatchesFungible<B> for IsAbstract<T> {
-	fn matches_fungible(a: &MultiAsset) -> Option<B> {
-		match (&a.id, &a.fun) {
-			(Abstract(ref id), Fungible(ref amount)) if id == &T::get() =>
-				(*amount).try_into().ok(),
-			_ => None,
-		}
-	}
+    fn matches_fungible(a: &MultiAsset) -> Option<B> {
+        match (&a.id, &a.fun) {
+            (Abstract(ref id), Fungible(ref amount)) if id == &T::get() => {
+                (*amount).try_into().ok()
+            },
+            _ => None,
+        }
+    }
 }
 impl<T: Get<[u8; 32]>, B: TryFrom<AssetInstance>> MatchesNonFungible<B> for IsAbstract<T> {
-	fn matches_nonfungible(a: &MultiAsset) -> Option<B> {
-		match (&a.id, &a.fun) {
-			(Abstract(id), NonFungible(instance)) if id == &T::get() => (*instance).try_into().ok(),
-			_ => None,
-		}
-	}
+    fn matches_nonfungible(a: &MultiAsset) -> Option<B> {
+        match (&a.id, &a.fun) {
+            (Abstract(id), NonFungible(instance)) if id == &T::get() => (*instance).try_into().ok(),
+            _ => None,
+        }
+    }
 }

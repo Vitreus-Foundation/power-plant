@@ -30,77 +30,77 @@ pub type JfyiResult<T> = std::result::Result<T, JfyiError>;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	/// We received a legacy `SubystemError::Context` error which is considered fatal.
-	#[fatal]
-	#[error("SubsystemError::Context error: {0}")]
-	SubsystemContext(String),
+    /// We received a legacy `SubystemError::Context` error which is considered fatal.
+    #[fatal]
+    #[error("SubsystemError::Context error: {0}")]
+    SubsystemContext(String),
 
-	/// `ctx.spawn` failed with an error.
-	#[fatal]
-	#[error("Spawning a task failed: {0}")]
-	SpawnFailed(#[source] SubsystemError),
+    /// `ctx.spawn` failed with an error.
+    #[fatal]
+    #[error("Spawning a task failed: {0}")]
+    SpawnFailed(#[source] SubsystemError),
 
-	#[fatal]
-	#[error("Participation worker receiver exhausted.")]
-	ParticipationWorkerReceiverExhausted,
+    #[fatal]
+    #[error("Participation worker receiver exhausted.")]
+    ParticipationWorkerReceiverExhausted,
 
-	/// Receiving subsystem message from overseer failed.
-	#[fatal]
-	#[error("Receiving message from overseer failed: {0}")]
-	SubsystemReceive(#[source] SubsystemError),
+    /// Receiving subsystem message from overseer failed.
+    #[fatal]
+    #[error("Receiving message from overseer failed: {0}")]
+    SubsystemReceive(#[source] SubsystemError),
 
-	#[fatal]
-	#[error("Writing to database failed: {0}")]
-	DbWriteFailed(std::io::Error),
+    #[fatal]
+    #[error("Writing to database failed: {0}")]
+    DbWriteFailed(std::io::Error),
 
-	#[fatal]
-	#[error("Reading from database failed: {0}")]
-	DbReadFailed(db::v1::Error),
+    #[fatal]
+    #[error("Reading from database failed: {0}")]
+    DbReadFailed(db::v1::Error),
 
-	#[fatal]
-	#[error("Oneshot for receiving block number from chain API got cancelled")]
-	CanceledBlockNumber,
+    #[fatal]
+    #[error("Oneshot for receiving block number from chain API got cancelled")]
+    CanceledBlockNumber,
 
-	#[fatal]
-	#[error("Retrieving block number from chain API failed with error: {0}")]
-	ChainApiBlockNumber(ChainApiError),
+    #[fatal]
+    #[error("Retrieving block number from chain API failed with error: {0}")]
+    ChainApiBlockNumber(ChainApiError),
 
-	#[fatal]
-	#[error(transparent)]
-	ChainApiAncestors(ChainApiError),
+    #[fatal]
+    #[error(transparent)]
+    ChainApiAncestors(ChainApiError),
 
-	#[fatal]
-	#[error("Chain API dropped response channel sender")]
-	ChainApiSenderDropped,
+    #[fatal]
+    #[error("Chain API dropped response channel sender")]
+    ChainApiSenderDropped,
 
-	#[fatal(forward)]
-	#[error("Error while accessing runtime information {0}")]
-	Runtime(#[from] runtime::Error),
+    #[fatal(forward)]
+    #[error("Error while accessing runtime information {0}")]
+    Runtime(#[from] runtime::Error),
 
-	#[error(transparent)]
-	ChainApi(#[from] ChainApiError),
+    #[error(transparent)]
+    ChainApi(#[from] ChainApiError),
 
-	#[error(transparent)]
-	Io(#[from] std::io::Error),
+    #[error(transparent)]
+    Io(#[from] std::io::Error),
 
-	#[error(transparent)]
-	Oneshot(#[from] oneshot::Canceled),
+    #[error(transparent)]
+    Oneshot(#[from] oneshot::Canceled),
 
-	#[error("Could not send import confirmation (receiver canceled)")]
-	DisputeImportOneshotSend,
+    #[error("Could not send import confirmation (receiver canceled)")]
+    DisputeImportOneshotSend,
 
-	#[error(transparent)]
-	Subsystem(#[from] SubsystemError),
+    #[error(transparent)]
+    Subsystem(#[from] SubsystemError),
 
-	#[error(transparent)]
-	Codec(#[from] CodecError),
+    #[error(transparent)]
+    Codec(#[from] CodecError),
 
-	/// `RollingSessionWindow` was not able to retrieve `SessionInfo`s.
-	#[error("Session can't be fetched via `RuntimeInfo`")]
-	SessionInfo,
+    /// `RollingSessionWindow` was not able to retrieve `SessionInfo`s.
+    #[error("Session can't be fetched via `RuntimeInfo`")]
+    SessionInfo,
 
-	#[error(transparent)]
-	QueueError(#[from] participation::QueueError),
+    #[error(transparent)]
+    QueueError(#[from] participation::QueueError),
 }
 
 /// Utility for eating top level errors and log them.
@@ -108,25 +108,25 @@ pub enum Error {
 /// We basically always want to try and continue on error. This utility function is meant to
 /// consume top-level errors by simply logging them
 pub fn log_error(result: Result<()>) -> std::result::Result<(), FatalError> {
-	match result.into_nested()? {
-		Ok(()) => Ok(()),
-		Err(jfyi) => {
-			jfyi.log();
-			Ok(())
-		},
-	}
+    match result.into_nested()? {
+        Ok(()) => Ok(()),
+        Err(jfyi) => {
+            jfyi.log();
+            Ok(())
+        },
+    }
 }
 
 impl JfyiError {
-	/// Log a `JfyiError`.
-	pub fn log(self) {
-		match self {
-			// don't spam the log with spurious errors
-			Self::Runtime(runtime::Error::RuntimeRequestCanceled(_)) | Self::Oneshot(_) => {
-				gum::debug!(target: LOG_TARGET, error = ?self)
-			},
-			// it's worth reporting otherwise
-			_ => gum::warn!(target: LOG_TARGET, error = ?self),
-		}
-	}
+    /// Log a `JfyiError`.
+    pub fn log(self) {
+        match self {
+            // don't spam the log with spurious errors
+            Self::Runtime(runtime::Error::RuntimeRequestCanceled(_)) | Self::Oneshot(_) => {
+                gum::debug!(target: LOG_TARGET, error = ?self)
+            },
+            // it's worth reporting otherwise
+            _ => gum::warn!(target: LOG_TARGET, error = ?self),
+        }
+    }
 }

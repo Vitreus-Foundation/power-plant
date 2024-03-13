@@ -22,72 +22,72 @@ pub struct Metrics(Option<MetricsInner>);
 
 #[derive(Clone)]
 struct MetricsInner {
-	assignments_imported_total: prometheus::Counter<prometheus::U64>,
-	approvals_imported_total: prometheus::Counter<prometheus::U64>,
-	unified_with_peer_total: prometheus::Counter<prometheus::U64>,
-	aggression_l1_messages_total: prometheus::Counter<prometheus::U64>,
-	aggression_l2_messages_total: prometheus::Counter<prometheus::U64>,
+    assignments_imported_total: prometheus::Counter<prometheus::U64>,
+    approvals_imported_total: prometheus::Counter<prometheus::U64>,
+    unified_with_peer_total: prometheus::Counter<prometheus::U64>,
+    aggression_l1_messages_total: prometheus::Counter<prometheus::U64>,
+    aggression_l2_messages_total: prometheus::Counter<prometheus::U64>,
 
-	time_unify_with_peer: prometheus::Histogram,
-	time_import_pending_now_known: prometheus::Histogram,
-	time_awaiting_approval_voting: prometheus::Histogram,
+    time_unify_with_peer: prometheus::Histogram,
+    time_import_pending_now_known: prometheus::Histogram,
+    time_awaiting_approval_voting: prometheus::Histogram,
 }
 
 impl Metrics {
-	pub(crate) fn on_assignment_imported(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.assignments_imported_total.inc();
-		}
-	}
+    pub(crate) fn on_assignment_imported(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.assignments_imported_total.inc();
+        }
+    }
 
-	pub(crate) fn on_approval_imported(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.approvals_imported_total.inc();
-		}
-	}
+    pub(crate) fn on_approval_imported(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.approvals_imported_total.inc();
+        }
+    }
 
-	pub(crate) fn on_unify_with_peer(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.unified_with_peer_total.inc();
-		}
-	}
+    pub(crate) fn on_unify_with_peer(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.unified_with_peer_total.inc();
+        }
+    }
 
-	pub(crate) fn time_unify_with_peer(&self) -> Option<prometheus::prometheus::HistogramTimer> {
-		self.0.as_ref().map(|metrics| metrics.time_unify_with_peer.start_timer())
-	}
+    pub(crate) fn time_unify_with_peer(&self) -> Option<prometheus::prometheus::HistogramTimer> {
+        self.0.as_ref().map(|metrics| metrics.time_unify_with_peer.start_timer())
+    }
 
-	pub(crate) fn time_import_pending_now_known(
-		&self,
-	) -> Option<prometheus::prometheus::HistogramTimer> {
-		self.0
-			.as_ref()
-			.map(|metrics| metrics.time_import_pending_now_known.start_timer())
-	}
+    pub(crate) fn time_import_pending_now_known(
+        &self,
+    ) -> Option<prometheus::prometheus::HistogramTimer> {
+        self.0
+            .as_ref()
+            .map(|metrics| metrics.time_import_pending_now_known.start_timer())
+    }
 
-	pub(crate) fn time_awaiting_approval_voting(
-		&self,
-	) -> Option<prometheus::prometheus::HistogramTimer> {
-		self.0
-			.as_ref()
-			.map(|metrics| metrics.time_awaiting_approval_voting.start_timer())
-	}
+    pub(crate) fn time_awaiting_approval_voting(
+        &self,
+    ) -> Option<prometheus::prometheus::HistogramTimer> {
+        self.0
+            .as_ref()
+            .map(|metrics| metrics.time_awaiting_approval_voting.start_timer())
+    }
 
-	pub(crate) fn on_aggression_l1(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.aggression_l1_messages_total.inc();
-		}
-	}
+    pub(crate) fn on_aggression_l1(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.aggression_l1_messages_total.inc();
+        }
+    }
 
-	pub(crate) fn on_aggression_l2(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.aggression_l2_messages_total.inc();
-		}
-	}
+    pub(crate) fn on_aggression_l2(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.aggression_l2_messages_total.inc();
+        }
+    }
 }
 
 impl MetricsTrait for Metrics {
-	fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
-		let metrics = MetricsInner {
+    fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
+        let metrics = MetricsInner {
 			assignments_imported_total: prometheus::register(
 				prometheus::Counter::new(
 					"polkadot_parachain_assignments_imported_total",
@@ -145,6 +145,6 @@ impl MetricsTrait for Metrics {
 				registry,
 			)?,
 		};
-		Ok(Metrics(Some(metrics)))
-	}
+        Ok(Metrics(Some(metrics)))
+    }
 }

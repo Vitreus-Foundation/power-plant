@@ -24,49 +24,49 @@ use polkadot_node_subsystem_util::runtime;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	#[fatal]
-	#[error("Spawning subsystem task failed")]
-	SpawnTask(#[source] SubsystemError),
+    #[fatal]
+    #[error("Spawning subsystem task failed")]
+    SpawnTask(#[source] SubsystemError),
 
-	#[fatal(forward)]
-	#[error("Error while accessing runtime information")]
-	Runtime(#[from] runtime::Error),
+    #[fatal(forward)]
+    #[error("Error while accessing runtime information")]
+    Runtime(#[from] runtime::Error),
 
-	/// We need available active heads for finding relevant authorities.
-	#[error("No active heads available - needed for finding relevant authorities.")]
-	NoActiveHeads,
+    /// We need available active heads for finding relevant authorities.
+    #[error("No active heads available - needed for finding relevant authorities.")]
+    NoActiveHeads,
 
-	/// This error likely indicates a bug in the coordinator.
-	#[error("Oneshot for asking dispute coordinator for active disputes got canceled.")]
-	AskActiveDisputesCanceled,
+    /// This error likely indicates a bug in the coordinator.
+    #[error("Oneshot for asking dispute coordinator for active disputes got canceled.")]
+    AskActiveDisputesCanceled,
 
-	/// This error likely indicates a bug in the coordinator.
-	#[error("Oneshot for asking dispute coordinator for candidate votes got canceled.")]
-	AskCandidateVotesCanceled,
+    /// This error likely indicates a bug in the coordinator.
+    #[error("Oneshot for asking dispute coordinator for candidate votes got canceled.")]
+    AskCandidateVotesCanceled,
 
-	/// This error does indicate a bug in the coordinator.
-	///
-	/// We were not able to successfully construct a `DisputeMessage` from disputes votes.
-	#[error("Invalid dispute encountered")]
-	InvalidDisputeFromCoordinator(#[source] DisputeMessageCheckError),
+    /// This error does indicate a bug in the coordinator.
+    ///
+    /// We were not able to successfully construct a `DisputeMessage` from disputes votes.
+    #[error("Invalid dispute encountered")]
+    InvalidDisputeFromCoordinator(#[source] DisputeMessageCheckError),
 
-	/// This error does indicate a bug in the coordinator.
-	///
-	/// We did not receive votes on both sides for `CandidateVotes` received from the coordinator.
-	#[error("Missing votes for valid dispute")]
-	MissingVotesFromCoordinator,
+    /// This error does indicate a bug in the coordinator.
+    ///
+    /// We did not receive votes on both sides for `CandidateVotes` received from the coordinator.
+    #[error("Missing votes for valid dispute")]
+    MissingVotesFromCoordinator,
 
-	/// This error does indicate a bug in the coordinator.
-	///
-	/// `SignedDisputeStatement` could not be reconstructed from recorded statements.
-	#[error("Invalid statements from coordinator")]
-	InvalidStatementFromCoordinator,
+    /// This error does indicate a bug in the coordinator.
+    ///
+    /// `SignedDisputeStatement` could not be reconstructed from recorded statements.
+    #[error("Invalid statements from coordinator")]
+    InvalidStatementFromCoordinator,
 
-	/// This error does indicate a bug in the coordinator.
-	///
-	/// A statement's `ValidatorIndex` could not be looked up.
-	#[error("ValidatorIndex of statement could not be found")]
-	InvalidValidatorIndexFromCoordinator,
+    /// This error does indicate a bug in the coordinator.
+    ///
+    /// A statement's `ValidatorIndex` could not be looked up.
+    #[error("ValidatorIndex of statement could not be found")]
+    InvalidValidatorIndexFromCoordinator,
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

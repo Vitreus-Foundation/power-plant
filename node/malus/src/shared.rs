@@ -26,24 +26,24 @@ pub(crate) const MALICIOUS_POV: &[u8] = "😈😈pov_looks_valid_to_me😈😈".
 #[allow(unused)]
 pub(crate) fn launch_processing_task<X, F, U, Q, S>(spawner: &S, queue: Q, action: F)
 where
-	F: Fn(X) -> U + Send + 'static,
-	U: Future<Output = ()> + Send + 'static,
-	Q: Stream<Item = X> + Send + 'static,
-	X: Send,
-	S: 'static + SpawnNamed + Clone + Unpin,
+    F: Fn(X) -> U + Send + 'static,
+    U: Future<Output = ()> + Send + 'static,
+    Q: Stream<Item = X> + Send + 'static,
+    X: Send,
+    S: 'static + SpawnNamed + Clone + Unpin,
 {
-	let spawner2: S = spawner.clone();
-	spawner.spawn(
-		"nemesis-queue-processor",
-		Some("malus"),
-		Box::pin(async move {
-			let spawner3 = spawner2.clone();
-			queue
-				.for_each(move |input| {
-					spawner3.spawn("nemesis-task", Some("malus"), Box::pin(action(input)));
-					async move { () }
-				})
-				.await;
-		}),
-	);
+    let spawner2: S = spawner.clone();
+    spawner.spawn(
+        "nemesis-queue-processor",
+        Some("malus"),
+        Box::pin(async move {
+            let spawner3 = spawner2.clone();
+            queue
+                .for_each(move |input| {
+                    spawner3.spawn("nemesis-task", Some("malus"), Box::pin(action(input)));
+                    async move { () }
+                })
+                .await;
+        }),
+    );
 }

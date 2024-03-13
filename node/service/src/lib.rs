@@ -54,7 +54,8 @@ use {
     },
     sc_client_api::BlockBackend,
     sc_transaction_pool_api::OffchainTransactionPoolFactory,
-    sp_core::traits::SpawnNamed, sp_core::U256,
+    sp_core::traits::SpawnNamed,
+    sp_core::U256,
     sp_trie::PrefixedMemoryDB,
 };
 
@@ -74,8 +75,8 @@ pub use {
 #[cfg(feature = "full-node")]
 use polkadot_node_subsystem::jaeger;
 
-use std::{cell::RefCell, sync::Arc, time::Duration};
 use std::path::Path;
+use std::{cell::RefCell, sync::Arc, time::Duration};
 
 use prometheus_endpoint::Registry;
 #[cfg(feature = "full-node")]
@@ -99,7 +100,9 @@ pub use service::{
     ChainSpec, Configuration, Error as SubstrateServiceError, PruningMode, Role, RuntimeGenesis,
     TFullBackend, TFullCallExecutor, TFullClient, TaskManager, TransactionPoolOptions,
 };
-pub use sp_api::{ApiRef, ConstructRuntimeApi, Core as CoreApi, ProvideRuntimeApi, StateBackend, TransactionFor};
+pub use sp_api::{
+    ApiRef, ConstructRuntimeApi, Core as CoreApi, ProvideRuntimeApi, StateBackend, TransactionFor,
+};
 pub use sp_runtime::{
     generic,
     traits::{
@@ -107,7 +110,10 @@ pub use sp_runtime::{
     },
 };
 
-use eth::{BackendType, db_config_dir, EthConfiguration, FrontierBackend, FrontierPartialComponents, new_frontier_partial, spawn_frontier_tasks};
+use eth::{
+    db_config_dir, new_frontier_partial, spawn_frontier_tasks, BackendType, EthConfiguration,
+    FrontierBackend, FrontierPartialComponents,
+};
 use vitreus_power_plant_runtime::{RuntimeApi, TransactionConverter};
 
 #[cfg(feature = "kusama-native")]
@@ -404,8 +410,12 @@ fn new_partial<ChainSelection>(
         sc_transaction_pool::FullPool<Block, FullClient>,
         (
             impl Fn(
-                polkadot_rpc::SubscriptionTaskExecutor
-            ) -> (polkadot_rpc::BabeDeps, polkadot_rpc::GrandpaDeps<FullBackend>, polkadot_rpc::BeefyDeps),
+                polkadot_rpc::SubscriptionTaskExecutor,
+            ) -> (
+                polkadot_rpc::BabeDeps,
+                polkadot_rpc::GrandpaDeps<FullBackend>,
+                polkadot_rpc::BeefyDeps,
+            ),
             (
                 babe::BabeBlockImport<
                     Block,
@@ -447,11 +457,10 @@ where
 
     let overrides = fc_storage::overrides_handle(client.clone());
     let frontier_backend = match eth_config.frontier_backend_type {
-        BackendType::KeyValue => FrontierBackend::KeyValue(fc_db::kv::Backend::open(
-            Arc::clone(&client),
-            &config.database,
-            &db_config_dir(config),
-        ).map_err(SubstrateServiceError::Other)?),
+        BackendType::KeyValue => FrontierBackend::KeyValue(
+            fc_db::kv::Backend::open(Arc::clone(&client), &config.database, &db_config_dir(config))
+                .map_err(SubstrateServiceError::Other)?,
+        ),
         BackendType::Sql => {
             let db_path = db_config_dir(config).join("sql");
             std::fs::create_dir_all(&db_path).expect("failed creating sql db directory");
@@ -470,7 +479,7 @@ where
                 std::num::NonZeroU32::new(eth_config.frontier_sql_backend_num_ops_timeout),
                 overrides.clone(),
             ))
-                .unwrap_or_else(|err| panic!("failed creating sql backend: {:?}", err));
+            .unwrap_or_else(|err| panic!("failed creating sql backend: {:?}", err));
             FrontierBackend::Sql(backend)
         },
     };
@@ -530,9 +539,11 @@ where
     let rpc_deps_builder = {
         let keystore = keystore_container.keystore();
 
-        move |subscription_executor: polkadot_rpc::SubscriptionTaskExecutor|
-              -> (polkadot_rpc::BabeDeps, polkadot_rpc::GrandpaDeps<FullBackend>, polkadot_rpc::BeefyDeps) {
-
+        move |subscription_executor: polkadot_rpc::SubscriptionTaskExecutor| -> (
+            polkadot_rpc::BabeDeps,
+            polkadot_rpc::GrandpaDeps<FullBackend>,
+            polkadot_rpc::BeefyDeps,
+        ) {
             let babe = polkadot_rpc::BabeDeps {
                 worker_handle: babe_worker_handle.clone(),
                 keystore: keystore.clone(),
@@ -562,7 +573,15 @@ where
         select_chain,
         import_queue,
         transaction_pool,
-        other: (rpc_deps_builder, import_setup, rpc_setup, slot_duration, telemetry, frontier_backend, overrides),
+        other: (
+            rpc_deps_builder,
+            import_setup,
+            rpc_setup,
+            slot_duration,
+            telemetry,
+            frontier_backend,
+            overrides,
+        ),
     })
 }
 
@@ -645,7 +664,8 @@ where
     let is_offchain_indexing_enabled = config.offchain_worker.indexing_enabled;
     let role = config.role.clone();
     let force_authoring = config.force_authoring;
-    let backoff_authoring_blocks = Some(sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default());
+    let backoff_authoring_blocks =
+        Some(sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default());
 
     // Warn the user that BEEFY is still experimental.
     if enable_beefy {
@@ -688,10 +708,20 @@ where
         select_chain,
         import_queue,
         transaction_pool,
-        other: (rpc_deps_builder, import_setup, rpc_setup, slot_duration, mut telemetry, frontier_backend, overrides),
+        other:
+            (
+                rpc_deps_builder,
+                import_setup,
+                rpc_setup,
+                slot_duration,
+                mut telemetry,
+                frontier_backend,
+                overrides,
+            ),
     } = new_partial::<SelectRelayChain<_>>(&mut config, &eth_config, basics, select_chain)?;
 
-    let FrontierPartialComponents { filter_pool, fee_history_cache, fee_history_cache_limit } = new_frontier_partial(&eth_config)?;
+    let FrontierPartialComponents { filter_pool, fee_history_cache, fee_history_cache_limit } =
+        new_frontier_partial(&eth_config)?;
 
     let shared_voter_state = rpc_setup;
     let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
@@ -900,7 +930,12 @@ where
                 node: polkadot_rpc::NodeDeps { name: node_name.clone() },
             };
 
-            polkadot_rpc::create_full(deps, subscription_executor, pubsub_notification_sinks.clone()).map_err(Into::into)
+            polkadot_rpc::create_full(
+                deps,
+                subscription_executor,
+                pubsub_notification_sinks.clone(),
+            )
+            .map_err(Into::into)
         }
     };
 
@@ -1357,7 +1392,7 @@ pub fn build_full(
         overseer_message_channel_override,
         malus_finality_delay,
         hwbench,
-        sealing
+        sealing,
     )
 }
 
@@ -1445,7 +1480,9 @@ fn run_manual_seal_authorship(
     task_manager: &TaskManager,
     prometheus_registry: Option<&Registry>,
     telemetry: Option<&Telemetry>,
-    commands_stream: futures::channel::mpsc::Receiver<sc_consensus_manual_seal::rpc::EngineCommand<Hash>>,
+    commands_stream: futures::channel::mpsc::Receiver<
+        sc_consensus_manual_seal::rpc::EngineCommand<Hash>,
+    >,
 ) -> Result<(), service::Error> {
     let proposer_factory = sc_basic_authorship::ProposerFactory::new(
         task_manager.spawn_handle(),
@@ -1491,8 +1528,8 @@ fn run_manual_seal_authorship(
     };
 
     let manual_seal = match sealing {
-        Sealing::Manual => futures::future::Either::Left(sc_consensus_manual_seal::run_manual_seal(
-            sc_consensus_manual_seal::ManualSealParams {
+        Sealing::Manual => futures::future::Either::Left(
+            sc_consensus_manual_seal::run_manual_seal(sc_consensus_manual_seal::ManualSealParams {
                 block_import,
                 env: proposer_factory,
                 client,
@@ -1501,19 +1538,21 @@ fn run_manual_seal_authorship(
                 select_chain,
                 consensus_data_provider: None,
                 create_inherent_data_providers,
-            },
-        )),
-        Sealing::Instant => futures::future::Either::Right(sc_consensus_manual_seal::run_instant_seal(
-            sc_consensus_manual_seal::InstantSealParams {
-                block_import,
-                env: proposer_factory,
-                client,
-                pool: transaction_pool,
-                select_chain,
-                consensus_data_provider: None,
-                create_inherent_data_providers,
-            },
-        )),
+            }),
+        ),
+        Sealing::Instant => {
+            futures::future::Either::Right(sc_consensus_manual_seal::run_instant_seal(
+                sc_consensus_manual_seal::InstantSealParams {
+                    block_import,
+                    env: proposer_factory,
+                    client,
+                    pool: transaction_pool,
+                    select_chain,
+                    consensus_data_provider: None,
+                    create_inherent_data_providers,
+                },
+            ))
+        },
     };
 
     // we spawn the future on a background thread managed by service.

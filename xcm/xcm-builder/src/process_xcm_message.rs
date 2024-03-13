@@ -17,8 +17,8 @@
 //! Implementation of `ProcessMessage` for an `ExecuteXcm` implementation.
 
 use frame_support::{
-	ensure,
-	traits::{ProcessMessage, ProcessMessageError},
+    ensure,
+    traits::{ProcessMessage, ProcessMessageError},
 };
 use parity_scale_codec::{Decode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -28,128 +28,128 @@ use xcm::prelude::*;
 
 /// A message processor that delegates execution to an [XcmExecutor].
 pub struct ProcessXcmMessage<MessageOrigin, XcmExecutor, Call>(
-	PhantomData<(MessageOrigin, XcmExecutor, Call)>,
+    PhantomData<(MessageOrigin, XcmExecutor, Call)>,
 );
 impl<
-		MessageOrigin: Into<MultiLocation> + FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + Debug,
-		XcmExecutor: ExecuteXcm<Call>,
-		Call,
-	> ProcessMessage for ProcessXcmMessage<MessageOrigin, XcmExecutor, Call>
+        MessageOrigin: Into<MultiLocation> + FullCodec + MaxEncodedLen + Clone + Eq + PartialEq + TypeInfo + Debug,
+        XcmExecutor: ExecuteXcm<Call>,
+        Call,
+    > ProcessMessage for ProcessXcmMessage<MessageOrigin, XcmExecutor, Call>
 {
-	type Origin = MessageOrigin;
+    type Origin = MessageOrigin;
 
-	/// Process the given message, using no more than the remaining `weight` to do so.
-	fn process_message(
-		message: &[u8],
-		origin: Self::Origin,
-		meter: &mut WeightMeter,
-		id: &mut XcmHash,
-	) -> Result<bool, ProcessMessageError> {
-		let versioned_message = VersionedXcm::<Call>::decode(&mut &message[..])
-			.map_err(|_| ProcessMessageError::Corrupt)?;
-		let message = Xcm::<Call>::try_from(versioned_message)
-			.map_err(|_| ProcessMessageError::Unsupported)?;
-		let pre = XcmExecutor::prepare(message).map_err(|_| ProcessMessageError::Unsupported)?;
-		let required = pre.weight_of();
-		ensure!(meter.can_accrue(required), ProcessMessageError::Overweight(required));
+    /// Process the given message, using no more than the remaining `weight` to do so.
+    fn process_message(
+        message: &[u8],
+        origin: Self::Origin,
+        meter: &mut WeightMeter,
+        id: &mut XcmHash,
+    ) -> Result<bool, ProcessMessageError> {
+        let versioned_message = VersionedXcm::<Call>::decode(&mut &message[..])
+            .map_err(|_| ProcessMessageError::Corrupt)?;
+        let message = Xcm::<Call>::try_from(versioned_message)
+            .map_err(|_| ProcessMessageError::Unsupported)?;
+        let pre = XcmExecutor::prepare(message).map_err(|_| ProcessMessageError::Unsupported)?;
+        let required = pre.weight_of();
+        ensure!(meter.can_accrue(required), ProcessMessageError::Overweight(required));
 
-		let (consumed, result) = match XcmExecutor::execute(origin.into(), pre, id, Weight::zero())
-		{
-			Outcome::Complete(w) => (w, Ok(true)),
-			Outcome::Incomplete(w, _) => (w, Ok(false)),
-			// In the error-case we assume the worst case and consume all possible weight.
-			Outcome::Error(_) => (required, Err(ProcessMessageError::Unsupported)),
-		};
-		meter.defensive_saturating_accrue(consumed);
-		result
-	}
+        let (consumed, result) = match XcmExecutor::execute(origin.into(), pre, id, Weight::zero())
+        {
+            Outcome::Complete(w) => (w, Ok(true)),
+            Outcome::Incomplete(w, _) => (w, Ok(false)),
+            // In the error-case we assume the worst case and consume all possible weight.
+            Outcome::Error(_) => (required, Err(ProcessMessageError::Unsupported)),
+        };
+        meter.defensive_saturating_accrue(consumed);
+        result
+    }
 }
 
 #[cfg(test)]
 mod tests {
-	use super::*;
-	use frame_support::{
-		assert_err, assert_ok,
-		traits::{ProcessMessageError, ProcessMessageError::*},
-	};
-	use parity_scale_codec::Encode;
-	use polkadot_test_runtime::*;
-	use xcm::{v2, v3, VersionedXcm};
+    use super::*;
+    use frame_support::{
+        assert_err, assert_ok,
+        traits::{ProcessMessageError, ProcessMessageError::*},
+    };
+    use parity_scale_codec::Encode;
+    use polkadot_test_runtime::*;
+    use xcm::{v2, v3, VersionedXcm};
 
-	const ORIGIN: Junction = Junction::OnlyChild;
-	/// The processor to use for tests.
-	type Processor =
-		ProcessXcmMessage<Junction, xcm_executor::XcmExecutor<xcm_config::XcmConfig>, RuntimeCall>;
+    const ORIGIN: Junction = Junction::OnlyChild;
+    /// The processor to use for tests.
+    type Processor =
+        ProcessXcmMessage<Junction, xcm_executor::XcmExecutor<xcm_config::XcmConfig>, RuntimeCall>;
 
-	#[test]
-	fn process_message_trivial_works() {
-		// ClearOrigin works.
-		assert!(process(v2_xcm(true)).unwrap());
-		assert!(process(v3_xcm(true)).unwrap());
-	}
+    #[test]
+    fn process_message_trivial_works() {
+        // ClearOrigin works.
+        assert!(process(v2_xcm(true)).unwrap());
+        assert!(process(v3_xcm(true)).unwrap());
+    }
 
-	#[test]
-	fn process_message_trivial_fails() {
-		// Trap makes it fail.
-		assert!(!process(v3_xcm(false)).unwrap());
-		assert!(!process(v3_xcm(false)).unwrap());
-	}
+    #[test]
+    fn process_message_trivial_fails() {
+        // Trap makes it fail.
+        assert!(!process(v3_xcm(false)).unwrap());
+        assert!(!process(v3_xcm(false)).unwrap());
+    }
 
-	#[test]
-	fn process_message_corrupted_fails() {
-		let msgs: &[&[u8]] = &[&[], &[55, 66], &[123, 222, 233]];
-		for msg in msgs {
-			assert_err!(process_raw(msg), Corrupt);
-		}
-	}
+    #[test]
+    fn process_message_corrupted_fails() {
+        let msgs: &[&[u8]] = &[&[], &[55, 66], &[123, 222, 233]];
+        for msg in msgs {
+            assert_err!(process_raw(msg), Corrupt);
+        }
+    }
 
-	#[test]
-	fn process_message_overweight_fails() {
-		for msg in [v3_xcm(true), v3_xcm(false), v3_xcm(false), v2_xcm(false)] {
-			let msg = &msg.encode()[..];
+    #[test]
+    fn process_message_overweight_fails() {
+        for msg in [v3_xcm(true), v3_xcm(false), v3_xcm(false), v2_xcm(false)] {
+            let msg = &msg.encode()[..];
 
-			// Errors if we stay below a weight limit of 1000.
-			for i in 0..10 {
-				let meter = &mut WeightMeter::from_limit((i * 10).into());
-				let mut id = [0; 32];
-				assert_err!(
-					Processor::process_message(msg, ORIGIN, meter, &mut id),
-					Overweight(1000.into())
-				);
-				assert_eq!(meter.consumed, 0.into());
-			}
+            // Errors if we stay below a weight limit of 1000.
+            for i in 0..10 {
+                let meter = &mut WeightMeter::from_limit((i * 10).into());
+                let mut id = [0; 32];
+                assert_err!(
+                    Processor::process_message(msg, ORIGIN, meter, &mut id),
+                    Overweight(1000.into())
+                );
+                assert_eq!(meter.consumed, 0.into());
+            }
 
-			// Works with a limit of 1000.
-			let meter = &mut WeightMeter::from_limit(1000.into());
-			let mut id = [0; 32];
-			assert_ok!(Processor::process_message(msg, ORIGIN, meter, &mut id));
-			assert_eq!(meter.consumed, 1000.into());
-		}
-	}
+            // Works with a limit of 1000.
+            let meter = &mut WeightMeter::from_limit(1000.into());
+            let mut id = [0; 32];
+            assert_ok!(Processor::process_message(msg, ORIGIN, meter, &mut id));
+            assert_eq!(meter.consumed, 1000.into());
+        }
+    }
 
-	fn v2_xcm(success: bool) -> VersionedXcm<RuntimeCall> {
-		let instr = if success {
-			v3::Instruction::<RuntimeCall>::ClearOrigin
-		} else {
-			v3::Instruction::<RuntimeCall>::Trap(1)
-		};
-		VersionedXcm::V3(v3::Xcm::<RuntimeCall>(vec![instr]))
-	}
+    fn v2_xcm(success: bool) -> VersionedXcm<RuntimeCall> {
+        let instr = if success {
+            v3::Instruction::<RuntimeCall>::ClearOrigin
+        } else {
+            v3::Instruction::<RuntimeCall>::Trap(1)
+        };
+        VersionedXcm::V3(v3::Xcm::<RuntimeCall>(vec![instr]))
+    }
 
-	fn v3_xcm(success: bool) -> VersionedXcm<RuntimeCall> {
-		let instr = if success {
-			v2::Instruction::<RuntimeCall>::ClearOrigin
-		} else {
-			v2::Instruction::<RuntimeCall>::Trap(1)
-		};
-		VersionedXcm::V2(v2::Xcm::<RuntimeCall>(vec![instr]))
-	}
+    fn v3_xcm(success: bool) -> VersionedXcm<RuntimeCall> {
+        let instr = if success {
+            v2::Instruction::<RuntimeCall>::ClearOrigin
+        } else {
+            v2::Instruction::<RuntimeCall>::Trap(1)
+        };
+        VersionedXcm::V2(v2::Xcm::<RuntimeCall>(vec![instr]))
+    }
 
-	fn process(msg: VersionedXcm<RuntimeCall>) -> Result<bool, ProcessMessageError> {
-		process_raw(msg.encode().as_slice())
-	}
+    fn process(msg: VersionedXcm<RuntimeCall>) -> Result<bool, ProcessMessageError> {
+        process_raw(msg.encode().as_slice())
+    }
 
-	fn process_raw(raw: &[u8]) -> Result<bool, ProcessMessageError> {
-		Processor::process_message(raw, ORIGIN, &mut WeightMeter::max_limit(), &mut [0; 32])
-	}
+    fn process_raw(raw: &[u8]) -> Result<bool, ProcessMessageError> {
+        Processor::process_message(raw, ORIGIN, &mut WeightMeter::max_limit(), &mut [0; 32])
+    }
 }

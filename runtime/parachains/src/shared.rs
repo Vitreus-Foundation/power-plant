@@ -41,104 +41,104 @@ mod tests;
 
 #[frame_support::pallet]
 pub mod pallet {
-	use super::*;
+    use super::*;
 
-	#[pallet::pallet]
-	#[pallet::without_storage_info]
-	pub struct Pallet<T>(_);
+    #[pallet::pallet]
+    #[pallet::without_storage_info]
+    pub struct Pallet<T>(_);
 
-	#[pallet::config]
-	pub trait Config: frame_system::Config {}
+    #[pallet::config]
+    pub trait Config: frame_system::Config {}
 
-	/// The current session index.
-	#[pallet::storage]
-	#[pallet::getter(fn session_index)]
-	pub(super) type CurrentSessionIndex<T: Config> = StorageValue<_, SessionIndex, ValueQuery>;
+    /// The current session index.
+    #[pallet::storage]
+    #[pallet::getter(fn session_index)]
+    pub(super) type CurrentSessionIndex<T: Config> = StorageValue<_, SessionIndex, ValueQuery>;
 
-	/// All the validators actively participating in parachain consensus.
-	/// Indices are into the broader validator set.
-	#[pallet::storage]
-	#[pallet::getter(fn active_validator_indices)]
-	pub(super) type ActiveValidatorIndices<T: Config> =
-		StorageValue<_, Vec<ValidatorIndex>, ValueQuery>;
+    /// All the validators actively participating in parachain consensus.
+    /// Indices are into the broader validator set.
+    #[pallet::storage]
+    #[pallet::getter(fn active_validator_indices)]
+    pub(super) type ActiveValidatorIndices<T: Config> =
+        StorageValue<_, Vec<ValidatorIndex>, ValueQuery>;
 
-	/// The parachain attestation keys of the validators actively participating in parachain consensus.
-	/// This should be the same length as `ActiveValidatorIndices`.
-	#[pallet::storage]
-	#[pallet::getter(fn active_validator_keys)]
-	pub(super) type ActiveValidatorKeys<T: Config> = StorageValue<_, Vec<ValidatorId>, ValueQuery>;
+    /// The parachain attestation keys of the validators actively participating in parachain consensus.
+    /// This should be the same length as `ActiveValidatorIndices`.
+    #[pallet::storage]
+    #[pallet::getter(fn active_validator_keys)]
+    pub(super) type ActiveValidatorKeys<T: Config> = StorageValue<_, Vec<ValidatorId>, ValueQuery>;
 
-	#[pallet::call]
-	impl<T: Config> Pallet<T> {}
+    #[pallet::call]
+    impl<T: Config> Pallet<T> {}
 }
 
 impl<T: Config> Pallet<T> {
-	/// Called by the initializer to initialize the configuration pallet.
-	pub(crate) fn initializer_initialize(_now: BlockNumberFor<T>) -> Weight {
-		Weight::zero()
-	}
+    /// Called by the initializer to initialize the configuration pallet.
+    pub(crate) fn initializer_initialize(_now: BlockNumberFor<T>) -> Weight {
+        Weight::zero()
+    }
 
-	/// Called by the initializer to finalize the configuration pallet.
-	pub(crate) fn initializer_finalize() {}
+    /// Called by the initializer to finalize the configuration pallet.
+    pub(crate) fn initializer_finalize() {}
 
-	/// Called by the initializer to note that a new session has started.
-	///
-	/// Returns the list of outgoing paras from the actions queue.
-	pub(crate) fn initializer_on_new_session(
-		session_index: SessionIndex,
-		random_seed: [u8; 32],
-		new_config: &HostConfiguration<BlockNumberFor<T>>,
-		all_validators: Vec<ValidatorId>,
-	) -> Vec<ValidatorId> {
-		CurrentSessionIndex::<T>::set(session_index);
-		let mut rng: ChaCha20Rng = SeedableRng::from_seed(random_seed);
+    /// Called by the initializer to note that a new session has started.
+    ///
+    /// Returns the list of outgoing paras from the actions queue.
+    pub(crate) fn initializer_on_new_session(
+        session_index: SessionIndex,
+        random_seed: [u8; 32],
+        new_config: &HostConfiguration<BlockNumberFor<T>>,
+        all_validators: Vec<ValidatorId>,
+    ) -> Vec<ValidatorId> {
+        CurrentSessionIndex::<T>::set(session_index);
+        let mut rng: ChaCha20Rng = SeedableRng::from_seed(random_seed);
 
-		let mut shuffled_indices: Vec<_> = (0..all_validators.len())
-			.enumerate()
-			.map(|(i, _)| ValidatorIndex(i as _))
-			.collect();
+        let mut shuffled_indices: Vec<_> = (0..all_validators.len())
+            .enumerate()
+            .map(|(i, _)| ValidatorIndex(i as _))
+            .collect();
 
-		shuffled_indices.shuffle(&mut rng);
+        shuffled_indices.shuffle(&mut rng);
 
-		if let Some(max) = new_config.max_validators {
-			shuffled_indices.truncate(max as usize);
-		}
+        if let Some(max) = new_config.max_validators {
+            shuffled_indices.truncate(max as usize);
+        }
 
-		let active_validator_keys =
-			crate::util::take_active_subset(&shuffled_indices, &all_validators);
+        let active_validator_keys =
+            crate::util::take_active_subset(&shuffled_indices, &all_validators);
 
-		ActiveValidatorIndices::<T>::set(shuffled_indices);
-		ActiveValidatorKeys::<T>::set(active_validator_keys.clone());
+        ActiveValidatorIndices::<T>::set(shuffled_indices);
+        ActiveValidatorKeys::<T>::set(active_validator_keys.clone());
 
-		active_validator_keys
-	}
+        active_validator_keys
+    }
 
-	/// Return the session index that should be used for any future scheduled changes.
-	pub fn scheduled_session() -> SessionIndex {
-		Self::session_index().saturating_add(SESSION_DELAY)
-	}
+    /// Return the session index that should be used for any future scheduled changes.
+    pub fn scheduled_session() -> SessionIndex {
+        Self::session_index().saturating_add(SESSION_DELAY)
+    }
 
-	/// Test function for setting the current session index.
-	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn set_session_index(index: SessionIndex) {
-		CurrentSessionIndex::<T>::set(index);
-	}
+    /// Test function for setting the current session index.
+    #[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+    pub fn set_session_index(index: SessionIndex) {
+        CurrentSessionIndex::<T>::set(index);
+    }
 
-	#[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
-	pub fn set_active_validators_ascending(active: Vec<ValidatorId>) {
-		ActiveValidatorIndices::<T>::set(
-			(0..active.len()).map(|i| ValidatorIndex(i as _)).collect(),
-		);
-		ActiveValidatorKeys::<T>::set(active);
-	}
+    #[cfg(any(feature = "std", feature = "runtime-benchmarks", test))]
+    pub fn set_active_validators_ascending(active: Vec<ValidatorId>) {
+        ActiveValidatorIndices::<T>::set(
+            (0..active.len()).map(|i| ValidatorIndex(i as _)).collect(),
+        );
+        ActiveValidatorKeys::<T>::set(active);
+    }
 
-	#[cfg(test)]
-	pub(crate) fn set_active_validators_with_indices(
-		indices: Vec<ValidatorIndex>,
-		keys: Vec<ValidatorId>,
-	) {
-		assert_eq!(indices.len(), keys.len());
-		ActiveValidatorIndices::<T>::set(indices);
-		ActiveValidatorKeys::<T>::set(keys);
-	}
+    #[cfg(test)]
+    pub(crate) fn set_active_validators_with_indices(
+        indices: Vec<ValidatorIndex>,
+        keys: Vec<ValidatorId>,
+    ) {
+        assert_eq!(indices.len(), keys.len());
+        ActiveValidatorIndices::<T>::set(indices);
+        ActiveValidatorKeys::<T>::set(keys);
+    }
 }

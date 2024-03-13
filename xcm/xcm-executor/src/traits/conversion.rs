@@ -21,21 +21,21 @@ use xcm::latest::prelude::*;
 
 /// Means of converting a location into an account identifier.
 pub trait ConvertLocation<AccountId> {
-	/// Convert the `location` into `Some` account ID, or `None` if not possible.
-	fn convert_location(location: &MultiLocation) -> Option<AccountId>;
+    /// Convert the `location` into `Some` account ID, or `None` if not possible.
+    fn convert_location(location: &MultiLocation) -> Option<AccountId>;
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 impl<AccountId> ConvertLocation<AccountId> for Tuple {
-	fn convert_location(l: &MultiLocation) -> Option<AccountId> {
-		for_tuples!( #(
+    fn convert_location(l: &MultiLocation) -> Option<AccountId> {
+        for_tuples!( #(
 			match Tuple::convert_location(l) {
 				Some(result) => return Some(result),
 				None => {},
 			}
 		)* );
-		None
-	}
+        None
+    }
 }
 
 /// A converter `trait` for origin types.
@@ -80,73 +80,73 @@ impl<AccountId> ConvertLocation<AccountId> for Tuple {
 /// # }
 /// ```
 pub trait ConvertOrigin<Origin> {
-	/// Attempt to convert `origin` to the generic `Origin` whilst consuming it.
-	fn convert_origin(
-		origin: impl Into<MultiLocation>,
-		kind: OriginKind,
-	) -> Result<Origin, MultiLocation>;
+    /// Attempt to convert `origin` to the generic `Origin` whilst consuming it.
+    fn convert_origin(
+        origin: impl Into<MultiLocation>,
+        kind: OriginKind,
+    ) -> Result<Origin, MultiLocation>;
 }
 
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 impl<O> ConvertOrigin<O> for Tuple {
-	fn convert_origin(
-		origin: impl Into<MultiLocation>,
-		kind: OriginKind,
-	) -> Result<O, MultiLocation> {
-		for_tuples!( #(
+    fn convert_origin(
+        origin: impl Into<MultiLocation>,
+        kind: OriginKind,
+    ) -> Result<O, MultiLocation> {
+        for_tuples!( #(
 			let origin = match Tuple::convert_origin(origin, kind) {
 				Err(o) => o,
 				r => return r
 			};
 		)* );
-		let origin = origin.into();
-		log::trace!(
-			target: "xcm::convert_origin",
-			"could not convert: origin: {:?}, kind: {:?}",
-			origin,
-			kind,
-		);
-		Err(origin)
-	}
+        let origin = origin.into();
+        log::trace!(
+            target: "xcm::convert_origin",
+            "could not convert: origin: {:?}, kind: {:?}",
+            origin,
+            kind,
+        );
+        Err(origin)
+    }
 }
 
 /// Defines how a call is dispatched with given origin.
 /// Allows to customize call dispatch, such as adapting the origin based on the call
 /// or modifying the call.
 pub trait CallDispatcher<Call: Dispatchable> {
-	fn dispatch(
-		call: Call,
-		origin: Call::RuntimeOrigin,
-	) -> Result<Call::PostInfo, DispatchErrorWithPostInfo<Call::PostInfo>>;
+    fn dispatch(
+        call: Call,
+        origin: Call::RuntimeOrigin,
+    ) -> Result<Call::PostInfo, DispatchErrorWithPostInfo<Call::PostInfo>>;
 }
 
 pub struct WithOriginFilter<Filter>(PhantomData<Filter>);
 impl<Call, Filter> CallDispatcher<Call> for WithOriginFilter<Filter>
 where
-	Call: Dispatchable,
-	Call::RuntimeOrigin: OriginTrait,
-	<<Call as Dispatchable>::RuntimeOrigin as OriginTrait>::Call: 'static,
-	Filter: Contains<<<Call as Dispatchable>::RuntimeOrigin as OriginTrait>::Call> + 'static,
+    Call: Dispatchable,
+    Call::RuntimeOrigin: OriginTrait,
+    <<Call as Dispatchable>::RuntimeOrigin as OriginTrait>::Call: 'static,
+    Filter: Contains<<<Call as Dispatchable>::RuntimeOrigin as OriginTrait>::Call> + 'static,
 {
-	fn dispatch(
-		call: Call,
-		mut origin: <Call as Dispatchable>::RuntimeOrigin,
-	) -> Result<
-		<Call as Dispatchable>::PostInfo,
-		DispatchErrorWithPostInfo<<Call as Dispatchable>::PostInfo>,
-	> {
-		origin.add_filter(Filter::contains);
-		call.dispatch(origin)
-	}
+    fn dispatch(
+        call: Call,
+        mut origin: <Call as Dispatchable>::RuntimeOrigin,
+    ) -> Result<
+        <Call as Dispatchable>::PostInfo,
+        DispatchErrorWithPostInfo<<Call as Dispatchable>::PostInfo>,
+    > {
+        origin.add_filter(Filter::contains);
+        call.dispatch(origin)
+    }
 }
 
 // We implement it for every calls so they can dispatch themselves
 // (without any change).
 impl<Call: Dispatchable> CallDispatcher<Call> for Call {
-	fn dispatch(
-		call: Call,
-		origin: Call::RuntimeOrigin,
-	) -> Result<Call::PostInfo, DispatchErrorWithPostInfo<Call::PostInfo>> {
-		call.dispatch(origin)
-	}
+    fn dispatch(
+        call: Call,
+        origin: Call::RuntimeOrigin,
+    ) -> Result<Call::PostInfo, DispatchErrorWithPostInfo<Call::PostInfo>> {
+        call.dispatch(origin)
+    }
 }

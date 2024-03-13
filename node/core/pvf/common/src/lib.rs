@@ -32,26 +32,26 @@ use tokio::io::{self, AsyncRead, AsyncReadExt as _, AsyncWrite, AsyncWriteExt as
 
 #[doc(hidden)]
 pub mod tests {
-	use std::time::Duration;
+    use std::time::Duration;
 
-	pub const TEST_EXECUTION_TIMEOUT: Duration = Duration::from_secs(3);
-	pub const TEST_PREPARATION_TIMEOUT: Duration = Duration::from_secs(30);
+    pub const TEST_EXECUTION_TIMEOUT: Duration = Duration::from_secs(3);
+    pub const TEST_PREPARATION_TIMEOUT: Duration = Duration::from_secs(30);
 }
 
 /// Write some data prefixed by its length into `w`.
 pub async fn framed_send(w: &mut (impl AsyncWrite + Unpin), buf: &[u8]) -> io::Result<()> {
-	let len_buf = buf.len().to_le_bytes();
-	w.write_all(&len_buf).await?;
-	w.write_all(buf).await?;
-	Ok(())
+    let len_buf = buf.len().to_le_bytes();
+    w.write_all(&len_buf).await?;
+    w.write_all(buf).await?;
+    Ok(())
 }
 
 /// Read some data prefixed by its length from `r`.
 pub async fn framed_recv(r: &mut (impl AsyncRead + Unpin)) -> io::Result<Vec<u8>> {
-	let mut len_buf = [0u8; mem::size_of::<usize>()];
-	r.read_exact(&mut len_buf).await?;
-	let len = usize::from_le_bytes(len_buf);
-	let mut buf = vec![0; len];
-	r.read_exact(&mut buf).await?;
-	Ok(buf)
+    let mut len_buf = [0u8; mem::size_of::<usize>()];
+    r.read_exact(&mut len_buf).await?;
+    let len = usize::from_le_bytes(len_buf);
+    let mut buf = vec![0; len];
+    r.read_exact(&mut buf).await?;
+    Ok(buf)
 }

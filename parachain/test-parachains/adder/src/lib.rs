@@ -33,50 +33,50 @@ static ALLOC: dlmalloc::GlobalDlmalloc = dlmalloc::GlobalDlmalloc;
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 fn keccak256(input: &[u8]) -> [u8; 32] {
-	let mut out = [0u8; 32];
-	let mut keccak256 = Keccak::v256();
-	keccak256.update(input);
-	keccak256.finalize(&mut out);
-	out
+    let mut out = [0u8; 32];
+    let mut keccak256 = Keccak::v256();
+    keccak256.update(input);
+    keccak256.finalize(&mut out);
+    out
 }
 
 /// Wasm binary unwrapped. If built with `BUILD_DUMMY_WASM_BINARY`, the function panics.
 #[cfg(feature = "std")]
 pub fn wasm_binary_unwrap() -> &'static [u8] {
-	WASM_BINARY.expect(
-		"Development wasm binary is not available. Testing is only \
+    WASM_BINARY.expect(
+        "Development wasm binary is not available. Testing is only \
 						supported with the flag disabled.",
-	)
+    )
 }
 
 /// Head data for this parachain.
 #[derive(Default, Clone, Hash, Eq, PartialEq, Encode, Decode, Debug)]
 pub struct HeadData {
-	/// Block number
-	pub number: u64,
-	/// parent block keccak256
-	pub parent_hash: [u8; 32],
-	/// hash of post-execution state.
-	pub post_state: [u8; 32],
+    /// Block number
+    pub number: u64,
+    /// parent block keccak256
+    pub parent_hash: [u8; 32],
+    /// hash of post-execution state.
+    pub post_state: [u8; 32],
 }
 
 impl HeadData {
-	pub fn hash(&self) -> [u8; 32] {
-		keccak256(&self.encode())
-	}
+    pub fn hash(&self) -> [u8; 32] {
+        keccak256(&self.encode())
+    }
 }
 
 /// Block data for this parachain.
 #[derive(Default, Clone, Encode, Decode, Debug)]
 pub struct BlockData {
-	/// State to begin from.
-	pub state: u64,
-	/// Amount to add (wrapping)
-	pub add: u64,
+    /// State to begin from.
+    pub state: u64,
+    /// Amount to add (wrapping)
+    pub add: u64,
 }
 
 pub fn hash_state(state: u64) -> [u8; 32] {
-	keccak256(state.encode().as_slice())
+    keccak256(state.encode().as_slice())
 }
 
 /// Start state mismatched with parent header's state hash.
@@ -86,17 +86,17 @@ pub struct StateMismatch;
 /// Execute a block body on top of given parent head, producing new parent head
 /// if valid.
 pub fn execute(
-	parent_hash: [u8; 32],
-	parent_head: HeadData,
-	block_data: &BlockData,
+    parent_hash: [u8; 32],
+    parent_head: HeadData,
+    block_data: &BlockData,
 ) -> Result<HeadData, StateMismatch> {
-	assert_eq!(parent_hash, parent_head.hash());
+    assert_eq!(parent_hash, parent_head.hash());
 
-	if hash_state(block_data.state) != parent_head.post_state {
-		return Err(StateMismatch)
-	}
+    if hash_state(block_data.state) != parent_head.post_state {
+        return Err(StateMismatch);
+    }
 
-	let new_state = block_data.state.wrapping_add(block_data.add);
+    let new_state = block_data.state.wrapping_add(block_data.add);
 
-	Ok(HeadData { number: parent_head.number + 1, parent_hash, post_state: hash_state(new_state) })
+    Ok(HeadData { number: parent_head.number + 1, parent_hash, post_state: hash_state(new_state) })
 }

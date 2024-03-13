@@ -21,16 +21,16 @@ use frame_system::RawOrigin;
 use sp_runtime::traits::One;
 
 benchmarks! {
-	force_unfreeze {
-		Frozen::<T>::set(Some(One::one()));
-	}: _(RawOrigin::Root)
-	verify {
-		assert!(Frozen::<T>::get().is_none())
-	}
+    force_unfreeze {
+        Frozen::<T>::set(Some(One::one()));
+    }: _(RawOrigin::Root)
+    verify {
+        assert!(Frozen::<T>::get().is_none())
+    }
 
-	impl_benchmark_test_suite!(
-		Pallet,
-		crate::mock::new_test_ext(Default::default()),
-		crate::mock::Test
-	);
+    impl_benchmark_test_suite!(
+        Pallet,
+        crate::mock::new_test_ext(Default::default()),
+        crate::mock::Test
+    );
 }

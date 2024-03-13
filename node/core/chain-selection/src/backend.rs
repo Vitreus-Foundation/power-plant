@@ -28,39 +28,39 @@ use std::collections::HashMap;
 use crate::{BlockEntry, Error, LeafEntrySet, Timestamp};
 
 pub(super) enum BackendWriteOp {
-	WriteBlockEntry(BlockEntry),
-	WriteBlocksByNumber(BlockNumber, Vec<Hash>),
-	WriteViableLeaves(LeafEntrySet),
-	WriteStagnantAt(Timestamp, Vec<Hash>),
-	DeleteBlocksByNumber(BlockNumber),
-	DeleteBlockEntry(Hash),
-	DeleteStagnantAt(Timestamp),
+    WriteBlockEntry(BlockEntry),
+    WriteBlocksByNumber(BlockNumber, Vec<Hash>),
+    WriteViableLeaves(LeafEntrySet),
+    WriteStagnantAt(Timestamp, Vec<Hash>),
+    DeleteBlocksByNumber(BlockNumber),
+    DeleteBlockEntry(Hash),
+    DeleteStagnantAt(Timestamp),
 }
 
 /// An abstraction over backend storage for the logic of this subsystem.
 pub(super) trait Backend {
-	/// Load a block entry from the DB.
-	fn load_block_entry(&self, hash: &Hash) -> Result<Option<BlockEntry>, Error>;
-	/// Load the active-leaves set.
-	fn load_leaves(&self) -> Result<LeafEntrySet, Error>;
-	/// Load the stagnant list at the given timestamp.
-	fn load_stagnant_at(&self, timestamp: Timestamp) -> Result<Vec<Hash>, Error>;
-	/// Load all stagnant lists up to and including the given Unix timestamp
-	/// in ascending order. Stop fetching stagnant entries upon reaching `max_elements`.
-	fn load_stagnant_at_up_to(
-		&self,
-		up_to: Timestamp,
-		max_elements: usize,
-	) -> Result<Vec<(Timestamp, Vec<Hash>)>, Error>;
-	/// Load the earliest kept block number.
-	fn load_first_block_number(&self) -> Result<Option<BlockNumber>, Error>;
-	/// Load blocks by number.
-	fn load_blocks_by_number(&self, number: BlockNumber) -> Result<Vec<Hash>, Error>;
+    /// Load a block entry from the DB.
+    fn load_block_entry(&self, hash: &Hash) -> Result<Option<BlockEntry>, Error>;
+    /// Load the active-leaves set.
+    fn load_leaves(&self) -> Result<LeafEntrySet, Error>;
+    /// Load the stagnant list at the given timestamp.
+    fn load_stagnant_at(&self, timestamp: Timestamp) -> Result<Vec<Hash>, Error>;
+    /// Load all stagnant lists up to and including the given Unix timestamp
+    /// in ascending order. Stop fetching stagnant entries upon reaching `max_elements`.
+    fn load_stagnant_at_up_to(
+        &self,
+        up_to: Timestamp,
+        max_elements: usize,
+    ) -> Result<Vec<(Timestamp, Vec<Hash>)>, Error>;
+    /// Load the earliest kept block number.
+    fn load_first_block_number(&self) -> Result<Option<BlockNumber>, Error>;
+    /// Load blocks by number.
+    fn load_blocks_by_number(&self, number: BlockNumber) -> Result<Vec<Hash>, Error>;
 
-	/// Atomically write the list of operations, with later operations taking precedence over prior.
-	fn write<I>(&mut self, ops: I) -> Result<(), Error>
-	where
-		I: IntoIterator<Item = BackendWriteOp>;
+    /// Atomically write the list of operations, with later operations taking precedence over prior.
+    fn write<I>(&mut self, ops: I) -> Result<(), Error>
+    where
+        I: IntoIterator<Item = BackendWriteOp>;
 }
 
 /// An in-memory overlay over the backend.
@@ -69,118 +69,118 @@ pub(super) trait Backend {
 /// converted into a set of write operations which will, when written to
 /// the underlying backend, give the same view as the state of the overlay.
 pub(super) struct OverlayedBackend<'a, B: 'a> {
-	inner: &'a B,
+    inner: &'a B,
 
-	// `None` means 'deleted', missing means query inner.
-	block_entries: HashMap<Hash, Option<BlockEntry>>,
-	// `None` means 'deleted', missing means query inner.
-	blocks_by_number: HashMap<BlockNumber, Option<Vec<Hash>>>,
-	// 'None' means 'deleted', missing means query inner.
-	stagnant_at: HashMap<Timestamp, Option<Vec<Hash>>>,
-	// 'None' means query inner.
-	leaves: Option<LeafEntrySet>,
+    // `None` means 'deleted', missing means query inner.
+    block_entries: HashMap<Hash, Option<BlockEntry>>,
+    // `None` means 'deleted', missing means query inner.
+    blocks_by_number: HashMap<BlockNumber, Option<Vec<Hash>>>,
+    // 'None' means 'deleted', missing means query inner.
+    stagnant_at: HashMap<Timestamp, Option<Vec<Hash>>>,
+    // 'None' means query inner.
+    leaves: Option<LeafEntrySet>,
 }
 
 impl<'a, B: 'a + Backend> OverlayedBackend<'a, B> {
-	pub(super) fn new(backend: &'a B) -> Self {
-		OverlayedBackend {
-			inner: backend,
-			block_entries: HashMap::new(),
-			blocks_by_number: HashMap::new(),
-			stagnant_at: HashMap::new(),
-			leaves: None,
-		}
-	}
+    pub(super) fn new(backend: &'a B) -> Self {
+        OverlayedBackend {
+            inner: backend,
+            block_entries: HashMap::new(),
+            blocks_by_number: HashMap::new(),
+            stagnant_at: HashMap::new(),
+            leaves: None,
+        }
+    }
 
-	pub(super) fn load_block_entry(&self, hash: &Hash) -> Result<Option<BlockEntry>, Error> {
-		if let Some(val) = self.block_entries.get(&hash) {
-			return Ok(val.clone())
-		}
+    pub(super) fn load_block_entry(&self, hash: &Hash) -> Result<Option<BlockEntry>, Error> {
+        if let Some(val) = self.block_entries.get(&hash) {
+            return Ok(val.clone());
+        }
 
-		self.inner.load_block_entry(hash)
-	}
+        self.inner.load_block_entry(hash)
+    }
 
-	pub(super) fn load_blocks_by_number(&self, number: BlockNumber) -> Result<Vec<Hash>, Error> {
-		if let Some(val) = self.blocks_by_number.get(&number) {
-			return Ok(val.as_ref().map_or(Vec::new(), Clone::clone))
-		}
+    pub(super) fn load_blocks_by_number(&self, number: BlockNumber) -> Result<Vec<Hash>, Error> {
+        if let Some(val) = self.blocks_by_number.get(&number) {
+            return Ok(val.as_ref().map_or(Vec::new(), Clone::clone));
+        }
 
-		self.inner.load_blocks_by_number(number)
-	}
+        self.inner.load_blocks_by_number(number)
+    }
 
-	pub(super) fn load_leaves(&self) -> Result<LeafEntrySet, Error> {
-		if let Some(ref set) = self.leaves {
-			return Ok(set.clone())
-		}
+    pub(super) fn load_leaves(&self) -> Result<LeafEntrySet, Error> {
+        if let Some(ref set) = self.leaves {
+            return Ok(set.clone());
+        }
 
-		self.inner.load_leaves()
-	}
+        self.inner.load_leaves()
+    }
 
-	pub(super) fn load_stagnant_at(&self, timestamp: Timestamp) -> Result<Vec<Hash>, Error> {
-		if let Some(val) = self.stagnant_at.get(&timestamp) {
-			return Ok(val.as_ref().map_or(Vec::new(), Clone::clone))
-		}
+    pub(super) fn load_stagnant_at(&self, timestamp: Timestamp) -> Result<Vec<Hash>, Error> {
+        if let Some(val) = self.stagnant_at.get(&timestamp) {
+            return Ok(val.as_ref().map_or(Vec::new(), Clone::clone));
+        }
 
-		self.inner.load_stagnant_at(timestamp)
-	}
+        self.inner.load_stagnant_at(timestamp)
+    }
 
-	pub(super) fn write_block_entry(&mut self, entry: BlockEntry) {
-		self.block_entries.insert(entry.block_hash, Some(entry));
-	}
+    pub(super) fn write_block_entry(&mut self, entry: BlockEntry) {
+        self.block_entries.insert(entry.block_hash, Some(entry));
+    }
 
-	pub(super) fn delete_block_entry(&mut self, hash: &Hash) {
-		self.block_entries.insert(*hash, None);
-	}
+    pub(super) fn delete_block_entry(&mut self, hash: &Hash) {
+        self.block_entries.insert(*hash, None);
+    }
 
-	pub(super) fn write_blocks_by_number(&mut self, number: BlockNumber, blocks: Vec<Hash>) {
-		if blocks.is_empty() {
-			self.blocks_by_number.insert(number, None);
-		} else {
-			self.blocks_by_number.insert(number, Some(blocks));
-		}
-	}
+    pub(super) fn write_blocks_by_number(&mut self, number: BlockNumber, blocks: Vec<Hash>) {
+        if blocks.is_empty() {
+            self.blocks_by_number.insert(number, None);
+        } else {
+            self.blocks_by_number.insert(number, Some(blocks));
+        }
+    }
 
-	pub(super) fn delete_blocks_by_number(&mut self, number: BlockNumber) {
-		self.blocks_by_number.insert(number, None);
-	}
+    pub(super) fn delete_blocks_by_number(&mut self, number: BlockNumber) {
+        self.blocks_by_number.insert(number, None);
+    }
 
-	pub(super) fn write_leaves(&mut self, leaves: LeafEntrySet) {
-		self.leaves = Some(leaves);
-	}
+    pub(super) fn write_leaves(&mut self, leaves: LeafEntrySet) {
+        self.leaves = Some(leaves);
+    }
 
-	pub(super) fn write_stagnant_at(&mut self, timestamp: Timestamp, hashes: Vec<Hash>) {
-		self.stagnant_at.insert(timestamp, Some(hashes));
-	}
+    pub(super) fn write_stagnant_at(&mut self, timestamp: Timestamp, hashes: Vec<Hash>) {
+        self.stagnant_at.insert(timestamp, Some(hashes));
+    }
 
-	pub(super) fn delete_stagnant_at(&mut self, timestamp: Timestamp) {
-		self.stagnant_at.insert(timestamp, None);
-	}
+    pub(super) fn delete_stagnant_at(&mut self, timestamp: Timestamp) {
+        self.stagnant_at.insert(timestamp, None);
+    }
 
-	/// Transform this backend into a set of write-ops to be written to the
-	/// inner backend.
-	pub(super) fn into_write_ops(self) -> impl Iterator<Item = BackendWriteOp> {
-		let block_entry_ops = self.block_entries.into_iter().map(|(h, v)| match v {
-			Some(v) => BackendWriteOp::WriteBlockEntry(v),
-			None => BackendWriteOp::DeleteBlockEntry(h),
-		});
+    /// Transform this backend into a set of write-ops to be written to the
+    /// inner backend.
+    pub(super) fn into_write_ops(self) -> impl Iterator<Item = BackendWriteOp> {
+        let block_entry_ops = self.block_entries.into_iter().map(|(h, v)| match v {
+            Some(v) => BackendWriteOp::WriteBlockEntry(v),
+            None => BackendWriteOp::DeleteBlockEntry(h),
+        });
 
-		let blocks_by_number_ops = self.blocks_by_number.into_iter().map(|(n, v)| match v {
-			Some(v) => BackendWriteOp::WriteBlocksByNumber(n, v),
-			None => BackendWriteOp::DeleteBlocksByNumber(n),
-		});
+        let blocks_by_number_ops = self.blocks_by_number.into_iter().map(|(n, v)| match v {
+            Some(v) => BackendWriteOp::WriteBlocksByNumber(n, v),
+            None => BackendWriteOp::DeleteBlocksByNumber(n),
+        });
 
-		let leaf_ops = self.leaves.into_iter().map(BackendWriteOp::WriteViableLeaves);
+        let leaf_ops = self.leaves.into_iter().map(BackendWriteOp::WriteViableLeaves);
 
-		let stagnant_at_ops = self.stagnant_at.into_iter().map(|(n, v)| match v {
-			Some(v) => BackendWriteOp::WriteStagnantAt(n, v),
-			None => BackendWriteOp::DeleteStagnantAt(n),
-		});
+        let stagnant_at_ops = self.stagnant_at.into_iter().map(|(n, v)| match v {
+            Some(v) => BackendWriteOp::WriteStagnantAt(n, v),
+            None => BackendWriteOp::DeleteStagnantAt(n),
+        });
 
-		block_entry_ops
-			.chain(blocks_by_number_ops)
-			.chain(leaf_ops)
-			.chain(stagnant_at_ops)
-	}
+        block_entry_ops
+            .chain(blocks_by_number_ops)
+            .chain(leaf_ops)
+            .chain(stagnant_at_ops)
+    }
 }
 
 /// Attempt to find the given ancestor in the chain with given head.
@@ -193,18 +193,18 @@ impl<'a, B: 'a + Backend> OverlayedBackend<'a, B> {
 ///
 /// If the ancestor is an older finalized block, this will return `false`.
 fn contains_ancestor(backend: &impl Backend, head: Hash, ancestor: Hash) -> Result<bool, Error> {
-	let mut current_hash = head;
-	loop {
-		if current_hash == ancestor {
-			return Ok(true)
-		}
-		match backend.load_block_entry(&current_hash)? {
-			Some(e) => current_hash = e.parent_hash,
-			None => break,
-		}
-	}
+    let mut current_hash = head;
+    loop {
+        if current_hash == ancestor {
+            return Ok(true);
+        }
+        match backend.load_block_entry(&current_hash)? {
+            Some(e) => current_hash = e.parent_hash,
+            None => break,
+        }
+    }
 
-	Ok(false)
+    Ok(false)
 }
 
 /// This returns the best unfinalized leaf containing the required block.
@@ -222,16 +222,16 @@ fn contains_ancestor(backend: &impl Backend, head: Hash, ancestor: Hash) -> Resu
 // However, if we need to, we could implement some type of skip-list for
 // fast ancestry checks.
 pub(super) fn find_best_leaf_containing(
-	backend: &impl Backend,
-	required: Hash,
+    backend: &impl Backend,
+    required: Hash,
 ) -> Result<Option<Hash>, Error> {
-	let leaves = backend.load_leaves()?;
-	for leaf in leaves.into_hashes_descending() {
-		if contains_ancestor(backend, leaf, required)? {
-			return Ok(Some(leaf))
-		}
-	}
+    let leaves = backend.load_leaves()?;
+    for leaf in leaves.into_hashes_descending() {
+        if contains_ancestor(backend, leaf, required)? {
+            return Ok(Some(leaf));
+        }
+    }
 
-	// If there are no viable leaves containing the ancestor
-	Ok(None)
+    // If there are no viable leaves containing the ancestor
+    Ok(None)
 }

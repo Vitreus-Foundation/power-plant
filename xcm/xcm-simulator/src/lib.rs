@@ -20,69 +20,69 @@ pub use codec::Encode;
 pub use paste;
 
 pub use frame_support::{
-	traits::{EnqueueMessage, Get, ProcessMessage, ProcessMessageError, ServiceQueues},
-	weights::{Weight, WeightMeter},
+    traits::{EnqueueMessage, Get, ProcessMessage, ProcessMessageError, ServiceQueues},
+    weights::{Weight, WeightMeter},
 };
 pub use sp_io::{hashing::blake2_256, TestExternalities};
 pub use sp_std::{cell::RefCell, collections::vec_deque::VecDeque, marker::PhantomData};
 
 pub use polkadot_core_primitives::BlockNumber as RelayBlockNumber;
 pub use polkadot_parachain::primitives::{
-	DmpMessageHandler as DmpMessageHandlerT, Id as ParaId, XcmpMessageFormat,
-	XcmpMessageHandler as XcmpMessageHandlerT,
+    DmpMessageHandler as DmpMessageHandlerT, Id as ParaId, XcmpMessageFormat,
+    XcmpMessageHandler as XcmpMessageHandlerT,
 };
 pub use polkadot_runtime_parachains::{
-	dmp,
-	inclusion::{AggregateMessageOrigin, UmpQueueId},
+    dmp,
+    inclusion::{AggregateMessageOrigin, UmpQueueId},
 };
 pub use xcm::{latest::prelude::*, VersionedXcm};
 pub use xcm_builder::ProcessXcmMessage;
 pub use xcm_executor::XcmExecutor;
 
 pub trait TestExt {
-	/// Initialize the test environment.
-	fn new_ext() -> sp_io::TestExternalities;
-	/// Resets the state of the test environment.
-	fn reset_ext();
-	/// Execute code in the context of the test externalities, without automatic
-	/// message processing. All messages in the message buses can be processed
-	/// by calling `Self::dispatch_xcm_buses()`.
-	fn execute_without_dispatch<R>(execute: impl FnOnce() -> R) -> R;
-	/// Process all messages in the message buses
-	fn dispatch_xcm_buses();
-	/// Execute some code in the context of the test externalities, with
-	/// automatic message processing.
-	/// Messages are dispatched once the passed closure completes.
-	fn execute_with<R>(execute: impl FnOnce() -> R) -> R {
-		let result = Self::execute_without_dispatch(execute);
-		Self::dispatch_xcm_buses();
-		result
-	}
+    /// Initialize the test environment.
+    fn new_ext() -> sp_io::TestExternalities;
+    /// Resets the state of the test environment.
+    fn reset_ext();
+    /// Execute code in the context of the test externalities, without automatic
+    /// message processing. All messages in the message buses can be processed
+    /// by calling `Self::dispatch_xcm_buses()`.
+    fn execute_without_dispatch<R>(execute: impl FnOnce() -> R) -> R;
+    /// Process all messages in the message buses
+    fn dispatch_xcm_buses();
+    /// Execute some code in the context of the test externalities, with
+    /// automatic message processing.
+    /// Messages are dispatched once the passed closure completes.
+    fn execute_with<R>(execute: impl FnOnce() -> R) -> R {
+        let result = Self::execute_without_dispatch(execute);
+        Self::dispatch_xcm_buses();
+        result
+    }
 }
 
 pub enum MessageKind {
-	Ump,
-	Dmp,
-	Xcmp,
+    Ump,
+    Dmp,
+    Xcmp,
 }
 
 /// Encodes the provided XCM message based on the `message_kind`.
 pub fn encode_xcm(message: Xcm<()>, message_kind: MessageKind) -> Vec<u8> {
-	match message_kind {
-		MessageKind::Ump | MessageKind::Dmp => VersionedXcm::<()>::from(message).encode(),
-		MessageKind::Xcmp => {
-			let fmt = XcmpMessageFormat::ConcatenatedVersionedXcm;
-			let mut outbound = fmt.encode();
+    match message_kind {
+        MessageKind::Ump | MessageKind::Dmp => VersionedXcm::<()>::from(message).encode(),
+        MessageKind::Xcmp => {
+            let fmt = XcmpMessageFormat::ConcatenatedVersionedXcm;
+            let mut outbound = fmt.encode();
 
-			let encoded = VersionedXcm::<()>::from(message).encode();
-			outbound.extend_from_slice(&encoded[..]);
-			outbound
-		},
-	}
+            let encoded = VersionedXcm::<()>::from(message).encode();
+            outbound.extend_from_slice(&encoded[..]);
+            outbound
+        },
+    }
 }
 
 pub fn fake_message_hash<T>(message: &Xcm<T>) -> XcmHash {
-	message.using_encoded(blake2_256)
+    message.using_encoded(blake2_256)
 }
 
 /// The macro is implementing upward message passing(UMP) for the provided relay
@@ -171,7 +171,7 @@ macro_rules! decl_test_relay_chain {
 /// ```
 #[macro_export]
 macro_rules! decl_test_parachain {
-	(
+    (
 		pub struct $name:ident {
 			Runtime = $runtime:path,
 			XcmpMessageHandler = $xcmp_message_handler:path,
@@ -179,89 +179,89 @@ macro_rules! decl_test_parachain {
 			new_ext = $new_ext:expr,
 		}
 	) => {
-		pub struct $name;
+        pub struct $name;
 
-		$crate::__impl_ext!($name, $new_ext);
+        $crate::__impl_ext!($name, $new_ext);
 
-		impl $crate::XcmpMessageHandlerT for $name {
-			fn handle_xcmp_messages<
-				'a,
-				I: Iterator<Item = ($crate::ParaId, $crate::RelayBlockNumber, &'a [u8])>,
-			>(
-				iter: I,
-				max_weight: $crate::Weight,
-			) -> $crate::Weight {
-				use $crate::{TestExt, XcmpMessageHandlerT};
+        impl $crate::XcmpMessageHandlerT for $name {
+            fn handle_xcmp_messages<
+                'a,
+                I: Iterator<Item = ($crate::ParaId, $crate::RelayBlockNumber, &'a [u8])>,
+            >(
+                iter: I,
+                max_weight: $crate::Weight,
+            ) -> $crate::Weight {
+                use $crate::{TestExt, XcmpMessageHandlerT};
 
-				$name::execute_with(|| {
-					<$xcmp_message_handler>::handle_xcmp_messages(iter, max_weight)
-				})
-			}
-		}
+                $name::execute_with(|| {
+                    <$xcmp_message_handler>::handle_xcmp_messages(iter, max_weight)
+                })
+            }
+        }
 
-		impl $crate::DmpMessageHandlerT for $name {
-			fn handle_dmp_messages(
-				iter: impl Iterator<Item = ($crate::RelayBlockNumber, Vec<u8>)>,
-				max_weight: $crate::Weight,
-			) -> $crate::Weight {
-				use $crate::{DmpMessageHandlerT, TestExt};
+        impl $crate::DmpMessageHandlerT for $name {
+            fn handle_dmp_messages(
+                iter: impl Iterator<Item = ($crate::RelayBlockNumber, Vec<u8>)>,
+                max_weight: $crate::Weight,
+            ) -> $crate::Weight {
+                use $crate::{DmpMessageHandlerT, TestExt};
 
-				$name::execute_with(|| {
-					<$dmp_message_handler>::handle_dmp_messages(iter, max_weight)
-				})
-			}
-		}
-	};
+                $name::execute_with(|| {
+                    <$dmp_message_handler>::handle_dmp_messages(iter, max_weight)
+                })
+            }
+        }
+    };
 }
 
 /// Implements the `TestExt` trait for a specified struct.
 #[macro_export]
 macro_rules! __impl_ext {
-	// entry point: generate ext name
-	($name:ident, $new_ext:expr) => {
-		$crate::paste::paste! {
-			$crate::__impl_ext!(@impl $name, $new_ext, [<EXT_ $name:upper>]);
-		}
-	};
-	// impl
-	(@impl $name:ident, $new_ext:expr, $ext_name:ident) => {
-		thread_local! {
-			pub static $ext_name: $crate::RefCell<$crate::TestExternalities>
-				= $crate::RefCell::new($new_ext);
-		}
+    // entry point: generate ext name
+    ($name:ident, $new_ext:expr) => {
+        $crate::paste::paste! {
+            $crate::__impl_ext!(@impl $name, $new_ext, [<EXT_ $name:upper>]);
+        }
+    };
+    // impl
+    (@impl $name:ident, $new_ext:expr, $ext_name:ident) => {
+        thread_local! {
+            pub static $ext_name: $crate::RefCell<$crate::TestExternalities>
+                = $crate::RefCell::new($new_ext);
+        }
 
-		impl $crate::TestExt for $name {
-			fn new_ext() -> $crate::TestExternalities {
-				$new_ext
-			}
+        impl $crate::TestExt for $name {
+            fn new_ext() -> $crate::TestExternalities {
+                $new_ext
+            }
 
-			fn reset_ext() {
-				$ext_name.with(|v| *v.borrow_mut() = $new_ext);
-			}
+            fn reset_ext() {
+                $ext_name.with(|v| *v.borrow_mut() = $new_ext);
+            }
 
-			fn execute_without_dispatch<R>(execute: impl FnOnce() -> R) -> R {
-				$ext_name.with(|v| v.borrow_mut().execute_with(execute))
-			}
+            fn execute_without_dispatch<R>(execute: impl FnOnce() -> R) -> R {
+                $ext_name.with(|v| v.borrow_mut().execute_with(execute))
+            }
 
-			fn dispatch_xcm_buses() {
-				while exists_messages_in_any_bus() {
-					if let Err(xcm_error) = process_relay_messages() {
-						panic!("Relay chain XCM execution failure: {:?}", xcm_error);
-					}
-					if let Err(xcm_error) = process_para_messages() {
-						panic!("Parachain XCM execution failure: {:?}", xcm_error);
-					}
-				}
-			}
-		}
-	};
+            fn dispatch_xcm_buses() {
+                while exists_messages_in_any_bus() {
+                    if let Err(xcm_error) = process_relay_messages() {
+                        panic!("Relay chain XCM execution failure: {:?}", xcm_error);
+                    }
+                    if let Err(xcm_error) = process_para_messages() {
+                        panic!("Parachain XCM execution failure: {:?}", xcm_error);
+                    }
+                }
+            }
+        }
+    };
 }
 
 thread_local! {
-	pub static PARA_MESSAGE_BUS: RefCell<VecDeque<(ParaId, MultiLocation, Xcm<()>)>>
-		= RefCell::new(VecDeque::new());
-	pub static RELAY_MESSAGE_BUS: RefCell<VecDeque<(MultiLocation, Xcm<()>)>>
-		= RefCell::new(VecDeque::new());
+    pub static PARA_MESSAGE_BUS: RefCell<VecDeque<(ParaId, MultiLocation, Xcm<()>)>>
+        = RefCell::new(VecDeque::new());
+    pub static RELAY_MESSAGE_BUS: RefCell<VecDeque<(MultiLocation, Xcm<()>)>>
+        = RefCell::new(VecDeque::new());
 }
 
 /// Declares a test network that consists of a relay chain and multiple

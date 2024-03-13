@@ -23,18 +23,18 @@ use parity_scale_codec::Error as DecodingError;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	// Incoming request stream exhausted. Should only happen on shutdown.
-	#[fatal]
-	#[error("Incoming request channel got closed.")]
-	RequestChannelExhausted,
+    // Incoming request stream exhausted. Should only happen on shutdown.
+    #[fatal]
+    #[error("Incoming request channel got closed.")]
+    RequestChannelExhausted,
 
-	/// Decoding failed, we were able to change the peer's reputation accordingly.
-	#[error("Decoding request failed for peer {0}.")]
-	DecodingError(PeerId, #[source] DecodingError),
+    /// Decoding failed, we were able to change the peer's reputation accordingly.
+    #[error("Decoding request failed for peer {0}.")]
+    DecodingError(PeerId, #[source] DecodingError),
 
-	/// Decoding failed, but sending reputation change failed.
-	#[error("Decoding request failed for peer {0}, and changing reputation failed.")]
-	DecodingErrorNoReputationChange(PeerId, #[source] DecodingError),
+    /// Decoding failed, but sending reputation change failed.
+    #[error("Decoding request failed for peer {0}, and changing reputation failed.")]
+    DecodingErrorNoReputationChange(PeerId, #[source] DecodingError),
 }
 
 /// General result based on above `Error`.

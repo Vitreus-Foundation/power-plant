@@ -23,9 +23,9 @@
 use parity_scale_codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
-	generic,
-	traits::{IdentifyAccount, Verify},
-	MultiSignature,
+    generic,
+    traits::{IdentifyAccount, Verify},
+    MultiSignature,
 };
 
 pub use sp_runtime::traits::{BlakeTwo256, Hash as HashT};
@@ -68,23 +68,23 @@ pub struct CandidateHash(pub Hash);
 
 #[cfg(feature = "std")]
 impl std::ops::Deref for CandidateHash {
-	type Target = Hash;
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+    type Target = Hash;
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 #[cfg(feature = "std")]
 impl std::fmt::Display for CandidateHash {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		self.0.fmt(f)
-	}
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 impl sp_std::fmt::Debug for CandidateHash {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		write!(f, "{:?}", self.0)
-	}
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
 }
 
 /// Index of a transaction in the relay chain. 32-bit should be plenty.
@@ -125,33 +125,33 @@ pub type DownwardMessage = sp_std::vec::Vec<u8>;
 /// the message was sent.
 #[derive(Encode, Decode, Clone, sp_runtime::RuntimeDebug, PartialEq, TypeInfo)]
 pub struct InboundDownwardMessage<BlockNumber = crate::BlockNumber> {
-	/// The block number at which these messages were put into the downward message queue.
-	pub sent_at: BlockNumber,
-	/// The actual downward message to processes.
-	pub msg: DownwardMessage,
+    /// The block number at which these messages were put into the downward message queue.
+    pub sent_at: BlockNumber,
+    /// The actual downward message to processes.
+    pub msg: DownwardMessage,
 }
 
 /// An HRMP message seen from the perspective of a recipient.
 #[derive(Encode, Decode, Clone, sp_runtime::RuntimeDebug, PartialEq, TypeInfo)]
 pub struct InboundHrmpMessage<BlockNumber = crate::BlockNumber> {
-	/// The block number at which this message was sent.
-	/// Specifically, it is the block number at which the candidate that sends this message was
-	/// enacted.
-	pub sent_at: BlockNumber,
-	/// The message payload.
-	pub data: sp_std::vec::Vec<u8>,
+    /// The block number at which this message was sent.
+    /// Specifically, it is the block number at which the candidate that sends this message was
+    /// enacted.
+    pub sent_at: BlockNumber,
+    /// The message payload.
+    pub data: sp_std::vec::Vec<u8>,
 }
 
 /// An HRMP message seen from the perspective of a sender.
 #[derive(Encode, Decode, Clone, sp_runtime::RuntimeDebug, PartialEq, Eq, Hash, TypeInfo)]
 pub struct OutboundHrmpMessage<Id> {
-	/// The para that will get this message in its downward message queue.
-	pub recipient: Id,
-	/// The message payload.
-	pub data: sp_std::vec::Vec<u8>,
+    /// The para that will get this message in its downward message queue.
+    pub recipient: Id,
+    /// The message payload.
+    pub data: sp_std::vec::Vec<u8>,
 }
 
 /// `V2` primitives.
 pub mod v2 {
-	pub use super::*;
+    pub use super::*;
 }

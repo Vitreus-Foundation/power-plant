@@ -15,11 +15,11 @@
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
 use polkadot_node_subsystem_util::{
-	metrics,
-	metrics::{
-		prometheus,
-		prometheus::{Counter, CounterVec, Opts, PrometheusError, Registry, U64},
-	},
+    metrics,
+    metrics::{
+        prometheus,
+        prometheus::{Counter, CounterVec, Opts, PrometheusError, Registry, U64},
+    },
 };
 
 /// Label for success counters.
@@ -37,72 +37,72 @@ pub struct Metrics(Option<MetricsInner>);
 
 #[derive(Clone)]
 struct MetricsInner {
-	/// Number of chunks fetched.
-	///
-	/// Note: The failed count gets incremented, when we were not able to fetch the chunk at all.
-	/// For times, where we failed downloading, but succeeded on the next try (with different
-	/// backers), see `retries`.
-	fetched_chunks: CounterVec<U64>,
+    /// Number of chunks fetched.
+    ///
+    /// Note: The failed count gets incremented, when we were not able to fetch the chunk at all.
+    /// For times, where we failed downloading, but succeeded on the next try (with different
+    /// backers), see `retries`.
+    fetched_chunks: CounterVec<U64>,
 
-	/// Number of chunks served.
-	served_chunks: CounterVec<U64>,
+    /// Number of chunks served.
+    served_chunks: CounterVec<U64>,
 
-	/// Number of received fetch PoV responses.
-	fetched_povs: CounterVec<U64>,
+    /// Number of received fetch PoV responses.
+    fetched_povs: CounterVec<U64>,
 
-	/// Number of PoVs served.
-	served_povs: CounterVec<U64>,
+    /// Number of PoVs served.
+    served_povs: CounterVec<U64>,
 
-	/// Number of times our first set of validators did not provide the needed chunk and we had to
-	/// query further validators.
-	retries: Counter<U64>,
+    /// Number of times our first set of validators did not provide the needed chunk and we had to
+    /// query further validators.
+    retries: Counter<U64>,
 }
 
 impl Metrics {
-	/// Create new dummy metrics, not reporting anything.
-	pub fn new_dummy() -> Self {
-		Metrics(None)
-	}
+    /// Create new dummy metrics, not reporting anything.
+    pub fn new_dummy() -> Self {
+        Metrics(None)
+    }
 
-	/// Increment counter on fetched labels.
-	pub fn on_fetch(&self, label: &'static str) {
-		if let Some(metrics) = &self.0 {
-			metrics.fetched_chunks.with_label_values(&[label]).inc()
-		}
-	}
+    /// Increment counter on fetched labels.
+    pub fn on_fetch(&self, label: &'static str) {
+        if let Some(metrics) = &self.0 {
+            metrics.fetched_chunks.with_label_values(&[label]).inc()
+        }
+    }
 
-	/// Increment counter on served chunks.
-	pub fn on_served_chunk(&self, label: &'static str) {
-		if let Some(metrics) = &self.0 {
-			metrics.served_chunks.with_label_values(&[label]).inc()
-		}
-	}
+    /// Increment counter on served chunks.
+    pub fn on_served_chunk(&self, label: &'static str) {
+        if let Some(metrics) = &self.0 {
+            metrics.served_chunks.with_label_values(&[label]).inc()
+        }
+    }
 
-	/// Increment counter on fetched PoVs.
-	pub fn on_fetched_pov(&self, label: &'static str) {
-		if let Some(metrics) = &self.0 {
-			metrics.fetched_povs.with_label_values(&[label]).inc()
-		}
-	}
+    /// Increment counter on fetched PoVs.
+    pub fn on_fetched_pov(&self, label: &'static str) {
+        if let Some(metrics) = &self.0 {
+            metrics.fetched_povs.with_label_values(&[label]).inc()
+        }
+    }
 
-	/// Increment counter on served PoVs.
-	pub fn on_served_pov(&self, label: &'static str) {
-		if let Some(metrics) = &self.0 {
-			metrics.served_povs.with_label_values(&[label]).inc()
-		}
-	}
+    /// Increment counter on served PoVs.
+    pub fn on_served_pov(&self, label: &'static str) {
+        if let Some(metrics) = &self.0 {
+            metrics.served_povs.with_label_values(&[label]).inc()
+        }
+    }
 
-	/// Increment retry counter.
-	pub fn on_retry(&self) {
-		if let Some(metrics) = &self.0 {
-			metrics.retries.inc()
-		}
-	}
+    /// Increment retry counter.
+    pub fn on_retry(&self) {
+        if let Some(metrics) = &self.0 {
+            metrics.retries.inc()
+        }
+    }
 }
 
 impl metrics::Metrics for Metrics {
-	fn try_register(registry: &Registry) -> Result<Self, PrometheusError> {
-		let metrics = MetricsInner {
+    fn try_register(registry: &Registry) -> Result<Self, PrometheusError> {
+        let metrics = MetricsInner {
 			fetched_chunks: prometheus::register(
 				CounterVec::new(
 					Opts::new(
@@ -151,6 +151,6 @@ impl metrics::Metrics for Metrics {
 				registry,
 			)?,
 		};
-		Ok(Metrics(Some(metrics)))
-	}
+        Ok(Metrics(Some(metrics)))
+    }
 }

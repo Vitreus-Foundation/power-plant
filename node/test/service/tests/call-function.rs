@@ -16,7 +16,7 @@
 
 use polkadot_test_service::*;
 use sp_core::Pair;
-use sp_keyring::Sr25519Keyring::{Alice};
+use sp_keyring::Sr25519Keyring::Alice;
 
 // TODO: fix "bad signature"
 #[substrate_test_utils::test(flavor = "multi_thread")]
@@ -27,12 +27,13 @@ async fn call_function_actually_work() {
 
     let alice = run_validator_node(alice_config, None);
 
-    let function =
-		vitreus_power_plant_runtime::RuntimeCall::Balances(pallet_balances::Call::transfer_allow_death {
-			dest: test_accounts::charlie().public().into(),
+    let function = vitreus_power_plant_runtime::RuntimeCall::Balances(
+        pallet_balances::Call::transfer_allow_death {
+            dest: test_accounts::charlie().public().into(),
             value: 1,
-        });
-	let output = alice.send_extrinsic(function, test_accounts::bob()).await.unwrap();
+        },
+    );
+    let output = alice.send_extrinsic(function, test_accounts::bob()).await.unwrap();
 
     let res = output.result;
     let json = serde_json::from_str::<serde_json::Value>(res.as_str()).expect("valid JSON");

@@ -30,40 +30,40 @@ use xcm::prelude::*;
 /// last element.
 pub struct WithUniqueTopic<Inner>(PhantomData<Inner>);
 impl<Inner: SendXcm> SendXcm for WithUniqueTopic<Inner> {
-	type Ticket = (Inner::Ticket, [u8; 32]);
+    type Ticket = (Inner::Ticket, [u8; 32]);
 
-	fn validate(
-		destination: &mut Option<MultiLocation>,
-		message: &mut Option<Xcm<()>>,
-	) -> SendResult<Self::Ticket> {
-		let mut message = message.take().ok_or(SendError::MissingArgument)?;
-		let unique_id = if let Some(SetTopic(id)) = message.last() {
-			*id
-		} else {
-			let unique_id = unique(&message);
-			message.0.push(SetTopic(unique_id));
-			unique_id
-		};
-		let (ticket, assets) = Inner::validate(destination, &mut Some(message))
-			.map_err(|_| SendError::NotApplicable)?;
-		Ok(((ticket, unique_id), assets))
-	}
+    fn validate(
+        destination: &mut Option<MultiLocation>,
+        message: &mut Option<Xcm<()>>,
+    ) -> SendResult<Self::Ticket> {
+        let mut message = message.take().ok_or(SendError::MissingArgument)?;
+        let unique_id = if let Some(SetTopic(id)) = message.last() {
+            *id
+        } else {
+            let unique_id = unique(&message);
+            message.0.push(SetTopic(unique_id));
+            unique_id
+        };
+        let (ticket, assets) = Inner::validate(destination, &mut Some(message))
+            .map_err(|_| SendError::NotApplicable)?;
+        Ok(((ticket, unique_id), assets))
+    }
 
-	fn deliver(ticket: Self::Ticket) -> Result<XcmHash, SendError> {
-		let (ticket, unique_id) = ticket;
-		Inner::deliver(ticket)?;
-		Ok(unique_id)
-	}
+    fn deliver(ticket: Self::Ticket) -> Result<XcmHash, SendError> {
+        let (ticket, unique_id) = ticket;
+        Inner::deliver(ticket)?;
+        Ok(unique_id)
+    }
 }
 
 pub trait SourceTopic {
-	fn source_topic(entropy: impl Encode) -> XcmHash;
+    fn source_topic(entropy: impl Encode) -> XcmHash;
 }
 
 impl SourceTopic for () {
-	fn source_topic(_: impl Encode) -> XcmHash {
-		[0u8; 32]
-	}
+    fn source_topic(_: impl Encode) -> XcmHash {
+        [0u8; 32]
+    }
 }
 
 /// Wrapper router which, if the message does not already end with a `SetTopic` instruction,
@@ -75,28 +75,28 @@ impl SourceTopic for () {
 /// last element.
 pub struct WithTopicSource<Inner, TopicSource>(PhantomData<(Inner, TopicSource)>);
 impl<Inner: SendXcm, TopicSource: SourceTopic> SendXcm for WithTopicSource<Inner, TopicSource> {
-	type Ticket = (Inner::Ticket, [u8; 32]);
+    type Ticket = (Inner::Ticket, [u8; 32]);
 
-	fn validate(
-		destination: &mut Option<MultiLocation>,
-		message: &mut Option<Xcm<()>>,
-	) -> SendResult<Self::Ticket> {
-		let mut message = message.take().ok_or(SendError::MissingArgument)?;
-		let unique_id = if let Some(SetTopic(id)) = message.last() {
-			*id
-		} else {
-			let unique_id = TopicSource::source_topic(&message);
-			message.0.push(SetTopic(unique_id));
-			unique_id
-		};
-		let (ticket, assets) = Inner::validate(destination, &mut Some(message))
-			.map_err(|_| SendError::NotApplicable)?;
-		Ok(((ticket, unique_id), assets))
-	}
+    fn validate(
+        destination: &mut Option<MultiLocation>,
+        message: &mut Option<Xcm<()>>,
+    ) -> SendResult<Self::Ticket> {
+        let mut message = message.take().ok_or(SendError::MissingArgument)?;
+        let unique_id = if let Some(SetTopic(id)) = message.last() {
+            *id
+        } else {
+            let unique_id = TopicSource::source_topic(&message);
+            message.0.push(SetTopic(unique_id));
+            unique_id
+        };
+        let (ticket, assets) = Inner::validate(destination, &mut Some(message))
+            .map_err(|_| SendError::NotApplicable)?;
+        Ok(((ticket, unique_id), assets))
+    }
 
-	fn deliver(ticket: Self::Ticket) -> Result<XcmHash, SendError> {
-		let (ticket, unique_id) = ticket;
-		Inner::deliver(ticket)?;
-		Ok(unique_id)
-	}
+    fn deliver(ticket: Self::Ticket) -> Result<XcmHash, SendError> {
+        let (ticket, unique_id) = ticket;
+        Inner::deliver(ticket)?;
+        Ok(unique_id)
+    }
 }

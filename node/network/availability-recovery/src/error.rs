@@ -22,26 +22,26 @@ use thiserror::Error;
 /// Error type used by the Availability Recovery subsystem.
 #[derive(Debug, Error)]
 pub enum Error {
-	#[error(transparent)]
-	Subsystem(#[from] polkadot_node_subsystem::SubsystemError),
+    #[error(transparent)]
+    Subsystem(#[from] polkadot_node_subsystem::SubsystemError),
 
-	#[error("failed to query full data from store")]
-	CanceledQueryFullData(#[source] oneshot::Canceled),
+    #[error("failed to query full data from store")]
+    CanceledQueryFullData(#[source] oneshot::Canceled),
 
-	#[error("failed to query session info")]
-	CanceledSessionInfo(#[source] oneshot::Canceled),
+    #[error("failed to query session info")]
+    CanceledSessionInfo(#[source] oneshot::Canceled),
 
-	#[error("failed to send response")]
-	CanceledResponseSender,
+    #[error("failed to send response")]
+    CanceledResponseSender,
 
-	#[error(transparent)]
-	Runtime(#[from] polkadot_node_subsystem::errors::RuntimeApiError),
+    #[error(transparent)]
+    Runtime(#[from] polkadot_node_subsystem::errors::RuntimeApiError),
 
-	#[error(transparent)]
-	Erasure(#[from] polkadot_erasure_coding::Error),
+    #[error(transparent)]
+    Erasure(#[from] polkadot_erasure_coding::Error),
 
-	#[error(transparent)]
-	Util(#[from] polkadot_node_subsystem_util::Error),
+    #[error(transparent)]
+    Util(#[from] polkadot_node_subsystem_util::Error),
 }
 
 pub type Result<T> = std::result::Result<T, Error>;

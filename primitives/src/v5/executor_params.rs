@@ -31,28 +31,28 @@ use sp_std::{ops::Deref, time::Duration, vec, vec::Vec};
 /// The different executor parameters for changing the execution environment semantics.
 #[derive(Clone, Debug, Encode, Decode, PartialEq, Eq, TypeInfo, Serialize, Deserialize)]
 pub enum ExecutorParam {
-	/// Maximum number of memory pages (64KiB bytes per page) the executor can allocate.
-	#[codec(index = 1)]
-	MaxMemoryPages(u32),
-	/// Wasm logical stack size limit (max. number of Wasm values on stack)
-	#[codec(index = 2)]
-	StackLogicalMax(u32),
-	/// Executor machine stack size limit, in bytes
-	#[codec(index = 3)]
-	StackNativeMax(u32),
-	/// Max. amount of memory the preparation worker is allowed to use during
-	/// pre-checking, in bytes
-	#[codec(index = 4)]
-	PrecheckingMaxMemory(u64),
-	/// PVF preparation timeouts, millisec
-	#[codec(index = 5)]
-	PvfPrepTimeout(PvfPrepTimeoutKind, u64),
-	/// PVF execution timeouts, millisec
-	#[codec(index = 6)]
-	PvfExecTimeout(PvfExecTimeoutKind, u64),
-	/// Enables WASM bulk memory proposal
-	#[codec(index = 7)]
-	WasmExtBulkMemory,
+    /// Maximum number of memory pages (64KiB bytes per page) the executor can allocate.
+    #[codec(index = 1)]
+    MaxMemoryPages(u32),
+    /// Wasm logical stack size limit (max. number of Wasm values on stack)
+    #[codec(index = 2)]
+    StackLogicalMax(u32),
+    /// Executor machine stack size limit, in bytes
+    #[codec(index = 3)]
+    StackNativeMax(u32),
+    /// Max. amount of memory the preparation worker is allowed to use during
+    /// pre-checking, in bytes
+    #[codec(index = 4)]
+    PrecheckingMaxMemory(u64),
+    /// PVF preparation timeouts, millisec
+    #[codec(index = 5)]
+    PvfPrepTimeout(PvfPrepTimeoutKind, u64),
+    /// PVF execution timeouts, millisec
+    #[codec(index = 6)]
+    PvfExecTimeout(PvfExecTimeoutKind, u64),
+    /// Enables WASM bulk memory proposal
+    #[codec(index = 7)]
+    WasmExtBulkMemory,
 }
 
 /// Unit type wrapper around [`type@Hash`] that represents an execution parameter set hash.
@@ -62,28 +62,28 @@ pub enum ExecutorParam {
 pub struct ExecutorParamsHash(Hash);
 
 impl ExecutorParamsHash {
-	/// Create a new executor parameter hash from `H256` hash
-	pub fn from_hash(hash: Hash) -> Self {
-		Self(hash)
-	}
+    /// Create a new executor parameter hash from `H256` hash
+    pub fn from_hash(hash: Hash) -> Self {
+        Self(hash)
+    }
 }
 
 impl sp_std::fmt::Display for ExecutorParamsHash {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		self.0.fmt(f)
-	}
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+        self.0.fmt(f)
+    }
 }
 
 impl sp_std::fmt::Debug for ExecutorParamsHash {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		write!(f, "{:?}", self.0)
-	}
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+        write!(f, "{:?}", self.0)
+    }
 }
 
 impl sp_std::fmt::LowerHex for ExecutorParamsHash {
-	fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
-		sp_std::fmt::LowerHex::fmt(&self.0, f)
-	}
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+        sp_std::fmt::LowerHex::fmt(&self.0, f)
+    }
 }
 
 /// # Deterministically serialized execution environment semantics
@@ -97,57 +97,57 @@ impl sp_std::fmt::LowerHex for ExecutorParamsHash {
 pub struct ExecutorParams(Vec<ExecutorParam>);
 
 impl ExecutorParams {
-	/// Creates a new, empty executor parameter set
-	pub fn new() -> Self {
-		ExecutorParams(vec![])
-	}
+    /// Creates a new, empty executor parameter set
+    pub fn new() -> Self {
+        ExecutorParams(vec![])
+    }
 
-	/// Returns hash of the set of execution environment parameters
-	pub fn hash(&self) -> ExecutorParamsHash {
-		ExecutorParamsHash(BlakeTwo256::hash(&self.encode()))
-	}
+    /// Returns hash of the set of execution environment parameters
+    pub fn hash(&self) -> ExecutorParamsHash {
+        ExecutorParamsHash(BlakeTwo256::hash(&self.encode()))
+    }
 
-	/// Returns a PVF preparation timeout, if any
-	pub fn pvf_prep_timeout(&self, kind: PvfPrepTimeoutKind) -> Option<Duration> {
-		for param in &self.0 {
-			if let ExecutorParam::PvfPrepTimeout(k, timeout) = param {
-				if kind == *k {
-					return Some(Duration::from_millis(*timeout))
-				}
-			}
-		}
-		None
-	}
+    /// Returns a PVF preparation timeout, if any
+    pub fn pvf_prep_timeout(&self, kind: PvfPrepTimeoutKind) -> Option<Duration> {
+        for param in &self.0 {
+            if let ExecutorParam::PvfPrepTimeout(k, timeout) = param {
+                if kind == *k {
+                    return Some(Duration::from_millis(*timeout));
+                }
+            }
+        }
+        None
+    }
 
-	/// Returns a PVF execution timeout, if any
-	pub fn pvf_exec_timeout(&self, kind: PvfExecTimeoutKind) -> Option<Duration> {
-		for param in &self.0 {
-			if let ExecutorParam::PvfExecTimeout(k, timeout) = param {
-				if kind == *k {
-					return Some(Duration::from_millis(*timeout))
-				}
-			}
-		}
-		None
-	}
+    /// Returns a PVF execution timeout, if any
+    pub fn pvf_exec_timeout(&self, kind: PvfExecTimeoutKind) -> Option<Duration> {
+        for param in &self.0 {
+            if let ExecutorParam::PvfExecTimeout(k, timeout) = param {
+                if kind == *k {
+                    return Some(Duration::from_millis(*timeout));
+                }
+            }
+        }
+        None
+    }
 }
 
 impl Deref for ExecutorParams {
-	type Target = Vec<ExecutorParam>;
+    type Target = Vec<ExecutorParam>;
 
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
 }
 
 impl From<&[ExecutorParam]> for ExecutorParams {
-	fn from(arr: &[ExecutorParam]) -> Self {
-		ExecutorParams(arr.to_vec())
-	}
+    fn from(arr: &[ExecutorParam]) -> Self {
+        ExecutorParams(arr.to_vec())
+    }
 }
 
 impl Default for ExecutorParams {
-	fn default() -> Self {
-		ExecutorParams(vec![])
-	}
+    fn default() -> Self {
+        ExecutorParams(vec![])
+    }
 }

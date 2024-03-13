@@ -25,13 +25,13 @@ use xcm::latest::prelude::*;
 /// Requires that the prefixed origin AccountId32 matches the target AccountId32.
 pub struct AliasForeignAccountId32<Prefix>(PhantomData<Prefix>);
 impl<Prefix: Contains<MultiLocation>> ContainsPair<MultiLocation, MultiLocation>
-	for AliasForeignAccountId32<Prefix>
+    for AliasForeignAccountId32<Prefix>
 {
-	fn contains(origin: &MultiLocation, target: &MultiLocation) -> bool {
-		if let (prefix, Some(account_id @ AccountId32 { .. })) = origin.split_last_interior() {
-			return Prefix::contains(&prefix) &&
-				*target == MultiLocation { parents: 0, interior: X1(account_id) }
-		}
-		false
-	}
+    fn contains(origin: &MultiLocation, target: &MultiLocation) -> bool {
+        if let (prefix, Some(account_id @ AccountId32 { .. })) = origin.split_last_interior() {
+            return Prefix::contains(&prefix)
+                && *target == MultiLocation { parents: 0, interior: X1(account_id) };
+        }
+        false
+    }
 }

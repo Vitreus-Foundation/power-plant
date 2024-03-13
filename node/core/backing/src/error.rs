@@ -18,8 +18,8 @@ use fatality::Nested;
 use futures::channel::{mpsc, oneshot};
 
 use polkadot_node_subsystem::{
-	messages::{StoreAvailableDataError, ValidationFailed},
-	SubsystemError,
+    messages::{StoreAvailableDataError, ValidationFailed},
+    SubsystemError,
 };
 use polkadot_node_subsystem_util::Error as UtilError;
 use polkadot_primitives::BackedCandidate;
@@ -33,53 +33,53 @@ pub type FatalResult<T> = std::result::Result<T, FatalError>;
 #[allow(missing_docs)]
 #[fatality::fatality(splitable)]
 pub enum Error {
-	#[error("Candidate is not found")]
-	CandidateNotFound,
+    #[error("Candidate is not found")]
+    CandidateNotFound,
 
-	#[error("Signature is invalid")]
-	InvalidSignature,
+    #[error("Signature is invalid")]
+    InvalidSignature,
 
-	#[error("Failed to send candidates {0:?}")]
-	Send(Vec<BackedCandidate>),
+    #[error("Failed to send candidates {0:?}")]
+    Send(Vec<BackedCandidate>),
 
-	#[error("FetchPoV failed")]
-	FetchPoV,
+    #[error("FetchPoV failed")]
+    FetchPoV,
 
-	#[fatal]
-	#[error("Failed to spawn background task")]
-	FailedToSpawnBackgroundTask,
+    #[fatal]
+    #[error("Failed to spawn background task")]
+    FailedToSpawnBackgroundTask,
 
-	#[error("ValidateFromChainState channel closed before receipt")]
-	ValidateFromChainState(#[source] oneshot::Canceled),
+    #[error("ValidateFromChainState channel closed before receipt")]
+    ValidateFromChainState(#[source] oneshot::Canceled),
 
-	#[error("StoreAvailableData channel closed before receipt")]
-	StoreAvailableDataChannel(#[source] oneshot::Canceled),
+    #[error("StoreAvailableData channel closed before receipt")]
+    StoreAvailableDataChannel(#[source] oneshot::Canceled),
 
-	#[error("a channel was closed before receipt in try_join!")]
-	JoinMultiple(#[source] oneshot::Canceled),
+    #[error("a channel was closed before receipt in try_join!")]
+    JoinMultiple(#[source] oneshot::Canceled),
 
-	#[error("Obtaining erasure chunks failed")]
-	ObtainErasureChunks(#[from] erasure_coding::Error),
+    #[error("Obtaining erasure chunks failed")]
+    ObtainErasureChunks(#[from] erasure_coding::Error),
 
-	#[error(transparent)]
-	ValidationFailed(#[from] ValidationFailed),
+    #[error(transparent)]
+    ValidationFailed(#[from] ValidationFailed),
 
-	#[fatal]
-	#[error(transparent)]
-	BackgroundValidationMpsc(#[from] mpsc::SendError),
+    #[fatal]
+    #[error(transparent)]
+    BackgroundValidationMpsc(#[from] mpsc::SendError),
 
-	#[error(transparent)]
-	UtilError(#[from] UtilError),
+    #[error(transparent)]
+    UtilError(#[from] UtilError),
 
-	#[error(transparent)]
-	SubsystemError(#[from] SubsystemError),
+    #[error(transparent)]
+    SubsystemError(#[from] SubsystemError),
 
-	#[fatal]
-	#[error(transparent)]
-	OverseerExited(SubsystemError),
+    #[fatal]
+    #[error(transparent)]
+    OverseerExited(SubsystemError),
 
-	#[error("Availability store error")]
-	StoreAvailableData(#[source] StoreAvailableDataError),
+    #[error("Availability store error")]
+    StoreAvailableData(#[source] StoreAvailableDataError),
 }
 
 /// Utility for eating top level errors and log them.
@@ -87,18 +87,18 @@ pub enum Error {
 /// We basically always want to try and continue on error. This utility function is meant to
 /// consume top-level errors by simply logging them
 pub fn log_error(result: Result<()>) -> std::result::Result<(), FatalError> {
-	match result.into_nested()? {
-		Ok(()) => Ok(()),
-		Err(jfyi) => {
-			jfyi.log();
-			Ok(())
-		},
-	}
+    match result.into_nested()? {
+        Ok(()) => Ok(()),
+        Err(jfyi) => {
+            jfyi.log();
+            Ok(())
+        },
+    }
 }
 
 impl JfyiError {
-	/// Log a `JfyiError`.
-	pub fn log(self) {
-		gum::debug!(target: LOG_TARGET, error = ?self);
-	}
+    /// Log a `JfyiError`.
+    pub fn log(self) {
+        gum::debug!(target: LOG_TARGET, error = ?self);
+    }
 }

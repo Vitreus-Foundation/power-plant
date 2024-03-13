@@ -45,46 +45,46 @@ const ACTIVE_LEAVES_SMALLVEC_CAPACITY: usize = 8;
 /// The status of an activated leaf.
 #[derive(Clone, Debug, PartialEq)]
 pub enum LeafStatus {
-	/// A leaf is fresh when it's the first time the leaf has been encountered.
-	/// Most leaves should be fresh.
-	Fresh,
-	/// A leaf is stale when it's encountered for a subsequent time. This will happen
-	/// when the chain is reverted or the fork-choice rule abandons some chain.
-	Stale,
+    /// A leaf is fresh when it's the first time the leaf has been encountered.
+    /// Most leaves should be fresh.
+    Fresh,
+    /// A leaf is stale when it's encountered for a subsequent time. This will happen
+    /// when the chain is reverted or the fork-choice rule abandons some chain.
+    Stale,
 }
 
 impl LeafStatus {
-	/// Returns a `bool` indicating fresh status.
-	pub fn is_fresh(&self) -> bool {
-		match *self {
-			LeafStatus::Fresh => true,
-			LeafStatus::Stale => false,
-		}
-	}
+    /// Returns a `bool` indicating fresh status.
+    pub fn is_fresh(&self) -> bool {
+        match *self {
+            LeafStatus::Fresh => true,
+            LeafStatus::Stale => false,
+        }
+    }
 
-	/// Returns a `bool` indicating stale status.
-	pub fn is_stale(&self) -> bool {
-		match *self {
-			LeafStatus::Fresh => false,
-			LeafStatus::Stale => true,
-		}
-	}
+    /// Returns a `bool` indicating stale status.
+    pub fn is_stale(&self) -> bool {
+        match *self {
+            LeafStatus::Fresh => false,
+            LeafStatus::Stale => true,
+        }
+    }
 }
 
 /// Activated leaf.
 #[derive(Debug, Clone)]
 pub struct ActivatedLeaf {
-	/// The block hash.
-	pub hash: Hash,
-	/// The block number.
-	pub number: BlockNumber,
-	/// The status of the leaf.
-	pub status: LeafStatus,
-	/// An associated [`jaeger::Span`].
-	///
-	/// NOTE: Each span should only be kept active as long as the leaf is considered active and should be dropped
-	/// when the leaf is deactivated.
-	pub span: Arc<jaeger::Span>,
+    /// The block hash.
+    pub hash: Hash,
+    /// The block number.
+    pub number: BlockNumber,
+    /// The status of the leaf.
+    pub status: LeafStatus,
+    /// An associated [`jaeger::Span`].
+    ///
+    /// NOTE: Each span should only be kept active as long as the leaf is considered active and should be dropped
+    /// when the leaf is deactivated.
+    pub span: Arc<jaeger::Span>,
 }
 
 /// Changes in the set of active leaves: the parachain heads which we care to work on.
@@ -92,56 +92,56 @@ pub struct ActivatedLeaf {
 /// Note that the activated and deactivated fields indicate deltas, not complete sets.
 #[derive(Clone, Default)]
 pub struct ActiveLeavesUpdate {
-	/// New relay chain block of interest.
-	pub activated: Option<ActivatedLeaf>,
-	/// Relay chain block hashes no longer of interest.
-	pub deactivated: SmallVec<[Hash; ACTIVE_LEAVES_SMALLVEC_CAPACITY]>,
+    /// New relay chain block of interest.
+    pub activated: Option<ActivatedLeaf>,
+    /// Relay chain block hashes no longer of interest.
+    pub deactivated: SmallVec<[Hash; ACTIVE_LEAVES_SMALLVEC_CAPACITY]>,
 }
 
 impl ActiveLeavesUpdate {
-	/// Create a `ActiveLeavesUpdate` with a single activated hash
-	pub fn start_work(activated: ActivatedLeaf) -> Self {
-		Self { activated: Some(activated), ..Default::default() }
-	}
+    /// Create a `ActiveLeavesUpdate` with a single activated hash
+    pub fn start_work(activated: ActivatedLeaf) -> Self {
+        Self { activated: Some(activated), ..Default::default() }
+    }
 
-	/// Create a `ActiveLeavesUpdate` with a single deactivated hash
-	pub fn stop_work(hash: Hash) -> Self {
-		Self { deactivated: [hash][..].into(), ..Default::default() }
-	}
+    /// Create a `ActiveLeavesUpdate` with a single deactivated hash
+    pub fn stop_work(hash: Hash) -> Self {
+        Self { deactivated: [hash][..].into(), ..Default::default() }
+    }
 
-	/// Is this update empty and doesn't contain any information?
-	pub fn is_empty(&self) -> bool {
-		self.activated.is_none() && self.deactivated.is_empty()
-	}
+    /// Is this update empty and doesn't contain any information?
+    pub fn is_empty(&self) -> bool {
+        self.activated.is_none() && self.deactivated.is_empty()
+    }
 }
 
 impl PartialEq for ActiveLeavesUpdate {
-	/// Equality for `ActiveLeavesUpdate` doesn't imply bitwise equality.
-	///
-	/// Instead, it means equality when `activated` and `deactivated` are considered as sets.
-	fn eq(&self, other: &Self) -> bool {
-		self.activated.as_ref().map(|a| a.hash) == other.activated.as_ref().map(|a| a.hash) &&
-			self.deactivated.len() == other.deactivated.len() &&
-			self.deactivated.iter().all(|a| other.deactivated.contains(a))
-	}
+    /// Equality for `ActiveLeavesUpdate` doesn't imply bitwise equality.
+    ///
+    /// Instead, it means equality when `activated` and `deactivated` are considered as sets.
+    fn eq(&self, other: &Self) -> bool {
+        self.activated.as_ref().map(|a| a.hash) == other.activated.as_ref().map(|a| a.hash)
+            && self.deactivated.len() == other.deactivated.len()
+            && self.deactivated.iter().all(|a| other.deactivated.contains(a))
+    }
 }
 
 impl fmt::Debug for ActiveLeavesUpdate {
-	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		f.debug_struct("ActiveLeavesUpdate")
-			.field("activated", &self.activated)
-			.field("deactivated", &self.deactivated)
-			.finish()
-	}
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ActiveLeavesUpdate")
+            .field("activated", &self.activated)
+            .field("deactivated", &self.deactivated)
+            .finish()
+    }
 }
 
 /// Signals sent by an overseer to a subsystem.
 #[derive(PartialEq, Clone, Debug)]
 pub enum OverseerSignal {
-	/// Subsystems should adjust their jobs to start and stop work on appropriate block hashes.
-	ActiveLeaves(ActiveLeavesUpdate),
-	/// `Subsystem` is informed of a finalized block by its block hash and number.
-	BlockFinalized(Hash, BlockNumber),
-	/// Conclude the work of the `Overseer` and all `Subsystem`s.
-	Conclude,
+    /// Subsystems should adjust their jobs to start and stop work on appropriate block hashes.
+    ActiveLeaves(ActiveLeavesUpdate),
+    /// `Subsystem` is informed of a finalized block by its block hash and number.
+    BlockFinalized(Hash, BlockNumber),
+    /// Conclude the work of the `Overseer` and all `Subsystem`s.
+    Conclude,
 }

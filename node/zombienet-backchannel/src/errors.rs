@@ -19,21 +19,21 @@
 #[derive(Debug, thiserror::Error)]
 #[allow(missing_docs)]
 pub enum BackchannelError {
-	#[error("Error connecting websocket server")]
-	CantConnectToWS,
+    #[error("Error connecting websocket server")]
+    CantConnectToWS,
 
-	#[error("Backchannel not initialized yet")]
-	Uninitialized,
+    #[error("Backchannel not initialized yet")]
+    Uninitialized,
 
-	#[error("Backchannel already initialized")]
-	AlreadyInitialized,
+    #[error("Backchannel already initialized")]
+    AlreadyInitialized,
 
-	#[error("Error sending new value to backchannel")]
-	SendItemFail,
+    #[error("Error sending new value to backchannel")]
+    SendItemFail,
 
-	#[error("Invalid host for connection backchannel")]
-	InvalidHost,
+    #[error("Invalid host for connection backchannel")]
+    InvalidHost,
 
-	#[error("Invalid port for connection backchannel")]
-	InvalidPort,
+    #[error("Invalid port for connection backchannel")]
+    InvalidPort,
 }

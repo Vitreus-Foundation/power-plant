@@ -42,9 +42,9 @@ mod integration_tests;
 mod mock;
 
 use frame_support::{
-	parameter_types,
-	traits::{ConstU32, Currency, OneSessionHandler},
-	weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
+    parameter_types,
+    traits::{ConstU32, Currency, OneSessionHandler},
+    weights::{constants::WEIGHT_REF_TIME_PER_SECOND, Weight},
 };
 use frame_system::limits;
 use primitives::{AssignmentId, Balance, BlockNumber, ValidatorId};
@@ -64,7 +64,7 @@ pub use sp_runtime::BuildStorage;
 pub use impls::ToAuthor;
 
 pub type NegativeImbalance<T> = <pallet_balances::Pallet<T> as Currency<
-	<T as frame_system::Config>::AccountId,
+    <T as frame_system::Config>::AccountId,
 >>::NegativeImbalance;
 
 /// We assume that an on-initialize consumes 1% of the weight on average, hence a single extrinsic
@@ -76,38 +76,38 @@ pub const NORMAL_DISPATCH_RATIO: Perbill = Perbill::from_percent(75);
 /// We allow for 2 seconds of compute with a 6 second average block time.
 /// The storage proof size is not limited so far.
 pub const MAXIMUM_BLOCK_WEIGHT: Weight =
-	Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
+    Weight::from_parts(WEIGHT_REF_TIME_PER_SECOND.saturating_mul(2), u64::MAX);
 
 const_assert!(NORMAL_DISPATCH_RATIO.deconstruct() >= AVERAGE_ON_INITIALIZE_RATIO.deconstruct());
 
 // Common constants used in all runtimes.
 parameter_types! {
-	pub const BlockHashCount: BlockNumber = 4096;
-	/// The portion of the `NORMAL_DISPATCH_RATIO` that we adjust the fees with. Blocks filled less
-	/// than this will decrease the weight and more will increase.
-	pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
-	/// The adjustment variable of the runtime. Higher values will cause `TargetBlockFullness` to
-	/// change the fees more rapidly.
-	pub AdjustmentVariable: Multiplier = Multiplier::saturating_from_rational(75, 1000_000);
-	/// Minimum amount of the multiplier. This value cannot be too low. A test case should ensure
-	/// that combined with `AdjustmentVariable`, we can recover from the minimum.
-	/// See `multiplier_can_grow_from_zero`.
-	pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 10u128);
-	/// The maximum amount of the multiplier.
-	pub MaximumMultiplier: Multiplier = Bounded::max_value();
-	/// Maximum length of block. Up to 5MB.
-	pub BlockLength: limits::BlockLength =
-	limits::BlockLength::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
+    pub const BlockHashCount: BlockNumber = 4096;
+    /// The portion of the `NORMAL_DISPATCH_RATIO` that we adjust the fees with. Blocks filled less
+    /// than this will decrease the weight and more will increase.
+    pub const TargetBlockFullness: Perquintill = Perquintill::from_percent(25);
+    /// The adjustment variable of the runtime. Higher values will cause `TargetBlockFullness` to
+    /// change the fees more rapidly.
+    pub AdjustmentVariable: Multiplier = Multiplier::saturating_from_rational(75, 1000_000);
+    /// Minimum amount of the multiplier. This value cannot be too low. A test case should ensure
+    /// that combined with `AdjustmentVariable`, we can recover from the minimum.
+    /// See `multiplier_can_grow_from_zero`.
+    pub MinimumMultiplier: Multiplier = Multiplier::saturating_from_rational(1, 10u128);
+    /// The maximum amount of the multiplier.
+    pub MaximumMultiplier: Multiplier = Bounded::max_value();
+    /// Maximum length of block. Up to 5MB.
+    pub BlockLength: limits::BlockLength =
+    limits::BlockLength::max_with_normal_ratio(5 * 1024 * 1024, NORMAL_DISPATCH_RATIO);
 }
 
 /// Parameterized slow adjusting fee updated based on
 /// https://research.web3.foundation/Polkadot/overview/token-economics#2-slow-adjusting-mechanism
 pub type SlowAdjustingFeeUpdate<R> = TargetedFeeAdjustment<
-	R,
-	TargetBlockFullness,
-	AdjustmentVariable,
-	MinimumMultiplier,
-	MaximumMultiplier,
+    R,
+    TargetBlockFullness,
+    AdjustmentVariable,
+    MinimumMultiplier,
+    MaximumMultiplier,
 >;
 
 /// Implements the weight types for a runtime.
@@ -116,46 +116,46 @@ pub type SlowAdjustingFeeUpdate<R> = TargetedFeeAdjustment<
 /// runtime but are now runtime dependant.
 #[macro_export]
 macro_rules! impl_runtime_weights {
-	($runtime:ident) => {
-		use frame_support::{dispatch::DispatchClass, weights::Weight};
-		use frame_system::limits;
-		use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
-		pub use runtime_common::{
-			impl_elections_weights, AVERAGE_ON_INITIALIZE_RATIO, MAXIMUM_BLOCK_WEIGHT,
-			NORMAL_DISPATCH_RATIO,
-		};
-		use sp_runtime::{FixedPointNumber, Perquintill};
+    ($runtime:ident) => {
+        use frame_support::{dispatch::DispatchClass, weights::Weight};
+        use frame_system::limits;
+        use pallet_transaction_payment::{Multiplier, TargetedFeeAdjustment};
+        pub use runtime_common::{
+            impl_elections_weights, AVERAGE_ON_INITIALIZE_RATIO, MAXIMUM_BLOCK_WEIGHT,
+            NORMAL_DISPATCH_RATIO,
+        };
+        use sp_runtime::{FixedPointNumber, Perquintill};
 
-		// Implement the weight types of the elections module.
-		impl_elections_weights!($runtime);
+        // Implement the weight types of the elections module.
+        impl_elections_weights!($runtime);
 
-		// Expose the weight from the runtime constants module.
-		pub use $runtime::weights::{
-			BlockExecutionWeight, ExtrinsicBaseWeight, ParityDbWeight, RocksDbWeight,
-		};
+        // Expose the weight from the runtime constants module.
+        pub use $runtime::weights::{
+            BlockExecutionWeight, ExtrinsicBaseWeight, ParityDbWeight, RocksDbWeight,
+        };
 
-		parameter_types! {
-			/// Block weights base values and limits.
-			pub BlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
-				.base_block($runtime::weights::BlockExecutionWeight::get())
-				.for_class(DispatchClass::all(), |weights| {
-					weights.base_extrinsic = $runtime::weights::ExtrinsicBaseWeight::get();
-				})
-				.for_class(DispatchClass::Normal, |weights| {
-					weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT);
-				})
-				.for_class(DispatchClass::Operational, |weights| {
-					weights.max_total = Some(MAXIMUM_BLOCK_WEIGHT);
-					// Operational transactions have an extra reserved space, so that they
-					// are included even if block reached `MAXIMUM_BLOCK_WEIGHT`.
-					weights.reserved = Some(
-						MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT,
-					);
-				})
-				.avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
-				.build_or_panic();
-		}
-	};
+        parameter_types! {
+            /// Block weights base values and limits.
+            pub BlockWeights: limits::BlockWeights = limits::BlockWeights::builder()
+                .base_block($runtime::weights::BlockExecutionWeight::get())
+                .for_class(DispatchClass::all(), |weights| {
+                    weights.base_extrinsic = $runtime::weights::ExtrinsicBaseWeight::get();
+                })
+                .for_class(DispatchClass::Normal, |weights| {
+                    weights.max_total = Some(NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT);
+                })
+                .for_class(DispatchClass::Operational, |weights| {
+                    weights.max_total = Some(MAXIMUM_BLOCK_WEIGHT);
+                    // Operational transactions have an extra reserved space, so that they
+                    // are included even if block reached `MAXIMUM_BLOCK_WEIGHT`.
+                    weights.reserved = Some(
+                        MAXIMUM_BLOCK_WEIGHT - NORMAL_DISPATCH_RATIO * MAXIMUM_BLOCK_WEIGHT,
+                    );
+                })
+                .avg_block_initialization(AVERAGE_ON_INITIALIZE_RATIO)
+                .build_or_panic();
+        }
+    };
 }
 
 /// The type used for currency conversion.
@@ -168,82 +168,82 @@ static_assertions::assert_eq_size!(primitives::Balance, u128);
 /// keys.
 pub struct ParachainSessionKeyPlaceholder<T>(sp_std::marker::PhantomData<T>);
 impl<T> sp_runtime::BoundToRuntimeAppPublic for ParachainSessionKeyPlaceholder<T> {
-	type Public = ValidatorId;
+    type Public = ValidatorId;
 }
 
 impl<T: pallet_session::Config> OneSessionHandler<T::AccountId>
-	for ParachainSessionKeyPlaceholder<T>
+    for ParachainSessionKeyPlaceholder<T>
 {
-	type Key = ValidatorId;
+    type Key = ValidatorId;
 
-	fn on_genesis_session<'a, I: 'a>(_validators: I)
-	where
-		I: Iterator<Item = (&'a T::AccountId, ValidatorId)>,
-		T::AccountId: 'a,
-	{
-	}
+    fn on_genesis_session<'a, I: 'a>(_validators: I)
+    where
+        I: Iterator<Item = (&'a T::AccountId, ValidatorId)>,
+        T::AccountId: 'a,
+    {
+    }
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _v: I, _q: I)
-	where
-		I: Iterator<Item = (&'a T::AccountId, ValidatorId)>,
-		T::AccountId: 'a,
-	{
-	}
+    fn on_new_session<'a, I: 'a>(_changed: bool, _v: I, _q: I)
+    where
+        I: Iterator<Item = (&'a T::AccountId, ValidatorId)>,
+        T::AccountId: 'a,
+    {
+    }
 
-	fn on_disabled(_: u32) {}
+    fn on_disabled(_: u32) {}
 }
 
 /// A placeholder since there is currently no provided session key handler for parachain validator
 /// keys.
 pub struct AssignmentSessionKeyPlaceholder<T>(sp_std::marker::PhantomData<T>);
 impl<T> sp_runtime::BoundToRuntimeAppPublic for AssignmentSessionKeyPlaceholder<T> {
-	type Public = AssignmentId;
+    type Public = AssignmentId;
 }
 
 impl<T: pallet_session::Config> OneSessionHandler<T::AccountId>
-	for AssignmentSessionKeyPlaceholder<T>
+    for AssignmentSessionKeyPlaceholder<T>
 {
-	type Key = AssignmentId;
+    type Key = AssignmentId;
 
-	fn on_genesis_session<'a, I: 'a>(_validators: I)
-	where
-		I: Iterator<Item = (&'a T::AccountId, AssignmentId)>,
-		T::AccountId: 'a,
-	{
-	}
+    fn on_genesis_session<'a, I: 'a>(_validators: I)
+    where
+        I: Iterator<Item = (&'a T::AccountId, AssignmentId)>,
+        T::AccountId: 'a,
+    {
+    }
 
-	fn on_new_session<'a, I: 'a>(_changed: bool, _v: I, _q: I)
-	where
-		I: Iterator<Item = (&'a T::AccountId, AssignmentId)>,
-		T::AccountId: 'a,
-	{
-	}
+    fn on_new_session<'a, I: 'a>(_changed: bool, _v: I, _q: I)
+    where
+        I: Iterator<Item = (&'a T::AccountId, AssignmentId)>,
+        T::AccountId: 'a,
+    {
+    }
 
-	fn on_disabled(_: u32) {}
+    fn on_disabled(_: u32) {}
 }
 
 /// A reasonable benchmarking config for staking pallet.
 pub struct StakingBenchmarkingConfig;
 impl pallet_staking::BenchmarkingConfig for StakingBenchmarkingConfig {
-	type MaxValidators = ConstU32<1000>;
-	type MaxNominators = ConstU32<1000>;
+    type MaxValidators = ConstU32<1000>;
+    type MaxNominators = ConstU32<1000>;
 }
 
 /// Convert a balance to an unsigned 256-bit number, use in nomination pools.
 pub struct BalanceToU256;
 impl sp_runtime::traits::Convert<Balance, sp_core::U256> for BalanceToU256 {
-	fn convert(n: Balance) -> sp_core::U256 {
-		n.into()
-	}
+    fn convert(n: Balance) -> sp_core::U256 {
+        n.into()
+    }
 }
 
 /// Convert an unsigned 256-bit number to balance, use in nomination pools.
 pub struct U256ToBalance;
 impl sp_runtime::traits::Convert<sp_core::U256, Balance> for U256ToBalance {
-	fn convert(n: sp_core::U256) -> Balance {
-		use frame_support::traits::Defensive;
-		n.try_into().defensive_unwrap_or(Balance::MAX)
-	}
+    fn convert(n: sp_core::U256) -> Balance {
+        use frame_support::traits::Defensive;
+        n.try_into().defensive_unwrap_or(Balance::MAX)
+    }
 }
 
 /// Macro to set a value (e.g. when using the `parameter_types` macro) to either a production value
@@ -260,18 +260,18 @@ impl sp_runtime::traits::Convert<sp_core::U256, Balance> for U256ToBalance {
 /// ```
 #[macro_export]
 macro_rules! prod_or_fast {
-	($prod:expr, $test:expr) => {
-		if cfg!(feature = "fast-runtime") {
-			$test
-		} else {
-			$prod
-		}
-	};
-	($prod:expr, $test:expr, $env:expr) => {
-		if cfg!(feature = "fast-runtime") {
-			core::option_env!($env).map(|s| s.parse().ok()).flatten().unwrap_or($test)
-		} else {
-			$prod
-		}
-	};
+    ($prod:expr, $test:expr) => {
+        if cfg!(feature = "fast-runtime") {
+            $test
+        } else {
+            $prod
+        }
+    };
+    ($prod:expr, $test:expr, $env:expr) => {
+        if cfg!(feature = "fast-runtime") {
+            core::option_env!($env).map(|s| s.parse().ok()).flatten().unwrap_or($test)
+        } else {
+            $prod
+        }
+    };
 }
