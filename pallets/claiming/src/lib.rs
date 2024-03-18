@@ -73,7 +73,7 @@ pub struct EcdsaSignature(pub [u8; 65]);
 
 impl PartialEq for EcdsaSignature {
     fn eq(&self, other: &Self) -> bool {
-        &self.0[..] == &other.0[..]
+        self.0[..] == other.0[..]
     }
 }
 
@@ -198,7 +198,7 @@ impl<T: Config> Pallet<T> {
 
     /// Claims tokens to account wallet.
     fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> DispatchResult {
-        let amount = <Claims<T>>::get(&signer).ok_or(Error::<T>::SignerHasNoClaim)?;
+        let amount = <Claims<T>>::get(signer).ok_or(Error::<T>::SignerHasNoClaim)?;
 
         let new_total =
             Self::total().checked_sub(&amount).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
@@ -206,7 +206,7 @@ impl<T: Config> Pallet<T> {
         <T as Config>::Currency::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
 
         <Total<T>>::put(new_total);
-        <Claims<T>>::remove(&signer);
+        <Claims<T>>::remove(signer);
 
         Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
 
