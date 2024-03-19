@@ -6595,12 +6595,18 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "hex-literal 0.4.1",
+ "libsecp256k1",
  "pallet-balances",
  "parity-scale-codec",
+ "rustc-hex",
  "scale-info",
+ "serde",
+ "serde_derive",
  "sp-core",
  "sp-io",
  "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]

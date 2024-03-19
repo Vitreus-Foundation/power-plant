@@ -8,10 +8,14 @@
 use crate::weights::WeightInfo;
 use frame_support::traits::Currency;
 use frame_support::traits::ExistenceRequirement::AllowDeath;
-use frame_support::{pallet_prelude::MaxEncodedLen, pallet_prelude::*, PalletId};
+use frame_support::{pallet_prelude::*, DefaultNoBound, PalletId};
 use scale_info::prelude::vec::Vec;
-use sp_core::H256;
+use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
+use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 use sp_runtime::traits::{AccountIdConversion, CheckedSub};
+
+#[cfg(not(feature = "std"))]
+use sp_std::alloc::{format, string::String};
 
 pub use pallet::*;
 
@@ -26,15 +30,57 @@ const PALLET_ID: PalletId = PalletId(*b"Claiming");
 type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
-/// Information about tokens claiming.
-#[derive(Clone, Eq, PartialEq, RuntimeDebugNoBound, Encode, Decode, TypeInfo, MaxEncodedLen)]
-#[scale_info(skip_type_params(T))]
-#[codec(mel_bound())]
-pub struct ClaimingInfo<T: Config> {
-    /// Action of this claim.
-    pub amount: BalanceOf<T>,
-    /// Ethereum transaction hash.
-    pub eth_hash: H256,
+/// An Ethereum address (i.e. 20 bytes, used to represent an Ethereum account).
+///
+/// This gets serialized to the 0x-prefixed hex representation.
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+pub struct EthereumAddress([u8; 20]);
+
+impl Serialize for EthereumAddress {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let hex: String = rustc_hex::ToHex::to_hex(&self.0[..]);
+        serializer.serialize_str(&format!("0x{}", hex))
+    }
+}
+
+impl<'de> Deserialize<'de> for EthereumAddress {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let base_string = String::deserialize(deserializer)?;
+        let offset = if base_string.starts_with("0x") { 2 } else { 0 };
+        let s = &base_string[offset..];
+        if s.len() != 40 {
+            Err(serde::de::Error::custom(
+                "Bad length of Ethereum address (should be 42 including '0x')",
+            ))?;
+        }
+        let raw: Vec<u8> = rustc_hex::FromHex::from_hex(s)
+            .map_err(|e| serde::de::Error::custom(format!("{:?}", e)))?;
+        let mut r = Self::default();
+        r.0.copy_from_slice(&raw);
+        Ok(r)
+    }
+}
+
+/// An Ethereum signature
+#[derive(Encode, Decode, Clone, TypeInfo)]
+pub struct EcdsaSignature(pub [u8; 65]);
+
+impl PartialEq for EcdsaSignature {
+    fn eq(&self, other: &Self) -> bool {
+        self.0[..] == other.0[..]
+    }
+}
+
+impl sp_std::fmt::Debug for EcdsaSignature {
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+        write!(f, "EcdsaSignature({:?})", &self.0[..])
+    }
 }
 
 #[frame_support::pallet]
@@ -54,14 +100,17 @@ pub mod pallet {
         /// The currency mechanism, used for VTRS claiming.
         type Currency: Currency<Self::AccountId>;
 
+        /// Ethereum message prefix
+        #[pallet::constant]
+        type Prefix: Get<&'static [u8]>;
+
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
     }
 
     #[pallet::storage]
     #[pallet::getter(fn claims)]
-    pub type Claims<T: Config> =
-        StorageMap<_, Blake2_128Concat, T::AccountId, Vec<ClaimingInfo<T>>, ValueQuery>;
+    pub(super) type Claims<T: Config> = StorageMap<_, Identity, EthereumAddress, BalanceOf<T>>;
 
     #[pallet::storage]
     #[pallet::getter(fn total)]
@@ -86,25 +135,42 @@ pub mod pallet {
     pub enum Error<T> {
         /// Error indicating insufficient VTRS for a claim.
         NotEnoughTokensForClaim,
+        /// Invalid Ethereum signature.
+        InvalidEthereumSignature,
+        /// Ethereum address has no claim.
+        SignerHasNoClaim,
+    }
+
+    #[pallet::genesis_config]
+    #[derive(DefaultNoBound)]
+    pub struct GenesisConfig<T: Config> {
+        /// Claims
+        pub claims: Vec<(EthereumAddress, BalanceOf<T>)>,
+    }
+
+    #[pallet::genesis_build]
+    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+        fn build(&self) {
+            self.claims.iter().for_each(|(address, amount)| {
+                Claims::<T>::insert(address, amount);
+            });
+        }
     }
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         /// Claim tokens to user account.
         #[pallet::call_index(0)]
-        #[pallet::weight(<T as Config>::WeightInfo::claim())]
-        pub fn claim(
-            origin: OriginFor<T>,
-            account_id: T::AccountId,
-            amount: BalanceOf<T>,
-            eth_hash: H256,
-        ) -> DispatchResult {
-            ensure_root(origin)?;
+        #[pallet::weight((<T as Config>::WeightInfo::claim(), Pays::No))]
+        pub fn claim(origin: OriginFor<T>, ethereum_signature: EcdsaSignature) -> DispatchResult {
+            let dest = ensure_signed(origin)?;
 
-            let claim = ClaimingInfo::<T> { amount, eth_hash };
-            Self::process_claim(claim, &account_id)?;
+            let data = dest.using_encoded(to_ascii_hex);
+            let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
+                .ok_or(Error::<T>::InvalidEthereumSignature)?;
 
-            Self::deposit_event(Event::<T>::Claimed { account_id, amount });
+            Self::process_claim(signer, dest)?;
+
             Ok(())
         }
 
@@ -131,23 +197,86 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Claims tokens to account wallet.
-    fn process_claim(claim_info: ClaimingInfo<T>, to_acc: &T::AccountId) -> DispatchResult {
-        let new_total = Self::total()
-            .checked_sub(&claim_info.amount)
-            .ok_or(Error::<T>::NotEnoughTokensForClaim)?;
+    fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> DispatchResult {
+        let amount = <Claims<T>>::get(signer).ok_or(Error::<T>::SignerHasNoClaim)?;
 
-        <T as Config>::Currency::transfer(
-            &Self::claim_account_id(),
-            to_acc,
-            claim_info.amount,
-            AllowDeath,
-        )?;
+        let new_total =
+            Self::total().checked_sub(&amount).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
 
-        let mut claims = Claims::<T>::get(to_acc);
-        claims.push(claim_info.clone());
-        Claims::<T>::insert(to_acc, claims);
+        <T as Config>::Currency::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
+
         <Total<T>>::put(new_total);
+        <Claims<T>>::remove(signer);
+
+        Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
 
         Ok(())
+    }
+
+    /// Constructs the message that Ethereum RPC's `personal_sign` and `eth_sign` would sign.
+    fn ethereum_signable_message(what: &[u8], extra: &[u8]) -> Vec<u8> {
+        let prefix = T::Prefix::get();
+        let mut l = prefix.len() + what.len() + extra.len();
+        let mut rev = Vec::new();
+        while l > 0 {
+            rev.push(b'0' + (l % 10) as u8);
+            l /= 10;
+        }
+        let mut v = b"\x19Ethereum Signed Message:\n".to_vec();
+        v.extend(rev.into_iter().rev());
+        v.extend_from_slice(prefix);
+        v.extend_from_slice(what);
+        v.extend_from_slice(extra);
+        v
+    }
+
+    /// Attempts to recover the Ethereum address from a message signature signed by using
+    /// the Ethereum RPC's `personal_sign` and `eth_sign`.
+    fn eth_recover(s: &EcdsaSignature, what: &[u8], extra: &[u8]) -> Option<EthereumAddress> {
+        let msg = keccak_256(&Self::ethereum_signable_message(what, extra));
+        let mut res = EthereumAddress::default();
+        res.0
+            .copy_from_slice(&keccak_256(&secp256k1_ecdsa_recover(&s.0, &msg).ok()?[..])[12..]);
+        Some(res)
+    }
+}
+
+/// Converts the given binary data into ASCII-encoded hex. It will be twice the length.
+fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
+    let mut r = Vec::with_capacity(data.len() * 2);
+    let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
+    for &b in data.iter() {
+        push_nibble(b / 16);
+        push_nibble(b % 16);
+    }
+    r
+}
+
+#[cfg(any(test, feature = "runtime-benchmarks"))]
+mod secp_utils {
+    use super::*;
+
+    pub fn public(secret: &libsecp256k1::SecretKey) -> libsecp256k1::PublicKey {
+        libsecp256k1::PublicKey::from_secret_key(secret)
+    }
+    pub fn eth(secret: &libsecp256k1::SecretKey) -> EthereumAddress {
+        let mut res = EthereumAddress::default();
+        res.0.copy_from_slice(&keccak_256(&public(secret).serialize()[1..65])[12..]);
+        res
+    }
+    pub fn sig<T: Config>(
+        secret: &libsecp256k1::SecretKey,
+        what: &[u8],
+        extra: &[u8],
+    ) -> EcdsaSignature {
+        let msg = keccak_256(&<super::Pallet<T>>::ethereum_signable_message(
+            &to_ascii_hex(what)[..],
+            extra,
+        ));
+        let (sig, recovery_id) = libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), secret);
+        let mut r = [0u8; 65];
+        r[0..64].copy_from_slice(&sig.serialize()[..]);
+        r[64] = recovery_id.serialize();
+        EcdsaSignature(r)
     }
 }

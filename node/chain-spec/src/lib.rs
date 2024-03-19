@@ -355,6 +355,7 @@ pub fn testnet_genesis(
         balances: BalancesConfig {
             balances: endowed_accounts.iter().cloned().map(|k| (k, ENDOWMENT)).collect(),
         },
+        claiming: Default::default(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
         council: CouncilConfig {
             members: endowed_accounts.iter().cloned().take(3).collect(),

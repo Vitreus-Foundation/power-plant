@@ -843,9 +843,14 @@ impl pallet_atomic_swap::Config for Runtime {
     type ProofLimit = ProofLimit;
 }
 
+parameter_types! {
+    pub Prefix: &'static [u8] = b"Pay VTRS to the Vitreus:";
+}
+
 impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
+    type Prefix = Prefix;
     type WeightInfo = ();
 }
 
