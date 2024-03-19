@@ -161,7 +161,7 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         /// Claim tokens to user account.
         #[pallet::call_index(0)]
-        #[pallet::weight(<T as Config>::WeightInfo::claim())]
+        #[pallet::weight((<T as Config>::WeightInfo::claim(), Pays::No))]
         pub fn claim(origin: OriginFor<T>, ethereum_signature: EcdsaSignature) -> DispatchResult {
             let dest = ensure_signed(origin)?;
 
