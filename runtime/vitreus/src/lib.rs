@@ -44,7 +44,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{ConvertInto, Zero};
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -854,6 +854,22 @@ impl pallet_claiming::Config for Runtime {
     type WeightInfo = ();
 }
 
+parameter_types! {
+    pub const MinVestedTransfer: Balance = 1;
+    pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
+        WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
+}
+
+impl pallet_vesting::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BlockNumberToBalance = ConvertInto;
+    type MinVestedTransfer = MinVestedTransfer;
+    type WeightInfo = pallet_vesting::weights::SubstrateWeight<Runtime>;
+    type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
+    const MAX_VESTING_SCHEDULES: u32 = 28;
+}
+
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
 impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
     for EnergyFee
@@ -1305,6 +1321,7 @@ construct_runtime!(
         Reputation: pallet_reputation,
         AtomicSwap: pallet_atomic_swap,
         Claiming: pallet_claiming,
+        Vesting: pallet_vesting,
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
         Authorship: pallet_authorship,

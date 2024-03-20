@@ -14799,6 +14799,7 @@ dependencies = [
  "pallet-treasury-extension",
  "pallet-uniques",
  "pallet-utility",
+ "pallet-vesting",
  "parity-scale-codec",
  "polkadot-primitives",
  "polkadot-runtime-common",
