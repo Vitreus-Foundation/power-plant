@@ -2,7 +2,7 @@ use crate::{prod_or_fast, MICRO_VTRS, MILLI_VTRS, UNITS};
 use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, MoreThanHalfCouncil,
     OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Scheduler,
-    TechnicalCommittee, Treasury, DAYS, HOURS, MINUTES, NANO_VTRS, PICO_VTRS,
+    TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MINUTES, NANO_VTRS, PICO_VTRS,
 };
 
 use frame_support::traits::EitherOf;
@@ -88,7 +88,7 @@ parameter_types! {
     pub const ProposalBond: Permill = Permill::from_percent(5);
     pub const ProposalBondMinimum: Balance = 10 * MILLI_VTRS;
     pub const ProposalBondMaximum: Balance = 10 * UNITS;
-    pub SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 7 * MINUTES, "VITREUS_SPEND_PERIOD");
+    pub SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 40, "VITREUS_SPEND_PERIOD");
     pub const Burn: Permill = Permill::from_percent(1);
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 
@@ -121,7 +121,7 @@ impl pallet_treasury::Config for Runtime {
     type SpendPeriod = SpendPeriod;
     type Burn = Burn;
     type BurnDestination = ();
-    type SpendFunds = Bounties;
+    type SpendFunds = (Bounties, TreasuryExtension);
     type MaxApprovals = MaxApprovals;
     type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
     type SpendOrigin = EitherOf<
