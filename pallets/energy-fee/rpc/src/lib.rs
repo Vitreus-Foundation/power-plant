@@ -17,6 +17,9 @@ pub use energy_fee_runtime_api::EnergyFeeApi as EnergyFeeRuntimeApi;
 pub trait EnergyFeeApi<BlockHash> {
     #[method(name = "energyFee_estimateGas")]
     fn estimate_gas(&self, request: CallRequest, at: Option<BlockHash>) -> RpcResult<U256>;
+
+    #[method(name = "energyFee_vtrsToVnrgSwapRate")]
+    fn vtrs_to_vnrg_swap_rate(&self, at: Option<BlockHash>) -> RpcResult<Option<u128>>;
 }
 
 pub struct EnergyFee<C, B> {
@@ -48,6 +51,19 @@ where
             self.client.info().best_hash,
         );
         api.estimate_gas(at, request)
+            .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
+    }
+
+    fn vtrs_to_vnrg_swap_rate(
+        &self,
+        at: Option<<Block as BlockT>::Hash>,
+    ) -> RpcResult<Option<u128>> {
+        let api = self.client.runtime_api();
+        let at = at.unwrap_or(
+            // If the block hash is not supplied assume the best block.
+            self.client.info().best_hash,
+        );
+        api.vtrs_to_vnrg_swap_rate(at)
             .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
     }
 }

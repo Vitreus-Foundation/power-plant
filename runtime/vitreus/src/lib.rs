@@ -8,6 +8,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use frame_support::traits::tokens::ConversionToAssetBalance;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
     CommittedCandidateReceipt, CoreState, DisputeState, ExecutorParams, GroupRotationInfo,
@@ -2103,6 +2104,10 @@ impl_runtime_apis! {
 
             EnergyFee::dispatch_info_to_fee(&call, None, None).into_inner().into()
         }
+
+        fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
+            EnergyRate::to_asset_balance(UNITS, VNRG::get()).ok()
+        }
     }
 
     #[cfg(feature = "runtime-benchmarks")]
@@ -2152,6 +2157,12 @@ impl_runtime_apis! {
     impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
         fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
             ReputationTierEnergyRewardAdditionalPercentMapping::get(&tier)
+        }
+
+        fn current_energy_per_stake_currency() -> u128 {
+            EnergyGeneration::active_era()
+                .and_then(|era| EnergyGeneration::eras_energy_per_stake_cur(era.index))
+                .unwrap_or(0)
         }
     }
 

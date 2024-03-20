@@ -21,6 +21,9 @@ pub trait EnergyGenerationApi<BlockHash> {
         tier: ReputationTier,
         at: Option<BlockHash>,
     ) -> RpcResult<Perbill>;
+
+    #[method(name = "energyGeneration_currentEnergyPerStakeCurrency")]
+    fn current_energy_per_stake_currency(&self, at: Option<BlockHash>) -> RpcResult<u128>;
 }
 
 pub struct EnergyGeneration<C, B> {
@@ -52,6 +55,19 @@ where
             self.client.info().best_hash,
         );
         api.reputation_tier_additional_reward(at, tier)
+            .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
+    }
+
+    fn current_energy_per_stake_currency(
+        &self,
+        at: Option<<Block as BlockT>::Hash>,
+    ) -> RpcResult<u128> {
+        let api = self.client.runtime_api();
+        let at = at.unwrap_or(
+            // If the block hash is not supplied assume the best block.
+            self.client.info().best_hash,
+        );
+        api.current_energy_per_stake_currency(at)
             .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
     }
 }
