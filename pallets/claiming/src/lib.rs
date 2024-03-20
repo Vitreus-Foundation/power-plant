@@ -252,7 +252,7 @@ fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
     r
 }
 
-#[cfg(any(test, feature = "runtime-benchmarks"))]
+#[cfg(test)]
 mod secp_utils {
     use super::*;
 
