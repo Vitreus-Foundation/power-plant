@@ -539,10 +539,16 @@ impl<T: Config> Pallet<T> {
     /// Store staking information for the new planned era
     #[allow(clippy::type_complexity)]
     pub fn store_stakers_info(
-        exposures: Vec<(T::AccountId, Exposure<T::AccountId, StakeOf<T>>)>,
+        mut exposures: Vec<(T::AccountId, Exposure<T::AccountId, StakeOf<T>>)>,
         new_planned_era: EraIndex,
     ) -> Vec<T::AccountId> {
-        let elected_stashes: Vec<_> = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
+        let max_validators = Self::validator_count().max(1) as usize;
+        if exposures.len() > max_validators {
+            // Get validators with max total stake
+            exposures.select_nth_unstable_by(max_validators, |a, b| b.1.total.cmp(&a.1.total));
+        }
+        let elected_stashes: Vec<_> =
+            exposures.iter().take(max_validators).map(|(x, _)| x.clone()).collect();
 
         // Populate stakers, exposures, and the snapshot of validator prefs.
         let mut total_stake: StakeOf<T> = Zero::zero();
