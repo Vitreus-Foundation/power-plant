@@ -19,7 +19,8 @@
 
 use crate::mock::*;
 use crate::secp_utils::*;
-use crate::{to_ascii_hex, EcdsaSignature, Error, EthereumAddress};
+use crate::{to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};
+use frame_support::traits::{Currency, VestingSchedule};
 use frame_support::{assert_err, assert_noop, assert_ok};
 use hex_literal::hex;
 use parity_scale_codec::Encode;
@@ -46,6 +47,7 @@ fn basic_setup_works() {
         assert_eq!(Claiming::claims(&eth(&eve())), Some(300));
         assert_eq!(Claiming::claims(&eth(&frank())), Some(400));
         assert_eq!(Claiming::claims(&EthereumAddress::default()), None);
+        assert_eq!(Claiming::vesting(&eth(&alice())), Some((50, 10, 1)));
     });
 }
 
@@ -60,6 +62,7 @@ fn claiming_works() {
             sig::<Test>(&alice(), &42u64.encode(), &[][..])
         ));
         assert_eq!(Balances::free_balance(&42), 100);
+        assert_eq!(Vesting::vesting_balance(&42), Some(50));
         assert_eq!(Claiming::total(), 50);
     });
 }
@@ -98,6 +101,27 @@ fn double_claiming_doesnt_work() {
                 sig::<Test>(&alice(), &42u64.encode(), &[][..])
             ),
             Error::<Test>::SignerHasNoClaim
+        );
+    });
+}
+
+#[test]
+fn claiming_while_vested_doesnt_work() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
+
+        CurrencyOf::<Test>::make_free_balance_be(&69, 1000);
+        assert_eq!(Balances::free_balance(69), 1000);
+        // A user is already vested
+        assert_ok!(<Test as Config>::VestingSchedule::add_vesting_schedule(&69, 1000, 100, 10));
+
+        // They should not be able to claim
+        assert_noop!(
+            Claiming::claim(
+                RuntimeOrigin::signed(69),
+                sig::<Test>(&alice(), &69u64.encode(), &[][..])
+            ),
+            Error::<Test>::VestedBalanceExists,
         );
     });
 }

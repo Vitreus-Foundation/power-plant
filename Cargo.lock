@@ -6598,6 +6598,7 @@ dependencies = [
  "hex-literal 0.4.1",
  "libsecp256k1",
  "pallet-balances",
+ "pallet-vesting",
  "parity-scale-codec",
  "rustc-hex",
  "scale-info",

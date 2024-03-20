@@ -20,6 +20,7 @@
 use super::secp_utils::eth;
 use crate as pallet_claiming;
 
+use frame_support::traits::WithdrawReasons;
 use frame_support::{
     construct_runtime, parameter_types,
     traits::{ConstU32, ConstU64},
@@ -27,7 +28,7 @@ use frame_support::{
 use sp_core::H256;
 use sp_io::hashing::keccak_256;
 use sp_runtime::{
-    traits::{BlakeTwo256, IdentityLookup},
+    traits::{BlakeTwo256, Identity, IdentityLookup},
     BuildStorage,
 };
 
@@ -38,6 +39,7 @@ construct_runtime!(
     {
         System: frame_system,
         Balances: pallet_balances::{Pallet, Event<T>},
+        Vesting: pallet_vesting,
         Claiming: pallet_claiming,
     }
 );
@@ -85,12 +87,29 @@ impl pallet_balances::Config for Test {
 }
 
 parameter_types! {
+    pub const MinVestedTransfer: u64 = 1;
+    pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
+        WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
+}
+
+impl pallet_vesting::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BlockNumberToBalance = Identity;
+    type MinVestedTransfer = MinVestedTransfer;
+    type WeightInfo = ();
+    type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
+    const MAX_VESTING_SCHEDULES: u32 = 28;
+}
+
+parameter_types! {
     pub Prefix: &'static [u8] = b"Pay RUSTs to the TEST account:";
 }
 
 impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
+    type VestingSchedule = Vesting;
     type Prefix = Prefix;
     type WeightInfo = ();
 }
@@ -105,6 +124,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
             (eth(&eve()), 300),
             (eth(&frank()), 400),
         ],
+        vesting: vec![(eth(&alice()), (50, 10, 1))],
     }
     .assimilate_storage(&mut t)
     .unwrap();

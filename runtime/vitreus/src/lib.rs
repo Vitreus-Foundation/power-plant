@@ -850,6 +850,7 @@ parameter_types! {
 impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
+    type VestingSchedule = Vesting;
     type Prefix = Prefix;
     type WeightInfo = ();
 }
