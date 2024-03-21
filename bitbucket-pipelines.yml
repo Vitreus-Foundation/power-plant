@@ -46,6 +46,26 @@ pipelines:
             - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
             - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
+  custom:
+    run-test-1:
+      - step:
+          script:
+            - echo "Running tests Stage 1"
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+
+  custom:
+    run-test-2:
+      - step:
+          script:
+            - echo "Running tests Stage 2"
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
+
   branches:   
     develop:
       - step:
@@ -65,8 +85,7 @@ pipelines:
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
                   - cargo build --features "fast-runtime" --locked
-                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
-                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
+
 
             - step:
                 name: inno DEVnet bootnode
