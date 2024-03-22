@@ -44,5 +44,7 @@ sp_api::decl_runtime_apis! {
     pub trait EnergyFeeApi
     {
         fn estimate_gas(request: CallRequest) -> U256;
+
+        fn vtrs_to_vnrg_swap_rate() -> Option<u128>;
     }
 }
