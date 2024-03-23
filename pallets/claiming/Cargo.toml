@@ -26,6 +26,7 @@ rustc-hex = { version = "2.1.0", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { workspace = true }
+pallet-vesting = { workspace = true }
 sp-runtime = { workspace = true }
 libsecp256k1 = "0.7.0"
 hex-literal = "0.4.1"
@@ -44,5 +45,6 @@ std = [
     "frame-system/std",
     "parity-scale-codec/std",
     "pallet-balances/std",
+    "pallet-vesting/std",
 ]
 try-runtime = [ "frame-support/try-runtime" ]

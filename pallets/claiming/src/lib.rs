@@ -4,10 +4,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
+#![allow(clippy::type_complexity)]
 
 use crate::weights::WeightInfo;
 use frame_support::traits::Currency;
 use frame_support::traits::ExistenceRequirement::AllowDeath;
+use frame_support::traits::VestingSchedule;
 use frame_support::{pallet_prelude::*, DefaultNoBound, PalletId};
 use scale_info::prelude::vec::Vec;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
@@ -27,8 +29,11 @@ mod tests;
 pub mod weights;
 
 const PALLET_ID: PalletId = PalletId(*b"Claiming");
-type BalanceOf<T> =
-    <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
+    <T as frame_system::Config>::AccountId,
+>>::Currency;
+type BalanceOf<T> = <CurrencyOf<T> as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// An Ethereum address (i.e. 20 bytes, used to represent an Ethereum account).
 ///
@@ -100,6 +105,9 @@ pub mod pallet {
         /// The currency mechanism, used for VTRS claiming.
         type Currency: Currency<Self::AccountId>;
 
+        /// The vesting schedule
+        type VestingSchedule: VestingSchedule<Self::AccountId, Moment = BlockNumberFor<Self>>;
+
         /// Ethereum message prefix
         #[pallet::constant]
         type Prefix: Get<&'static [u8]>;
@@ -111,6 +119,15 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn claims)]
     pub(super) type Claims<T: Config> = StorageMap<_, Identity, EthereumAddress, BalanceOf<T>>;
+
+    /// Vesting schedule for a claim.
+    /// First balance is the total amount that should be held for vesting.
+    /// Second balance is how much should be unlocked per block.
+    /// The block number is when the vesting should start.
+    #[pallet::storage]
+    #[pallet::getter(fn vesting)]
+    pub(super) type Vesting<T: Config> =
+        StorageMap<_, Identity, EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>;
 
     #[pallet::storage]
     #[pallet::getter(fn total)]
@@ -139,6 +156,8 @@ pub mod pallet {
         InvalidEthereumSignature,
         /// Ethereum address has no claim.
         SignerHasNoClaim,
+        /// The account already has a vested balance.
+        VestedBalanceExists,
     }
 
     #[pallet::genesis_config]
@@ -146,6 +165,8 @@ pub mod pallet {
     pub struct GenesisConfig<T: Config> {
         /// Claims
         pub claims: Vec<(EthereumAddress, BalanceOf<T>)>,
+        /// Vesting schedule for claims
+        pub vesting: Vec<(EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>))>,
     }
 
     #[pallet::genesis_build]
@@ -153,6 +174,9 @@ pub mod pallet {
         fn build(&self) {
             self.claims.iter().for_each(|(address, amount)| {
                 Claims::<T>::insert(address, amount);
+            });
+            self.vesting.iter().for_each(|(k, v)| {
+                Vesting::<T>::insert(k, v);
             });
         }
     }
@@ -180,7 +204,7 @@ pub mod pallet {
         pub fn mint_tokens_to_claim(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
             ensure_root(origin)?;
 
-            T::Currency::deposit_creating(&Self::claim_account_id(), amount);
+            CurrencyOf::<T>::deposit_creating(&Self::claim_account_id(), amount);
 
             <Total<T>>::mutate(|value| *value += amount);
             Self::deposit_event(Event::<T>::TokenMintedToClaim(amount));
@@ -203,10 +227,24 @@ impl<T: Config> Pallet<T> {
         let new_total =
             Self::total().checked_sub(&amount).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
 
-        <T as Config>::Currency::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
+        let vesting = Vesting::<T>::get(signer);
+        if vesting.is_some() && T::VestingSchedule::vesting_balance(&dest).is_some() {
+            return Err(Error::<T>::VestedBalanceExists.into());
+        }
+
+        CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
+
+        // Check if this claim should have a vesting schedule.
+        if let Some(vs) = vesting {
+            // This can only fail if the account already has a vesting schedule,
+            // but this is checked above.
+            T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)
+                .expect("No other vesting schedule exists, as checked above; qed");
+        }
 
         <Total<T>>::put(new_total);
         <Claims<T>>::remove(signer);
+        <Vesting<T>>::remove(signer);
 
         Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
 
