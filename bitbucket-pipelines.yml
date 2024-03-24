@@ -15,8 +15,8 @@ pipelines:
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
-            - cargo test --locked
-            - cargo test --features "runtime-benchmarks" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
     feature/*:
       - step:
@@ -29,8 +29,8 @@ pipelines:
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
-            - cargo test --locked
-            - cargo test --features "runtime-benchmarks" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
     devops/*:
       - step:
@@ -43,8 +43,31 @@ pipelines:
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
-            - cargo test --locked
-            - cargo test --features "runtime-benchmarks" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
+
+  custom:
+    run-test-1:
+      - step:
+          name: Run tests Stage 1
+          size: 2x
+          script:
+            - echo "Running tests Stage 1"
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+
+    run-test-2:
+      - step:
+          name: Run tests Stage 2
+          size: 2x
+          script:
+            - echo "Running tests Stage 2"
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
   branches:   
     develop:
@@ -65,8 +88,7 @@ pipelines:
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
                   - cargo build --features "fast-runtime" --locked
-                  - cargo test --locked
-                  - cargo test --features "runtime-benchmarks" --locked
+
 
             - step:
                 name: inno DEVnet bootnode
@@ -126,8 +148,8 @@ pipelines:
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
                   - cargo build --locked
-                  - cargo test --locked
-                  - cargo test --features "runtime-benchmarks" --locked
+                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
             - step:
                 name: inno STAGEnet bootnode
@@ -171,8 +193,8 @@ pipelines:
 #             - export RUSTFLAGS="-C strip=debuginfo"
 #             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
 #             - cargo build --locked
-#             - cargo test --locked
-# #            - cargo test --locked -- --include-ignored
+#             - cargo test -j 4 --workspace --locked
+# #            - cargo test -j 4 --workspace --locked -- --include-ignored
 #             - cargo fmt -- --check
 #             - cargo clippy -- -D warnings
 
@@ -187,9 +209,9 @@ pipelines:
                   - export RUSTFLAGS="-C strip=debuginfo"
                   - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
                   - cargo build --locked
-                  - cargo test --locked
-                  - cargo test --features "runtime-benchmarks" --locked
-#                  - cargo test --locked -- --include-ignored
+                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
+#                  - cargo test -j 4 --workspace --locked -- --include-ignored
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
 

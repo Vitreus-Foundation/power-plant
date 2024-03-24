@@ -1,7 +1,10 @@
+#![allow(clippy::type_complexity)]
+
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
 // Substrate
-use sc_chain_spec::{ChainType, Properties};
+use polkadot_primitives::{AssignmentId, AuthorityDiscoveryId, ValidatorId};
+use sc_chain_spec::{ChainSpecExtension, ChainType, Properties};
 use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
@@ -11,19 +14,32 @@ use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
-    opaque, vtrs, AccountId, AssetsConfig, BabeConfig, Balance, BalancesConfig, CouncilConfig,
-    EVMChainIdConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
-    ImOnlineId, MaxCooperations, NacManagingConfig, ReputationConfig, RuntimeGenesisConfig,
-    SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
-    TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
+    BalancesConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig, EnableManualSeal,
+    EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
+    NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix, SessionConfig,
+    Signature, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
+/// Node `ChainSpec` extensions.
+///
+/// Additional parameters for some Substrate core modules,
+/// customizable from the chain spec.
+#[derive(Default, Clone, Serialize, Deserialize, ChainSpecExtension)]
+#[serde(rename_all = "camelCase")]
+pub struct Extensions {
+    /// The light sync state.
+    ///
+    /// This value will be set by the `sync-state rpc` implementation.
+    pub light_sync_state: sc_sync_state_rpc::LightSyncStateExtension,
+}
+
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig>;
+pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig, Extensions>;
 
 /// Specialized `ChainSpec` for development.
-pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt>;
+pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt, Extensions>;
 
 const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 /// 10^9 with 18 decimals
@@ -97,7 +113,7 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
@@ -144,7 +160,7 @@ pub fn devnet_config() -> ChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
@@ -182,7 +198,7 @@ pub fn stagenet_config() -> ChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
@@ -229,7 +245,7 @@ pub fn localnet_config() -> ChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
@@ -267,16 +283,25 @@ pub fn testnet_config() -> ChainSpec {
         // Properties
         Some(properties()),
         // Extensions
-        None,
+        Default::default(),
     )
 }
 
 /// Configure initial storage state for FRAME modules.
-fn testnet_genesis(
+pub fn testnet_genesis(
     wasm_binary: &[u8],
     root_key: AccountId,
     mut endowed_accounts: Vec<AccountId>,
-    initial_validators: Vec<(AccountId, AccountId, BabeId, GrandpaId, ImOnlineId)>,
+    initial_validators: Vec<(
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    )>,
     initial_cooperators: Vec<AccountId>,
     chain_id: u64,
 ) -> RuntimeGenesisConfig {
@@ -330,6 +355,8 @@ fn testnet_genesis(
         balances: BalancesConfig {
             balances: endowed_accounts.iter().cloned().map(|k| (k, ENDOWMENT)).collect(),
         },
+        claiming: Default::default(),
+        vesting: Default::default(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
         council: CouncilConfig {
             members: endowed_accounts.iter().cloned().take(3).collect(),
@@ -381,7 +408,20 @@ fn testnet_genesis(
         session: SessionConfig {
             keys: initial_validators
                 .iter()
-                .map(|x| (x.1, x.0, session_keys(x.2.clone(), x.3.clone(), x.4.clone())))
+                .map(|x| {
+                    (
+                        x.1,
+                        x.0,
+                        session_keys(
+                            x.2.clone(),
+                            x.3.clone(),
+                            x.4.clone(),
+                            x.5.clone(),
+                            x.6.clone(),
+                            x.7.clone(),
+                        ),
+                    )
+                })
                 .collect::<Vec<_>>(),
         },
         technical_committee: TechnicalCommitteeConfig {
@@ -399,6 +439,10 @@ fn testnet_genesis(
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },
+        authority_discovery: AuthorityDiscoveryConfig { keys: vec![], ..Default::default() },
+        hrmp: Default::default(),
+        configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
+        paras: Default::default(),
     }
 }
 
@@ -439,13 +483,25 @@ pub mod devnet_keys {
 
     pub fn authority_keys_from_seed(
         s: &str,
-    ) -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    ) -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
         (
             get_account_id_from_seed::<ecdsa::Public>(&format!("{}//stash", s)),
             get_account_id_from_seed::<ecdsa::Public>(s),
             derive_dev::<BabeId>(s),
             derive_dev::<GrandpaId>(s),
             derive_dev::<ImOnlineId>(s),
+            derive_dev::<ValidatorId>(s),
+            derive_dev::<AssignmentId>(s),
+            derive_dev::<AuthorityDiscoveryId>(s),
         )
     }
     /// Generate a crypto pair.
@@ -497,7 +553,16 @@ pub mod testnet_keys {
         AccountId::from(hex!("E0E337F0753CB3099B17c6Af6D3E7C41e99FF83D"))
     }
 
-    pub(super) fn validator_1_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_1_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
         (
             AccountId::from(hex!("784e69Feba8a2FCCc938A722D5a66E9EbfA3A14A")), // Stash
             validator_1(),
@@ -513,10 +578,31 @@ pub mod testnet_keys {
                 "408300338038bb359afc7f32a0622d3be520988b5a89c3af5af0272e6745de5e"
             ))
             .into(),
+            sp_core::sr25519::Public(hex!(
+                "f870a88d596c9207b9df17fbc7960ba9f7fa25296fc3d17a844bc7680287011e"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "164b92db1487c67254182e9e231823b662fb39ffdee4e1ffe73559f600bebd25"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "7297d91787b2ec39853efaf1a553b4a5b58f834161a11f03575116e0340ada62"
+            ))
+            .into(),
         )
     }
 
-    pub(super) fn validator_2_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_2_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
         (
             AccountId::from(hex!("309753d1BAc45489B9C4BdDEf28963d862AdCb13")), // Stash
             validator_2(),
@@ -532,10 +618,31 @@ pub mod testnet_keys {
                 "527844f460f369100ca67a1fa084b9a29b71d984cd90479ce5bcd7efb74bde1c"
             ))
             .into(),
+            sp_core::sr25519::Public(hex!(
+                "7aec7e56d3de6cf85d23d38fea64107523ffeb43e17e27de6899cac625199a3d"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "acc2c4d8acefa119eee9a88a880bc490895c0aeb2a661daeccf2b6fcba30da3f"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "d2d0a556d5526c8114e7312a9d7220869894db1ae01f3ef7696f9f784fc58a4f"
+            ))
+            .into(),
         )
     }
 
-    pub(super) fn validator_3_keys() -> (AccountId, AccountId, BabeId, GrandpaId, ImOnlineId) {
+    pub(super) fn validator_3_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
         (
             AccountId::from(hex!("A6543B65DD9cFA7e324AF616A339D3c1a13fa685")), // Stash
             validator_3(),
@@ -551,12 +658,38 @@ pub mod testnet_keys {
                 "3e99fe54593eeaf568029ec4989106286fd3384fc9c7b723d0e60bc3c3c02479"
             ))
             .into(),
+            sp_core::sr25519::Public(hex!(
+                "1eb253fc5186d7ec1bf2d28cc8120d97431745ead18381aca1cff47ebae0a83c"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "0075191c5441c7a2134c234f3ab393866deded809f21a37c9a6025ce26884556"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "5425357e3002c6d2972e803362fe8648156837e70f3951929f13c0b9ba75c93b"
+            ))
+            .into(),
         )
     }
 }
 
-fn session_keys(babe: BabeId, grandpa: GrandpaId, im_online: ImOnlineId) -> opaque::SessionKeys {
-    opaque::SessionKeys { babe, grandpa, im_online }
+fn session_keys(
+    babe: BabeId,
+    grandpa: GrandpaId,
+    im_online: ImOnlineId,
+    para_validator: ValidatorId,
+    para_assignment: AssignmentId,
+    authority_discovery: AuthorityDiscoveryId,
+) -> opaque::SessionKeys {
+    opaque::SessionKeys {
+        babe,
+        grandpa,
+        im_online,
+        para_validator,
+        para_assignment,
+        authority_discovery,
+    }
 }
 
 fn properties() -> Properties {
@@ -565,4 +698,45 @@ fn properties() -> Properties {
     properties.insert("tokenDecimals".into(), 18.into());
     properties.insert("ss58Format".into(), SS58Prefix::get().into());
     properties
+}
+
+fn default_parachains_host_configuration(
+) -> polkadot_runtime_parachains::configuration::HostConfiguration<polkadot_primitives::BlockNumber>
+{
+    use polkadot_primitives::{MAX_CODE_SIZE, MAX_POV_SIZE};
+
+    polkadot_runtime_parachains::configuration::HostConfiguration {
+        validation_upgrade_cooldown: 2u32,
+        validation_upgrade_delay: 2,
+        code_retention_period: 1200,
+        max_code_size: MAX_CODE_SIZE,
+        max_pov_size: MAX_POV_SIZE,
+        max_head_data_size: 32 * 1024,
+        group_rotation_frequency: 20,
+        chain_availability_period: 4,
+        thread_availability_period: 4,
+        max_upward_queue_count: 8,
+        max_upward_queue_size: 1024 * 1024,
+        max_downward_message_size: 1024 * 1024,
+        max_upward_message_size: 50 * 1024,
+        max_upward_message_num_per_candidate: 5,
+        hrmp_sender_deposit: 0,
+        hrmp_recipient_deposit: 0,
+        hrmp_channel_max_capacity: 8,
+        hrmp_channel_max_total_size: 8 * 1024,
+        hrmp_max_parachain_inbound_channels: 4,
+        hrmp_max_parathread_inbound_channels: 4,
+        hrmp_channel_max_message_size: 1024 * 1024,
+        hrmp_max_parachain_outbound_channels: 4,
+        hrmp_max_parathread_outbound_channels: 4,
+        hrmp_max_message_num_per_candidate: 5,
+        dispute_period: 6,
+        no_show_slots: 2,
+        n_delay_tranches: 25,
+        needed_approvals: 2,
+        relay_vrf_modulo_samples: 2,
+        zeroth_delay_tranche_width: 0,
+        minimum_validation_upgrade_delay: 5,
+        ..Default::default()
+    }
 }
