@@ -1,0 +1,56 @@
+[package]
+name = "polkadot-rpc"
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+futures = "0.3.25"
+jsonrpsee = { version = "0.16.2", features = ["server"] }
+polkadot-primitives = { path = "../primitives" }
+sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sp-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sp-consensus-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-consensus-manual-seal = { workspace = true }
+sp-core = { workspace = true }
+sc-chain-spec = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-consensus-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-consensus-babe-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-consensus-beefy = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-consensus-beefy-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-consensus-epochs = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-consensus-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-consensus-grandpa-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-network = { workspace = true }
+sc-network-sync = { workspace = true }
+sc-rpc-api = { workspace = true }
+sc-service = { workspace = true }
+sc-sync-state-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sc-transaction-pool = { workspace = true }
+sc-transaction-pool-api = { workspace = true }
+mmr-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sp-block-builder = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+substrate-frame-rpc-system = { workspace = true }
+substrate-state-trie-migration-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+
+fc-db = { workspace = true }
+fc-mapping-sync = { workspace = true }
+fc-rpc = { workspace = true }
+fc-rpc-core = { workspace = true }
+fc-storage = { workspace = true }
+fp-rpc = { workspace = true }
+
+# RPC modules
+eth-rpc-server = { workspace = true }
+energy-fee-rpc = { workspace = true }
+energy-generation-rpc = { workspace = true }
+node-rpc-server = { workspace = true }
+
+vitreus-power-plant-runtime = { workspace = true }
+vitreus-utility-runtime-api = { workspace = true }
