@@ -436,6 +436,7 @@ pub fn testnet_genesis(
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
             stakers,
+            energy_per_stake_currency: 1_000_000u128,
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },

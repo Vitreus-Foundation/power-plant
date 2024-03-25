@@ -610,19 +610,6 @@ parameter_types! {
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-pub struct EnergyPerStakeCurrency;
-
-impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerStakeCurrency {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Runtime>,
-        _total_issuance: Energy,
-        _core_nodes_num: u32,
-        _battery_slot_cap: Energy,
-    ) -> Energy {
-        1_000_000
-    }
-}
-
 pub struct EnergyPerReputationPoint;
 
 impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerReputationPoint {
@@ -680,7 +667,7 @@ impl pallet_energy_generation::Config for Runtime {
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type ValidatorReputationTier = ValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
+    type EnergyPerStakeCurrency = EnergyGeneration;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
     type MaxCooperatorRewardedPerValidator = ConstU32<64>;

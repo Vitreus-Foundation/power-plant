@@ -548,6 +548,12 @@ pub mod pallet {
     #[pallet::storage]
     pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
+    /// The current constant value of energy per stake currency.
+    #[pallet::storage]
+    #[pallet::getter(fn current_energy_per_stake_currency)]
+    pub(crate) type CurrentEnergyPerStakeCurrency<T: Config> =
+        StorageValue<_, EnergyOf<T>, OptionQuery>;
+
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
@@ -568,6 +574,7 @@ pub mod pallet {
         pub min_validator_bond: StakeOf<T>,
         pub max_validator_count: Option<u32>,
         pub max_cooperator_count: Option<u32>,
+        pub energy_per_stake_currency: EnergyOf<T>,
     }
 
     #[pallet::genesis_build]
@@ -581,6 +588,7 @@ pub mod pallet {
             SlashRewardFraction::<T>::put(self.slash_reward_fraction);
             MinCooperatorBond::<T>::put(self.min_cooperator_bond);
             MinValidatorBond::<T>::put(self.min_validator_bond);
+            CurrentEnergyPerStakeCurrency::<T>::put(self.energy_per_stake_currency);
             if let Some(x) = self.max_validator_count {
                 MaxValidatorsCount::<T>::put(x);
             }
@@ -1747,6 +1755,18 @@ pub mod pallet {
                     .map(|prefs| prefs.collaborative = true)
                     .ok_or(Error::<T>::NotStash)
             })?;
+            Ok(())
+        }
+
+        /// Sets the current energy units per stake currency.
+        #[pallet::call_index(28)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(0, 1))]
+        pub fn set_energy_per_stake_currency(
+            origin: OriginFor<T>,
+            energy_per_stake_currency: EnergyOf<T>,
+        ) -> DispatchResult {
+            T::AdminOrigin::ensure_origin(origin)?;
+            CurrentEnergyPerStakeCurrency::<T>::put(energy_per_stake_currency);
             Ok(())
         }
     }

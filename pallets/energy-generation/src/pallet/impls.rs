@@ -1090,6 +1090,17 @@ where
     }
 }
 
+impl<T: Config> EnergyRateCalculator<StakeOf<T>, EnergyOf<T>> for Pallet<T> {
+    fn calculate_energy_rate(
+        _total_staked: StakeOf<T>,
+        _total_issuance: EnergyOf<T>,
+        _core_nodes_num: u32,
+        _battery_slot_cap: EnergyOf<T>,
+    ) -> EnergyOf<T> {
+        Pallet::<T>::current_energy_per_stake_currency().unwrap_or(EnergyOf::<T>::zero())
+    }
+}
+
 #[cfg(any(test, feature = "try-runtime"))]
 impl<T: Config> Pallet<T> {
     pub(crate) fn do_try_state(

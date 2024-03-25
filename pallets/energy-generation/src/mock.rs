@@ -287,19 +287,6 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
     }
 }
 
-pub struct EnergyPerStakeCurrency;
-
-impl EnergyRateCalculator<StakeOf<Test>, EnergyOf<Test>> for EnergyPerStakeCurrency {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Test>,
-        _total_issuance: EnergyOf<Test>,
-        _core_nodes_num: u32,
-        _battery_slot_cap: EnergyOf<Test>,
-    ) -> EnergyOf<Test> {
-        EnergyOf::<Test>::from(1_000_000_u128)
-    }
-}
-
 pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
 
 impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
@@ -332,7 +319,7 @@ impl crate::pallet::pallet::Config for Test {
     type BondingDuration = BondingDuration;
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
+    type EnergyPerStakeCurrency = PowerPlant;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
     type MaxCooperatorRewardedPerValidator = ConstU32<64>;
@@ -372,6 +359,7 @@ pub struct ExtBuilder {
     status: BTreeMap<AccountId, StakerStatus<AccountId, Balance>>,
     stakes: BTreeMap<AccountId, Balance>,
     stakers: Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId, Balance>)>,
+    energy_per_stake_currency: Balance,
 }
 
 impl Default for ExtBuilder {
@@ -389,6 +377,7 @@ impl Default for ExtBuilder {
             status: Default::default(),
             stakes: Default::default(),
             stakers: Default::default(),
+            energy_per_stake_currency: 1_000_000u128
         }
     }
 }
@@ -582,6 +571,7 @@ impl ExtBuilder {
             slash_reward_fraction: Perbill::from_percent(10),
             min_cooperator_bond: self.min_cooperator_bond,
             min_validator_bond: self.min_validator_bond,
+            energy_per_stake_currency: self.energy_per_stake_currency,
             ..Default::default()
         }
         .assimilate_storage(&mut storage);
