@@ -45,6 +45,12 @@ const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 /// 10^9 with 18 decimals
 const INITIAL_ENERGY_RATE: FixedU128 = FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
 
+/// Min validator stake for user who has NAC level 1.
+const MIN_COMMON_VALIDATOR_BOND: Balance = 1_000_000_000_000_000_000_000_000u128;
+
+/// Min validator stake for user who has NAC level > 1.
+const MIN_TRUST_VALIDATOR_BOND: Balance = 1_000_000_000_000_000_000;
+
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
 #[derive(Serialize, Deserialize)]
 pub struct DevGenesisExt {
@@ -435,6 +441,8 @@ pub fn testnet_genesis(
             minimum_validator_count: initial_validators.len() as u32,
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
+            min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
+            min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
             ..Default::default()
         },

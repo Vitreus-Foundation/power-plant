@@ -619,7 +619,7 @@ impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerStakeCurrency {
         _core_nodes_num: u32,
         _battery_slot_cap: Energy,
     ) -> Energy {
-        1_000_000
+        1_000
     }
 }
 
