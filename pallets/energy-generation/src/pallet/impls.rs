@@ -49,6 +49,20 @@ impl<T: Config> Pallet<T> {
         }
     }
 
+    /// Minimum stake to be a validator depends on NAC level.
+    pub fn min_bond_for_validator(stash: &T::AccountId) -> StakeOf<T> {
+        match pallet_nac_managing::Pallet::<T>::get_nac_level(stash) {
+            Some((level, _)) => {
+                if level > 1 {
+                    MinTrustValidatorBond::<T>::get()
+                } else {
+                    MinCommonValidatorBond::<T>::get()
+                }
+            },
+            None => MinCommonValidatorBond::<T>::get(),
+        }
+    }
+
     /// Check if the account has enough reputation for collaborative staking.
     pub fn is_legit_for_collab(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {
