@@ -140,8 +140,6 @@ where
         .create_runner_with_logger_hook::<sc_cli::RunCmd, F>(&cli.run.base, logger_hook)
         .map_err(Error::from)?;
 
-    let enable_beefy = !cli.run.no_beefy;
-
     let grandpa_pause = if cli.run.grandpa_pause.is_empty() {
         None
     } else {
@@ -174,7 +172,7 @@ where
             cli.eth,
             service::IsCollator::No,
             grandpa_pause,
-            enable_beefy,
+            cli.run.beefy,
             jaeger_agent,
             None,
             false,
