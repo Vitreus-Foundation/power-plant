@@ -13,7 +13,9 @@ use frame_support::{
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use orml_traits::GetByKey;
-use pallet_reputation::{ReputationRecord, ReputationTier, RANKS_PER_TIER};
+use pallet_reputation::{
+    ReputationRecord, ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_BLOCK,
+};
 use parity_scale_codec::Compact;
 use sp_core::H256;
 
@@ -360,6 +362,7 @@ pub struct ExtBuilder {
     stakes: BTreeMap<AccountId, Balance>,
     stakers: Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId, Balance>)>,
     energy_per_stake_currency: Balance,
+    block_authoring_reward: ReputationPoint,
 }
 
 impl Default for ExtBuilder {
@@ -377,7 +380,8 @@ impl Default for ExtBuilder {
             status: Default::default(),
             stakes: Default::default(),
             stakers: Default::default(),
-            energy_per_stake_currency: 1_000_000u128
+            energy_per_stake_currency: 1_000_000u128,
+            block_authoring_reward: ReputationPoint(12),
         }
     }
 }

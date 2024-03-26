@@ -554,6 +554,11 @@ pub mod pallet {
     pub(crate) type CurrentEnergyPerStakeCurrency<T: Config> =
         StorageValue<_, EnergyOf<T>, OptionQuery>;
 
+    /// Block authoring reward in reputation points.
+    #[pallet::storage]
+    #[pallet::getter(fn block_authoring_reward)]
+    pub(crate) type BlockAuthoringReward<T: Config> = StorageValue<_, ReputationPoint, ValueQuery>;
+
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
@@ -575,6 +580,7 @@ pub mod pallet {
         pub max_validator_count: Option<u32>,
         pub max_cooperator_count: Option<u32>,
         pub energy_per_stake_currency: EnergyOf<T>,
+        pub block_authoring_reward: ReputationPoint,
     }
 
     #[pallet::genesis_build]
@@ -589,6 +595,7 @@ pub mod pallet {
             MinCooperatorBond::<T>::put(self.min_cooperator_bond);
             MinValidatorBond::<T>::put(self.min_validator_bond);
             CurrentEnergyPerStakeCurrency::<T>::put(self.energy_per_stake_currency);
+            BlockAuthoringReward::<T>::put(self.block_authoring_reward);
             if let Some(x) = self.max_validator_count {
                 MaxValidatorsCount::<T>::put(x);
             }
@@ -1767,6 +1774,18 @@ pub mod pallet {
         ) -> DispatchResult {
             T::AdminOrigin::ensure_origin(origin)?;
             CurrentEnergyPerStakeCurrency::<T>::put(energy_per_stake_currency);
+            Ok(())
+        }
+
+        /// Sets the block authoring reward.
+        #[pallet::call_index(29)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(0, 1))]
+        pub fn set_block_authoring_reward(
+            origin: OriginFor<T>,
+            block_authoring_reward: ReputationPoint,
+        ) -> DispatchResult {
+            T::AdminOrigin::ensure_origin(origin)?;
+            BlockAuthoringReward::<T>::put(block_authoring_reward);
             Ok(())
         }
     }
