@@ -45,9 +45,6 @@ const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 /// 10^9 with 18 decimals
 const INITIAL_ENERGY_RATE: FixedU128 = FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
 
-/// Min validator stake for user who has NAC level 1.
-const MIN_COMMON_VALIDATOR_BOND: Balance = 1_000_000_000_000_000_000_000_000u128;
-
 /// Min validator stake for user who has NAC level > 1.
 const MIN_TRUST_VALIDATOR_BOND: Balance = 1_000_000_000_000_000_000;
 
