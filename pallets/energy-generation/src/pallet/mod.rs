@@ -83,7 +83,10 @@ pub mod pallet {
 
     #[pallet::config]
     pub trait Config:
-        frame_system::Config + pallet_assets::Config + pallet_nac_managing::Config + pallet_reputation::Config
+        frame_system::Config
+        + pallet_assets::Config
+        + pallet_nac_managing::Config
+        + pallet_reputation::Config
     {
         /// The staking currency.
         type StakeCurrency: LockableCurrency<
@@ -958,7 +961,6 @@ pub mod pallet {
                     ledger.active = Zero::zero();
                 }
 
-
                 let min_active_bond = if Cooperators::<T>::contains_key(&ledger.stash) {
                     MinCooperatorBond::<T>::get()
                 } else if Validators::<T>::contains_key(&ledger.stash) {
@@ -1040,8 +1042,10 @@ pub mod pallet {
 
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
-
-            ensure!(ledger.active >= Self::min_bond_for_validator(&controller), Error::<T>::InsufficientBond);
+            ensure!(
+                ledger.active >= Self::min_bond_for_validator(&controller),
+                Error::<T>::InsufficientBond
+            );
             let stash = &ledger.stash;
 
             ensure!(Self::is_legit_for_validator(stash), Error::<T>::ReputationTooLow,);
@@ -1588,6 +1592,7 @@ pub mod pallet {
         /// to kick people under the new limits, `chill_other` should be called.
         // We assume the worst case for this call is either: all items are set or all items are
         // removed.
+        #[allow(clippy::too_many_arguments)]
         #[pallet::call_index(23)]
         #[pallet::weight(
             T::ThisWeightInfo::set_staking_configs_all_set()

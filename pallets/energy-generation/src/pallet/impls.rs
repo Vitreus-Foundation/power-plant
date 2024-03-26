@@ -59,9 +59,7 @@ impl<T: Config> Pallet<T> {
                     MinCommonValidatorBond::<T>::get()
                 }
             },
-            None => {
-                MinCommonValidatorBond::<T>::get()
-            }
+            None => MinCommonValidatorBond::<T>::get(),
         }
     }
 
