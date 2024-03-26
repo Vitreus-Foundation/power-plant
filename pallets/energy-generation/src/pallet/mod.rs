@@ -83,7 +83,7 @@ pub mod pallet {
 
     #[pallet::config]
     pub trait Config:
-        frame_system::Config + pallet_assets::Config + pallet_reputation::Config
+        frame_system::Config + pallet_assets::Config + pallet_nac_managing::Config + pallet_reputation::Config
     {
         /// The staking currency.
         type StakeCurrency: LockableCurrency<
@@ -101,7 +101,7 @@ pub mod pallet {
             + sp_std::fmt::Debug
             + Default
             + From<u64>
-            + Into<Self::Balance>
+            + Into<<Self as pallet_assets::Config>::Balance>
             + TypeInfo
             + MaxEncodedLen;
 
@@ -272,9 +272,13 @@ pub mod pallet {
     #[pallet::storage]
     pub type MinCooperatorBond<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
 
-    /// The minimum active bond to become and maintain the role of a validator.
+    /// The minimum active bond to become and maintain the role of a validator with nac level 1.
     #[pallet::storage]
-    pub type MinValidatorBond<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
+    pub type MinCommonValidatorBond<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
+
+    /// The minimum active bond to become and maintain the role of a validator with nac level 2.
+    #[pallet::storage]
+    pub type MinTrustValidatorBond<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
 
     /// The minimum active cooperator stake of the last successful election.
     #[pallet::storage]
@@ -565,7 +569,8 @@ pub mod pallet {
             crate::StakerStatus<T::AccountId, StakeOf<T>>,
         )>,
         pub min_cooperator_bond: StakeOf<T>,
-        pub min_validator_bond: StakeOf<T>,
+        pub min_common_validator_bond: StakeOf<T>,
+        pub min_trust_validator_bond: StakeOf<T>,
         pub max_validator_count: Option<u32>,
         pub max_cooperator_count: Option<u32>,
     }
@@ -580,7 +585,8 @@ pub mod pallet {
             CanceledSlashPayout::<T>::put(self.canceled_payout);
             SlashRewardFraction::<T>::put(self.slash_reward_fraction);
             MinCooperatorBond::<T>::put(self.min_cooperator_bond);
-            MinValidatorBond::<T>::put(self.min_validator_bond);
+            MinCommonValidatorBond::<T>::put(self.min_common_validator_bond);
+            MinTrustValidatorBond::<T>::put(self.min_trust_validator_bond);
             if let Some(x) = self.max_validator_count {
                 MaxValidatorsCount::<T>::put(x);
             }
@@ -952,10 +958,11 @@ pub mod pallet {
                     ledger.active = Zero::zero();
                 }
 
+
                 let min_active_bond = if Cooperators::<T>::contains_key(&ledger.stash) {
                     MinCooperatorBond::<T>::get()
                 } else if Validators::<T>::contains_key(&ledger.stash) {
-                    MinValidatorBond::<T>::get()
+                    Self::min_bond_for_validator(&ledger.stash)
                 } else {
                     Zero::zero()
                 };
@@ -1033,7 +1040,8 @@ pub mod pallet {
 
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
-            ensure!(ledger.active >= MinValidatorBond::<T>::get(), Error::<T>::InsufficientBond);
+
+            ensure!(ledger.active >= Self::min_bond_for_validator(&controller), Error::<T>::InsufficientBond);
             let stash = &ledger.stash;
 
             ensure!(Self::is_legit_for_validator(stash), Error::<T>::ReputationTooLow,);
@@ -1407,7 +1415,7 @@ pub mod pallet {
             era: EraIndex,
             slash_indices: Vec<u32>,
         ) -> DispatchResult {
-            T::AdminOrigin::ensure_origin(origin)?;
+            <T as Config>::AdminOrigin::ensure_origin(origin)?;
 
             ensure!(!slash_indices.is_empty(), Error::<T>::EmptyTargets);
             ensure!(is_sorted_and_unique(&slash_indices), Error::<T>::NotSortedAndUnique);
@@ -1588,7 +1596,8 @@ pub mod pallet {
         pub fn set_staking_configs(
             origin: OriginFor<T>,
             min_cooperator_bond: ConfigOp<StakeOf<T>>,
-            min_validator_bond: ConfigOp<StakeOf<T>>,
+            min_common_validator_bond: ConfigOp<StakeOf<T>>,
+            min_trust_validator_bond: ConfigOp<StakeOf<T>>,
             max_cooperator_count: ConfigOp<u32>,
             max_validator_count: ConfigOp<u32>,
             chill_threshold: ConfigOp<Percent>,
@@ -1607,7 +1616,8 @@ pub mod pallet {
             }
 
             config_op_exp!(MinCooperatorBond<T>, min_cooperator_bond);
-            config_op_exp!(MinValidatorBond<T>, min_validator_bond);
+            config_op_exp!(MinCommonValidatorBond<T>, min_common_validator_bond);
+            config_op_exp!(MinTrustValidatorBond<T>, min_trust_validator_bond);
             config_op_exp!(MaxCooperatorsCount<T>, max_cooperator_count);
             config_op_exp!(MaxValidatorsCount<T>, max_validator_count);
             config_op_exp!(ChillThreshold<T>, chill_threshold);
@@ -1688,7 +1698,7 @@ pub mod pallet {
                         threshold * max_validator_count < current_validator_count,
                         Error::<T>::CannotChillOther
                     );
-                    MinValidatorBond::<T>::get()
+                    Self::min_bond_for_validator(&stash)
                 } else {
                     Zero::zero()
                 };
@@ -1730,7 +1740,7 @@ pub mod pallet {
         #[pallet::call_index(26)]
         #[pallet::weight(T::ThisWeightInfo::set_min_commission())]
         pub fn set_min_commission(origin: OriginFor<T>, new: Perbill) -> DispatchResult {
-            T::AdminOrigin::ensure_origin(origin)?;
+            <T as Config>::AdminOrigin::ensure_origin(origin)?;
             MinCommission::<T>::put(new);
             Ok(())
         }
