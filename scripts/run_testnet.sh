@@ -23,7 +23,7 @@ usage() {
     echo "\t<envs_file> contains the environment variables with session keys"
     printf "\n\033[31m"
     echo "The envs file should contain the variables:"
-    echo "\t<VALIDATOR1, VALIDATOR2, VALIDATOR3>_<PRIVATE, PUBLIC>_<BABE, GRAN, IMON, PARA, ASGN, AUDI>"
+    echo "\t<VALIDATOR1, VALIDATOR2, VALIDATOR3>_<PRIVATE, PUBLIC>_<GRAN, BABE, IMON, PARA, ASGN, AUDI>"
     printf "\033[0m\n"
 }
 
