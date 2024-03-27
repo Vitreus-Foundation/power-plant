@@ -434,7 +434,7 @@ pub fn testnet_genesis(
         technical_membership: Default::default(),
         treasury: Default::default(),
         energy_generation: EnergyGenerationConfig {
-            validator_count: initial_validators.len() as u32,
+            validator_count: 125,
             minimum_validator_count: initial_validators.len() as u32,
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
