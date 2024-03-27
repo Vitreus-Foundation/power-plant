@@ -729,8 +729,8 @@ fn session_keys(
     authority_discovery: AuthorityDiscoveryId,
 ) -> opaque::SessionKeys {
     opaque::SessionKeys {
-        babe,
         grandpa,
+        babe,
         im_online,
         para_validator,
         para_assignment,
