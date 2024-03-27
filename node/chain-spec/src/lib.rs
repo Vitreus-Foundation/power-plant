@@ -576,7 +576,7 @@ pub mod testnet_keys {
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "488c73604a3da26d8f2547c71869d8a78542b008b55fc50bdea72751e702d142"
+                "275fad28e7f2904a0341b5baa66b40f8941b09a22739a8b141f99b91e0dd9458"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
@@ -616,7 +616,7 @@ pub mod testnet_keys {
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "735fa995b62b01c3ffc05f752a2fa708a46147dec40af60a7b3d5eeeb67c1415"
+                "a4e37cd11ee58c2a6d529f42b13195295179df0921bf20d9f634145d71e817f1"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
@@ -656,7 +656,7 @@ pub mod testnet_keys {
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "7290d1a791f03dcc5b789d16b09c3ea586789931167339fba079bdb4c9f64c75"
+                "281a3b47515392d492faca42d616fa09e609b5fbbaa98716293ebf5c6d4e6248"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
@@ -729,8 +729,8 @@ fn session_keys(
     authority_discovery: AuthorityDiscoveryId,
 ) -> opaque::SessionKeys {
     opaque::SessionKeys {
-        babe,
         grandpa,
+        babe,
         im_online,
         para_validator,
         para_assignment,
