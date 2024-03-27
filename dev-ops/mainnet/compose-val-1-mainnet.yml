@@ -20,15 +20,14 @@ services:
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
-      --chain testnet
-      --name testnet-val1
+      --chain mainnet
+      --name mainnet-val1
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
-      --node-key c6354babbc4a8c2a5cd2e5fb0e2f6ccdf0adf520cf5e6ba4fa4ccf484c298427
       --validator
       --prometheus-external
-      --bootnodes /ip4/45.77.100.209/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
+      --bootnodes /ip4/45.32.187.143/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
       --rpc-cors all
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
       -lwarn

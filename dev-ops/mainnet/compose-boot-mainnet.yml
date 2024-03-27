@@ -20,8 +20,8 @@ services:
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
-      --chain testnet
-      --name testnet-bootnode
+      --chain mainnet
+      --name mainnet-bootnode
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
