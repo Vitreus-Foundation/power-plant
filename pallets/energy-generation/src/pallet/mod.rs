@@ -1787,7 +1787,7 @@ pub mod pallet {
             origin: OriginFor<T>,
             energy_per_stake_currency: EnergyOf<T>,
         ) -> DispatchResult {
-            T::AdminOrigin::ensure_origin(origin)?;
+            <T as Config>::AdminOrigin::ensure_origin(origin)?;
             CurrentEnergyPerStakeCurrency::<T>::put(energy_per_stake_currency);
             Ok(())
         }
@@ -1799,7 +1799,7 @@ pub mod pallet {
             origin: OriginFor<T>,
             block_authoring_reward: ReputationPoint,
         ) -> DispatchResult {
-            T::AdminOrigin::ensure_origin(origin)?;
+            <T as Config>::AdminOrigin::ensure_origin(origin)?;
             BlockAuthoringReward::<T>::put(block_authoring_reward);
             Ok(())
         }
