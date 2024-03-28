@@ -193,8 +193,8 @@ pub mod opaque {
 
     impl_opaque_keys! {
         pub struct SessionKeys {
-            pub babe: Babe,
             pub grandpa: Grandpa,
+            pub babe: Babe,
             pub im_online: ImOnline,
             pub para_validator: Initializer,
             pub para_assignment: ParaSessionInfo,
@@ -215,7 +215,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 5,
+    spec_version: 6,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -345,7 +345,7 @@ parameter_types! {
     pub const ExpectedBlockTime: Moment = MILLISECS_PER_BLOCK;
     pub const ReportLongevity: u64 = 24 * 28 * 6 * EpochDuration::get();
         // BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
-    pub const MaxAuthorities: u32 = 100;
+    pub const MaxAuthorities: u32 = 10_000;
 }
 
 impl pallet_babe::Config for Runtime {
@@ -366,10 +366,12 @@ impl pallet_grandpa::Config for Runtime {
 
     type WeightInfo = ();
     type MaxAuthorities = ConstU32<32>;
-    type MaxSetIdSessionEntries = ConstU64<0>;
+    type MaxSetIdSessionEntries = ConstU64<168>;
 
-    type KeyOwnerProof = sp_core::Void;
-    type EquivocationReportSystem = ();
+    type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
+
+    type EquivocationReportSystem =
+        pallet_grandpa::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
 }
 
 parameter_types! {
@@ -475,7 +477,7 @@ pallet_staking_reward_curve::build! {
 }
 
 impl pallet_session::Config for Runtime {
-    type SessionManager = pallet_session::historical::NoteHistoricalRoot<Runtime, EnergyGeneration>;
+    type SessionManager = pallet_session::historical::NoteHistoricalRoot<Self, EnergyGeneration>;
     type Keys = opaque::SessionKeys;
     type ShouldEndSession = Babe;
     type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
@@ -592,7 +594,7 @@ parameter_types! {
     pub const SessionsPerEra: SessionIndex = prod_or_fast!(5, 1);
     pub const BondingDuration: EraIndex = prod_or_fast!(7, 5);
     // TODO: consider removing, since the slash defer feature was removed
-    pub const SlashDeferDuration: EraIndex = 4; // 1/4 the bonding duration.
+    pub const SlashDeferDuration: EraIndex = 0;
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const VNRG: AssetId = 1;
@@ -608,6 +610,19 @@ parameter_types! {
     pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     pub const RewardRemainderUnbalanced: u128 = 0;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
+}
+
+pub struct EnergyPerStakeCurrency;
+
+impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerStakeCurrency {
+    fn calculate_energy_rate(
+        _total_staked: StakeOf<Runtime>,
+        _total_issuance: Energy,
+        _core_nodes_num: u32,
+        _battery_slot_cap: Energy,
+    ) -> Energy {
+        1_000_000_000_000
+    }
 }
 
 pub struct EnergyPerReputationPoint;
@@ -678,11 +693,11 @@ impl pallet_energy_generation::Config for Runtime {
     type ReputationTierEnergyRewardAdditionalPercentMapping =
         ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = ();
-    type RewardRemainder = ();
+    type RewardRemainder = Treasury;
     type RuntimeEvent = RuntimeEvent;
     type SessionInterface = Self;
     type SessionsPerEra = SessionsPerEra;
-    type Slash = ();
+    type Slash = Treasury;
     type SlashDeferDuration = SlashDeferDuration;
     type StakeBalance = Balance;
     type StakeCurrency = Balances;
@@ -2035,23 +2050,29 @@ impl_runtime_apis! {
         }
 
         fn submit_report_equivocation_unsigned_extrinsic(
-            _equivocation_proof: fg_primitives::EquivocationProof<
+            equivocation_proof: fg_primitives::EquivocationProof<
                 <Block as BlockT>::Hash,
                 NumberFor<Block>,
             >,
-            _key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
+            key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
         ) -> Option<()> {
-            None
+            let key_owner_proof = key_owner_proof.decode()?;
+
+            Grandpa::submit_unsigned_equivocation_report(
+                equivocation_proof,
+                key_owner_proof,
+            )
         }
 
         fn generate_key_ownership_proof(
             _set_id: fg_primitives::SetId,
-            _authority_id: GrandpaId,
+            authority_id: GrandpaId,
         ) -> Option<fg_primitives::OpaqueKeyOwnershipProof> {
-            // NOTE: this is the only implementation possible since we've
-            // defined our key owner proof type as a bottom type (i.e. a type
-            // with no values).
-            None
+            use parity_scale_codec::Encode;
+
+            Historical::prove((fg_primitives::KEY_TYPE, authority_id))
+                .map(|p| p.encode())
+                .map(fg_primitives::OpaqueKeyOwnershipProof::new)
         }
     }
 

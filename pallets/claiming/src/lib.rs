@@ -39,7 +39,7 @@ type BalanceOf<T> = <CurrencyOf<T> as Currency<<T as frame_system::Config>::Acco
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
-pub struct EthereumAddress([u8; 20]);
+pub struct EthereumAddress(pub [u8; 20]);
 
 impl Serialize for EthereumAddress {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -198,7 +198,7 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Mint a new claim to collect VTRS.
+        /// Mint new tokens to claim.
         #[pallet::call_index(1)]
         #[pallet::weight(<T as Config>::WeightInfo::mint_tokens_to_claim())]
         pub fn mint_tokens_to_claim(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
@@ -209,6 +209,24 @@ pub mod pallet {
             <Total<T>>::mutate(|value| *value += amount);
             Self::deposit_event(Event::<T>::TokenMintedToClaim(amount));
 
+            Ok(())
+        }
+
+        /// Mint a new claim to collect VTRS.
+        #[pallet::call_index(2)]
+        #[pallet::weight(<T as Config>::WeightInfo::mint_claim())]
+        pub fn mint_claim(
+            origin: OriginFor<T>,
+            who: EthereumAddress,
+            value: BalanceOf<T>,
+            vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            <Claims<T>>::insert(who, value);
+            if let Some(vs) = vesting_schedule {
+                <Vesting<T>>::insert(who, vs);
+            }
             Ok(())
         }
     }

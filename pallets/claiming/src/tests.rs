@@ -20,11 +20,12 @@
 use crate::mock::*;
 use crate::secp_utils::*;
 use crate::{to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};
-use frame_support::traits::{Currency, VestingSchedule};
+use frame_support::traits::{Currency, ExistenceRequirement, VestingSchedule};
 use frame_support::{assert_err, assert_noop, assert_ok};
 use hex_literal::hex;
 use parity_scale_codec::Encode;
 use sp_runtime::DispatchError::BadOrigin;
+use sp_runtime::TokenError;
 
 #[test]
 fn mint_tokens_to_claim() {
@@ -64,6 +65,72 @@ fn claiming_works() {
         assert_eq!(Balances::free_balance(&42), 100);
         assert_eq!(Vesting::vesting_balance(&42), Some(50));
         assert_eq!(Claiming::total(), 50);
+    });
+}
+
+#[test]
+fn add_claim_works() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 250));
+
+        assert_noop!(
+            Claiming::mint_claim(RuntimeOrigin::signed(42), eth(&bob()), 200, None),
+            sp_runtime::traits::BadOrigin,
+        );
+        assert_eq!(Balances::free_balance(42), 0);
+        assert_noop!(
+            Claiming::claim(
+                RuntimeOrigin::signed(69),
+                sig::<Test>(&bob(), &69u64.encode(), &[][..])
+            ),
+            Error::<Test>::SignerHasNoClaim,
+        );
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, None));
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::signed(69),
+            sig::<Test>(&bob(), &69u64.encode(), &[][..])
+        ));
+        assert_eq!(Balances::free_balance(&69), 200);
+        assert_eq!(Vesting::vesting_balance(&69), None);
+        assert_eq!(Claiming::total(), 50);
+    });
+}
+
+#[test]
+fn add_claim_with_vesting_works() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 250));
+
+        assert_noop!(
+            Claiming::mint_claim(RuntimeOrigin::signed(42), eth(&bob()), 200, Some((50, 10, 1))),
+            sp_runtime::traits::BadOrigin,
+        );
+        assert_eq!(Balances::free_balance(42), 0);
+        assert_noop!(
+            Claiming::claim(
+                RuntimeOrigin::signed(69),
+                sig::<Test>(&bob(), &69u64.encode(), &[][..])
+            ),
+            Error::<Test>::SignerHasNoClaim,
+        );
+        assert_ok!(Claiming::mint_claim(
+            RuntimeOrigin::root(),
+            eth(&bob()),
+            200,
+            Some((50, 10, 1))
+        ));
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::signed(69),
+            sig::<Test>(&bob(), &69u64.encode(), &[][..])
+        ));
+        assert_eq!(Balances::free_balance(&69), 200);
+        assert_eq!(Vesting::vesting_balance(&69), Some(50));
+
+        // Make sure we can not transfer the vested balance.
+        assert_err!(
+            <Balances as Currency<_>>::transfer(&69, &80, 180, ExistenceRequirement::AllowDeath),
+            TokenError::Frozen,
+        );
     });
 }
 

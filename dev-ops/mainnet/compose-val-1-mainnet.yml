@@ -7,11 +7,11 @@ services:
       dockerfile: Dockerfile
     image: vitreus_power_plant
     networks:
-      - vitreus_power_plant-network
+      - vitreus_power_plant_network
 
-  archive_node:
+  first_node:
     image: vitreus_power_plant
-    container_name: power-plant-archive-node
+    container_name: power-plant-first-node
     restart: always
     depends_on:
       - vitreus_power_plant
@@ -20,28 +20,29 @@ services:
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
-      --chain testnet
-      --name testnet-archive
+      --chain mainnet
+      --name mainnet-val1
       --port 30333
       --rpc-port 9944
-      --rpc-external
+      --rpc-methods=unsafe
+      --validator
       --prometheus-external
-      --bootnodes /ip4/45.77.100.209/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
+      --bootnodes /ip4/45.32.187.143/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
       --rpc-cors all
-      --state-pruning archive
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
+      -lwarn
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
-      - "0.0.0.0:9944:9944/tcp"
-      - "0.0.0.0:9615:9615/tcp"
+      - "127.0.0.1:9944:9944/tcp"
+      - "127.0.0.1:9615:9615/tcp"
     networks:
-      - vitreus_power_plant-network
+      - vitreus_power_plant_network
 
 volumes:
   node_data:
     driver: local
 
 networks:
-  vitreus_power_plant-network:
+  vitreus_power_plant_network:
     name: vitreus_power_plant
