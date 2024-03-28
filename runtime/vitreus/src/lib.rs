@@ -685,7 +685,7 @@ impl pallet_energy_generation::Config for Runtime {
     type EnergyPerStakeCurrency = EnergyGeneration;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
-    type MaxCooperatorRewardedPerValidator = ConstU32<64>;
+    type MaxCooperatorRewardedPerValidator = ConstU32<128>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
