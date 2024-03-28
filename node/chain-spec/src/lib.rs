@@ -358,7 +358,7 @@ pub fn testnet_genesis(
         balances: BalancesConfig {
             balances: endowed_accounts.iter().cloned().map(|k| (k, ENDOWMENT)).collect(),
         },
-        claiming: Default::default(),
+        claiming: genesis::claiming_config(),
         vesting: Default::default(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
         council: CouncilConfig {
@@ -434,7 +434,7 @@ pub fn testnet_genesis(
         technical_membership: Default::default(),
         treasury: Default::default(),
         energy_generation: EnergyGenerationConfig {
-            validator_count: initial_validators.len() as u32,
+            validator_count: 125,
             minimum_validator_count: initial_validators.len() as u32,
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
@@ -576,7 +576,7 @@ pub mod testnet_keys {
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "488c73604a3da26d8f2547c71869d8a78542b008b55fc50bdea72751e702d142"
+                "275fad28e7f2904a0341b5baa66b40f8941b09a22739a8b141f99b91e0dd9458"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
@@ -616,7 +616,7 @@ pub mod testnet_keys {
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "735fa995b62b01c3ffc05f752a2fa708a46147dec40af60a7b3d5eeeb67c1415"
+                "a4e37cd11ee58c2a6d529f42b13195295179df0921bf20d9f634145d71e817f1"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
@@ -656,7 +656,7 @@ pub mod testnet_keys {
             ))
             .into(),
             sp_core::ed25519::Public(hex!(
-                "7290d1a791f03dcc5b789d16b09c3ea586789931167339fba079bdb4c9f64c75"
+                "281a3b47515392d492faca42d616fa09e609b5fbbaa98716293ebf5c6d4e6248"
             ))
             .into(),
             sp_core::sr25519::Public(hex!(
@@ -679,6 +679,47 @@ pub mod testnet_keys {
     }
 }
 
+mod genesis {
+    use super::*;
+
+    pub(super) fn claiming_config() -> vitreus_power_plant_runtime::ClaimingConfig {
+        let mut config = vitreus_power_plant_runtime::ClaimingConfig {
+            claims: include!(concat!(env!("OUT_DIR"), "/claiming_claims.rs")),
+            vesting: vec![],
+        };
+
+        // address, amount in milliVTRS, vesting start/period in years
+        let claims = vec![
+            (hex!("3e743911188753601C688F42510d7d9fF34bfEFf"), 375083500, Some((1, 1))),
+            (hex!("2902213Ae1122D9D23c41AaC3961Da8d4dcb8588"), 629210, Some((1, 1))),
+            (hex!("Da67BB5318003a8Cd5D68cC2Fc042958ed4262F2"), 26000000, Some((1, 1))),
+            (hex!("E5b8524a2613472972cA7Ea11c6Fa2DA65379C2b"), 1100000, Some((1, 1))),
+            (hex!("cEcb9661f49255d7f814a49018Bc74069Cc0AD45"), 260000000, Some((1, 1))),
+            (hex!("fb8B24C9072A93BC3F6A5aF7C3F55a0655Eee509"), 1360000, Some((1, 1))),
+            (hex!("Dc5419Ce5633a3608b1d19F26377D84BD8b0168f"), 2040000, Some((1, 1))),
+            (hex!("5b7d4c4b7243bfad283472c1ff3a4fb1949cb309"), 60627000, None),
+            (hex!("21ECD0192945a534EA5faf594f1a5aDa6CBAD4C0"), 160353820, None),
+        ];
+
+        for (address, amount, vesting) in claims {
+            let address = pallet_claiming::EthereumAddress(address);
+            let amount = amount * vitreus_power_plant_runtime::MILLI_VTRS;
+
+            config.claims.push((address, amount));
+
+            if let Some((start, period)) = vesting {
+                let start = start * 365 * vitreus_power_plant_runtime::DAYS;
+                let period = period * 365 * vitreus_power_plant_runtime::DAYS;
+
+                let amount_per_block = amount / period as u128;
+                config.vesting.push((address, (amount, amount_per_block, start)));
+            }
+        }
+
+        config
+    }
+}
+
 fn session_keys(
     babe: BabeId,
     grandpa: GrandpaId,
@@ -688,8 +729,8 @@ fn session_keys(
     authority_discovery: AuthorityDiscoveryId,
 ) -> opaque::SessionKeys {
     opaque::SessionKeys {
-        babe,
         grandpa,
+        babe,
         im_online,
         para_validator,
         para_assignment,

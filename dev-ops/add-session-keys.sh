@@ -22,7 +22,7 @@ usage() {
     echo "\t<RPC_API_ENDPOINT> the URL to connect to the node via RPC"
     printf "\n\033[31m"
     echo "The envs file should contain the variables:"
-    echo "\t<PREFIX><PRIVATE, PUBLIC>_<BABE, GRAN, IMON>" 
+    echo "\t<PREFIX><PRIVATE, PUBLIC>_<GRAN, BABE, IMON, PARA, ASGN, AUDI>"
     printf "\033[0m\n"
 }
 
@@ -30,7 +30,7 @@ load_envs() {
     source "$envs"
     
     # check all variables are loaded
-    local envs_postfix="PRIVATE_BABE PUBLIC_BABE PRIVATE_GRAN PUBLIC_GRAN PRIVATE_IMON PUBLIC_IMON"
+    local envs_postfix="PRIVATE_GRAN PUBLIC_GRAN PRIVATE_BABE PUBLIC_BABE PRIVATE_IMON PUBLIC_IMON PRIVATE_PARA PUBLIC_PARA PRIVATE_ASGN PUBLIC_ASGN PRIVATE_AUDI PUBLIC_AUDI"
     
     for postfix in $envs_postfix; do
         local variable_name="${prefix}${postfix}"
@@ -69,18 +69,30 @@ check_availability() {
 }
 
 add_session_keys() {
-    local private_babe="${prefix}PRIVATE_BABE"
-    local public_babe="${prefix}PUBLIC_BABE"
-
     local private_gran="${prefix}PRIVATE_GRAN"
     local public_gran="${prefix}PUBLIC_GRAN"
+
+    local private_babe="${prefix}PRIVATE_BABE"
+    local public_babe="${prefix}PUBLIC_BABE"
 
     local private_imon="${prefix}PRIVATE_IMON"
     local public_imon="${prefix}PUBLIC_IMON"
 
-    add_key "babe" "${!private_babe}" "${!public_babe}" "$rpc_api_endpoint"
+    local private_para="${prefix}PRIVATE_PARA"
+    local public_para="${prefix}PUBLIC_PARA"
+
+    local private_asgn="${prefix}PRIVATE_ASGN"
+    local public_asgn="${prefix}PUBLIC_ASGN"
+
+    local private_audi="${prefix}PRIVATE_AUDI"
+    local public_audi="${prefix}PUBLIC_AUDI"
+
     add_key "gran" "${!private_gran}" "${!public_gran}" "$rpc_api_endpoint"
+    add_key "babe" "${!private_babe}" "${!public_babe}" "$rpc_api_endpoint"
     add_key "imon" "${!private_imon}" "${!public_imon}" "$rpc_api_endpoint"
+    add_key "para" "${!private_para}" "${!public_para}" "$rpc_api_endpoint"
+    add_key "asgn" "${!private_asgn}" "${!public_asgn}" "$rpc_api_endpoint"
+    add_key "audi" "${!private_audi}" "${!public_audi}" "$rpc_api_endpoint"
 }
 
 add_key() {
