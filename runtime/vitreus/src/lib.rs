@@ -774,9 +774,9 @@ impl pallet_transaction_payment::Config for Runtime {
 
 impl pallet_asset_rate::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type CreateOrigin = EnsureRoot<AccountId>;
-    type RemoveOrigin = EnsureRoot<AccountId>;
-    type UpdateOrigin = EnsureRoot<AccountId>;
+    type CreateOrigin = MoreThanHalfCouncil;
+    type RemoveOrigin = MoreThanHalfCouncil;
+    type UpdateOrigin = MoreThanHalfCouncil;
     type AssetId = AssetId;
     type Currency = Balances;
     type Balance = Balance;
