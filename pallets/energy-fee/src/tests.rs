@@ -479,3 +479,52 @@ fn fee_multiplier_works_for_evm() {
         assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance - constant_fee,);
     });
 }
+
+#[test]
+fn update_base_fee_works() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
+        let transfer_amount: Balance = 1_000_000_000;
+
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+
+        let dispatch_info: DispatchInfo = assets_transfer_call.get_dispatch_info();
+        let extrinsic_len: u32 = 1000;
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+
+        let constant_fee_1 = GetConstantEnergyFee::get();
+        assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance - constant_fee_1,);
+
+        let constant_fee_2 = 100;
+        EnergyFee::update_base_fee(RuntimeOrigin::root(), constant_fee_2)
+            .expect("Expected to set a new base fee");
+
+        <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+
+        assert_eq!(
+            BalancesVNRG::balance(&ALICE),
+            initial_energy_balance - constant_fee_1 - constant_fee_2,
+        );
+    });
+}

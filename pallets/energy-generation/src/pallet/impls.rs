@@ -16,7 +16,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use orml_traits::GetByKey;
 use scale_info::prelude::*;
 
-use pallet_reputation::{ReputationPoint, ReputationRecord, NORMAL};
+use pallet_reputation::{ReputationPoint, ReputationRecord};
 use pallet_session::historical;
 use sp_runtime::{
     traits::{Convert, One, Saturating, Zero},
@@ -837,9 +837,7 @@ impl<T: Config> Pallet<T> {
     // TODO: get rid of floating point types.
     pub fn calculate_block_authoring_reward() -> ReputationPoint {
         let active_validators_count = T::SessionInterface::validators().len();
-        let reward = (NORMAL as u64 * pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0)
-            .saturating_sub(pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0)
-            .saturating_mul(active_validators_count as u64);
+        let reward = Self::block_authoring_reward().saturating_mul(active_validators_count as u64);
 
         ReputationPoint(reward)
     }
@@ -1089,18 +1087,27 @@ where
     T: Config + pallet_authorship::Config + pallet_session::Config,
 {
     fn note_author(author: T::AccountId) {
-        if let Err(e) = <pallet_reputation::Pallet<T>>::do_increase_points(
-            &author,
-            Self::calculate_block_authoring_reward(),
-        ) {
+        let reward = Self::calculate_block_authoring_reward();
+        if let Err(e) = <pallet_reputation::Pallet<T>>::do_increase_points(&author, reward) {
             pallet_reputation::Pallet::<T>::deposit_event(
                 pallet_reputation::Event::<T>::ReputationIncreaseFailed {
                     account: author,
                     error: e,
-                    points: pallet_reputation::REPUTATION_POINTS_PER_DAY,
+                    points: reward,
                 },
             );
         }
+    }
+}
+
+impl<T: Config> EnergyRateCalculator<StakeOf<T>, EnergyOf<T>> for Pallet<T> {
+    fn calculate_energy_rate(
+        _total_staked: StakeOf<T>,
+        _total_issuance: EnergyOf<T>,
+        _core_nodes_num: u32,
+        _battery_slot_cap: EnergyOf<T>,
+    ) -> EnergyOf<T> {
+        Pallet::<T>::current_energy_per_stake_currency().unwrap_or(EnergyOf::<T>::zero())
     }
 }
 

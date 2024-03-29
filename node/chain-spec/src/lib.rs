@@ -17,8 +17,8 @@ use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
     BalancesConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig, EnableManualSeal,
     EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
-    NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix, SessionConfig,
-    Signature, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+    NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix,
+    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
     BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -465,6 +465,8 @@ pub fn testnet_genesis(
             min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
+            energy_per_stake_currency: 1_000_000u128,
+            block_authoring_reward: ReputationPoint(12),
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },
@@ -590,6 +592,8 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
             min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
+            energy_per_stake_currency: 1_000_000u128,
+            block_authoring_reward: ReputationPoint(12),
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },

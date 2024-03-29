@@ -682,10 +682,10 @@ impl pallet_energy_generation::Config for Runtime {
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type ValidatorReputationTier = ValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
+    type EnergyPerStakeCurrency = EnergyGeneration;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
-    type MaxCooperatorRewardedPerValidator = ConstU32<64>;
+    type MaxCooperatorRewardedPerValidator = ConstU32<128>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
@@ -818,7 +818,7 @@ impl pallet_asset_rate::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-    pub GetConstantGasLimit: U256 = U256::from(56_000);
+    pub GetConstantGasLimit: U256 = U256::from(100_000);
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
@@ -914,7 +914,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 
     fn custom_fee() -> Balance {
         let next_multiplier = TransactionPayment::next_fee_multiplier();
-        next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+        next_multiplier.saturating_mul_int(EnergyFee::base_fee())
     }
 
     fn weight_fee(
@@ -1129,7 +1129,7 @@ impl pallet_evm::Config for Runtime {
     type FindAuthor = FindAuthorTruncated<Babe>;
     type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
-    type OnChargeTransaction = EnergyFee; //EVMCurrencyAdapter<Balances, ()>;
+    type OnChargeTransaction = EnergyFee;
     type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
