@@ -592,6 +592,8 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
             min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
+            energy_per_stake_currency: 1_000_000u128,
+            block_authoring_reward: ReputationPoint(12),
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },
