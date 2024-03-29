@@ -60,9 +60,10 @@ where
         if call.is_sub_type().is_some() {
             return Ok(());
         }
-        let fee = match T::CustomFee::dispatch_info_to_fee(call, info) {
-            CallFee::Custom(custom_fee) | CallFee::EVM(custom_fee) => custom_fee,
-            _ => TransactionPaymentPallet::<T>::compute_fee(len as u32, info, 0u32.into()),
+
+        let fee = TransactionPaymentPallet::<T>::compute_fee(len as u32, info, 0u32.into());
+        let fee = match T::CustomFee::dispatch_info_to_fee(call, Some(info), Some(fee)) {
+            CallFee::Regular(custom_fee) | CallFee::EVM(custom_fee) => custom_fee,
         };
         Pallet::<T>::validate_call_fee(fee).map_err(|_| {
             TransactionValidityError::Invalid(InvalidTransaction::ExhaustsResources)

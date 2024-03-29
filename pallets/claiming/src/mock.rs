@@ -17,15 +17,18 @@
 
 //! Test environment for 'pallet-claiming'.
 
+use super::secp_utils::eth;
 use crate as pallet_claiming;
 
+use frame_support::traits::WithdrawReasons;
 use frame_support::{
-    construct_runtime,
+    construct_runtime, parameter_types,
     traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
+use sp_io::hashing::keccak_256;
 use sp_runtime::{
-    traits::{BlakeTwo256, IdentityLookup},
+    traits::{BlakeTwo256, Identity, IdentityLookup},
     BuildStorage,
 };
 
@@ -36,6 +39,7 @@ construct_runtime!(
     {
         System: frame_system,
         Balances: pallet_balances::{Pallet, Event<T>},
+        Vesting: pallet_vesting,
         Claiming: pallet_claiming,
     }
 );
@@ -82,16 +86,64 @@ impl pallet_balances::Config for Test {
     type MaxFreezes = ();
 }
 
+parameter_types! {
+    pub const MinVestedTransfer: u64 = 1;
+    pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
+        WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
+}
+
+impl pallet_vesting::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BlockNumberToBalance = Identity;
+    type MinVestedTransfer = MinVestedTransfer;
+    type WeightInfo = ();
+    type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
+    const MAX_VESTING_SCHEDULES: u32 = 28;
+}
+
+parameter_types! {
+    pub Prefix: &'static [u8] = b"Pay RUSTs to the TEST account:";
+}
+
 impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
+    type VestingSchedule = Vesting;
+    type Prefix = Prefix;
     type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
-    let genesis = pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 100), (2, 200)] };
-    genesis.assimilate_storage(&mut t).unwrap();
+
+    pallet_claiming::GenesisConfig::<Test> {
+        claims: vec![
+            (eth(&alice()), 100),
+            (eth(&dave()), 200),
+            (eth(&eve()), 300),
+            (eth(&frank()), 400),
+        ],
+        vesting: vec![(eth(&alice()), (50, 10, 1))],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
 
     t.into()
+}
+
+pub(crate) fn alice() -> libsecp256k1::SecretKey {
+    libsecp256k1::SecretKey::parse(&keccak_256(b"Alice")).unwrap()
+}
+pub(crate) fn bob() -> libsecp256k1::SecretKey {
+    libsecp256k1::SecretKey::parse(&keccak_256(b"Bob")).unwrap()
+}
+pub(crate) fn dave() -> libsecp256k1::SecretKey {
+    libsecp256k1::SecretKey::parse(&keccak_256(b"Dave")).unwrap()
+}
+pub(crate) fn eve() -> libsecp256k1::SecretKey {
+    libsecp256k1::SecretKey::parse(&keccak_256(b"Eve")).unwrap()
+}
+pub(crate) fn frank() -> libsecp256k1::SecretKey {
+    libsecp256k1::SecretKey::parse(&keccak_256(b"Frank")).unwrap()
 }

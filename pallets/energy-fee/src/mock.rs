@@ -8,6 +8,7 @@ use fp_account::AccountId20;
 use frame_support::traits::fungible::{Balanced, ItemOf};
 use frame_support::traits::tokens::imbalance::SplitTwoWays;
 use frame_support::traits::OnUnbalanced;
+use frame_support::dispatch::GetDispatchInfo;
 use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
     pallet_prelude::Weight,
@@ -17,7 +18,7 @@ use frame_support::{
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_ethereum::PostLogContent;
 use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
-use parity_scale_codec::Compact;
+use parity_scale_codec::{Compact, Encode};
 
 use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Perquintill};
 use sp_core::{Get, H256, U256};
@@ -30,7 +31,7 @@ use sp_runtime::{
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub(crate) type AccountId = AccountId20;
-pub(crate) type AssetId = u128;
+pub(crate) type AssetId = u32;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
@@ -250,20 +251,42 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 {
     fn dispatch_info_to_fee(
         runtime_call: &RuntimeCall,
-        _dispatch_info: &DispatchInfoOf<RuntimeCall>,
+        dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
+        calculated_fee: Option<Balance>,
     ) -> CallFee<Balance> {
         match runtime_call {
             RuntimeCall::BalancesVTRS(..) | RuntimeCall::Assets(..) => {
-                CallFee::Custom(Self::custom_fee())
+                CallFee::Regular(Self::custom_fee())
             },
             RuntimeCall::EVM(..) => CallFee::EVM(Self::custom_fee()),
-            _ => CallFee::Stock,
+            _ => {
+                let fee = Self::weight_fee(runtime_call, dispatch_info, calculated_fee);
+                CallFee::Regular(fee)
+            },
         }
     }
 
     fn custom_fee() -> Balance {
         let next_multiplier = TransactionPayment::next_fee_multiplier();
         next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+    }
+
+    fn weight_fee(
+        runtime_call: &RuntimeCall,
+        dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
+        calculated_fee: Option<Balance>,
+    ) -> Balance {
+        if let Some(fee) = calculated_fee {
+            fee
+        } else {
+            let len = runtime_call.encode().len() as u32;
+            if let Some(info) = dispatch_info {
+                pallet_transaction_payment::Pallet::<Test>::compute_fee(len, info, Zero::zero())
+            } else {
+                let info = &runtime_call.get_dispatch_info();
+                pallet_transaction_payment::Pallet::<Test>::compute_fee(len, info, Zero::zero())
+            }
+        }
     }
 }
 
@@ -286,6 +309,8 @@ impl pallet_assets::Config for Test {
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
     type CallbackHandle = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
 }
 
 parameter_types! {

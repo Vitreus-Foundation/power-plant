@@ -23,7 +23,7 @@ usage() {
     echo "\t<envs_file> contains the environment variables with session keys"
     printf "\n\033[31m"
     echo "The envs file should contain the variables:"
-    echo "\t<VALIDATOR1, VALIDATOR2, VALIDATOR3>_<PRIVATE, PUBLIC>_<BABE, GRAN, IMON>" 
+    echo "\t<VALIDATOR1, VALIDATOR2, VALIDATOR3>_<PRIVATE, PUBLIC>_<GRAN, BABE, IMON, PARA, ASGN, AUDI>"
     printf "\033[0m\n"
 }
 
@@ -134,16 +134,25 @@ add_session_keys() {
     local prefix="$1"
     local rpc_api_endpoint="$2"
 
-    local private_babe="${prefix}_PRIVATE_BABE"
-    local public_babe="${prefix}_PUBLIC_BABE"
     local private_gran="${prefix}_PRIVATE_GRAN"
     local public_gran="${prefix}_PUBLIC_GRAN"
+    local private_babe="${prefix}_PRIVATE_BABE"
+    local public_babe="${prefix}_PUBLIC_BABE"
     local private_imon="${prefix}_PRIVATE_IMON"
     local public_imon="${prefix}_PUBLIC_IMON"
+    local private_para="${prefix}_PRIVATE_PARA"
+    local public_para="${prefix}_PUBLIC_PARA"
+    local private_asgn="${prefix}_PRIVATE_ASGN"
+    local public_asgn="${prefix}_PUBLIC_ASGN"
+    local private_audi="${prefix}_PRIVATE_AUDI"
+    local public_audi="${prefix}_PUBLIC_AUDI"
 
-    add_key "babe" "${!private_babe}" "${!public_babe}" "$rpc_api_endpoint"
     add_key "gran" "${!private_gran}" "${!public_gran}" "$rpc_api_endpoint"
+    add_key "babe" "${!private_babe}" "${!public_babe}" "$rpc_api_endpoint"
     add_key "imon" "${!private_imon}" "${!public_imon}" "$rpc_api_endpoint"
+    add_key "para" "${!private_para}" "${!public_para}" "$rpc_api_endpoint"
+    add_key "asgn" "${!private_asgn}" "${!public_asgn}" "$rpc_api_endpoint"
+    add_key "audi" "${!private_audi}" "${!public_audi}" "$rpc_api_endpoint"
 }
 
 add_key() {

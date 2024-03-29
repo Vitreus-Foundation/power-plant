@@ -1,9 +1,143 @@
+[[bin]]
+name = "vitreus-power-plant-node"
+path = "src/main.rs"
+
+[package]
+name = "vitreus-power-plant-node"
+version = "0.0.0"
+license = "Unlicense"
+description = "A fresh FRAME-based Substrate node, ready for hacking."
+publish = false
+authors = { workspace = true }
+edition = { workspace = true }
+repository = { workspace = true }
+
+[dependencies]
+color-eyre = { version = "0.6.1", default-features = false }
+tikv-jemallocator = "0.5.0"
+
+# Crates in our workspace, defined as dependencies so we can pass them feature flags.
+polkadot-cli = { path = "cli", features = ["polkadot-native", "kusama-native", "westend-native", "rococo-native"] }
+polkadot-service = { path = "node/service" }
+polkadot-node-core-pvf = { path = "node/core/pvf" }
+polkadot-node-core-pvf-prepare-worker = { path = "node/core/pvf/prepare-worker" }
+polkadot-overseer = { path = "node/overseer" }
+
+[dev-dependencies]
+assert_cmd = "2.0.4"
+nix = { version = "0.26.1", features = ["signal"] }
+tempfile = "3.2.0"
+tokio = "1.24.2"
+substrate-rpc-client = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+polkadot-core-primitives = { path = "core-primitives" }
+
+[features]
+default = ["with-rocksdb-weights", "rocksdb", "sql", "txpool"]
+with-rocksdb-weights = ["polkadot-service/with-rocksdb-weights"]
+with-paritydb-weights = ["polkadot-service/with-paritydb-weights"]
+rocksdb = [
+    "polkadot-cli/db",
+    "polkadot-service/db",
+]
+sql = ["polkadot-service/sql"]
+txpool = ["polkadot-service/txpool"]
+rpc-binary-search-estimate = ["polkadot-service/rpc-binary-search-estimate"]
+runtime-benchmarks = [
+    "polkadot-cli/runtime-benchmarks",
+    "polkadot-service/runtime-benchmarks",
+]
+fast-runtime = [
+    "polkadot-cli/fast-runtime",
+    "polkadot-service/fast-runtime",
+]
+
 [workspace]
 members = [
-    "node",
+    "cli",
+    "core-primitives",
+    "erasure-coding",
+    "erasure-coding/fuzzer",
+    "primitives",
+    "primitives/test-helpers",
+    "runtime/common",
+    "runtime/common/slot_range_helper",
+    "runtime/metrics",
+    "runtime/parachains",
+    "runtime/polkadot",
+    "runtime/polkadot/constants",
+    "runtime/kusama",
+    "runtime/kusama/constants",
+    "runtime/rococo",
+    "runtime/rococo/constants",
+    "runtime/westend",
+    "runtime/westend/constants",
+    "runtime/test-runtime",
+    "runtime/test-runtime/constants",
+    "statement-table",
+    "xcm",
+    "xcm/xcm-builder",
+    "xcm/xcm-executor",
+    #    "xcm/xcm-executor/integration-tests",
+    "xcm/xcm-simulator",
+    "xcm/xcm-simulator/example",
+    "xcm/xcm-simulator/fuzzer",
+    "xcm/pallet-xcm",
+    "xcm/pallet-xcm-benchmarks",
+    "xcm/procedural",
     "node/chain-spec",
-    "node/eth-rpc-server",
-    "node/node-rpc-server",
+    "node/collation-generation",
+    "node/core/approval-voting",
+    "node/core/av-store",
+    "node/core/backing",
+    "node/core/bitfield-signing",
+    "node/core/candidate-validation",
+    "node/core/chain-api",
+    "node/core/chain-selection",
+    "node/core/dispute-coordinator",
+    "node/core/parachains-inherent",
+    "node/core/provisioner",
+    "node/core/pvf",
+    "node/core/pvf/common",
+    "node/core/pvf/execute-worker",
+    "node/core/pvf/prepare-worker",
+    "node/core/pvf-checker",
+    "node/core/runtime-api",
+    "node/network/approval-distribution",
+    "node/network/bridge",
+    "node/network/protocol",
+    "node/network/statement-distribution",
+    "node/network/bitfield-distribution",
+    "node/network/availability-distribution",
+    "node/network/availability-recovery",
+    "node/network/collator-protocol",
+    "node/network/gossip-support",
+    "node/network/dispute-distribution",
+    "node/overseer",
+    "node/malus",
+    "node/primitives",
+    "node/service",
+    "node/subsystem",
+    "node/subsystem-types",
+    "node/subsystem-test-helpers",
+    "node/subsystem-util",
+    "node/jaeger",
+    "node/gum",
+    "node/gum/proc-macro",
+    "node/metrics",
+    "node/test/client",
+    "node/test/performance-test",
+    "node/test/service",
+    "node/zombienet-backchannel",
+    "rpc",
+    "rpc/eth-rpc-server",
+    "rpc/node-rpc-server",
+    "parachain",
+    #    "parachain/test-parachains",
+    #    "parachain/test-parachains/adder",
+    #    "parachain/test-parachains/adder/collator",
+    #    "parachain/test-parachains/halt",
+    #    "parachain/test-parachains/undying",
+    #    "parachain/test-parachains/undying/collator",
     "pallets/claiming",
     "pallets/energy-fee",
     "pallets/energy-fee/runtime-api",
@@ -14,8 +148,9 @@ members = [
     "pallets/faucet",
     "pallets/nac-managing",
     "pallets/reputation",
-    "runtime",
-    "runtime/runtime-api",
+    "pallets/treasury-extension",
+    "runtime/vitreus",
+    "runtime/vitreus/runtime-api",
     # "pallets/simple-staking",
     # "precompiles/balances-erc20",
     # "precompiles/utils",
@@ -26,6 +161,69 @@ resolver = "2"
 authors = ["Innowise FinTech Team"]
 edition = "2021"
 repository = "https://bitbucket.org/innowise-group/vitreus-power-plant"
+version = "1.0.0"
+
+# Disable some clippy checks for polkadot code
+[workspace.lints.clippy]
+bind_instead_of_map = "allow"
+boxed_local = "allow"
+collapsible_else_if = "allow"
+collapsible_match = "allow"
+comparison_chain = "allow"
+derivable_impls = "allow"
+excessive_precision = "allow"
+four_forward_slashes = "allow"
+from_over_into = "allow"
+identity_op = "allow"
+inconsistent_digit_grouping = "allow"
+into_iter_on_ref = "allow"
+iter_next_slice = "allow"
+iter_overeager_cloned = "allow"
+large_enum_variant = "allow"
+len_without_is_empty = "allow"
+len_zero = "allow"
+let_and_return = "allow"
+let_unit_value = "allow"
+manual_next_back = "allow"
+map_clone = "allow"
+match_like_matches_macro = "allow"
+match_ref_pats = "allow"
+match_result_ok = "allow"
+mem_replace_with_default = "allow"
+module_inception = "allow"
+needless_borrow = "allow"
+needless_borrows_for_generic_args = "allow"
+needless_return = "allow"
+new_without_default = "allow"
+nonminimal_bool = "allow"
+op_ref = "allow"
+option_map_or_none = "allow"
+option_map_unit_fn = "allow"
+partialeq_to_none = "allow"
+ptr_arg = "allow"
+redundant_closure = "allow"
+redundant_pattern = "allow"
+redundant_pattern_matching = "allow"
+redundant_static_lifetimes = "allow"
+result_large_err = "allow"
+result_unit_err = "allow"
+should_implement_trait = "allow"
+single_match = "allow"
+suspicious_doc_comments = "allow"
+tabs_in_doc_comments = "allow"
+too_many_arguments = "allow"
+type_complexity = "allow"
+unit_arg = "allow"
+unnecessary_cast = "allow"
+unnecessary_lazy_evaluations = "allow"
+unnecessary_mut_passed = "allow"
+unused_unit = "allow"
+unwrap_or_default = "allow"
+useless_conversion = "allow"
+vec_init_then_push = "allow"
+while_let_on_iterator = "allow"
+write_with_newline = "allow"
+wrong_self_convention = "allow"
 
 [workspace.dependencies]
 affix = "0.1"
@@ -45,7 +243,7 @@ libm = { version = "0.2.8" }
 libsecp256k1 = { version = "0.7", default-features = false }
 log = { version = "0.4", default-features = false }
 num_enum = { version = "0.6", default-features = false }
-orml-traits = { git = "https://github.com/open-web3-stack//open-runtime-module-library.git", branch = "polkadot-v1.0.0", default-features = false}
+orml-traits = { git = "https://github.com/open-web3-stack//open-runtime-module-library.git", branch = "polkadot-v1.0.0", default-features = false }
 parity-db = "0.4"
 rand_chacha = { version = "0.2", default-features = false }
 rlp = { version = "0.5", default-features = false }
@@ -61,6 +259,7 @@ serde = { version = "1.0", default-features = false, features = [
     "derive",
     "alloc",
 ] }
+serde_derive = "1.0"
 serde_json = "1.0"
 sha3 = { version = "0.10", default-features = false }
 similar-asserts = "1.4"
@@ -102,10 +301,12 @@ sc-utils = { git = "https://github.com/paritytech/substrate", branch = "polkadot
 sp-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-application-crypto = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-arithmetic = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+sp-authority-discovery = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-block-builder = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-consensus-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+sp-consensus-beefy = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-consensus-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-database = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
@@ -113,6 +314,7 @@ sp-inherents = { git = "https://github.com/paritytech/substrate", branch = "polk
 sp-io = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+sp-mmr-primitives = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-offchain = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-session = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
@@ -136,13 +338,20 @@ frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/substrate"
 pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-asset-rate = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-atomic-swap = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-authority-discovery = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-authorship = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-bags-list = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-bounties = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-collective = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-democracy = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-im-online = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-membership = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-offences = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-preimage = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-scheduler = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-session = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false, features = [
     "historical",
 ] }
@@ -151,10 +360,13 @@ pallet-timestamp = { git = "https://github.com/paritytech/substrate", branch = "
 pallet-transaction-payment = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-treasury = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-treasury-extension = { path = "pallets/treasury-extension", default-features = false }
 pallet-nfts = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-nfts-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-uniques = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-utility = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-vesting = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-staking-reward-curve = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 
 # Substrate Utility
@@ -196,9 +408,13 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # Moonbeam
 # precompile-utils = { path = "precompiles/utils", default-features = false }
 # pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
+
+# Polkadot
+polkadot-primitives = { path = "primitives", default-features = false }
+
 # Runtime
-vitreus-power-plant-runtime = { path = "runtime", default-features = false }
-vitreus-utility-runtime-api = { path = "runtime/runtime-api", default-features = false}
+vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
+vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false }
 
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
@@ -214,8 +430,8 @@ energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-feat
 energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api", default-features = false }
 energy-fee-rpc = { path = "pallets/energy-fee/rpc" }
 energy-generation-rpc = { path = "pallets/energy-generation/rpc" }
-eth-rpc-server = { path = "node/eth-rpc-server" }
-node-rpc-server = { path = "node/node-rpc-server" }
+eth-rpc-server = { path = "rpc/eth-rpc-server" }
+node-rpc-server = { path = "rpc/node-rpc-server" }
 
 # Arkworks
 ark-bls12-377 = { version = "0.4.0", default-features = false, features = [

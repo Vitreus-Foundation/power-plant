@@ -49,6 +49,20 @@ impl<T: Config> Pallet<T> {
         }
     }
 
+    /// Minimum stake to be a validator depends on NAC level.
+    pub fn min_bond_for_validator(stash: &T::AccountId) -> StakeOf<T> {
+        match pallet_nac_managing::Pallet::<T>::get_nac_level(stash) {
+            Some((level, _)) => {
+                if level > 1 {
+                    MinTrustValidatorBond::<T>::get()
+                } else {
+                    MinCommonValidatorBond::<T>::get()
+                }
+            },
+            None => MinCommonValidatorBond::<T>::get(),
+        }
+    }
+
     /// Check if the account has enough reputation for collaborative staking.
     pub fn is_legit_for_collab(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {
@@ -195,7 +209,7 @@ impl<T: Config> Pallet<T> {
 
         <Ledger<T>>::insert(&controller, &ledger);
 
-        let validator_total_payout = exposure.total.into().saturating_mul(era_energy_rate);
+        let validator_total_payout = exposure.total.into() / era_energy_rate;
 
         let validator_prefs = Self::eras_validator_prefs(era, &validator_stash);
         // Validator first gets a cut off the top.
@@ -539,10 +553,16 @@ impl<T: Config> Pallet<T> {
     /// Store staking information for the new planned era
     #[allow(clippy::type_complexity)]
     pub fn store_stakers_info(
-        exposures: Vec<(T::AccountId, Exposure<T::AccountId, StakeOf<T>>)>,
+        mut exposures: Vec<(T::AccountId, Exposure<T::AccountId, StakeOf<T>>)>,
         new_planned_era: EraIndex,
     ) -> Vec<T::AccountId> {
-        let elected_stashes: Vec<_> = exposures.iter().cloned().map(|(x, _)| x).collect::<Vec<_>>();
+        let max_validators = Self::validator_count().max(1) as usize;
+        if exposures.len() > max_validators {
+            // Get validators with max total stake
+            exposures.select_nth_unstable_by(max_validators, |a, b| b.1.total.cmp(&a.1.total));
+        }
+        let elected_stashes: Vec<_> =
+            exposures.iter().take(max_validators).map(|(x, _)| x.clone()).collect();
 
         // Populate stakers, exposures, and the snapshot of validator prefs.
         let mut total_stake: StakeOf<T> = Zero::zero();

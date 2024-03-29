@@ -20,7 +20,7 @@ services:
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/alice
-      --chain devnet
+      --chain stagenet
       --alice
       --port 30333
       --rpc-port 9944
@@ -29,7 +29,7 @@ services:
       --validator
       --prometheus-external
       --rpc-cors all
-      --telemetry-url "wss://telemetry-power-plant-dev.compliq.io:8001/submit/ 9"
+      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
 
     ports:
       - "0.0.0.0:30333:30333/tcp"

@@ -32,14 +32,23 @@ generate_session_keys() {
     for name in $names; do
         echo "# $name Session Keys:"
         printf "\n"
+        echo "# GRAN (GRANDPA)"
+        generate_session_key gran ed25519
+        printf "\n"
         echo "# BABE"
         generate_session_key babe sr25519
         printf "\n"
-        echo "# GRAN (GRANDPA)"
-        generate_session_key imon ed25519
-        printf "\n"
         echo "# IMON (I'm Online)"
         generate_session_key imon sr25519
+        printf "\n"
+        echo "# PARA (Parachain Validator)"
+        generate_session_key para sr25519
+        printf "\n"
+        echo "# ASGN (Parachain Assignment)"
+        generate_session_key asgn sr25519
+        printf "\n"
+        echo "# AUDI (Authority Discovery)"
+        generate_session_key audi sr25519
         printf "\n"
     done
 }

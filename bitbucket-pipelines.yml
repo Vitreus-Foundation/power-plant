@@ -15,7 +15,8 @@ pipelines:
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
-            - cargo test --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
     feature/*:
       - step:
@@ -28,7 +29,8 @@ pipelines:
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
-            - cargo test --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
     devops/*:
       - step:
@@ -41,7 +43,31 @@ pipelines:
             - cargo fmt -- --check
             - cargo clippy -- -D warnings
             - cargo build --locked
-            - cargo test --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
+
+  custom:
+    run-test-1:
+      - step:
+          name: Run tests Stage 1
+          size: 2x
+          script:
+            - echo "Running tests Stage 1"
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+
+    run-test-2:
+      - step:
+          name: Run tests Stage 2
+          size: 2x
+          script:
+            - echo "Running tests Stage 2"
+            - rustup target add wasm32-unknown-unknown
+            - export RUSTFLAGS="-C strip=debuginfo"
+            - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+            - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
   branches:   
     develop:
@@ -61,8 +87,8 @@ pipelines:
                   - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
-                  - cargo build --locked
-                  - cargo test --locked
+                  - cargo build --features "fast-runtime" --locked
+
 
             - step:
                 name: inno DEVnet bootnode
@@ -113,7 +139,20 @@ pipelines:
       - parallel:
           steps:
             - step:
-                name: Stage DEVnet bootnode
+                name: Build and Run Tests
+                size: 2x
+                script:
+                  - rustup target add wasm32-unknown-unknown
+                  - export RUSTFLAGS="-C strip=debuginfo"
+                  - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
+                  - cargo fmt -- --check
+                  - cargo clippy -- -D warnings
+                  - cargo build --locked
+                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
+
+            - step:
+                name: inno STAGEnet bootnode
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
                 trigger: manual
                 deployment: stage-bootnode
@@ -123,7 +162,7 @@ pipelines:
                   - ssh ${USERNAME}@${HOST1} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep boot-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Stage Boot Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep boot-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Stage Boot Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
-                name: Stage DEVnet node1
+                name: inno STAGEnet node1
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
                 trigger: manual
                 deployment: stage-node-1
@@ -133,7 +172,7 @@ pipelines:
                   - ssh ${USERNAME}@${HOST2} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep first-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Stage First Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep first-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Stage First Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
-                name: Stage DEVnet archive
+                name: inno STAGEet archive
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
                 trigger: manual
                 deployment: stage-archive
@@ -154,8 +193,8 @@ pipelines:
 #             - export RUSTFLAGS="-C strip=debuginfo"
 #             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
 #             - cargo build --locked
-#             - cargo test --locked
-# #            - cargo test --locked -- --include-ignored
+#             - cargo test -j 4 --workspace --locked
+# #            - cargo test -j 4 --workspace --locked -- --include-ignored
 #             - cargo fmt -- --check
 #             - cargo clippy -- -D warnings
 
@@ -170,8 +209,9 @@ pipelines:
                   - export RUSTFLAGS="-C strip=debuginfo"
                   - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
                   - cargo build --locked
-                  - cargo test --locked
-#                  - cargo test --locked -- --include-ignored
+                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
+                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
+#                  - cargo test -j 4 --workspace --locked -- --include-ignored
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
 

@@ -1,0 +1,47 @@
+version: "3.3"
+
+services:
+  vitreus_power_plant:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: vitreus_power_plant
+    networks:
+      - vitreus_power_plant_network
+
+  boot_node:
+    image: vitreus_power_plant
+    container_name: power-plant-boot-node
+    restart: always
+    depends_on:
+      - vitreus_power_plant
+    volumes:
+      - node_data:/tmp/node
+    command: >
+      ./target/release/vitreus-power-plant-node
+      --base-path /tmp/node
+      --chain mainnet
+      --name mainnet-bootnode
+      --port 30333
+      --rpc-port 9944
+      --rpc-methods=unsafe
+      --node-key 06ef833a7c5e1576d8a7f9b9a8eeeef37dd3f4c4b9927f4d4184b7dfb18af1e8
+      --validator
+      --prometheus-external
+      --rpc-cors all
+      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 1"
+
+    ports:
+      - "0.0.0.0:30333:30333/tcp"
+      - "127.0.0.1:9944:9944/tcp"
+      - "127.0.0.1:9615:9615/tcp"
+    networks:
+      - vitreus_power_plant_network
+
+volumes:
+  node_data:
+    driver: local
+
+networks:
+  vitreus_power_plant_network:
+    name: vitreus_power_plant
