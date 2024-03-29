@@ -377,8 +377,6 @@ pub fn testnet_genesis(
             initial_energy_rate: INITIAL_ENERGY_RATE,
             ..Default::default()
         },
-        dynamic_fee: Default::default(),
-        base_fee: Default::default(),
         assets: AssetsConfig {
             assets: vec![(VNRG::get(), root_key, false, 1)],
             metadata: vec![(

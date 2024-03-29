@@ -446,18 +446,6 @@ impl pallet_assets::Config for Runtime {
     type BenchmarkHelper = ();
 }
 
-parameter_types! {
-    pub AccumulationPeriod: BlockNumber = prod_or_fast!(HOURS * 24, 24 * MINUTES, "VITREUS_FAUCET_ACCUMULATION_PERIOD");
-    pub const MaxAmount: Balance = 1000 * vtrs::UNITS;
-}
-
-impl pallet_faucet::Config for Runtime {
-    type AccumulationPeriod = AccumulationPeriod;
-    type MaxAmount = MaxAmount;
-    type RuntimeEvent = RuntimeEvent;
-    type WeightInfo = ();
-}
-
 impl pallet_reputation::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -753,28 +741,6 @@ impl pallet_nfts::Config for Runtime {
     type Locker = ();
 }
 
-impl pallet_uniques::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type CollectionId = CollectionId;
-    type ItemId = ItemId;
-    type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-    type CollectionDeposit = CollectionDeposit;
-    type ItemDeposit = ItemDeposit;
-    type MetadataDepositBase = MetadataDepositBase;
-    type AttributeDepositBase = MetadataDepositBase;
-    type DepositPerByte = MetadataDepositPerByte;
-    type StringLimit = AssetsStringLimit;
-    type KeyLimit = KeyLimit;
-    type ValueLimit = ValueLimit;
-    type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
-    // TODO: do we want to allow regular users create nfts?
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type Locker = ();
-}
-
 parameter_types! {
     pub const NftCollectionId: CollectionId = 0;
 }
@@ -886,7 +852,6 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         match runtime_call {
             RuntimeCall::Balances(..)
             | RuntimeCall::Assets(..)
-            | RuntimeCall::Uniques(..)
             | RuntimeCall::Reputation(..)
             | RuntimeCall::Bounties(..)
             | RuntimeCall::EnergyGeneration(..) => CallFee::Regular(Self::custom_fee()),
@@ -1146,38 +1111,7 @@ impl pallet_ethereum::Config for Runtime {
 }
 
 parameter_types! {
-    // as we have constant fee, we set it to 1
-    pub BoundDivision: U256 = U256::from(1);
-}
-
-impl pallet_dynamic_fee::Config for Runtime {
-    type MinGasPriceBoundDivisor = BoundDivision;
-}
-
-parameter_types! {
-    // the minimum amount of gas that a transaction must pay to be included in a block
-    pub DefaultBaseFeePerGas: U256 = U256::from(GetConstantEnergyFee::get());
     pub DefaultElasticity: Permill = Permill::from_parts(1_000_000);
-}
-
-pub struct BaseFeeThreshold;
-impl pallet_base_fee::BaseFeeThreshold for BaseFeeThreshold {
-    fn lower() -> Permill {
-        Permill::from_parts(1_000_000)
-    }
-    fn ideal() -> Permill {
-        Permill::from_parts(1_000_000)
-    }
-    fn upper() -> Permill {
-        Permill::from_parts(1_000_000)
-    }
-}
-
-impl pallet_base_fee::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type Threshold = BaseFeeThreshold;
-    type DefaultBaseFeePerGas = DefaultBaseFeePerGas;
-    type DefaultElasticity = DefaultElasticity;
 }
 
 impl pallet_hotfix_sufficients::Config for Runtime {
@@ -1308,20 +1242,14 @@ construct_runtime!(
         Babe: pallet_babe,
         Grandpa: pallet_grandpa,
         Balances: pallet_balances,
-        Faucet: pallet_faucet,
         Assets: pallet_assets,
         AssetRate: pallet_asset_rate,
         TransactionPayment: pallet_transaction_payment,
         Sudo: pallet_sudo,
-        // TODO: do we need this pallet?
-        BaseFee: pallet_base_fee,
-        // TODO: do we need this pallet?
-        DynamicFee: pallet_dynamic_fee,
         EVM: pallet_evm,
         EVMChainId: pallet_evm_chain_id,
         Ethereum: pallet_ethereum,
         HotfixSufficients: pallet_hotfix_sufficients,
-        Uniques: pallet_uniques,
         Nfts: pallet_nfts,
         Reputation: pallet_reputation,
         AtomicSwap: pallet_atomic_swap,
@@ -1859,7 +1787,7 @@ impl_runtime_apis! {
         }
 
         fn elasticity() -> Option<Permill> {
-            Some(pallet_base_fee::Elasticity::<Runtime>::get())
+            Some(DefaultElasticity::get())
         }
 
         fn gas_limit_multiplier_support() {}
