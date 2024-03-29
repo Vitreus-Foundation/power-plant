@@ -77,7 +77,7 @@ use frame_support::{
         fungible::ItemOf, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall,
         FindAuthor, Hooks, KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
+    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_energy_fee::{
@@ -760,13 +760,14 @@ impl pallet_nac_managing::Config for Runtime {
 
 parameter_types! {
     pub const TransactionByteFee: Balance = 1;
+    pub const TransactionPicosecondFee: Balance = 8;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type OnChargeTransaction = EnergyFee;
     type OperationalFeeMultiplier = ConstU8<5>;
-    type WeightToFee = IdentityFee<Balance>;
+    type WeightToFee = ConstantMultiplier<Balance, TransactionPicosecondFee>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = EnergyFee;
 }
