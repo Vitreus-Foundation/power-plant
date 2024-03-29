@@ -28,7 +28,7 @@ services:
       --prometheus-external
       --bootnodes /ip4/45.32.187.143/tcp/30333/p2p/12D3KooWBFQSrDskroYuP9CxKDizTomeSc3sC1K9EgmdpeeJzEnS
       --rpc-cors all
-      --rpc-max-connections 1000
+      --rpc-max-connections 5000
       --state-pruning archive
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
       -lwarn
