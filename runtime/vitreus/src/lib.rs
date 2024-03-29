@@ -37,10 +37,8 @@ use frame_support::traits::tokens::{
     Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced,
+    fungible::Balanced, Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced,
     SignedImbalance, WithdrawReasons,
-    tokens::imbalance::Imbalance,
-    fungible::Balanced,
 };
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
@@ -835,10 +833,7 @@ pub struct TreasurySink;
 
 impl OnUnbalanced<MainCreditOf<Runtime>> for TreasurySink {
     fn on_nonzero_unbalanced(amount: MainCreditOf<Runtime>) {
-        let _ = Balances::resolve(
-            &Treasury::account_id(),
-            amount,
-        );
+        let _ = Balances::resolve(&Treasury::account_id(), amount);
     }
 }
 

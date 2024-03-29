@@ -5,10 +5,10 @@ use crate::{self as pallet_energy_fee, FeeCreditOf, MainCreditOf};
 use crate::{CallFee, CustomFee};
 use fp_account::AccountId20;
 
+use frame_support::dispatch::GetDispatchInfo;
 use frame_support::traits::fungible::{Balanced, ItemOf};
 use frame_support::traits::tokens::imbalance::SplitTwoWays;
 use frame_support::traits::OnUnbalanced;
-use frame_support::dispatch::GetDispatchInfo;
 use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
     pallet_prelude::Weight,

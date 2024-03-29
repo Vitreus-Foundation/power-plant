@@ -5,10 +5,10 @@ use frame_support::traits::OnUnbalanced;
 use frame_support::traits::{
     fungible::{Balanced, Inspect},
     tokens::{
-        imbalance::Imbalance, Balance, ConversionFromAssetBalance, ConversionToAssetBalance,
-        Fortitude, Precision, Preservation,
+        Balance, ConversionFromAssetBalance, ConversionToAssetBalance, Fortitude, Precision,
+        Preservation,
     },
-    Get,
+    Get, Imbalance,
 };
 use pallet_asset_rate::{Config as AssetRateConfig, Error as AssetRateError};
 use sp_runtime::{DispatchError, FixedPointNumber, FixedPointOperand, TokenError};
