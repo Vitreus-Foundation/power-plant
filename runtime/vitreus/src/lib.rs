@@ -854,6 +854,7 @@ impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type OnClaim = NacManaging;
     type Prefix = Prefix;
     type WeightInfo = ();
 }

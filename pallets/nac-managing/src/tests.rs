@@ -20,13 +20,21 @@
 use crate::{mock::*, *};
 
 use frame_support::{assert_err, assert_ok};
+use parity_scale_codec::Decode;
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
+type BalanceOf<Test> = <Test as Config>::Balance;
 
 const VANGUARD_1_REPUTATION_POINT: u64 = 7398066;
 
 fn account(id: u8) -> AccountIdOf<Test> {
     [id; 32].into()
+}
+
+fn get_claimed(collection_id: CollectionId, item_id: ItemId) -> BalanceOf<Test> {
+    let claimed_raw = Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
+        .unwrap_or(vec![]);
+    BalanceOf::<Test>::decode(&mut claimed_raw.as_slice()).unwrap_or(BalanceOf::<Test>::default())
 }
 
 #[test]
@@ -115,5 +123,34 @@ fn user_has_access_test() {
         assert!(NacManaging::user_has_access(account(1), 2));
         assert!(NacManaging::user_has_access(account(1), 5));
         assert!(!NacManaging::user_has_access(account(1), 6));
+    });
+}
+
+#[test]
+fn on_claim_should_work() {
+    new_test_ext().execute_with(|| {
+        let nac_level = 0_u8;
+        let owner = account(1);
+        let item_id = 123_u32;
+        let collection_id = NftCollectionId::get();
+
+        NacManaging::create_collection(&account(1));
+
+        NacManaging::do_mint(item_id, owner.clone()).expect("Minting failed");
+        NacManaging::update_nft_info(&collection_id, &item_id, nac_level, owner.clone())
+            .expect("Error updating nft info");
+
+        let claimed = get_claimed(collection_id, item_id);
+        assert_eq!(claimed, 0);
+
+        NacManaging::on_claim(&owner, 1000_u64).expect("Error on claim");
+
+        let claimed = get_claimed(collection_id, item_id);
+        assert_eq!(claimed, 1000);
+
+        NacManaging::on_claim(&owner, 1000_u64).expect("Error on claim");
+
+        let new_claimed = get_claimed(collection_id, item_id);
+        assert_eq!(new_claimed, claimed + 1000);
     });
 }
