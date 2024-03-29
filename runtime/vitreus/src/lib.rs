@@ -850,11 +850,22 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         calculated_fee: Option<Balance>,
     ) -> CallFee<Balance> {
         match runtime_call {
-            RuntimeCall::Balances(..)
-            | RuntimeCall::Assets(..)
-            | RuntimeCall::Reputation(..)
+            RuntimeCall::Assets(..)
+            | RuntimeCall::AssetRate(..)
+            | RuntimeCall::Balances(..)
             | RuntimeCall::Bounties(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Regular(Self::custom_fee()),
+            | RuntimeCall::EnergyGeneration(..)
+            | RuntimeCall::Nfts(..)
+            | RuntimeCall::AtomicSwap(..)
+            | RuntimeCall::Claiming(..)
+            | RuntimeCall::Vesting(..)
+            | RuntimeCall::NacManaging(..)
+            | RuntimeCall::Council(..)
+            | RuntimeCall::TechnicalCommittee(..)
+            | RuntimeCall::TechnicalMembership(..)
+            | RuntimeCall::Treasury(..)
+            | RuntimeCall::Democracy(..)
+            | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
             | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
@@ -870,7 +881,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             },
             RuntimeCall::Utility(pallet_utility::Call::dispatch_as { call, .. })
             | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
-                CallFee::Regular(Self::weight_fee(call, None, calculated_fee))
+                Self::dispatch_info_to_fee(call, None, calculated_fee)
             },
             _ => CallFee::Regular(Self::weight_fee(runtime_call, dispatch_info, calculated_fee)),
         }
