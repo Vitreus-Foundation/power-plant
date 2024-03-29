@@ -26,6 +26,7 @@ services:
       --rpc-port 9944
       --rpc-external
       --prometheus-external
+      --rpc-max-connections 5000
       --bootnodes /ip4/45.77.100.209/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
       --rpc-cors all
       --state-pruning archive
