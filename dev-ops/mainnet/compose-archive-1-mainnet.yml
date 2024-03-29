@@ -3,7 +3,7 @@ version: "3.3"
 services:
   vitreus_power_plant:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     image: vitreus_power_plant
     networks:
