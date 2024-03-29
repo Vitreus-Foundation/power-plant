@@ -7422,6 +7422,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-simple-vesting"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-society"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech/substrate?branch=polkadot-v1.0.0#948fbd2fd1233dc26dbb9f9bbc1d2cca2c03945d"
@@ -14816,6 +14831,7 @@ dependencies = [
  "pallet-reputation",
  "pallet-scheduler",
  "pallet-session",
+ "pallet-simple-vesting",
  "pallet-staking-reward-curve",
  "pallet-sudo",
  "pallet-timestamp",

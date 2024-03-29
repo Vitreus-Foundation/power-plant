@@ -360,6 +360,7 @@ pub fn testnet_genesis(
         },
         claiming: genesis::claiming_config(),
         vesting: Default::default(),
+        simple_vesting: Default::default(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
         council: CouncilConfig {
             members: endowed_accounts.iter().cloned().take(3).collect(),

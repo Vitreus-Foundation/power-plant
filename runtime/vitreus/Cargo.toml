@@ -72,6 +72,7 @@ pallet-preimage = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-scheduler = { workspace = true }
 pallet-session = { workspace = true }
+pallet-simple-vesting = { workspace = true }
 pallet-staking-reward-curve = { workspace = true }
 pallet-sudo = { workspace = true }
 pallet-timestamp = { workspace = true }
@@ -206,6 +207,7 @@ std = [
     "pallet-evm-precompile-simple/std",
     "pallet-hotfix-sufficients/std",
     "pallet-claiming/std",
+    "pallet-simple-vesting/std",
     "pallet-nac-managing/std",
     "pallet-reputation/std",
     "pallet-energy-generation/std",
