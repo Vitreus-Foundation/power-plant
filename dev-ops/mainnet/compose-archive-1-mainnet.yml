@@ -21,13 +21,14 @@ services:
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
       --chain mainnet
-      --name mainnet-archive
+      --name mainnet-archive-1
       --port 30333
       --rpc-port 9944
       --rpc-external
       --prometheus-external
-      --bootnodes /ip4/45.32.187.143/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
+      --bootnodes /ip4/45.32.187.143/tcp/30333/p2p/12D3KooWBFQSrDskroYuP9CxKDizTomeSc3sC1K9EgmdpeeJzEnS
       --rpc-cors all
+      --rpc-max-connections 1000
       --state-pruning archive
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
       -lwarn
