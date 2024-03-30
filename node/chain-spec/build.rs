@@ -26,7 +26,7 @@ fn process_claiming(input: PathBuf, mut claims: File) -> Result<(), Box<dyn Erro
 
         write!(
             &mut claims,
-            "(pallet_claiming::EthereumAddress(hex_literal::hex!(\"{address}\")), {amount}),"
+            "(pallet_claiming::EthereumAddress(hex_literal::hex!(\"{address}\")), {amount}u128),"
         )?;
     }
     write!(&mut claims, "]")?;

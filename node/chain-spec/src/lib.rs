@@ -15,11 +15,12 @@ use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig, EnableManualSeal,
-    EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
-    NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix,
-    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
-    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    BalancesConfig, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
+    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
+    MaxCooperations, NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig,
+    SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig,
+    SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 /// Node `ChainSpec` extensions.
@@ -1047,7 +1048,7 @@ pub mod mainnet_keys {
 mod genesis {
     use super::*;
 
-    use vitreus_power_plant_runtime::{BlockNumber, ExistentialDeposit, DAYS};
+    use vitreus_power_plant_runtime::{BlockNumber, ExistentialDeposit, DAYS, MILLI_VTRS};
 
     const YEARS: BlockNumber = 36525 * (DAYS / 100);
     const MONTHS: BlockNumber = YEARS / 12;
@@ -1062,8 +1063,8 @@ mod genesis {
         vnode.into_iter()
     }
 
-    pub(super) fn claiming_config() -> vitreus_power_plant_runtime::ClaimingConfig {
-        let mut config = vitreus_power_plant_runtime::ClaimingConfig {
+    pub(super) fn claiming_config() -> ClaimingConfig {
+        let mut config = ClaimingConfig {
             claims: include!(concat!(env!("OUT_DIR"), "/claiming_claims.rs")),
             vesting: vec![],
         };
@@ -1083,13 +1084,13 @@ mod genesis {
 
         for (address, amount, vesting) in claims {
             let address = pallet_claiming::EthereumAddress(address);
-            let amount = amount * vitreus_power_plant_runtime::MILLI_VTRS;
+            let amount = amount * MILLI_VTRS;
 
             config.claims.push((address, amount));
 
             if let Some((start, period)) = vesting {
-                let start = start * 365 * vitreus_power_plant_runtime::DAYS;
-                let period = period * 365 * vitreus_power_plant_runtime::DAYS;
+                let start = start * YEARS;
+                let period = period * YEARS;
 
                 let amount_per_block = amount / period as u128;
                 config.vesting.push((address, (amount, amount_per_block, start)));
@@ -1099,7 +1100,7 @@ mod genesis {
         config
     }
 
-    pub(super) fn simple_vesting_config() -> vitreus_power_plant_runtime::SimpleVestingConfig {
+    pub(super) fn simple_vesting_config() -> SimpleVestingConfig {
         let vesting = include!(concat!(env!("OUT_DIR"), "/vesting.rs"));
 
         let vesting = vesting
@@ -1109,7 +1110,7 @@ mod genesis {
             })
             .collect();
 
-        vitreus_power_plant_runtime::SimpleVestingConfig { vesting }
+        SimpleVestingConfig { vesting }
     }
 
     pub(super) fn council_config() -> CouncilConfig {
