@@ -15,7 +15,7 @@ use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
+    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
     EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
     MaxCooperations, NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig,
     SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig,
@@ -499,6 +499,13 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
         .map(|x| (x.0, x.1, STASH, StakerStatus::Validator))
         .collect::<Vec<_>>();
 
+    let claiming_config = genesis::claiming_config();
+
+    let claiming_balance = claiming_config
+        .claims
+        .iter()
+        .fold(15_000_000 * vtrs::UNITS, |total, claim| total.saturating_add(claim.1));
+
     RuntimeGenesisConfig {
         // System
         system: SystemConfig {
@@ -516,11 +523,12 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
             balances: endowed_accounts
                 .iter()
                 .map(|k| (*k, ENDOWMENT))
+                .chain([(Claiming::claim_account_id(), claiming_balance)])
                 .chain(initial_validators.iter().map(|x| (x.0, STASH)))
                 .chain(genesis::vested_balance())
                 .collect(),
         },
-        claiming: genesis::claiming_config(),
+        claiming: claiming_config,
         vesting: Default::default(),
         simple_vesting: genesis::simple_vesting_config(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
