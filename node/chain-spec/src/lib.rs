@@ -522,7 +522,7 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
         vesting: Default::default(),
         simple_vesting: Default::default(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
-        council: Default::default(),
+        council: genesis::council_config(),
         democracy: Default::default(),
         grandpa: Default::default(),
         transaction_payment: Default::default(),
@@ -1076,6 +1076,23 @@ mod genesis {
         }
 
         config
+    }
+
+    pub(super) fn council_config() -> CouncilConfig {
+        CouncilConfig {
+            members: vec![
+                AccountId::from(hex!("5f53d6893b5ca9b80a98e66f16f966e8c7d0b29c")),
+                AccountId::from(hex!("51C7b0F6Ec0b45b1Fa644Aa1c7560d45D7506c91")),
+                AccountId::from(hex!("56fef4e5500eb9b8546c722f22e437e26d45f33c")),
+                AccountId::from(hex!("2A27793bDe97A121050093285a6D75a6EbCD9Cf1")),
+                AccountId::from(hex!("d3a58ebcbab95c9950aa45d143eb4ca241ff4563")),
+                AccountId::from(hex!("e6a32e4b99f2c40f1999db38456e8b1a4d4a9884")),
+                AccountId::from(hex!("7bD754C60e252ac4Ea5E583EA8F4ee34Bf7Cb3DC")),
+                AccountId::from(hex!("6096991707a190f97e2cb9146fabba23f5fc8cdd")),
+                AccountId::from(hex!("93518a144178d7cea1421c7a754b1493ad47f439")),
+            ],
+            ..Default::default()
+        }
     }
 }
 
