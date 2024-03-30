@@ -522,6 +522,7 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
         },
         claiming: genesis::claiming_config(),
         vesting: Default::default(),
+        simple_vesting: Default::default(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
         council: Default::default(),
         democracy: Default::default(),
