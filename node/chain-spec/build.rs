@@ -9,6 +9,7 @@ use std::{
 
 fn main() {
     process_claiming(input_path("claims.csv"), output_file("claiming_claims.rs")).unwrap();
+    process_vesting(input_path("vesting.csv"), output_file("vesting.rs")).unwrap();
 }
 
 fn process_claiming(input: PathBuf, mut claims: File) -> Result<(), Box<dyn Error>> {
@@ -28,6 +29,29 @@ fn process_claiming(input: PathBuf, mut claims: File) -> Result<(), Box<dyn Erro
         )?;
     }
     write!(&mut claims, "]")?;
+
+    Ok(())
+}
+
+fn process_vesting(input: PathBuf, mut vesting: File) -> Result<(), Box<dyn Error>> {
+    let mut reader =
+        csv::ReaderBuilder::new().has_headers(false).delimiter(b';').from_path(input)?;
+
+    write!(&mut vesting, "vec![")?;
+    for result in reader.records() {
+        let record = result?;
+
+        let address = strip_hex_prefix(&record[0]);
+        let amount = u128::from_str(record[1].trim())?;
+        let start = u32::from_str(record[2].trim())?;
+        let period = u32::from_str(record[3].trim())?;
+
+        write!(
+            &mut vesting,
+            "(AccountId::from(hex_literal::hex!(\"{address}\")), {amount}u128, {start}, {period}),"
+        )?;
+    }
+    write!(&mut vesting, "]")?;
 
     Ok(())
 }

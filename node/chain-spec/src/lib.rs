@@ -516,11 +516,12 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
                 .iter()
                 .map(|k| (*k, ENDOWMENT))
                 .chain(initial_validators.iter().map(|x| (x.0, STASH)))
+                .chain(genesis::vested_balance())
                 .collect(),
         },
         claiming: genesis::claiming_config(),
         vesting: Default::default(),
-        simple_vesting: Default::default(),
+        simple_vesting: genesis::simple_vesting_config(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
         council: genesis::council_config(),
         democracy: Default::default(),
@@ -1041,6 +1042,16 @@ pub mod mainnet_keys {
 mod genesis {
     use super::*;
 
+    use vitreus_power_plant_runtime::{BlockNumber, ExistentialDeposit, DAYS};
+
+    const YEARS: BlockNumber = 36525 * (DAYS / 100);
+    const MONTHS: BlockNumber = YEARS / 12;
+
+    pub(super) fn vested_balance() -> impl Iterator<Item = (AccountId, Balance)> {
+        let vesting = include!(concat!(env!("OUT_DIR"), "/vesting.rs"));
+        vesting.into_iter().map(|(account, amount, _, _)| (account, amount))
+    }
+
     pub(super) fn claiming_config() -> vitreus_power_plant_runtime::ClaimingConfig {
         let mut config = vitreus_power_plant_runtime::ClaimingConfig {
             claims: include!(concat!(env!("OUT_DIR"), "/claiming_claims.rs")),
@@ -1076,6 +1087,19 @@ mod genesis {
         }
 
         config
+    }
+
+    pub(super) fn simple_vesting_config() -> vitreus_power_plant_runtime::SimpleVestingConfig {
+        let vesting = include!(concat!(env!("OUT_DIR"), "/vesting.rs"));
+
+        let vesting = vesting
+            .into_iter()
+            .map(|(address, _, start, period)| {
+                (address, start * MONTHS, period * MONTHS, ExistentialDeposit::get())
+            })
+            .collect();
+
+        vitreus_power_plant_runtime::SimpleVestingConfig { vesting }
     }
 
     pub(super) fn council_config() -> CouncilConfig {
