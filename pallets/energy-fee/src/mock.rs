@@ -232,7 +232,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 
     fn custom_fee() -> Balance {
         let next_multiplier = TransactionPayment::next_fee_multiplier();
-        next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+        next_multiplier.saturating_mul_int(EnergyFee::base_fee())
     }
 
     fn weight_fee(

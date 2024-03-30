@@ -3,15 +3,15 @@ version: "3.3"
 services:
   vitreus_power_plant:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     image: vitreus_power_plant
     networks:
       - vitreus_power_plant_network
 
-  second_node:
+  third_node:
     image: vitreus_power_plant
-    container_name: power-plant-second-node
+    container_name: power-plant-third-node
     restart: always
     depends_on:
       - vitreus_power_plant

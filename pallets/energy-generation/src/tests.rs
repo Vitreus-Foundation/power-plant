@@ -2263,10 +2263,7 @@ fn reward_from_authorship_event_handler_works() {
 
         let init_reputation_11 = ReputationPallet::reputation(11).unwrap().reputation.points();
         let validator_count = <Test as crate::Config>::SessionInterface::validators().len();
-        let reputation_reward =
-            (pallet_reputation::NORMAL * *pallet_reputation::REPUTATION_POINTS_PER_BLOCK as f64
-                - *pallet_reputation::REPUTATION_POINTS_PER_BLOCK as f64) as u64
-                * validator_count as u64;
+        let reputation_reward = *PowerPlant::block_authoring_reward() * validator_count as u64;
 
         Pallet::<Test>::note_author(11);
         Pallet::<Test>::note_author(11);

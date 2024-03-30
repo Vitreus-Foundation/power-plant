@@ -110,6 +110,7 @@ impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type OnClaim = ();
     type Prefix = Prefix;
     type WeightInfo = ();
 }
