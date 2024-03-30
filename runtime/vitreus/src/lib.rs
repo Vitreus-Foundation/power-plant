@@ -9,6 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::traits::tokens::ConversionToAssetBalance;
+use pallet_energy_fee::MainCreditOf;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
     CommittedCandidateReceipt, CoreState, DisputeState, ExecutorParams, GroupRotationInfo,
@@ -36,7 +37,8 @@ use frame_support::traits::tokens::{
     Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, SignedImbalance, WithdrawReasons,
+    fungible::Balanced, Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced,
+    SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
@@ -825,6 +827,16 @@ type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
 type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
+// impl OnUnbalanced<
+
+pub struct TreasurySink;
+
+impl OnUnbalanced<MainCreditOf<Runtime>> for TreasurySink {
+    fn on_nonzero_unbalanced(amount: MainCreditOf<Runtime>) {
+        let _ = Balances::resolve(&Treasury::account_id(), amount);
+    }
+}
+
 impl pallet_energy_fee::Config for Runtime {
     type ManageOrigin = MoreThanHalfCouncil;
     type RuntimeEvent = RuntimeEvent;
@@ -834,6 +846,8 @@ impl pallet_energy_fee::Config for Runtime {
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAssetId = VNRG;
+    type MainRecycleDestination = TreasurySink;
+    type FeeRecycleDestination = ();
 }
 
 parameter_types! {

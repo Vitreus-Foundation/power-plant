@@ -1,10 +1,14 @@
-use crate as pallet_energy_fee;
+use core::marker::PhantomData;
+
 use crate::traits::{AssetsBalancesConverter, NativeExchange};
+use crate::{self as pallet_energy_fee, FeeCreditOf, MainCreditOf};
 use crate::{CallFee, CustomFee};
 use fp_account::AccountId20;
 
 use frame_support::dispatch::GetDispatchInfo;
-use frame_support::traits::fungible::ItemOf;
+use frame_support::traits::fungible::{Balanced, ItemOf};
+use frame_support::traits::tokens::imbalance::SplitTwoWays;
+use frame_support::traits::OnUnbalanced;
 use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
     pallet_prelude::Weight,
@@ -17,7 +21,7 @@ use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::{Compact, Encode};
 
 use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Perquintill};
-use sp_core::{H256, U256};
+use sp_core::{Get, H256, U256};
 
 use sp_runtime::{
     traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup, Zero},
@@ -36,6 +40,8 @@ pub(crate) type EnergyRate = AssetsBalancesConverter<Test, AssetRate>;
 pub(crate) const VNRG: AssetId = 1;
 pub(crate) const ALICE: AccountId = AccountId20([1u8; 20]);
 pub(crate) const BOB: AccountId = AccountId20([2u8; 20]);
+pub(crate) const FEE_DEST: AccountId = AccountId20([3u8; 20]);
+pub(crate) const MAIN_DEST: AccountId = AccountId20([4u8; 20]);
 
 /// 10^9 with 18 decimals
 /// 1 VNRG = VNRG_TO_VTRS_RATE VTRS
@@ -135,6 +141,33 @@ impl pallet_asset_rate::Config for Test {
     type WeightInfo = ();
 }
 
+parameter_types! {
+    pub const FeeBurnAccount: AccountId = FEE_DEST;
+    pub const MainBurnAccount: AccountId = MAIN_DEST;
+}
+
+pub struct FeeBurnDestination<GetAccountId: Get<AccountId>>(PhantomData<GetAccountId>);
+
+impl<GetAccountId: Get<AccountId>> OnUnbalanced<FeeCreditOf<Test>>
+    for FeeBurnDestination<GetAccountId>
+{
+    fn on_nonzero_unbalanced(amount: FeeCreditOf<Test>) {
+        let account_id = GetAccountId::get();
+        let _ = <BalancesVNRG as Balanced<AccountId>>::resolve(&account_id, amount);
+    }
+}
+
+pub struct MainBurnDestination<GetAccountId: Get<AccountId>>(PhantomData<GetAccountId>);
+
+impl<GetAccountId: Get<AccountId>> OnUnbalanced<MainCreditOf<Test>>
+    for MainBurnDestination<GetAccountId>
+{
+    fn on_nonzero_unbalanced(amount: MainCreditOf<Test>) {
+        let account_id = GetAccountId::get();
+        let _ = <BalancesVTRS as Balanced<AccountId>>::resolve(&account_id, amount);
+    }
+}
+
 impl pallet_energy_fee::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type ManageOrigin = EnsureRoot<AccountId>;
@@ -144,6 +177,9 @@ impl pallet_energy_fee::Config for Test {
     type MainTokenBalanced = BalancesVTRS;
     type EnergyExchange = NativeExchange<AssetId, BalancesVTRS, BalancesVNRG, EnergyRate, GetVNRG>;
     type EnergyAssetId = GetVNRG;
+    type MainRecycleDestination = MainBurnDestination<MainBurnAccount>;
+    type FeeRecycleDestination =
+        SplitTwoWays<Balance, FeeCreditOf<Test>, FeeBurnDestination<FeeBurnAccount>, (), 2, 8>;
 }
 
 impl pallet_timestamp::Config for Test {
@@ -306,7 +342,13 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     };
 
     pallet_balances::GenesisConfig::<Test> {
-        balances: vec![(ALICE, VTRS_INITIAL_BALANCE), (BOB, VTRS_INITIAL_BALANCE)],
+        balances: vec![
+            (ALICE, VTRS_INITIAL_BALANCE),
+            (BOB, VTRS_INITIAL_BALANCE),
+            // required for account creation
+            (FEE_DEST, 1),
+            (MAIN_DEST, 1),
+        ],
     }
     .assimilate_storage(&mut t)
     .unwrap();

@@ -36,6 +36,12 @@ pub mod traits;
 
 pub(crate) type BalanceOf<T> = <T as pallet_asset_rate::Config>::Balance;
 
+pub type MainCreditOf<T> =
+    Credit<<T as frame_system::Config>::AccountId, <T as Config>::MainTokenBalanced>;
+
+pub type FeeCreditOf<T> =
+    Credit<<T as frame_system::Config>::AccountId, <T as Config>::FeeTokenBalanced>;
+
 /// Fee type inferred from call info
 #[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CallFee<Balance> {
@@ -59,7 +65,7 @@ pub mod pallet {
     use super::*;
     use frame_support::{
         pallet_prelude::{OptionQuery, ValueQuery, *},
-        traits::{EnsureOrigin, Hooks},
+        traits::{EnsureOrigin, Hooks, OnUnbalanced},
         weights::Weight,
     };
     use frame_system::pallet_prelude::*;
@@ -101,10 +107,14 @@ pub mod pallet {
             Self::AccountId,
             Self::MainTokenBalanced,
             Self::FeeTokenBalanced,
+            Self::MainRecycleDestination,
             BalanceOf<Self>,
         >;
         /// Used for initializing the pallet
         type EnergyAssetId: Get<Self::AssetId>;
+
+        type MainRecycleDestination: OnUnbalanced<MainCreditOf<Self>>;
+        type FeeRecycleDestination: OnUnbalanced<FeeCreditOf<Self>>;
     }
 
     #[pallet::storage]
@@ -275,14 +285,19 @@ pub mod pallet {
         }
 
         // TODO: make a refund for calls non-elligible for custom fee
+        // TODO: decide what to do with fee debt generated during exchange (if it would remain
+        // relevant after EnergyBroker implementation)
         fn correct_and_deposit_fee(
             _who: &T::AccountId,
             _dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
             _post_info: &PostDispatchInfoOf<T::RuntimeCall>,
             _corrected_fee: Self::Balance,
             _tip: Self::Balance,
-            _already_withdrawn: Self::LiquidityInfo,
+            already_withdrawn: Self::LiquidityInfo,
         ) -> Result<(), TransactionValidityError> {
+            if let Some(credit) = already_withdrawn {
+                T::FeeRecycleDestination::on_unbalanced(credit);
+            }
             Ok(())
         }
     }
@@ -329,12 +344,15 @@ pub mod pallet {
             _who: &H160,
             _corrected_fee: U256,
             _base_fee: U256,
-            _already_withdrawn: Self::LiquidityInfo,
+            already_withdrawn: Self::LiquidityInfo,
         ) -> Self::LiquidityInfo {
+            if let Some(credit) = already_withdrawn {
+                T::FeeRecycleDestination::on_unbalanced(credit);
+            };
             None
         }
 
-        // TODO: handle EVM priority fee
+        // TODO: investigate whether we need this (and check if it influences the chain behaviour)
         fn pay_priority_fee(_tip: Self::LiquidityInfo) {
             // Default Ethereum behaviour: issue the tip to the block author.
         }
