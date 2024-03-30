@@ -3,7 +3,7 @@ version: "3.3"
 services:
   vitreus_power_plant:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     image: vitreus_power_plant
     networks:
@@ -25,12 +25,11 @@ services:
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
-      --node-key bf4912e408a4cf864623e8f01c4e74f3cf61f7863129d65a8df47d007fe00f22
+      --node-key 06ef833a7c5e1576d8a7f9b9a8eeeef37dd3f4c4b9927f4d4184b7dfb18af1e8
       --validator
       --prometheus-external
       --rpc-cors all
-      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
-      -lwarn
+      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 1"
 
     ports:
       - "0.0.0.0:30333:30333/tcp"

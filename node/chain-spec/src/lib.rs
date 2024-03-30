@@ -1,4 +1,4 @@
-#![allow(clippy::type_complexity)]
+#![allow(clippy::type_complexity, clippy::identity_op)]
 
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
@@ -17,8 +17,8 @@ use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
     BalancesConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig, EnableManualSeal,
     EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
-    NacManagingConfig, ReputationConfig, RuntimeGenesisConfig, SS58Prefix, SessionConfig,
-    Signature, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+    NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix,
+    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
     BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -46,7 +46,7 @@ const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 const INITIAL_ENERGY_RATE: FixedU128 = FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
 
 /// Min validator stake for user who has NAC level > 1.
-const MIN_TRUST_VALIDATOR_BOND: Balance = 1_000_000_000_000_000_000;
+const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
 #[derive(Serialize, Deserialize)]
@@ -290,6 +290,30 @@ pub fn testnet_config() -> ChainSpec {
     )
 }
 
+pub fn mainnet_config() -> ChainSpec {
+    let wasm_binary = WASM_BINARY.expect("WASM not available");
+
+    ChainSpec::from_genesis(
+        // Name
+        "Mainnet",
+        // ID
+        "mainnet",
+        ChainType::Live,
+        move || mainnet_genesis(wasm_binary),
+        // Bootnodes
+        vec![],
+        // Telemetry
+        None,
+        // Protocol ID
+        None,
+        None,
+        // Properties
+        Some(properties()),
+        // Extensions
+        Default::default(),
+    )
+}
+
 /// Configure initial storage state for FRAME modules.
 pub fn testnet_genesis(
     wasm_binary: &[u8],
@@ -442,6 +466,135 @@ pub fn testnet_genesis(
             min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
+            energy_per_stake_currency: 1_000_000u128,
+            block_authoring_reward: ReputationPoint(12),
+            ..Default::default()
+        },
+        im_online: ImOnlineConfig { keys: vec![] },
+        authority_discovery: AuthorityDiscoveryConfig { keys: vec![], ..Default::default() },
+        hrmp: Default::default(),
+        configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
+        paras: Default::default(),
+    }
+}
+
+/// Configure initial storage state for FRAME modules.
+fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
+    use mainnet_keys::*;
+
+    let root_key = root();
+    let endowed_accounts = [root()];
+    let initial_validators = vec![
+        validator_1_keys(),
+        validator_2_keys(),
+        validator_3_keys(),
+        validator_4_keys(),
+        validator_5_keys(),
+    ];
+
+    const ENDOWMENT: Balance = 1_000 * vtrs::UNITS;
+    const STASH: Balance = 1 * vtrs::UNITS;
+
+    let stakers = initial_validators
+        .iter()
+        .map(|x| (x.0, x.1, STASH, StakerStatus::Validator))
+        .collect::<Vec<_>>();
+
+    RuntimeGenesisConfig {
+        // System
+        system: SystemConfig {
+            // Add Wasm runtime to storage.
+            code: wasm_binary.to_vec(),
+            ..Default::default()
+        },
+        sudo: SudoConfig {
+            // Assign network admin rights.
+            key: Some(root_key),
+        },
+
+        // Monetary
+        balances: BalancesConfig {
+            balances: endowed_accounts
+                .iter()
+                .map(|k| (*k, ENDOWMENT))
+                .chain(initial_validators.iter().map(|x| (x.0, STASH)))
+                .collect(),
+        },
+        claiming: genesis::claiming_config(),
+        vesting: Default::default(),
+        babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
+        council: Default::default(),
+        democracy: Default::default(),
+        grandpa: Default::default(),
+        transaction_payment: Default::default(),
+
+        // EVM compatibility
+        evm_chain_id: EVMChainIdConfig { chain_id: SS58Prefix::get() as u64, ..Default::default() },
+        evm: Default::default(),
+        ethereum: Default::default(),
+        energy_fee: EnergyFeeConfig {
+            initial_energy_rate: INITIAL_ENERGY_RATE,
+            ..Default::default()
+        },
+        dynamic_fee: Default::default(),
+        base_fee: Default::default(),
+        assets: AssetsConfig {
+            assets: vec![(VNRG::get(), root_key, false, 1)],
+            metadata: vec![(
+                VNRG::get(),
+                "Energy".as_bytes().to_vec(),
+                "VNRG".as_bytes().to_vec(),
+                18,
+            )],
+            accounts: vec![],
+        },
+        reputation: ReputationConfig {
+            accounts: stakers
+                .iter()
+                .flat_map(|x| {
+                    [
+                        (x.0, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into()),
+                        (x.1, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD.into()),
+                    ]
+                })
+                .collect::<Vec<_>>(),
+        },
+        nac_managing: NacManagingConfig {
+            accounts: initial_validators.iter().map(|x| (x.1, 2)).collect(),
+            owners: vec![root_key],
+        },
+        session: SessionConfig {
+            keys: initial_validators
+                .iter()
+                .map(|x| {
+                    (
+                        x.1,
+                        x.0,
+                        session_keys(
+                            x.2.clone(),
+                            x.3.clone(),
+                            x.4.clone(),
+                            x.5.clone(),
+                            x.6.clone(),
+                            x.7.clone(),
+                        ),
+                    )
+                })
+                .collect::<Vec<_>>(),
+        },
+        technical_committee: Default::default(),
+        technical_membership: Default::default(),
+        treasury: Default::default(),
+        energy_generation: EnergyGenerationConfig {
+            validator_count: initial_validators.len() as u32,
+            minimum_validator_count: initial_validators.len() as u32,
+            invulnerables: initial_validators.iter().map(|x| x.1).collect(),
+            slash_reward_fraction: Perbill::from_percent(10),
+            min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
+            min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
+            stakers,
+            energy_per_stake_currency: 1_000_000u128,
+            block_authoring_reward: ReputationPoint(12),
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },
@@ -674,6 +827,214 @@ pub mod testnet_keys {
             .into(),
             sp_core::sr25519::Public(hex!(
                 "5425357e3002c6d2972e803362fe8648156837e70f3951929f13c0b9ba75c93b"
+            ))
+            .into(),
+        )
+    }
+}
+
+pub mod mainnet_keys {
+    use super::*;
+
+    pub(super) fn root() -> AccountId {
+        AccountId::from(hex!("cD3a7509cE9869902FA5F8132c686014d1A6ef07"))
+    }
+
+    pub(super) fn validator_1_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
+        (
+            AccountId::from(hex!("f3612fF49FE440e46faAc08C71d141249D71ff12")), // Stash
+            AccountId::from(hex!("03a6b4755F58f91731735d5B881054Fe6eCA7cc8")), // Validator
+            sp_core::sr25519::Public(hex!(
+                "bc35dc7c4bb874005361848b08cc7b5cba87e10391f60f124cc04bf5d34c981c"
+            ))
+            .into(),
+            sp_core::ed25519::Public(hex!(
+                "24c7ac8c11718f7056b01f6755c7da3d5d16423243334f22b2d560e658def8eb"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "4c2ff1cedac25109f367826a420e1bd74047ab37aa78132bb42fbf1dd689e876"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "0a803acb3451a91d84c27757c5af3a45b295741df3170853d9f6a8073e202300"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "84a974507ccea0dc46d5beb4287d71665a65d83d47bf9da40b1f62ddaa2b804c"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "864507801e50051b2bb691c7839b2eb66d288f4f6f5d070681f79f7aac8c613f"
+            ))
+            .into(),
+        )
+    }
+
+    pub(super) fn validator_2_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
+        (
+            AccountId::from(hex!("e9De3598e78Ac90d45de4f6B19666B280ec4886b")), // Stash
+            AccountId::from(hex!("1d1D7cd4469c5997a665ce219fB3aE6B18FF5E52")), // Validator
+            sp_core::sr25519::Public(hex!(
+                "74dcc8c2138cd579b8cc80d2de4cca3a37cdb6a4dde08a8b8dd309a0106b9c79"
+            ))
+            .into(),
+            sp_core::ed25519::Public(hex!(
+                "370f55c79dab485740ef10881d92ec515332292652f0ad9ed61f3450edc13fc7"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "a25d0e79e61aeef2e7baa9814f1d4744afeecab9d8df9891307500b122752d74"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "2c46c1d5dcdfe94e5a8543ad749a235e3a2285f197798f534669e97140517b34"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "9e7d5d82b966eb206efe40e7e3e8d1b37b4fdb0764c651b32ae207b760ae4e74"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "c47aea1cf8270930ef66afd4a04f14c7baf003bc1993c76a2c17807c019c303d"
+            ))
+            .into(),
+        )
+    }
+
+    pub(super) fn validator_3_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
+        (
+            AccountId::from(hex!("66c93481CbF5F1951C0D5E0685540D4e59C3C454")), // Stash
+            AccountId::from(hex!("3Ff5AD852f15a22F5b39DF53C400314C8b8F8ACb")), // Validator
+            sp_core::sr25519::Public(hex!(
+                "b2d683cc8c70417182d724244c284b22ad47ec61a872bd7873958c4ee757a966"
+            ))
+            .into(),
+            sp_core::ed25519::Public(hex!(
+                "42fe4d0b5298eaf62062cef16143eb3458a1f0c7b66b92dfa3cbb21141c4681d"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "14958d70c481dc72925df4a8701743f3069241818bf6a725060bbcce008bea09"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "62c90e97adf3f99cad816b0585e8a64d1604929cc76ff7d23f5edcb825f0980e"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "ae5600a1039bd46927c0927673491df50e2e4787970bf2e948f4aefb65601768"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "e49adf172ddb764215d7ba5a4633dec04991fb3bd9d876f34740f10f439ebf0a"
+            ))
+            .into(),
+        )
+    }
+
+    pub(super) fn validator_4_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
+        (
+            AccountId::from(hex!("29f8AE257C8Ab3607AB7F37215606b52a54849D1")), // Stash
+            AccountId::from(hex!("1b2f4c7A4863587987e2083c8c7D023856996116")), // Validator
+            sp_core::sr25519::Public(hex!(
+                "2ae1ee0f0df43aaa1f071bda8f8f58e849a1024f59bfbe35063bd06a5bd90d57"
+            ))
+            .into(),
+            sp_core::ed25519::Public(hex!(
+                "f2a1fef4dc58a00843f38f792b4854ae4d35e641784577df018d1017f69098e4"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "eeb0fc7fcf71296f88a83ccf937fffa6752f7eb3da64a8bb4eab601488c43850"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "4010ccfaa632f6aa8d026174dec6a2b27bd4036d1dc4f92c4c66df78e7af1313"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "a6e02f71a4723f4e671cb4e67bbc60307cdf393406d2690c9a54c66f4e210b75"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "341a2e2fd269d9d56c8b1f5b4bf0de3bf05c3f1b7dab48a40f06e66818dd067e"
+            ))
+            .into(),
+        )
+    }
+
+    pub(super) fn validator_5_keys() -> (
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    ) {
+        (
+            AccountId::from(hex!("8136A3A57a52bA0b8370E46D8c5e3B99f20b4c0a")), // Stash
+            AccountId::from(hex!("D913FDf697CA06e3BDa32169C58C0e51d0E38db7")), // Validator
+            sp_core::sr25519::Public(hex!(
+                "64676f9a84208fa8039ea15ab8235532a1ae11368d583f8ab12be5f2721e6b3b"
+            ))
+            .into(),
+            sp_core::ed25519::Public(hex!(
+                "f2616ad5f85d65c2d67e85e3d555f05f1f5dd597d791f289eeb124fd1eaf57c7"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "d08221bccf384c180108c7fd0eccd4976f0306503da336950b7bd8a6f5c0d77e"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "929751cb0df5782a5800d133b1dbd72d6a30f22a4024b8968001fb8d4b896553"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "801067636cb11406d8ec953f0e57b9de3784537fb1f1fd425e27fe2d6e9f2a01"
+            ))
+            .into(),
+            sp_core::sr25519::Public(hex!(
+                "60c50d14148a65996718014822b528ca2ad0e75a66cddd07e8b80ea78f223955"
             ))
             .into(),
         )

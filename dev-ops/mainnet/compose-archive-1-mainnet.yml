@@ -3,15 +3,15 @@ version: "3.3"
 services:
   vitreus_power_plant:
     build:
-      context: ..
+      context: ../..
       dockerfile: Dockerfile
     image: vitreus_power_plant
     networks:
       - vitreus_power_plant-network
 
-  archive_node:
+  archive_node_1:
     image: vitreus_power_plant
-    container_name: power-plant-archive-node
+    container_name: power-plant-archive-node-1
     restart: always
     depends_on:
       - vitreus_power_plant
@@ -21,13 +21,14 @@ services:
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
       --chain mainnet
-      --name mainnet-archive
+      --name mainnet-archive-1
       --port 30333
       --rpc-port 9944
       --rpc-external
       --prometheus-external
-      --bootnodes /ip4/45.32.187.143/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
+      --bootnodes /ip4/45.32.187.143/tcp/30333/p2p/12D3KooWBFQSrDskroYuP9CxKDizTomeSc3sC1K9EgmdpeeJzEnS
       --rpc-cors all
+      --rpc-max-connections 5000
       --state-pruning archive
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
       -lwarn

@@ -135,6 +135,10 @@ pub mod pallet {
     pub type UpperFeeMultiplier<T: Config> =
         StorageValue<_, Multiplier, ValueQuery, DefaultFeeMultiplier<T>>;
 
+    #[pallet::storage]
+    #[pallet::getter(fn base_fee)]
+    pub type BaseFee<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery, T::GetConstantFee>;
+
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
@@ -209,6 +213,17 @@ pub mod pallet {
             T::ManageOrigin::ensure_origin(origin)?;
             UpperFeeMultiplier::<T>::put(new_multiplier);
             Self::deposit_event(Event::<T>::UpperFeeMultiplierUpdated { new_multiplier });
+            Ok(().into())
+        }
+
+        #[pallet::call_index(3)]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
+        pub fn update_base_fee(
+            origin: OriginFor<T>,
+            new_base_fee: BalanceOf<T>,
+        ) -> DispatchResultWithPostInfo {
+            T::ManageOrigin::ensure_origin(origin)?;
+            BaseFee::<T>::put(new_base_fee);
             Ok(().into())
         }
     }

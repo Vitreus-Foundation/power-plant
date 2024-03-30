@@ -7116,6 +7116,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-claiming",
  "pallet-nfts",
  "pallet-reputation",
  "pallet-staking-reward-curve",
