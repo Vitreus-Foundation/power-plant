@@ -10,6 +10,7 @@ use std::{
 fn main() {
     process_claiming(input_path("claims.csv"), output_file("claiming_claims.rs")).unwrap();
     process_vesting(input_path("vesting.csv"), output_file("vesting.rs")).unwrap();
+    process_vnode(input_path("vnode.csv"), output_file("vnode.rs")).unwrap();
 }
 
 fn process_claiming(input: PathBuf, mut claims: File) -> Result<(), Box<dyn Error>> {
@@ -52,6 +53,23 @@ fn process_vesting(input: PathBuf, mut vesting: File) -> Result<(), Box<dyn Erro
         )?;
     }
     write!(&mut vesting, "]")?;
+
+    Ok(())
+}
+
+fn process_vnode(input: PathBuf, mut vnode: File) -> Result<(), Box<dyn Error>> {
+    let mut reader =
+        csv::ReaderBuilder::new().has_headers(false).delimiter(b';').from_path(input)?;
+
+    write!(&mut vnode, "vec![")?;
+    for result in reader.records() {
+        let record = result?;
+
+        let address = strip_hex_prefix(&record[0]);
+
+        write!(&mut vnode, "AccountId::from(hex_literal::hex!(\"{address}\")),")?;
+    }
+    write!(&mut vnode, "]")?;
 
     Ok(())
 }

@@ -558,7 +558,12 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
                 .collect::<Vec<_>>(),
         },
         nac_managing: NacManagingConfig {
-            accounts: initial_validators.iter().map(|x| (x.1, 2)).collect(),
+            accounts: initial_validators
+                .iter()
+                .map(|x| x.1)
+                .chain(genesis::vnode_accounts())
+                .map(|account| (account, 2))
+                .collect(),
             owners: vec![root_key],
         },
         session: SessionConfig {
@@ -1050,6 +1055,11 @@ mod genesis {
     pub(super) fn vested_balance() -> impl Iterator<Item = (AccountId, Balance)> {
         let vesting = include!(concat!(env!("OUT_DIR"), "/vesting.rs"));
         vesting.into_iter().map(|(account, amount, _, _)| (account, amount))
+    }
+
+    pub(super) fn vnode_accounts() -> impl Iterator<Item = AccountId> {
+        let vnode = include!(concat!(env!("OUT_DIR"), "/vnode.rs"));
+        vnode.into_iter()
     }
 
     pub(super) fn claiming_config() -> vitreus_power_plant_runtime::ClaimingConfig {
