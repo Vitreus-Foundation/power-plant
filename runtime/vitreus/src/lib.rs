@@ -875,6 +875,11 @@ impl pallet_vesting::Config for Runtime {
     const MAX_VESTING_SCHEDULES: u32 = 28;
 }
 
+impl pallet_simple_vesting::Config for Runtime {
+    type Currency = Balances;
+    type BlockNumberToBalance = ConvertInto;
+}
+
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
 impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
     for EnergyFee
@@ -1328,6 +1333,7 @@ construct_runtime!(
         AtomicSwap: pallet_atomic_swap,
         Claiming: pallet_claiming,
         Vesting: pallet_vesting,
+        SimpleVesting: pallet_simple_vesting,
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
         Authorship: pallet_authorship,
