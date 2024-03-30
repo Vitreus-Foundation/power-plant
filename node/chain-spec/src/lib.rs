@@ -579,7 +579,7 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
                 })
                 .collect::<Vec<_>>(),
         },
-        technical_committee: Default::default(),
+        technical_committee: genesis::technical_committee_config(),
         technical_membership: Default::default(),
         treasury: Default::default(),
         energy_generation: EnergyGenerationConfig {
@@ -1090,6 +1090,16 @@ mod genesis {
                 AccountId::from(hex!("7bD754C60e252ac4Ea5E583EA8F4ee34Bf7Cb3DC")),
                 AccountId::from(hex!("6096991707a190f97e2cb9146fabba23f5fc8cdd")),
                 AccountId::from(hex!("93518a144178d7cea1421c7a754b1493ad47f439")),
+            ],
+            ..Default::default()
+        }
+    }
+
+    pub(super) fn technical_committee_config() -> TechnicalCommitteeConfig {
+        TechnicalCommitteeConfig {
+            members: vec![
+                AccountId::from(hex!("B91De9Bdb5A04ecD5f1ddb875E96e39926F7AFE1")),
+                AccountId::from(hex!("0646fc56f259b366a6b05b38c128275b06a68b41")),
             ],
             ..Default::default()
         }
