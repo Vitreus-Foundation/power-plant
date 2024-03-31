@@ -22,7 +22,8 @@ use crate as pallet_nac_managing;
 
 use frame_support::{
     construct_runtime, parameter_types,
-    traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
+    traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, WithdrawReasons},
+    Identity,
 };
 use sp_core::H256;
 use sp_runtime::{
@@ -98,8 +99,8 @@ parameter_types! {
     pub TestItemDeposit:  u64 = 0;
 }
 
-type CollectionId = u32;
-type ItemId = u32;
+pub(crate) type CollectionId = u32;
+pub(crate) type ItemId = u32;
 
 impl pallet_nfts::Config for Test {
     type RuntimeEvent = RuntimeEvent;

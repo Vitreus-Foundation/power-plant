@@ -18,6 +18,7 @@ use frame_support::{
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
+use pallet_claiming::OnClaimHandler;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
 use parity_scale_codec::{Encode, MaxEncodedLen};
@@ -42,6 +43,9 @@ type CollectionConfigFor<T> =
 
 /// NAC level attribute key in NFT.
 const NAC_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
+
+/// Claimed amount attribute key in NFT.
+const CLAIM_AMOUNT_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 2];
 
 /// Default NAC level for account.
 const DEFAULT_NAC_LEVEL: u8 = 1;
@@ -359,5 +363,32 @@ impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
         if nac_minting_result.is_ok() {
             UsersNft::<T>::insert(who, (&item_id, &DEFAULT_NAC_LEVEL));
         }
+    }
+}
+
+impl<T: Config, Balance> OnClaimHandler<T::AccountId, Balance> for Pallet<T>
+where
+    Balance: frame_support::traits::tokens::Balance,
+{
+    fn on_claim(who: &T::AccountId, amount: Balance) -> DispatchResult {
+        let collection = T::NftCollectionId::get();
+        let item = T::Nfts::owned_in_collection(&collection, who)
+            .next()
+            .ok_or(Error::<T>::NftNotFound)?;
+
+        let claimed_raw =
+            T::Nfts::system_attribute(&collection, &item, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
+                .unwrap_or(vec![]);
+        let currently_claimed =
+            Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(Balance::zero());
+
+        let updated_claimed = currently_claimed.saturating_add(amount);
+
+        T::Nfts::set_attribute(
+            &collection,
+            &item,
+            &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            &updated_claimed.encode(),
+        )
     }
 }
