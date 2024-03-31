@@ -838,9 +838,23 @@ impl<T: Config> Pallet<T> {
         if Validators::<T>::contains_key(who) {
             Validators::<T>::remove(who);
             Collaborations::<T>::remove(who);
+
             true
         } else {
             false
+        }
+    }
+
+    // Remove a validator from cooperators target
+    pub fn do_remove_validator_from_cooperators_target(who: &T::AccountId) {
+        if let Some(cooperators) = Collaborations::<T>::get(who) {
+            for cooperator in cooperators {
+                Cooperators::<T>::mutate(cooperator, |cooperations| {
+                    if let Some(cooperations) = cooperations {
+                        cooperations.targets.remove(who);
+                    }
+                });
+            }
         }
     }
 

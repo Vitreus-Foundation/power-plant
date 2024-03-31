@@ -45,6 +45,9 @@ const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 /// 10^9 with 18 decimals
 const INITIAL_ENERGY_RATE: FixedU128 = FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
 
+/// Min validator stake for user who has NAC level = 1.
+const MIN_COMMON_VALIDATOR_BOND: Balance = 1_000_000 * vtrs::UNITS;
+
 /// Min validator stake for user who has NAC level > 1.
 const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 
@@ -464,11 +467,11 @@ pub fn testnet_genesis(
             minimum_validator_count: initial_validators.len() as u32,
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
-            min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
+            min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
             energy_per_stake_currency: 1_000_000u128,
-            block_authoring_reward: ReputationPoint(12),
+            block_authoring_reward: ReputationPoint(24),
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },
@@ -588,10 +591,10 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
         treasury: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
-            minimum_validator_count: initial_validators.len() as u32,
+            minimum_validator_count: initial_validators.len() as u32 - 1,
             invulnerables: initial_validators.iter().map(|x| x.1).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
-            min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
+            min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
             energy_per_stake_currency: 1_000_000u128,
