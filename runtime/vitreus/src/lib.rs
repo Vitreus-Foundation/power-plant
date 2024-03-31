@@ -238,7 +238,7 @@ pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
 // NOTE: Currently it is not possible to change the epoch duration after the chain has started.
 //       Attempting to do so will brick block production.
-pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
+pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 60 * MINUTES;
 pub const EPOCH_DURATION_IN_SLOTS: u64 = {
     const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
 
@@ -398,6 +398,8 @@ parameter_types! {
     // This number may need to be adjusted in the future if this assumption no longer holds true.
     pub const MaxLocks: u32 = 50;
     pub const MaxReserves: u32 = 50;
+    pub const MaxFreezes: u32 = 8;
+    pub const MaxHolds: u32 = 2;
 }
 
 impl pallet_balances::Config for Runtime {
@@ -413,9 +415,9 @@ impl pallet_balances::Config for Runtime {
     type MaxReserves = MaxReserves;
     type ReserveIdentifier = [u8; 8];
     type FreezeIdentifier = ();
-    type MaxFreezes = ();
+    type MaxFreezes = MaxFreezes;
     type RuntimeHoldReason = ();
-    type MaxHolds = ();
+    type MaxHolds = MaxHolds;
 }
 
 parameter_types! {
@@ -583,15 +585,15 @@ pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
 
 parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const SessionsPerEra: SessionIndex = prod_or_fast!(5, 1);
-    pub const BondingDuration: EraIndex = prod_or_fast!(7, 5);
+    pub const SessionsPerEra: SessionIndex = prod_or_fast!(4, 1);
+    pub const BondingDuration: EraIndex = prod_or_fast!(42, 5);
     // TODO: consider removing, since the slash defer feature was removed
     pub const SlashDeferDuration: EraIndex = 0;
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const VNRG: AssetId = 1;
     pub const BatterySlotCapacity: Energy = 100_000_000_000;
-    pub const MaxCooperations: u32 = 1024;
+    pub const MaxCooperations: u32 = 256;
     pub const HistoryDepth: u32 = 84;
     pub const MaxUnlockingChunks: u32 = 64;
     pub const RewardOnUnbalanceWasCalled: bool = false;
@@ -1239,8 +1241,8 @@ impl parachains_slashing::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ParaDeposit: Balance = 0;
-    pub const ParaDataByteDeposit: Balance = 0;
+    pub const ParaDeposit: Balance = 20000 * UNITS;
+    pub const ParaDataByteDeposit: Balance = 2;
 }
 
 impl paras_registrar::Config for Runtime {
