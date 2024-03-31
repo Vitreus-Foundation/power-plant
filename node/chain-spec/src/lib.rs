@@ -15,11 +15,12 @@ use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig, EnableManualSeal,
-    EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
-    NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix,
-    SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
-    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
+    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
+    MaxCooperations, NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig,
+    SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig,
+    SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 /// Node `ChainSpec` extensions.
@@ -434,7 +435,7 @@ pub fn testnet_genesis(
                 .collect::<Vec<_>>(),
         },
         nac_managing: NacManagingConfig {
-            accounts: endowed_accounts.iter().map(|x| (*x, 1)).collect(),
+            accounts: endowed_accounts.iter().map(|x| (*x, 2)).collect(),
             owners: vec![root_key],
         },
         session: SessionConfig {
@@ -504,6 +505,13 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
         .map(|x| (x.0, x.1, STASH, StakerStatus::Validator))
         .collect::<Vec<_>>();
 
+    let claiming_config = genesis::claiming_config();
+
+    let claiming_balance = claiming_config
+        .claims
+        .iter()
+        .fold(15_000_000 * vtrs::UNITS, |total, claim| total.saturating_add(claim.1));
+
     RuntimeGenesisConfig {
         // System
         system: SystemConfig {
@@ -521,15 +529,17 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
             balances: endowed_accounts
                 .iter()
                 .map(|k| (*k, ENDOWMENT))
+                .chain([(Claiming::claim_account_id(), claiming_balance)])
                 .chain(initial_validators.iter().map(|x| (x.0, STASH)))
+                .chain(genesis::vested_balance())
                 .chain(genesis::tech_allocation())
                 .collect(),
         },
-        claiming: genesis::claiming_config(),
+        claiming: claiming_config,
         vesting: Default::default(),
-        simple_vesting: Default::default(),
+        simple_vesting: genesis::simple_vesting_config(),
         babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
-        council: Default::default(),
+        council: genesis::council_config(),
         democracy: Default::default(),
         grandpa: Default::default(),
         transaction_payment: Default::default(),
@@ -564,7 +574,12 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
                 .collect::<Vec<_>>(),
         },
         nac_managing: NacManagingConfig {
-            accounts: initial_validators.iter().map(|x| (x.1, 2)).collect(),
+            accounts: initial_validators
+                .iter()
+                .map(|x| x.1)
+                .chain(genesis::vnode_accounts())
+                .map(|account| (account, 2))
+                .collect(),
             owners: vec![root_key],
         },
         session: SessionConfig {
@@ -586,17 +601,19 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
                 })
                 .collect::<Vec<_>>(),
         },
-        technical_committee: Default::default(),
+        technical_committee: genesis::technical_committee_config(),
         technical_membership: Default::default(),
         treasury: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32 - 1,
-            invulnerables: initial_validators.iter().map(|x| x.1).collect(),
+            invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
+            min_commission: Perbill::from_percent(20),
             min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
+            disable_collaboration: true,
             energy_per_stake_currency: 1_000_000u128,
             block_authoring_reward: ReputationPoint(12),
             ..Default::default()
@@ -1067,45 +1084,13 @@ mod genesis {
     use super::*;
     use tech_addresses::*;
 
-    pub(super) fn claiming_config() -> vitreus_power_plant_runtime::ClaimingConfig {
-        let mut config = vitreus_power_plant_runtime::ClaimingConfig {
-            claims: include!(concat!(env!("OUT_DIR"), "/claiming_claims.rs")),
-            vesting: vec![],
-        };
+    use vitreus_power_plant_runtime::{BlockNumber, ExistentialDeposit, DAYS, MILLI_VTRS};
 
-        // address, amount in milliVTRS, vesting start/period in years
-        let claims = vec![
-            (hex!("3e743911188753601C688F42510d7d9fF34bfEFf"), 375083500, Some((1, 1))),
-            (hex!("2902213Ae1122D9D23c41AaC3961Da8d4dcb8588"), 629210, Some((1, 1))),
-            (hex!("Da67BB5318003a8Cd5D68cC2Fc042958ed4262F2"), 26000000, Some((1, 1))),
-            (hex!("E5b8524a2613472972cA7Ea11c6Fa2DA65379C2b"), 1100000, Some((1, 1))),
-            (hex!("cEcb9661f49255d7f814a49018Bc74069Cc0AD45"), 260000000, Some((1, 1))),
-            (hex!("fb8B24C9072A93BC3F6A5aF7C3F55a0655Eee509"), 1360000, Some((1, 1))),
-            (hex!("Dc5419Ce5633a3608b1d19F26377D84BD8b0168f"), 2040000, Some((1, 1))),
-            (hex!("5b7d4c4b7243bfad283472c1ff3a4fb1949cb309"), 60627000, None),
-            (hex!("21ECD0192945a534EA5faf594f1a5aDa6CBAD4C0"), 160353820, None),
-        ];
-
-        for (address, amount, vesting) in claims {
-            let address = pallet_claiming::EthereumAddress(address);
-            let amount = amount * vitreus_power_plant_runtime::MILLI_VTRS;
-
-            config.claims.push((address, amount));
-
-            if let Some((start, period)) = vesting {
-                let start = start * 365 * vitreus_power_plant_runtime::DAYS;
-                let period = period * 365 * vitreus_power_plant_runtime::DAYS;
-
-                let amount_per_block = amount / period as u128;
-                config.vesting.push((address, (amount, amount_per_block, start)));
-            }
-        }
-
-        config
-    }
+    const YEARS: BlockNumber = 36525 * (DAYS / 100);
+    const MONTHS: BlockNumber = YEARS / 12;
 
     pub(super) fn tech_allocation() -> Vec<(AccountId, Balance)> {
-        const INITIAL_TREASURY_ALLOCATION: Balance = 68_364_887_120 * vtrs::MILLI_VTRS;
+        const INITIAL_TREASURY_ALLOCATION: Balance = 68_364_887_120 * MILLI_VTRS;
         const INITIAL_LIQUIDITY_ALLOCATION: Balance = 10_000_000 * vtrs::UNITS;
         const INITIAL_LIQUIDITY_RESERVES_ALLOCATION: Balance = 125_000_000 * vtrs::UNITS;
         const INITIAL_STAKING_REWARDS_ALLOCATION: Balance = 170_000_000 * vtrs::UNITS;
@@ -1116,6 +1101,124 @@ mod genesis {
             (liquidity(), INITIAL_LIQUIDITY_ALLOCATION),
             (liquidity_reserves(), INITIAL_LIQUIDITY_RESERVES_ALLOCATION),
         ]
+    }
+
+    pub(super) fn vested_balance() -> impl Iterator<Item = (AccountId, Balance)> {
+        let vesting = include!(concat!(env!("OUT_DIR"), "/vesting.rs"));
+        vesting.into_iter().map(|(account, amount, _, _)| (account, amount))
+    }
+
+    pub(super) fn vnode_accounts() -> impl Iterator<Item = AccountId> {
+        let vnode = include!(concat!(env!("OUT_DIR"), "/vnode.rs"));
+        vnode.into_iter()
+    }
+
+    pub(super) fn claiming_config() -> ClaimingConfig {
+        let mut config = ClaimingConfig {
+            claims: include!(concat!(env!("OUT_DIR"), "/claiming_claims.rs")),
+            vesting: vec![],
+        };
+
+        // address, amount in milliVTRS, vesting start/period in years
+        let claims = vec![
+            (
+                hex!("3e743911188753601C688F42510d7d9fF34bfEFf"),
+                375083500000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("2902213Ae1122D9D23c41AaC3961Da8d4dcb8588"),
+                629210000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("Da67BB5318003a8Cd5D68cC2Fc042958ed4262F2"),
+                26000000000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("E5b8524a2613472972cA7Ea11c6Fa2DA65379C2b"),
+                1100000000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("cEcb9661f49255d7f814a49018Bc74069Cc0AD45"),
+                260000000000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("fb8B24C9072A93BC3F6A5aF7C3F55a0655Eee509"),
+                1360000000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("Dc5419Ce5633a3608b1d19F26377D84BD8b0168f"),
+                22046888888888800000000 + 2040000000000000000000,
+                Some((Some(2040000000000000000000), 1, 1)),
+            ),
+            (hex!("5b7d4c4b7243bfad283472c1ff3a4fb1949cb309"), 60627000000000000000000, None),
+            (hex!("21ECD0192945a534EA5faf594f1a5aDa6CBAD4C0"), 160353820000000000000000, None),
+            (hex!("205Be1AD81b62E49ed9D34E97cb52F31D3644A04"), 100540000000000000000000, None),
+            (hex!("Ab404525918C62F7A751Db4096f8Bb04E4D12309"), 10000000000000000000000, None),
+        ];
+
+        for (address, amount, vesting) in claims {
+            let address = pallet_claiming::EthereumAddress(address);
+
+            config.claims.push((address, amount));
+
+            if let Some((vesting_amount, start, period)) = vesting {
+                let start = start * YEARS;
+                let period = period * YEARS;
+
+                let vesting_amount = vesting_amount.unwrap_or(amount);
+                let amount_per_block = vesting_amount / period as u128;
+
+                config.vesting.push((address, (vesting_amount, amount_per_block, start)));
+            }
+        }
+
+        config
+    }
+
+    pub(super) fn simple_vesting_config() -> SimpleVestingConfig {
+        let vesting = include!(concat!(env!("OUT_DIR"), "/vesting.rs"));
+
+        let vesting = vesting
+            .into_iter()
+            .map(|(address, _, start, period)| {
+                (address, start * MONTHS, period * MONTHS, ExistentialDeposit::get())
+            })
+            .collect();
+
+        SimpleVestingConfig { vesting }
+    }
+
+    pub(super) fn council_config() -> CouncilConfig {
+        CouncilConfig {
+            members: vec![
+                AccountId::from(hex!("5f53d6893b5ca9b80a98e66f16f966e8c7d0b29c")),
+                AccountId::from(hex!("51C7b0F6Ec0b45b1Fa644Aa1c7560d45D7506c91")),
+                AccountId::from(hex!("56fef4e5500eb9b8546c722f22e437e26d45f33c")),
+                AccountId::from(hex!("2A27793bDe97A121050093285a6D75a6EbCD9Cf1")),
+                AccountId::from(hex!("d3a58ebcbab95c9950aa45d143eb4ca241ff4563")),
+                AccountId::from(hex!("e6a32e4b99f2c40f1999db38456e8b1a4d4a9884")),
+                AccountId::from(hex!("7bD754C60e252ac4Ea5E583EA8F4ee34Bf7Cb3DC")),
+                AccountId::from(hex!("6096991707a190f97e2cb9146fabba23f5fc8cdd")),
+                AccountId::from(hex!("93518a144178d7cea1421c7a754b1493ad47f439")),
+            ],
+            ..Default::default()
+        }
+    }
+
+    pub(super) fn technical_committee_config() -> TechnicalCommitteeConfig {
+        TechnicalCommitteeConfig {
+            members: vec![
+                AccountId::from(hex!("B91De9Bdb5A04ecD5f1ddb875E96e39926F7AFE1")),
+                AccountId::from(hex!("0646fc56f259b366a6b05b38c128275b06a68b41")),
+            ],
+            ..Default::default()
+        }
     }
 }
 
