@@ -1294,14 +1294,14 @@ construct_runtime!(
         // for im-online and staking.
         Authorship: pallet_authorship = 30,
         ImOnline: pallet_im_online = 31,
-        EnergyGeneration: pallet_energy_generation = 32,
+        NacManaging: pallet_nac_managing = 32,
         EnergyFee: pallet_energy_fee = 33,
         Offences: pallet_offences = 34,
         Session: pallet_session = 35,
         Utility: pallet_utility = 36,
         Historical: pallet_session::historical = 37,
         AuthorityDiscovery: pallet_authority_discovery = 38,
-        NacManaging: pallet_nac_managing = 39,
+        EnergyGeneration: pallet_energy_generation = 39,
 
         // Governance-related pallets
         Scheduler: pallet_scheduler = 45,
