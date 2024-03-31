@@ -557,9 +557,19 @@ impl<T: Config> Pallet<T> {
         new_planned_era: EraIndex,
     ) -> Vec<T::AccountId> {
         let max_validators = Self::validator_count().max(1) as usize;
+
+        // Get validators with max total stake, invulnerables validators are always elected
         if exposures.len() > max_validators {
-            // Get validators with max total stake
-            exposures.select_nth_unstable_by(max_validators, |a, b| b.1.total.cmp(&a.1.total));
+            let invulnerables = Self::invulnerables();
+
+            exposures.select_nth_unstable_by(max_validators, |a, b| {
+                // If `a` < `b`, then validator `a` will be elected
+                match (invulnerables.contains(&a.0), invulnerables.contains(&b.0)) {
+                    (true, false) => Ordering::Less,
+                    (false, true) => Ordering::Greater,
+                    _ => a.1.total.cmp(&b.1.total).reverse(),
+                }
+            });
         }
         let elected_stashes: Vec<_> =
             exposures.iter().take(max_validators).map(|(x, _)| x.clone()).collect();
