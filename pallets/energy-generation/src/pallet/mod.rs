@@ -633,16 +633,17 @@ pub mod pallet {
                     balance,
                     RewardDestination::default(),
                 ));
-                let prefs =
-                    if !self.disable_collaboration && Pallet::<T>::is_legit_for_collab(stash) {
-                        ValidatorPrefs::default_collaborative()
-                    } else {
-                        Default::default()
-                    };
+
+                let collaborative =
+                    !self.disable_collaboration && Pallet::<T>::is_legit_for_collab(stash);
                 frame_support::assert_ok!(match status {
                     crate::StakerStatus::Validator => <Pallet<T>>::validate(
                         T::RuntimeOrigin::from(Some(controller.clone()).into()),
-                        prefs,
+                        ValidatorPrefs {
+                            collaborative,
+                            commission: self.min_commission,
+                            ..Default::default()
+                        },
                     ),
                     crate::StakerStatus::Cooperator(votes) => <Pallet<T>>::cooperate(
                         T::RuntimeOrigin::from(Some(controller.clone()).into()),
