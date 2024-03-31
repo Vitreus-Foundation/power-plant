@@ -5,23 +5,25 @@
 use crate::{self as energy_generation, *};
 use frame_support::{
     assert_ok, ord_parameter_types, parameter_types,
+    storage::StorageValue,
     traits::{
-        AsEnsureOriginWithArg, ConstU32, ConstU64, Currency, EitherOfDiverse, FindAuthor, Get,
-        Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Currency, EitherOfDiverse,
+        FindAuthor, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
     },
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use orml_traits::GetByKey;
-use pallet_reputation::{ReputationRecord, ReputationTier, RANKS_PER_TIER};
+use pallet_reputation::{
+    ReputationRecord, ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_BLOCK,
+};
 use parity_scale_codec::Compact;
 use sp_core::H256;
-
 use sp_runtime::{
     curve::PiecewiseLinear,
-    testing::{Header, UintAuthorityId},
-    traits::{IdentityLookup, Zero},
-    BuildStorage, Percent,
+    testing::{Header, TestSignature, UintAuthorityId},
+    traits::{IdentifyAccount, IdentityLookup, Verify, Zero},
+    BuildStorage, MultiSignature, Percent,
 };
 use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
@@ -34,8 +36,8 @@ pub(crate) type AccountId = u64;
 pub(crate) type Nonce = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
-
-use frame_support::storage::StorageValue;
+pub(crate) type Signature = TestSignature;
+pub(crate) type AccountPublic = UintAuthorityId;
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
@@ -81,6 +83,8 @@ frame_support::construct_runtime!(
         Authorship: pallet_authorship,
         Balances: pallet_balances,
         Historical: pallet_session::historical,
+        NacManaging: pallet_nac_managing,
+        Nfts: pallet_nfts,
         ReputationPallet: pallet_reputation,
         Session: pallet_session,
         PowerPlant: energy_generation,
@@ -287,19 +291,6 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
     }
 }
 
-pub struct EnergyPerStakeCurrency;
-
-impl EnergyRateCalculator<StakeOf<Test>, EnergyOf<Test>> for EnergyPerStakeCurrency {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Test>,
-        _total_issuance: EnergyOf<Test>,
-        _core_nodes_num: u32,
-        _battery_slot_cap: EnergyOf<Test>,
-    ) -> EnergyOf<Test> {
-        EnergyOf::<Test>::from(1_000_000_u128)
-    }
-}
-
 pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
 
 impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
@@ -325,6 +316,60 @@ impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalP
     }
 }
 
+parameter_types! {
+    pub TestCollectionDeposit:  u64 = 0;
+    pub TestItemDeposit:  u64 = 0;
+}
+
+type CollectionId = u32;
+type ItemId = u32;
+
+impl pallet_nfts::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
+    type Currency = Balances;
+    type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
+    type CollectionDeposit = TestCollectionDeposit;
+    type ApprovalsLimit = ();
+    type ItemAttributesApprovalsLimit = ();
+    type MaxTips = ();
+    type MaxDeadlineDuration = ();
+    type MaxAttributesPerCall = ();
+    type Features = ();
+    type OffchainPublic = AccountPublic;
+    type OffchainSignature = Signature;
+    type ItemDeposit = TestItemDeposit;
+    type MetadataDepositBase = ConstU128<1>;
+    type AttributeDepositBase = ConstU128<1>;
+    type DepositPerByte = ConstU128<1>;
+    type StringLimit = ConstU32<50>;
+    type KeyLimit = ConstU32<50>;
+    type ValueLimit = ConstU32<50>;
+    type WeightInfo = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type Helper = ();
+    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
+    type Locker = ();
+}
+
+parameter_types! {
+    pub const NftCollectionId: CollectionId = 0;
+}
+
+impl pallet_nac_managing::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
+    type Nfts = Nfts;
+    type Balance = Balance;
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
+    type NftCollectionId = NftCollectionId;
+    type KeyLimit = ConstU32<50>;
+    type ValueLimit = ConstU32<50>;
+    type WeightInfo = ();
+}
+
 impl crate::pallet::pallet::Config for Test {
     type AdminOrigin = EnsureOneOrRoot;
     type BatterySlotCapacity = BatterySlotCapacity;
@@ -332,7 +377,7 @@ impl crate::pallet::pallet::Config for Test {
     type BondingDuration = BondingDuration;
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
+    type EnergyPerStakeCurrency = PowerPlant;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
     type MaxCooperatorRewardedPerValidator = ConstU32<64>;
@@ -367,11 +412,14 @@ pub struct ExtBuilder {
     has_stakers: bool,
     initialize_first_session: bool,
     pub min_cooperator_bond: Balance,
-    min_validator_bond: Balance,
+    min_common_validator_bond: Balance,
+    min_trust_validator_bond: Balance,
     balance_factor: Balance,
     status: BTreeMap<AccountId, StakerStatus<AccountId, Balance>>,
     stakes: BTreeMap<AccountId, Balance>,
     stakers: Vec<(AccountId, AccountId, Balance, StakerStatus<AccountId, Balance>)>,
+    energy_per_stake_currency: Balance,
+    block_authoring_reward: ReputationPoint,
 }
 
 impl Default for ExtBuilder {
@@ -385,10 +433,13 @@ impl Default for ExtBuilder {
             has_stakers: true,
             initialize_first_session: true,
             min_cooperator_bond: ExistentialDeposit::get(),
-            min_validator_bond: ExistentialDeposit::get(),
+            min_common_validator_bond: ExistentialDeposit::get(),
+            min_trust_validator_bond: ExistentialDeposit::get(),
             status: Default::default(),
             stakes: Default::default(),
             stakers: Default::default(),
+            energy_per_stake_currency: 1_000_000u128,
+            block_authoring_reward: ReputationPoint(12),
         }
     }
 }
@@ -442,8 +493,12 @@ impl ExtBuilder {
         self.min_cooperator_bond = amount;
         self
     }
-    pub fn min_validator_bond(mut self, amount: Balance) -> Self {
-        self.min_validator_bond = amount;
+    pub fn min_common_validator_bond(mut self, amount: Balance) -> Self {
+        self.min_common_validator_bond = amount;
+        self
+    }
+    pub fn min_trust_validator_bond(mut self, amount: Balance) -> Self {
+        self.min_trust_validator_bond = amount;
         self
     }
     pub fn set_status(mut self, who: AccountId, status: StakerStatus<AccountId, Balance>) -> Self {
@@ -581,7 +636,9 @@ impl ExtBuilder {
             invulnerables: self.invulnerables,
             slash_reward_fraction: Perbill::from_percent(10),
             min_cooperator_bond: self.min_cooperator_bond,
-            min_validator_bond: self.min_validator_bond,
+            min_common_validator_bond: self.min_common_validator_bond,
+            min_trust_validator_bond: self.min_trust_validator_bond,
+            energy_per_stake_currency: self.energy_per_stake_currency,
             ..Default::default()
         }
         .assimilate_storage(&mut storage);

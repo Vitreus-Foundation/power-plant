@@ -9,6 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::traits::tokens::ConversionToAssetBalance;
+use pallet_energy_fee::MainCreditOf;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
     CommittedCandidateReceipt, CoreState, DisputeState, ExecutorParams, GroupRotationInfo,
@@ -36,7 +37,8 @@ use frame_support::traits::tokens::{
     Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, SignedImbalance, WithdrawReasons,
+    fungible::Balanced, Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced,
+    SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
@@ -77,7 +79,7 @@ use frame_support::{
         fungible::ItemOf, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall,
         FindAuthor, Hooks, KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, IdentityFee, Weight},
+    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use pallet_energy_fee::{
@@ -215,7 +217,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 6,
+    spec_version: 8,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -446,18 +448,6 @@ impl pallet_assets::Config for Runtime {
     type BenchmarkHelper = ();
 }
 
-parameter_types! {
-    pub AccumulationPeriod: BlockNumber = prod_or_fast!(HOURS * 24, 24 * MINUTES, "VITREUS_FAUCET_ACCUMULATION_PERIOD");
-    pub const MaxAmount: Balance = 1000 * vtrs::UNITS;
-}
-
-impl pallet_faucet::Config for Runtime {
-    type AccumulationPeriod = AccumulationPeriod;
-    type MaxAmount = MaxAmount;
-    type RuntimeEvent = RuntimeEvent;
-    type WeightInfo = ();
-}
-
 impl pallet_reputation::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -621,7 +611,7 @@ impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerStakeCurrency {
         _core_nodes_num: u32,
         _battery_slot_cap: Energy,
     ) -> Energy {
-        1_000_000_000_000
+        19_909_091_036_891
     }
 }
 
@@ -682,10 +672,10 @@ impl pallet_energy_generation::Config for Runtime {
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type ValidatorReputationTier = ValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = EnergyPerStakeCurrency;
+    type EnergyPerStakeCurrency = EnergyGeneration;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
-    type MaxCooperatorRewardedPerValidator = ConstU32<64>;
+    type MaxCooperatorRewardedPerValidator = ConstU32<128>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
@@ -753,28 +743,6 @@ impl pallet_nfts::Config for Runtime {
     type Locker = ();
 }
 
-impl pallet_uniques::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type CollectionId = CollectionId;
-    type ItemId = ItemId;
-    type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-    type CollectionDeposit = CollectionDeposit;
-    type ItemDeposit = ItemDeposit;
-    type MetadataDepositBase = MetadataDepositBase;
-    type AttributeDepositBase = MetadataDepositBase;
-    type DepositPerByte = MetadataDepositPerByte;
-    type StringLimit = AssetsStringLimit;
-    type KeyLimit = KeyLimit;
-    type ValueLimit = ValueLimit;
-    type WeightInfo = pallet_uniques::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
-    // TODO: do we want to allow regular users create nfts?
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type Locker = ();
-}
-
 parameter_types! {
     pub const NftCollectionId: CollectionId = 0;
 }
@@ -794,22 +762,23 @@ impl pallet_nac_managing::Config for Runtime {
 
 parameter_types! {
     pub const TransactionByteFee: Balance = 1;
+    pub const TransactionPicosecondFee: Balance = 8;
 }
 
 impl pallet_transaction_payment::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type OnChargeTransaction = EnergyFee;
     type OperationalFeeMultiplier = ConstU8<5>;
-    type WeightToFee = IdentityFee<Balance>;
+    type WeightToFee = ConstantMultiplier<Balance, TransactionPicosecondFee>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = EnergyFee;
 }
 
 impl pallet_asset_rate::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type CreateOrigin = EnsureRoot<AccountId>;
-    type RemoveOrigin = EnsureRoot<AccountId>;
-    type UpdateOrigin = EnsureRoot<AccountId>;
+    type CreateOrigin = MoreThanHalfCouncil;
+    type RemoveOrigin = MoreThanHalfCouncil;
+    type UpdateOrigin = MoreThanHalfCouncil;
     type AssetId = AssetId;
     type Currency = Balances;
     type Balance = Balance;
@@ -818,12 +787,22 @@ impl pallet_asset_rate::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-    pub GetConstantGasLimit: U256 = U256::from(56_000);
+    pub GetConstantGasLimit: U256 = U256::from(100_000);
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
 type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
+
+// impl OnUnbalanced<
+
+pub struct TreasurySink;
+
+impl OnUnbalanced<MainCreditOf<Runtime>> for TreasurySink {
+    fn on_nonzero_unbalanced(amount: MainCreditOf<Runtime>) {
+        let _ = Balances::resolve(&Treasury::account_id(), amount);
+    }
+}
 
 impl pallet_energy_fee::Config for Runtime {
     type ManageOrigin = MoreThanHalfCouncil;
@@ -834,6 +813,8 @@ impl pallet_energy_fee::Config for Runtime {
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAssetId = VNRG;
+    type MainRecycleDestination = TreasurySink;
+    type FeeRecycleDestination = ();
 }
 
 parameter_types! {
@@ -854,6 +835,7 @@ impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type OnClaim = NacManaging;
     type Prefix = Prefix;
     type WeightInfo = ();
 }
@@ -874,6 +856,11 @@ impl pallet_vesting::Config for Runtime {
     const MAX_VESTING_SCHEDULES: u32 = 28;
 }
 
+impl pallet_simple_vesting::Config for Runtime {
+    type Currency = Balances;
+    type BlockNumberToBalance = ConvertInto;
+}
+
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
 impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
     for EnergyFee
@@ -884,12 +871,22 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         calculated_fee: Option<Balance>,
     ) -> CallFee<Balance> {
         match runtime_call {
-            RuntimeCall::Balances(..)
-            | RuntimeCall::Assets(..)
-            | RuntimeCall::Uniques(..)
-            | RuntimeCall::Reputation(..)
+            RuntimeCall::Assets(..)
+            | RuntimeCall::AssetRate(..)
+            | RuntimeCall::Balances(..)
             | RuntimeCall::Bounties(..)
-            | RuntimeCall::EnergyGeneration(..) => CallFee::Regular(Self::custom_fee()),
+            | RuntimeCall::EnergyGeneration(..)
+            | RuntimeCall::Nfts(..)
+            | RuntimeCall::AtomicSwap(..)
+            | RuntimeCall::Claiming(..)
+            | RuntimeCall::Vesting(..)
+            | RuntimeCall::NacManaging(..)
+            | RuntimeCall::Council(..)
+            | RuntimeCall::TechnicalCommittee(..)
+            | RuntimeCall::TechnicalMembership(..)
+            | RuntimeCall::Treasury(..)
+            | RuntimeCall::Democracy(..)
+            | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
             | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
@@ -905,7 +902,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             },
             RuntimeCall::Utility(pallet_utility::Call::dispatch_as { call, .. })
             | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
-                CallFee::Regular(Self::weight_fee(call, None, calculated_fee))
+                Self::dispatch_info_to_fee(call, None, calculated_fee)
             },
             _ => CallFee::Regular(Self::weight_fee(runtime_call, dispatch_info, calculated_fee)),
         }
@@ -913,7 +910,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 
     fn custom_fee() -> Balance {
         let next_multiplier = TransactionPayment::next_fee_multiplier();
-        next_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+        next_multiplier.saturating_mul_int(EnergyFee::base_fee())
     }
 
     fn weight_fee(
@@ -1128,7 +1125,7 @@ impl pallet_evm::Config for Runtime {
     type FindAuthor = FindAuthorTruncated<Babe>;
     type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
-    type OnChargeTransaction = EnergyFee; //EVMCurrencyAdapter<Balances, ()>;
+    type OnChargeTransaction = EnergyFee;
     type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
@@ -1146,38 +1143,7 @@ impl pallet_ethereum::Config for Runtime {
 }
 
 parameter_types! {
-    // as we have constant fee, we set it to 1
-    pub BoundDivision: U256 = U256::from(1);
-}
-
-impl pallet_dynamic_fee::Config for Runtime {
-    type MinGasPriceBoundDivisor = BoundDivision;
-}
-
-parameter_types! {
-    // the minimum amount of gas that a transaction must pay to be included in a block
-    pub DefaultBaseFeePerGas: U256 = U256::from(GetConstantEnergyFee::get());
     pub DefaultElasticity: Permill = Permill::from_parts(1_000_000);
-}
-
-pub struct BaseFeeThreshold;
-impl pallet_base_fee::BaseFeeThreshold for BaseFeeThreshold {
-    fn lower() -> Permill {
-        Permill::from_parts(1_000_000)
-    }
-    fn ideal() -> Permill {
-        Permill::from_parts(1_000_000)
-    }
-    fn upper() -> Permill {
-        Permill::from_parts(1_000_000)
-    }
-}
-
-impl pallet_base_fee::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type Threshold = BaseFeeThreshold;
-    type DefaultBaseFeePerGas = DefaultBaseFeePerGas;
-    type DefaultElasticity = DefaultElasticity;
 }
 
 impl pallet_hotfix_sufficients::Config for Runtime {
@@ -1303,73 +1269,70 @@ impl paras_sudo_wrapper::Config for Runtime {}
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
-        System: frame_system,
-        Timestamp: pallet_timestamp,
-        Babe: pallet_babe,
-        Grandpa: pallet_grandpa,
-        Balances: pallet_balances,
-        Faucet: pallet_faucet,
-        Assets: pallet_assets,
-        AssetRate: pallet_asset_rate,
-        TransactionPayment: pallet_transaction_payment,
-        Sudo: pallet_sudo,
-        // TODO: do we need this pallet?
-        BaseFee: pallet_base_fee,
-        // TODO: do we need this pallet?
-        DynamicFee: pallet_dynamic_fee,
-        EVM: pallet_evm,
-        EVMChainId: pallet_evm_chain_id,
-        Ethereum: pallet_ethereum,
-        HotfixSufficients: pallet_hotfix_sufficients,
-        Uniques: pallet_uniques,
-        Nfts: pallet_nfts,
-        Reputation: pallet_reputation,
-        AtomicSwap: pallet_atomic_swap,
-        Claiming: pallet_claiming,
-        Vesting: pallet_vesting,
+        System: frame_system = 0,
+        Timestamp: pallet_timestamp = 1,
+        Babe: pallet_babe = 2,
+        Grandpa: pallet_grandpa = 3,
+        Balances: pallet_balances = 4,
+        Assets: pallet_assets = 5,
+        AssetRate: pallet_asset_rate = 6,
+        TransactionPayment: pallet_transaction_payment = 7,
+        Sudo: pallet_sudo = 8,
+
+        EVM: pallet_evm = 15,
+        EVMChainId: pallet_evm_chain_id = 16,
+        Ethereum: pallet_ethereum = 17,
+        HotfixSufficients: pallet_hotfix_sufficients = 18,
+        Nfts: pallet_nfts = 19,
+        Reputation: pallet_reputation = 20,
+        AtomicSwap: pallet_atomic_swap = 21,
+        Claiming: pallet_claiming = 22,
+        Vesting: pallet_vesting = 23,
+        SimpleVesting: pallet_simple_vesting = 24,
+
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
-        Authorship: pallet_authorship,
-        ImOnline: pallet_im_online,
-        EnergyGeneration: pallet_energy_generation,
-        EnergyFee: pallet_energy_fee,
-        Offences: pallet_offences,
-        Session: pallet_session,
-        Utility: pallet_utility,
-        Historical: pallet_session::historical,
-        AuthorityDiscovery: pallet_authority_discovery,
-        NacManaging: pallet_nac_managing,
+        Authorship: pallet_authorship = 30,
+        ImOnline: pallet_im_online = 31,
+        EnergyGeneration: pallet_energy_generation = 32,
+        EnergyFee: pallet_energy_fee = 33,
+        Offences: pallet_offences = 34,
+        Session: pallet_session = 35,
+        Utility: pallet_utility = 36,
+        Historical: pallet_session::historical = 37,
+        AuthorityDiscovery: pallet_authority_discovery = 38,
+        NacManaging: pallet_nac_managing = 39,
 
         // Governance-related pallets
-        Scheduler: pallet_scheduler,
-        Preimage: pallet_preimage,
-        Council: pallet_collective::<Instance1>,
-        TechnicalCommittee: pallet_collective::<Instance2>,
-        TechnicalMembership: pallet_membership::<Instance1>,
-        Treasury: pallet_treasury,
-        TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>},
-        Bounties: pallet_bounties,
-        Democracy: pallet_democracy,
+        Scheduler: pallet_scheduler = 45,
+        Preimage: pallet_preimage = 46,
+        Council: pallet_collective::<Instance1> = 47,
+        TechnicalCommittee: pallet_collective::<Instance2> = 48,
+        TechnicalMembership: pallet_membership::<Instance1> = 49,
+        Treasury: pallet_treasury = 50,
+        TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>} = 51,
+        Bounties: pallet_bounties = 52,
+        Democracy: pallet_democracy = 53,
 
         // Parachains pallets
-        ParachainsOrigin: parachains_origin::{Pallet, Origin} = 50,
-        Configuration: parachains_configuration::{Pallet, Call, Storage, Config<T>} = 51,
-        ParasShared: parachains_shared::{Pallet, Call, Storage} = 52,
-        ParaInclusion: parachains_inclusion::{Pallet, Call, Storage, Event<T>} = 53,
-        ParaInherent: parachains_paras_inherent::{Pallet, Call, Storage, Inherent} = 54,
-        ParaScheduler: parachains_scheduler::{Pallet, Storage} = 55,
-        Paras: parachains_paras::{Pallet, Call, Storage, Event, Config<T>, ValidateUnsigned} = 56,
-        Initializer: parachains_initializer::{Pallet, Call, Storage} = 57,
-        Dmp: parachains_dmp::{Pallet, Storage} = 58,
-        Hrmp: parachains_hrmp::{Pallet, Call, Storage, Event<T>, Config<T>} = 60,
-        ParaSessionInfo: parachains_session_info::{Pallet, Storage} = 61,
-        ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 62,
-        ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 63,
+        ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,
+        Configuration: parachains_configuration::{Pallet, Call, Storage, Config<T>} = 61,
+        ParasShared: parachains_shared::{Pallet, Call, Storage} = 62,
+        ParaInclusion: parachains_inclusion::{Pallet, Call, Storage, Event<T>} = 63,
+        ParaInherent: parachains_paras_inherent::{Pallet, Call, Storage, Inherent} = 64,
+        ParaScheduler: parachains_scheduler::{Pallet, Storage} = 65,
+        Paras: parachains_paras::{Pallet, Call, Storage, Event, Config<T>, ValidateUnsigned} = 66,
+        Initializer: parachains_initializer::{Pallet, Call, Storage} = 67,
+        Dmp: parachains_dmp::{Pallet, Storage} = 68,
+        Hrmp: parachains_hrmp::{Pallet, Call, Storage, Event<T>, Config<T>} = 70,
+        ParaSessionInfo: parachains_session_info::{Pallet, Storage} = 71,
+        ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 72,
+        ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 73,
 
-        // Parachain Onboarding Pallets. Start indices at 70 to leave room.
-        Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 70,
-        Slots: slots::{Pallet, Call, Storage, Event<T>} = 71,
-        ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 72,
+        // Parachain Onboarding Pallets. Start indices at 80 to leave room.
+        Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 80,
+        Slots: slots::{Pallet, Call, Storage, Event<T>} = 81,
+        ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 82,
     }
 );
 
@@ -1859,7 +1822,7 @@ impl_runtime_apis! {
         }
 
         fn elasticity() -> Option<Permill> {
-            Some(pallet_base_fee::Elasticity::<Runtime>::get())
+            Some(DefaultElasticity::get())
         }
 
         fn gas_limit_multiplier_support() {}

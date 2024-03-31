@@ -7116,6 +7116,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "pallet-balances",
+ "pallet-claiming",
  "pallet-nfts",
  "pallet-reputation",
  "pallet-staking-reward-curve",
@@ -7418,6 +7419,21 @@ dependencies = [
  "rand 0.8.5",
  "sp-runtime",
  "sp-session",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-simple-vesting"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -14816,6 +14832,7 @@ dependencies = [
  "pallet-reputation",
  "pallet-scheduler",
  "pallet-session",
+ "pallet-simple-vesting",
  "pallet-staking-reward-curve",
  "pallet-sudo",
  "pallet-timestamp",

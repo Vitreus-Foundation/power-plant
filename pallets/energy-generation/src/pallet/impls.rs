@@ -16,7 +16,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use orml_traits::GetByKey;
 use scale_info::prelude::*;
 
-use pallet_reputation::{ReputationPoint, ReputationRecord, NORMAL};
+use pallet_reputation::{ReputationPoint, ReputationRecord};
 use pallet_session::historical;
 use sp_runtime::{
     traits::{Convert, One, Saturating, Zero},
@@ -557,9 +557,19 @@ impl<T: Config> Pallet<T> {
         new_planned_era: EraIndex,
     ) -> Vec<T::AccountId> {
         let max_validators = Self::validator_count().max(1) as usize;
+
+        // Get validators with max total stake, invulnerables validators are always elected
         if exposures.len() > max_validators {
-            // Get validators with max total stake
-            exposures.select_nth_unstable_by(max_validators, |a, b| b.1.total.cmp(&a.1.total));
+            let invulnerables = Self::invulnerables();
+
+            exposures.select_nth_unstable_by(max_validators, |a, b| {
+                // If `a` < `b`, then validator `a` will be elected
+                match (invulnerables.contains(&a.0), invulnerables.contains(&b.0)) {
+                    (true, false) => Ordering::Less,
+                    (false, true) => Ordering::Greater,
+                    _ => a.1.total.cmp(&b.1.total).reverse(),
+                }
+            });
         }
         let elected_stashes: Vec<_> =
             exposures.iter().take(max_validators).map(|(x, _)| x.clone()).collect();
@@ -828,18 +838,30 @@ impl<T: Config> Pallet<T> {
         if Validators::<T>::contains_key(who) {
             Validators::<T>::remove(who);
             Collaborations::<T>::remove(who);
+
             true
         } else {
             false
         }
     }
 
+    // Remove a validator from cooperators target
+    pub fn do_remove_validator_from_cooperators_target(who: &T::AccountId) {
+        if let Some(cooperators) = Collaborations::<T>::get(who) {
+            for cooperator in cooperators {
+                Cooperators::<T>::mutate(cooperator, |cooperations| {
+                    if let Some(cooperations) = cooperations {
+                        cooperations.targets.remove(who);
+                    }
+                });
+            }
+        }
+    }
+
     // TODO: get rid of floating point types.
     pub fn calculate_block_authoring_reward() -> ReputationPoint {
         let active_validators_count = T::SessionInterface::validators().len();
-        let reward = (NORMAL as u64 * pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0)
-            .saturating_sub(pallet_reputation::REPUTATION_POINTS_PER_BLOCK.0)
-            .saturating_mul(active_validators_count as u64);
+        let reward = Self::block_authoring_reward().saturating_mul(active_validators_count as u64);
 
         ReputationPoint(reward)
     }
@@ -1089,18 +1111,27 @@ where
     T: Config + pallet_authorship::Config + pallet_session::Config,
 {
     fn note_author(author: T::AccountId) {
-        if let Err(e) = <pallet_reputation::Pallet<T>>::do_increase_points(
-            &author,
-            Self::calculate_block_authoring_reward(),
-        ) {
+        let reward = Self::calculate_block_authoring_reward();
+        if let Err(e) = <pallet_reputation::Pallet<T>>::do_increase_points(&author, reward) {
             pallet_reputation::Pallet::<T>::deposit_event(
                 pallet_reputation::Event::<T>::ReputationIncreaseFailed {
                     account: author,
                     error: e,
-                    points: pallet_reputation::REPUTATION_POINTS_PER_DAY,
+                    points: reward,
                 },
             );
         }
+    }
+}
+
+impl<T: Config> EnergyRateCalculator<StakeOf<T>, EnergyOf<T>> for Pallet<T> {
+    fn calculate_energy_rate(
+        _total_staked: StakeOf<T>,
+        _total_issuance: EnergyOf<T>,
+        _core_nodes_num: u32,
+        _battery_slot_cap: EnergyOf<T>,
+    ) -> EnergyOf<T> {
+        Pallet::<T>::current_energy_per_stake_currency().unwrap_or(EnergyOf::<T>::zero())
     }
 }
 
