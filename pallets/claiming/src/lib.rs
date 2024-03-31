@@ -188,11 +188,18 @@ pub mod pallet {
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             self.claims.iter().for_each(|(address, amount)| {
+                assert!(
+                    !Claims::<T>::contains_key(address),
+                    "duplicate claims in genesis: {}",
+                    String::from_utf8(to_ascii_hex(&address.0)).unwrap()
+                );
                 Claims::<T>::insert(address, amount);
             });
             self.vesting.iter().for_each(|(k, v)| {
                 Vesting::<T>::insert(k, v);
             });
+
+            <Total<T>>::put(CurrencyOf::<T>::free_balance(&Pallet::<T>::claim_account_id()));
         }
     }
 
@@ -249,7 +256,7 @@ pub mod pallet {
 
 impl<T: Config> Pallet<T> {
     /// The account ID that holds the VTRS to claim.
-    fn claim_account_id() -> T::AccountId {
+    pub fn claim_account_id() -> T::AccountId {
         PALLET_ID.into_account_truncating()
     }
 
