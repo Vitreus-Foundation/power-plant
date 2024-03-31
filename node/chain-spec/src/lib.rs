@@ -9,7 +9,7 @@ use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
 use sp_core::{storage::Storage, Pair, Public};
-use sp_runtime::traits::{AccountIdConversion, IdentifyAccount, Verify};
+use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
@@ -70,6 +70,7 @@ impl sp_runtime::BuildStorage for DevGenesisExt {
 
 pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
     use devnet_keys::*;
+    use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -122,6 +123,7 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
 
 pub fn devnet_config() -> ChainSpec {
     use devnet_keys::*;
+    use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -207,6 +209,7 @@ pub fn stagenet_config() -> ChainSpec {
 
 pub fn localnet_config() -> ChainSpec {
     use devnet_keys::*;
+    use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -516,6 +519,7 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
                 .iter()
                 .map(|k| (*k, ENDOWMENT))
                 .chain(initial_validators.iter().map(|x| (x.0, STASH)))
+                .chain(genesis::tech_allocation().into_iter(),)
                 .collect(),
         },
         claiming: genesis::claiming_config(),
@@ -631,10 +635,6 @@ pub mod devnet_keys {
 
     pub fn goliath() -> AccountId {
         AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
-    }
-
-    pub fn treasury() -> AccountId {
-        vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()
     }
 
     pub fn authority_keys_from_seed(
@@ -1038,8 +1038,31 @@ pub mod mainnet_keys {
     }
 }
 
+mod tech_addresses {
+    use vitreus_power_plant_runtime::AccountId;
+    use sp_runtime::traits::AccountIdConversion;
+
+    pub fn treasury() -> AccountId {
+        vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()
+    }
+
+    pub fn staking_rewards() -> AccountId {
+        vitreus_power_plant_runtime::areas::StakingRewardsPalletId::get().into_account_truncating()
+    }
+
+    pub fn liquidity() -> AccountId {
+        vitreus_power_plant_runtime::areas::LiquidityPalletId::get().into_account_truncating()
+    }
+
+    pub fn liquidity_reserves() -> AccountId {
+        vitreus_power_plant_runtime::areas::LiquidityReservesPalletId::get()
+            .into_account_truncating()
+    }
+}
+
 mod genesis {
     use super::*;
+    use tech_addresses::*;
 
     pub(super) fn claiming_config() -> vitreus_power_plant_runtime::ClaimingConfig {
         let mut config = vitreus_power_plant_runtime::ClaimingConfig {
@@ -1076,6 +1099,20 @@ mod genesis {
         }
 
         config
+    }
+
+    pub(super) fn tech_allocation() -> Vec<(AccountId, Balance)> {
+        const INITIAL_TREASURY_ALLOCATION: Balance = 68_364_887_120 * vtrs::MILLI_VTRS;
+        const INITIAL_LIQUIDITY_ALLOCATION: Balance = 10_000_000 * vtrs::UNITS;
+        const INITIAL_LIQUIDITY_RESERVES_ALLOCATION: Balance = 125_000_000 * vtrs::UNITS;
+        const INITIAL_STAKING_REWARDS_ALLOCATION: Balance = 170_000_000 * vtrs::UNITS;
+
+        vec![
+            (treasury(), INITIAL_TREASURY_ALLOCATION),
+            (staking_rewards(), INITIAL_STAKING_REWARDS_ALLOCATION),
+            (liquidity(), INITIAL_LIQUIDITY_ALLOCATION),
+            (liquidity_reserves(), INITIAL_LIQUIDITY_RESERVES_ALLOCATION),
+        ]
     }
 }
 

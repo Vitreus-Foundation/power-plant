@@ -8,6 +8,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
+use frame_support::PalletId;
 use frame_support::traits::tokens::ConversionToAssetBalance;
 use pallet_energy_fee::MainCreditOf;
 use polkadot_primitives::{
@@ -47,7 +48,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use sp_runtime::traits::{ConvertInto, Zero};
+use sp_runtime::traits::{ConvertInto, Zero, AccountIdConversion};
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -788,19 +789,19 @@ impl pallet_asset_rate::Config for Runtime {
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
     pub GetConstantGasLimit: U256 = U256::from(100_000);
+    pub EnergyBrokerPalletId: PalletId = PalletId(*b"enrgbrkr");
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
 type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
-// impl OnUnbalanced<
+pub struct EnergyBrokerSink;
 
-pub struct TreasurySink;
-
-impl OnUnbalanced<MainCreditOf<Runtime>> for TreasurySink {
+impl OnUnbalanced<MainCreditOf<Runtime>> for EnergyBrokerSink {
     fn on_nonzero_unbalanced(amount: MainCreditOf<Runtime>) {
-        let _ = Balances::resolve(&Treasury::account_id(), amount);
+        let energy_broker_address: AccountId = EnergyBrokerPalletId::get().into_account_truncating();
+        let _ = Balances::resolve(&energy_broker_address, amount);
     }
 }
 
@@ -813,7 +814,7 @@ impl pallet_energy_fee::Config for Runtime {
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAssetId = VNRG;
-    type MainRecycleDestination = TreasurySink;
+    type MainRecycleDestination = EnergyBrokerSink;
     type FeeRecycleDestination = ();
 }
 

@@ -5,10 +5,12 @@ use crate::{
     TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MINUTES, NANO_VTRS, PICO_VTRS,
 };
 
-use frame_support::traits::EitherOf;
+use frame_support::traits::{Currency, EitherOf, OnUnbalanced};
 use frame_support::{parameter_types, traits::EitherOfDiverse, weights::Weight, PalletId};
 use frame_system::{EnsureRoot, EnsureWithSuccess};
+use pallet_treasury::NegativeImbalanceOf;
 use sp_core::ConstU32;
+use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::{Perbill, Permill};
 
 pub const fn deposit(items: u32, bytes: u32) -> Balance {
@@ -136,12 +138,25 @@ impl pallet_treasury::Config for Runtime {
 
 parameter_types! {
     pub const SpendThreshold: Permill = Permill::from_percent(10);
+    pub const StakingRewardsPalletId: PalletId = PalletId(*b"stknrwrd");
+    pub const LiquidityPalletId: PalletId = PalletId(*b"liquidty");
+    pub const LiquidityReservesPalletId: PalletId = PalletId(*b"liqresrv");
+}
+
+pub struct StakingRewardsSink;
+
+impl OnUnbalanced<NegativeImbalanceOf<Runtime>> for StakingRewardsSink {
+    fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<Runtime>) {
+        let staking_rewards_address: AccountId =
+            StakingRewardsPalletId::get().into_account_truncating();
+        let _ = Balances::resolve_creating(&staking_rewards_address, amount);
+    }
 }
 
 impl pallet_treasury_extension::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type SpendThreshold = SpendThreshold;
-    type OnRecycled = ();
+    type OnRecycled = StakingRewardsSink;
     type WeightInfo = pallet_treasury_extension::weights::SubstrateWeight<Runtime>;
 }
 
