@@ -4676,6 +4676,32 @@ fn min_bond_checks_work() {
 }
 
 #[test]
+fn chill_works() {
+    ExtBuilder::default().cooperate(true).build_and_execute(|| {
+        // attempt to cooperate from 100/101...
+        assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(100), vec![(11, 200)]));
+
+        assert_eq!(
+            Collaborations::<Test>::get(11).unwrap().into_iter().collect::<Vec<_>>(),
+            vec![101]
+        );
+        assert_eq!(
+            Cooperators::<Test>::get(101).unwrap().targets.into_iter().collect::<Vec<_>>(),
+            vec![(11, 200)]
+        );
+
+        // chill
+        assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(10)));
+
+        assert_eq!(Collaborations::<Test>::get(11), None);
+        assert_eq!(
+            Cooperators::<Test>::get(101).unwrap().targets.into_iter().collect::<Vec<_>>(),
+            vec![]
+        );
+    });
+}
+
+#[test]
 fn chill_other_works() {
     ExtBuilder::default()
         .existential_deposit(100)
