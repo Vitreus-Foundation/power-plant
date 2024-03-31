@@ -431,7 +431,7 @@ pub fn testnet_genesis(
                 .collect::<Vec<_>>(),
         },
         nac_managing: NacManagingConfig {
-            accounts: endowed_accounts.iter().map(|x| (*x, 1)).collect(),
+            accounts: endowed_accounts.iter().map(|x| (*x, 2)).collect(),
             owners: vec![root_key],
         },
         session: SessionConfig {
