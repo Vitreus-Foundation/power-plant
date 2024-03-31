@@ -2606,6 +2606,25 @@ fn subsequent_reports_in_same_span_pay_out_less() {
 }
 
 #[test]
+fn invulnerables_are_always_elected() {
+    ExtBuilder::default()
+        .validator_count(2)
+        .invulnerables(vec![31])
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+
+            assert_eq_uvec!(Session::validators(), [31, 21]);
+
+            // loser validator
+            assert_eq!(PowerPlant::eras_stakers(active_era(), 11).total, 1200);
+            // elected: max stake
+            assert_eq!(PowerPlant::eras_stakers(active_era(), 21).total, 1300);
+            // elected: invulnerable
+            assert_eq!(PowerPlant::eras_stakers(active_era(), 31).total, 500);
+        });
+}
+
+#[test]
 fn invulnerables_are_not_slashed() {
     // For invulnerable validators no slashing is performed.
     ExtBuilder::default().invulnerables(vec![11]).build_and_execute(|| {
@@ -4654,6 +4673,32 @@ fn min_bond_checks_work() {
             assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(4)));
             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(4), 1000));
         })
+}
+
+#[test]
+fn chill_works() {
+    ExtBuilder::default().cooperate(true).build_and_execute(|| {
+        // attempt to cooperate from 100/101...
+        assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(100), vec![(11, 200)]));
+
+        assert_eq!(
+            Collaborations::<Test>::get(11).unwrap().into_iter().collect::<Vec<_>>(),
+            vec![101]
+        );
+        assert_eq!(
+            Cooperators::<Test>::get(101).unwrap().targets.into_iter().collect::<Vec<_>>(),
+            vec![(11, 200)]
+        );
+
+        // chill
+        assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(10)));
+
+        assert_eq!(Collaborations::<Test>::get(11), None);
+        assert_eq!(
+            Cooperators::<Test>::get(101).unwrap().targets.into_iter().collect::<Vec<_>>(),
+            vec![]
+        );
+    });
 }
 
 #[test]

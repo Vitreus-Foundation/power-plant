@@ -9,7 +9,7 @@ use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
 use sp_core::{storage::Storage, Pair, Public};
-use sp_runtime::traits::{AccountIdConversion, IdentifyAccount, Verify};
+use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::{FixedU128, Perbill};
 use sp_state_machine::BasicExternalities;
 // Frontier
@@ -46,6 +46,9 @@ const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 /// 10^9 with 18 decimals
 const INITIAL_ENERGY_RATE: FixedU128 = FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
 
+/// Min validator stake for user who has NAC level = 1.
+const MIN_COMMON_VALIDATOR_BOND: Balance = 1_000_000 * vtrs::UNITS;
+
 /// Min validator stake for user who has NAC level > 1.
 const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 
@@ -71,6 +74,7 @@ impl sp_runtime::BuildStorage for DevGenesisExt {
 
 pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
     use devnet_keys::*;
+    use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -123,6 +127,7 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
 
 pub fn devnet_config() -> ChainSpec {
     use devnet_keys::*;
+    use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -208,6 +213,7 @@ pub fn stagenet_config() -> ChainSpec {
 
 pub fn localnet_config() -> ChainSpec {
     use devnet_keys::*;
+    use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -429,7 +435,7 @@ pub fn testnet_genesis(
                 .collect::<Vec<_>>(),
         },
         nac_managing: NacManagingConfig {
-            accounts: endowed_accounts.iter().map(|x| (*x, 1)).collect(),
+            accounts: endowed_accounts.iter().map(|x| (*x, 2)).collect(),
             owners: vec![root_key],
         },
         session: SessionConfig {
@@ -462,11 +468,11 @@ pub fn testnet_genesis(
             minimum_validator_count: initial_validators.len() as u32,
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
-            min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
+            min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
             energy_per_stake_currency: 1_000_000u128,
-            block_authoring_reward: ReputationPoint(12),
+            block_authoring_reward: ReputationPoint(24),
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },
@@ -526,6 +532,7 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
                 .chain([(Claiming::claim_account_id(), claiming_balance)])
                 .chain(initial_validators.iter().map(|x| (x.0, STASH)))
                 .chain(genesis::vested_balance())
+                .chain(genesis::tech_allocation())
                 .collect(),
         },
         claiming: claiming_config,
@@ -599,10 +606,10 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
         treasury: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
-            minimum_validator_count: initial_validators.len() as u32,
+            minimum_validator_count: initial_validators.len() as u32 - 1,
             invulnerables: initial_validators.iter().map(|x| x.1).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
-            min_common_validator_bond: MIN_TRUST_VALIDATOR_BOND,
+            min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
             disable_collaboration: true,
@@ -647,10 +654,6 @@ pub mod devnet_keys {
 
     pub fn goliath() -> AccountId {
         AccountId::from(hex!("7BF369283338E12C90514468aa3868A551AB2929"))
-    }
-
-    pub fn treasury() -> AccountId {
-        vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()
     }
 
     pub fn authority_keys_from_seed(
@@ -1054,13 +1057,50 @@ pub mod mainnet_keys {
     }
 }
 
+mod tech_addresses {
+    use sp_runtime::traits::AccountIdConversion;
+    use vitreus_power_plant_runtime::AccountId;
+
+    pub fn treasury() -> AccountId {
+        vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()
+    }
+
+    pub fn staking_rewards() -> AccountId {
+        vitreus_power_plant_runtime::areas::StakingRewardsPalletId::get().into_account_truncating()
+    }
+
+    pub fn liquidity() -> AccountId {
+        vitreus_power_plant_runtime::areas::LiquidityPalletId::get().into_account_truncating()
+    }
+
+    pub fn liquidity_reserves() -> AccountId {
+        vitreus_power_plant_runtime::areas::LiquidityReservesPalletId::get()
+            .into_account_truncating()
+    }
+}
+
 mod genesis {
     use super::*;
+    use tech_addresses::*;
 
     use vitreus_power_plant_runtime::{BlockNumber, ExistentialDeposit, DAYS, MILLI_VTRS};
 
     const YEARS: BlockNumber = 36525 * (DAYS / 100);
     const MONTHS: BlockNumber = YEARS / 12;
+
+    pub(super) fn tech_allocation() -> Vec<(AccountId, Balance)> {
+        const INITIAL_TREASURY_ALLOCATION: Balance = 68_364_887_120 * MILLI_VTRS;
+        const INITIAL_LIQUIDITY_ALLOCATION: Balance = 10_000_000 * vtrs::UNITS;
+        const INITIAL_LIQUIDITY_RESERVES_ALLOCATION: Balance = 125_000_000 * vtrs::UNITS;
+        const INITIAL_STAKING_REWARDS_ALLOCATION: Balance = 170_000_000 * vtrs::UNITS;
+
+        vec![
+            (treasury(), INITIAL_TREASURY_ALLOCATION),
+            (staking_rewards(), INITIAL_STAKING_REWARDS_ALLOCATION),
+            (liquidity(), INITIAL_LIQUIDITY_ALLOCATION),
+            (liquidity_reserves(), INITIAL_LIQUIDITY_RESERVES_ALLOCATION),
+        ]
+    }
 
     pub(super) fn vested_balance() -> impl Iterator<Item = (AccountId, Balance)> {
         let vesting = include!(concat!(env!("OUT_DIR"), "/vesting.rs"));

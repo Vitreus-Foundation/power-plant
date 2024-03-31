@@ -9,6 +9,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::traits::tokens::ConversionToAssetBalance;
+use frame_support::PalletId;
 use pallet_energy_fee::MainCreditOf;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
@@ -47,7 +48,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use sp_runtime::traits::{ConvertInto, Zero};
+use sp_runtime::traits::{AccountIdConversion, ConvertInto, Zero};
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -217,7 +218,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 6,
+    spec_version: 8,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -612,7 +613,7 @@ impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerStakeCurrency {
         _core_nodes_num: u32,
         _battery_slot_cap: Energy,
     ) -> Energy {
-        1_000_000_000_000
+        19_909_091_036_891
     }
 }
 
@@ -789,19 +790,20 @@ impl pallet_asset_rate::Config for Runtime {
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
     pub GetConstantGasLimit: U256 = U256::from(100_000);
+    pub EnergyBrokerPalletId: PalletId = PalletId(*b"enrgbrkr");
 }
 
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
 type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
-// impl OnUnbalanced<
+pub struct EnergyBrokerSink;
 
-pub struct TreasurySink;
-
-impl OnUnbalanced<MainCreditOf<Runtime>> for TreasurySink {
+impl OnUnbalanced<MainCreditOf<Runtime>> for EnergyBrokerSink {
     fn on_nonzero_unbalanced(amount: MainCreditOf<Runtime>) {
-        let _ = Balances::resolve(&Treasury::account_id(), amount);
+        let energy_broker_address: AccountId =
+            EnergyBrokerPalletId::get().into_account_truncating();
+        let _ = Balances::resolve(&energy_broker_address, amount);
     }
 }
 
@@ -814,7 +816,7 @@ impl pallet_energy_fee::Config for Runtime {
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAssetId = VNRG;
-    type MainRecycleDestination = TreasurySink;
+    type MainRecycleDestination = EnergyBrokerSink;
     type FeeRecycleDestination = ();
 }
 
@@ -1270,68 +1272,70 @@ impl paras_sudo_wrapper::Config for Runtime {}
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
-        System: frame_system,
-        Timestamp: pallet_timestamp,
-        Babe: pallet_babe,
-        Grandpa: pallet_grandpa,
-        Balances: pallet_balances,
-        Assets: pallet_assets,
-        AssetRate: pallet_asset_rate,
-        TransactionPayment: pallet_transaction_payment,
-        Sudo: pallet_sudo,
-        EVM: pallet_evm,
-        EVMChainId: pallet_evm_chain_id,
-        Ethereum: pallet_ethereum,
-        HotfixSufficients: pallet_hotfix_sufficients,
-        Nfts: pallet_nfts,
-        Reputation: pallet_reputation,
-        AtomicSwap: pallet_atomic_swap,
-        Claiming: pallet_claiming,
-        Vesting: pallet_vesting,
-        SimpleVesting: pallet_simple_vesting,
+        System: frame_system = 0,
+        Timestamp: pallet_timestamp = 1,
+        Babe: pallet_babe = 2,
+        Grandpa: pallet_grandpa = 3,
+        Balances: pallet_balances = 4,
+        Assets: pallet_assets = 5,
+        AssetRate: pallet_asset_rate = 6,
+        TransactionPayment: pallet_transaction_payment = 7,
+        Sudo: pallet_sudo = 8,
+
+        EVM: pallet_evm = 15,
+        EVMChainId: pallet_evm_chain_id = 16,
+        Ethereum: pallet_ethereum = 17,
+        HotfixSufficients: pallet_hotfix_sufficients = 18,
+        Nfts: pallet_nfts = 19,
+        Reputation: pallet_reputation = 20,
+        AtomicSwap: pallet_atomic_swap = 21,
+        Claiming: pallet_claiming = 22,
+        Vesting: pallet_vesting = 23,
+        SimpleVesting: pallet_simple_vesting = 24,
+
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
-        Authorship: pallet_authorship,
-        ImOnline: pallet_im_online,
-        EnergyGeneration: pallet_energy_generation,
-        EnergyFee: pallet_energy_fee,
-        Offences: pallet_offences,
-        Session: pallet_session,
-        Utility: pallet_utility,
-        Historical: pallet_session::historical,
-        AuthorityDiscovery: pallet_authority_discovery,
-        NacManaging: pallet_nac_managing,
+        Authorship: pallet_authorship = 30,
+        ImOnline: pallet_im_online = 31,
+        NacManaging: pallet_nac_managing = 32,
+        EnergyFee: pallet_energy_fee = 33,
+        Offences: pallet_offences = 34,
+        Session: pallet_session = 35,
+        Utility: pallet_utility = 36,
+        Historical: pallet_session::historical = 37,
+        AuthorityDiscovery: pallet_authority_discovery = 38,
+        EnergyGeneration: pallet_energy_generation = 39,
 
         // Governance-related pallets
-        Scheduler: pallet_scheduler,
-        Preimage: pallet_preimage,
-        Council: pallet_collective::<Instance1>,
-        TechnicalCommittee: pallet_collective::<Instance2>,
-        TechnicalMembership: pallet_membership::<Instance1>,
-        Treasury: pallet_treasury,
-        TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>},
-        Bounties: pallet_bounties,
-        Democracy: pallet_democracy,
+        Scheduler: pallet_scheduler = 45,
+        Preimage: pallet_preimage = 46,
+        Council: pallet_collective::<Instance1> = 47,
+        TechnicalCommittee: pallet_collective::<Instance2> = 48,
+        TechnicalMembership: pallet_membership::<Instance1> = 49,
+        Treasury: pallet_treasury = 50,
+        TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>} = 51,
+        Bounties: pallet_bounties = 52,
+        Democracy: pallet_democracy = 53,
 
         // Parachains pallets
-        ParachainsOrigin: parachains_origin::{Pallet, Origin} = 50,
-        Configuration: parachains_configuration::{Pallet, Call, Storage, Config<T>} = 51,
-        ParasShared: parachains_shared::{Pallet, Call, Storage} = 52,
-        ParaInclusion: parachains_inclusion::{Pallet, Call, Storage, Event<T>} = 53,
-        ParaInherent: parachains_paras_inherent::{Pallet, Call, Storage, Inherent} = 54,
-        ParaScheduler: parachains_scheduler::{Pallet, Storage} = 55,
-        Paras: parachains_paras::{Pallet, Call, Storage, Event, Config<T>, ValidateUnsigned} = 56,
-        Initializer: parachains_initializer::{Pallet, Call, Storage} = 57,
-        Dmp: parachains_dmp::{Pallet, Storage} = 58,
-        Hrmp: parachains_hrmp::{Pallet, Call, Storage, Event<T>, Config<T>} = 60,
-        ParaSessionInfo: parachains_session_info::{Pallet, Storage} = 61,
-        ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 62,
-        ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 63,
+        ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,
+        Configuration: parachains_configuration::{Pallet, Call, Storage, Config<T>} = 61,
+        ParasShared: parachains_shared::{Pallet, Call, Storage} = 62,
+        ParaInclusion: parachains_inclusion::{Pallet, Call, Storage, Event<T>} = 63,
+        ParaInherent: parachains_paras_inherent::{Pallet, Call, Storage, Inherent} = 64,
+        ParaScheduler: parachains_scheduler::{Pallet, Storage} = 65,
+        Paras: parachains_paras::{Pallet, Call, Storage, Event, Config<T>, ValidateUnsigned} = 66,
+        Initializer: parachains_initializer::{Pallet, Call, Storage} = 67,
+        Dmp: parachains_dmp::{Pallet, Storage} = 68,
+        Hrmp: parachains_hrmp::{Pallet, Call, Storage, Event<T>, Config<T>} = 70,
+        ParaSessionInfo: parachains_session_info::{Pallet, Storage} = 71,
+        ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 72,
+        ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 73,
 
-        // Parachain Onboarding Pallets. Start indices at 70 to leave room.
-        Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 70,
-        Slots: slots::{Pallet, Call, Storage, Event<T>} = 71,
-        ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 72,
+        // Parachain Onboarding Pallets. Start indices at 80 to leave room.
+        Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 80,
+        Slots: slots::{Pallet, Call, Storage, Event<T>} = 81,
+        ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 82,
     }
 );
 

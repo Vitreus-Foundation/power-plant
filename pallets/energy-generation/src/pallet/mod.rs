@@ -1200,7 +1200,10 @@ pub mod pallet {
         pub fn chill(origin: OriginFor<T>) -> DispatchResult {
             let controller = ensure_signed(origin)?;
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-            Self::chill_stash(&ledger.stash);
+
+            let stash = ledger.stash;
+            Self::do_remove_validator_from_cooperators_target(&stash);
+            Self::chill_stash(&stash);
             Ok(())
         }
 
@@ -1697,6 +1700,7 @@ pub mod pallet {
             // Otherwise, if caller is the same as the controller, this is just like `chill`.
 
             if Cooperators::<T>::contains_key(&stash) && Cooperators::<T>::get(&stash).is_none() {
+                Self::do_remove_validator_from_cooperators_target(&stash);
                 Self::chill_stash(&stash);
                 return Ok(());
             }
@@ -1728,6 +1732,7 @@ pub mod pallet {
                 ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
             }
 
+            Self::do_remove_validator_from_cooperators_target(&stash);
             Self::chill_stash(&stash);
             Ok(())
         }
