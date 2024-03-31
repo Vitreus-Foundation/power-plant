@@ -8,8 +8,8 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use frame_support::PalletId;
 use frame_support::traits::tokens::ConversionToAssetBalance;
+use frame_support::PalletId;
 use pallet_energy_fee::MainCreditOf;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
@@ -48,7 +48,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use sp_runtime::traits::{ConvertInto, Zero, AccountIdConversion};
+use sp_runtime::traits::{AccountIdConversion, ConvertInto, Zero};
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -800,7 +800,8 @@ pub struct EnergyBrokerSink;
 
 impl OnUnbalanced<MainCreditOf<Runtime>> for EnergyBrokerSink {
     fn on_nonzero_unbalanced(amount: MainCreditOf<Runtime>) {
-        let energy_broker_address: AccountId = EnergyBrokerPalletId::get().into_account_truncating();
+        let energy_broker_address: AccountId =
+            EnergyBrokerPalletId::get().into_account_truncating();
         let _ = Balances::resolve(&energy_broker_address, amount);
     }
 }

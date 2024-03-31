@@ -522,7 +522,7 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
                 .iter()
                 .map(|k| (*k, ENDOWMENT))
                 .chain(initial_validators.iter().map(|x| (x.0, STASH)))
-                .chain(genesis::tech_allocation().into_iter(),)
+                .chain(genesis::tech_allocation())
                 .collect(),
         },
         claiming: genesis::claiming_config(),
@@ -1042,8 +1042,8 @@ pub mod mainnet_keys {
 }
 
 mod tech_addresses {
-    use vitreus_power_plant_runtime::AccountId;
     use sp_runtime::traits::AccountIdConversion;
+    use vitreus_power_plant_runtime::AccountId;
 
     pub fn treasury() -> AccountId {
         vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()

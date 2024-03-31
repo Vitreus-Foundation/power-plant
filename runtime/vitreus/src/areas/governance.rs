@@ -149,7 +149,7 @@ impl OnUnbalanced<NegativeImbalanceOf<Runtime>> for StakingRewardsSink {
     fn on_nonzero_unbalanced(amount: NegativeImbalanceOf<Runtime>) {
         let staking_rewards_address: AccountId =
             StakingRewardsPalletId::get().into_account_truncating();
-        let _ = Balances::resolve_creating(&staking_rewards_address, amount);
+        Balances::resolve_creating(&staking_rewards_address, amount);
     }
 }
 
