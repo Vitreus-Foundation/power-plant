@@ -583,6 +583,7 @@ pub mod pallet {
             crate::StakerStatus<T::AccountId, StakeOf<T>>,
         )>,
         pub disable_collaboration: bool,
+        pub min_commission: Perbill,
         pub min_cooperator_bond: StakeOf<T>,
         pub min_common_validator_bond: StakeOf<T>,
         pub min_trust_validator_bond: StakeOf<T>,
@@ -604,6 +605,7 @@ pub mod pallet {
             MinCooperatorBond::<T>::put(self.min_cooperator_bond);
             CurrentEnergyPerStakeCurrency::<T>::put(self.energy_per_stake_currency);
             BlockAuthoringReward::<T>::put(self.block_authoring_reward);
+            MinCommission::<T>::put(self.min_commission);
             MinCommonValidatorBond::<T>::put(self.min_common_validator_bond);
             MinTrustValidatorBond::<T>::put(self.min_trust_validator_bond);
             if let Some(x) = self.max_validator_count {
