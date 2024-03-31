@@ -1120,33 +1120,60 @@ mod genesis {
 
         // address, amount in milliVTRS, vesting start/period in years
         let claims = vec![
-            (hex!("3e743911188753601C688F42510d7d9fF34bfEFf"), 375083_500, Some((1, 1))),
-            (hex!("2902213Ae1122D9D23c41AaC3961Da8d4dcb8588"), 629_210, Some((1, 1))),
-            (hex!("Da67BB5318003a8Cd5D68cC2Fc042958ed4262F2"), 26000_000, Some((1, 1))),
-            (hex!("E5b8524a2613472972cA7Ea11c6Fa2DA65379C2b"), 1100_000, Some((1, 1))),
-            (hex!("cEcb9661f49255d7f814a49018Bc74069Cc0AD45"), 260000_000, Some((1, 1))),
-            (hex!("fb8B24C9072A93BC3F6A5aF7C3F55a0655Eee509"), 1360_000, Some((1, 1))),
-            (hex!("Dc5419Ce5633a3608b1d19F26377D84BD8b0168f"), 2040_000, Some((1, 1))),
-            (hex!("5b7d4c4b7243bfad283472c1ff3a4fb1949cb309"), 60627_000, None),
-            (hex!("21ECD0192945a534EA5faf594f1a5aDa6CBAD4C0"), 160353_820, None),
-            (hex!("205Be1AD81b62E49ed9D34E97cb52F31D3644A04"), 100540_000, None),
-            (hex!("Ab404525918C62F7A751Db4096f8Bb04E4D12309"), 10000_000, None),
-            (hex!("c66f231D2a0A6Ff4Ed476eE2B4659822A0E70D77"), 2500_000, None),
-            (hex!("f1552c024D9596e04AFcDf81C6E6E0afB9ae8327"), 10000_000, None),
+            (
+                hex!("3e743911188753601C688F42510d7d9fF34bfEFf"),
+                375083500000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("2902213Ae1122D9D23c41AaC3961Da8d4dcb8588"),
+                629210000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("Da67BB5318003a8Cd5D68cC2Fc042958ed4262F2"),
+                26000000000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("E5b8524a2613472972cA7Ea11c6Fa2DA65379C2b"),
+                1100000000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("cEcb9661f49255d7f814a49018Bc74069Cc0AD45"),
+                260000000000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("fb8B24C9072A93BC3F6A5aF7C3F55a0655Eee509"),
+                1360000000000000000000,
+                Some((None, 1, 1)),
+            ),
+            (
+                hex!("Dc5419Ce5633a3608b1d19F26377D84BD8b0168f"),
+                22046888888888800000000 + 2040000000000000000000,
+                Some((Some(2040000000000000000000), 1, 1)),
+            ),
+            (hex!("5b7d4c4b7243bfad283472c1ff3a4fb1949cb309"), 60627000000000000000000, None),
+            (hex!("21ECD0192945a534EA5faf594f1a5aDa6CBAD4C0"), 160353820000000000000000, None),
+            (hex!("205Be1AD81b62E49ed9D34E97cb52F31D3644A04"), 100540000000000000000000, None),
+            (hex!("Ab404525918C62F7A751Db4096f8Bb04E4D12309"), 10000000000000000000000, None),
         ];
 
         for (address, amount, vesting) in claims {
             let address = pallet_claiming::EthereumAddress(address);
-            let amount = amount * MILLI_VTRS;
 
             config.claims.push((address, amount));
 
-            if let Some((start, period)) = vesting {
+            if let Some((vesting_amount, start, period)) = vesting {
                 let start = start * YEARS;
                 let period = period * YEARS;
 
-                let amount_per_block = amount / period as u128;
-                config.vesting.push((address, (amount, amount_per_block, start)));
+                let vesting_amount = vesting_amount.unwrap_or(amount);
+                let amount_per_block = vesting_amount / period as u128;
+
+                config.vesting.push((address, (vesting_amount, amount_per_block, start)));
             }
         }
 

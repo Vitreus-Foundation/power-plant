@@ -188,6 +188,11 @@ pub mod pallet {
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             self.claims.iter().for_each(|(address, amount)| {
+                assert!(
+                    !Claims::<T>::contains_key(address),
+                    "duplicate claims in genesis: {}",
+                    String::from_utf8(to_ascii_hex(&address.0)).unwrap()
+                );
                 Claims::<T>::insert(address, amount);
             });
             self.vesting.iter().for_each(|(k, v)| {
