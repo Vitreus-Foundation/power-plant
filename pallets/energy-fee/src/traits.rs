@@ -1,12 +1,14 @@
 use crate::CallFee;
 use frame_support::ensure;
+use frame_support::traits::fungible::Credit;
+use frame_support::traits::OnUnbalanced;
 use frame_support::traits::{
     fungible::{Balanced, Inspect},
     tokens::{
-        imbalance::Imbalance, Balance, ConversionFromAssetBalance, ConversionToAssetBalance,
-        Fortitude, Precision, Preservation,
+        Balance, ConversionFromAssetBalance, ConversionToAssetBalance, Fortitude, Precision,
+        Preservation,
     },
-    Get,
+    Get, Imbalance,
 };
 use pallet_asset_rate::{Config as AssetRateConfig, Error as AssetRateError};
 use sp_runtime::{DispatchError, FixedPointNumber, FixedPointOperand, TokenError};
@@ -39,10 +41,11 @@ where
     }
 }
 
-pub trait TokenExchange<AccountId, SourceToken, TargetToken, TokenBalance>
+pub trait TokenExchange<AccountId, SourceToken, TargetToken, SourceTokenRecycleDest, TokenBalance>
 where
     SourceToken: Balanced<AccountId> + Inspect<AccountId, Balance = TokenBalance>,
     TargetToken: Balanced<AccountId> + Inspect<AccountId, Balance = TokenBalance>,
+    SourceTokenRecycleDest: OnUnbalanced<Credit<AccountId, SourceToken>>,
     TokenBalance: Balance,
 {
     /// Calculate the amount of `TargetToken` corresponding to `amount` of `SourceToken`
@@ -89,7 +92,11 @@ where
             Preservation::Protect,
             Fortitude::Polite,
         )?;
-        ensure!(credit.peek() == amount_in, DispatchError::Token(TokenError::FundsUnavailable));
+        let credit_amount = credit.peek();
+        // Regardless of whether the conversion is successful or not, we need to recycle the credit
+        SourceTokenRecycleDest::on_unbalanced(credit);
+
+        ensure!(credit_amount == amount_in, DispatchError::Token(TokenError::FundsUnavailable));
         let _ = TargetToken::deposit(who, amount_out, Precision::Exact)?;
         Ok(amount_out)
     }
@@ -150,10 +157,13 @@ pub struct NativeExchange<AssetId, SourceToken, TargetToken, Rate, GetAssetId>(
     PhantomData<(AssetId, SourceToken, TargetToken, Rate, GetAssetId)>,
 );
 
-impl<AC, AS, TT, ST, B, G, R> TokenExchange<AC, ST, TT, B> for NativeExchange<AS, ST, TT, R, G>
+// TODO: rename types
+impl<AC, AS, TT, ST, STD, B, G, R> TokenExchange<AC, ST, TT, STD, B>
+    for NativeExchange<AS, ST, TT, R, G>
 where
     TT: Balanced<AC> + Inspect<AC, Balance = B>,
     ST: Balanced<AC> + Inspect<AC, Balance = B>,
+    STD: OnUnbalanced<Credit<AC, ST>>,
     B: Balance,
     G: Get<AS>,
     R: ConversionFromAssetBalance<B, AS, B, Error = DispatchError>

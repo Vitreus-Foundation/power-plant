@@ -35,6 +35,18 @@ type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
 >>::Currency;
 type BalanceOf<T> = <CurrencyOf<T> as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
+/// Handler for when a claim is made.
+pub trait OnClaimHandler<AccountId, Balance> {
+    /// Handle a claim.
+    fn on_claim(who: &AccountId, amount: Balance) -> DispatchResult;
+}
+
+impl<AccountId, Balance> OnClaimHandler<AccountId, Balance> for () {
+    fn on_claim(_who: &AccountId, _amount: Balance) -> DispatchResult {
+        Ok(())
+    }
+}
+
 /// An Ethereum address (i.e. 20 bytes, used to represent an Ethereum account).
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
@@ -107,6 +119,9 @@ pub mod pallet {
 
         /// The vesting schedule
         type VestingSchedule: VestingSchedule<Self::AccountId, Moment = BlockNumberFor<Self>>;
+
+        /// Handler for when a claim is made.
+        type OnClaim: OnClaimHandler<Self::AccountId, BalanceOf<Self>>;
 
         /// Ethereum message prefix
         #[pallet::constant]
@@ -251,6 +266,8 @@ impl<T: Config> Pallet<T> {
         }
 
         CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
+
+        T::OnClaim::on_claim(&dest, amount)?;
 
         // Check if this claim should have a vesting schedule.
         if let Some(vs) = vesting {

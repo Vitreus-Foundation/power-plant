@@ -555,6 +555,17 @@ pub mod pallet {
     #[pallet::storage]
     pub(crate) type ChillThreshold<T: Config> = StorageValue<_, Percent, OptionQuery>;
 
+    /// The current constant value of energy per stake currency.
+    #[pallet::storage]
+    #[pallet::getter(fn current_energy_per_stake_currency)]
+    pub(crate) type CurrentEnergyPerStakeCurrency<T: Config> =
+        StorageValue<_, EnergyOf<T>, OptionQuery>;
+
+    /// Block authoring reward in reputation points.
+    #[pallet::storage]
+    #[pallet::getter(fn block_authoring_reward)]
+    pub(crate) type BlockAuthoringReward<T: Config> = StorageValue<_, ReputationPoint, ValueQuery>;
+
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
@@ -576,6 +587,8 @@ pub mod pallet {
         pub min_trust_validator_bond: StakeOf<T>,
         pub max_validator_count: Option<u32>,
         pub max_cooperator_count: Option<u32>,
+        pub energy_per_stake_currency: EnergyOf<T>,
+        pub block_authoring_reward: ReputationPoint,
     }
 
     #[pallet::genesis_build]
@@ -588,6 +601,8 @@ pub mod pallet {
             CanceledSlashPayout::<T>::put(self.canceled_payout);
             SlashRewardFraction::<T>::put(self.slash_reward_fraction);
             MinCooperatorBond::<T>::put(self.min_cooperator_bond);
+            CurrentEnergyPerStakeCurrency::<T>::put(self.energy_per_stake_currency);
+            BlockAuthoringReward::<T>::put(self.block_authoring_reward);
             MinCommonValidatorBond::<T>::put(self.min_common_validator_bond);
             MinTrustValidatorBond::<T>::put(self.min_trust_validator_bond);
             if let Some(x) = self.max_validator_count {
@@ -1183,7 +1198,10 @@ pub mod pallet {
         pub fn chill(origin: OriginFor<T>) -> DispatchResult {
             let controller = ensure_signed(origin)?;
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-            Self::chill_stash(&ledger.stash);
+
+            let stash = ledger.stash;
+            Self::do_remove_validator_from_cooperators_target(&stash);
+            Self::chill_stash(&stash);
             Ok(())
         }
 
@@ -1680,6 +1698,7 @@ pub mod pallet {
             // Otherwise, if caller is the same as the controller, this is just like `chill`.
 
             if Cooperators::<T>::contains_key(&stash) && Cooperators::<T>::get(&stash).is_none() {
+                Self::do_remove_validator_from_cooperators_target(&stash);
                 Self::chill_stash(&stash);
                 return Ok(());
             }
@@ -1711,6 +1730,7 @@ pub mod pallet {
                 ensure!(ledger.active < min_active_bond, Error::<T>::CannotChillOther);
             }
 
+            Self::do_remove_validator_from_cooperators_target(&stash);
             Self::chill_stash(&stash);
             Ok(())
         }
@@ -1762,6 +1782,30 @@ pub mod pallet {
                     .map(|prefs| prefs.collaborative = true)
                     .ok_or(Error::<T>::NotStash)
             })?;
+            Ok(())
+        }
+
+        /// Sets the current energy units per stake currency.
+        #[pallet::call_index(28)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(0, 1))]
+        pub fn set_energy_per_stake_currency(
+            origin: OriginFor<T>,
+            energy_per_stake_currency: EnergyOf<T>,
+        ) -> DispatchResult {
+            <T as Config>::AdminOrigin::ensure_origin(origin)?;
+            CurrentEnergyPerStakeCurrency::<T>::put(energy_per_stake_currency);
+            Ok(())
+        }
+
+        /// Sets the block authoring reward.
+        #[pallet::call_index(29)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(0, 1))]
+        pub fn set_block_authoring_reward(
+            origin: OriginFor<T>,
+            block_authoring_reward: ReputationPoint,
+        ) -> DispatchResult {
+            <T as Config>::AdminOrigin::ensure_origin(origin)?;
+            BlockAuthoringReward::<T>::put(block_authoring_reward);
             Ok(())
         }
     }
