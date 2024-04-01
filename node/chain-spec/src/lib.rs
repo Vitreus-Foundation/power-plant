@@ -615,7 +615,7 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
             stakers,
             disable_collaboration: true,
             energy_per_stake_currency: 1_000_000u128,
-            block_authoring_reward: ReputationPoint(12),
+            block_authoring_reward: ReputationPoint(24),
             ..Default::default()
         },
         im_online: ImOnlineConfig { keys: vec![] },

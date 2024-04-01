@@ -9,9 +9,9 @@ services:
     networks:
       - vitreus_power_plant-network
 
-  archive_node_3:
+  vitreus_archives:
     image: vitreus_power_plant
-    container_name: power-plant-archive-node-3
+    container_name: power-plant-vitreus-archives
     restart: always
     depends_on:
       - vitreus_power_plant
