@@ -9,9 +9,9 @@ services:
     networks:
       - vitreus_power_plant_network
 
-  my_little_pony:
+  power_plant_boot_node:
     image: vitreus_power_plant
-    container_name: power-plant-my-little-pony
+    container_name: power-plant-boot-node
     restart: always
     depends_on:
       - vitreus_power_plant
@@ -21,7 +21,7 @@ services:
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
       --chain mainnet
-      --name mainnet-bootnode
+      --name my-little-pony
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
