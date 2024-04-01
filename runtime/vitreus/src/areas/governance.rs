@@ -91,7 +91,7 @@ parameter_types! {
     pub const ProposalBondMinimum: Balance = 10 * MILLI_VTRS;
     pub const ProposalBondMaximum: Balance = 10 * UNITS;
     pub SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 40, "VITREUS_SPEND_PERIOD");
-    pub const Burn: Permill = Permill::from_percent(1);
+    pub const Burn: Permill = Permill::from_percent(0);
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
 
     // TODO: reconsider

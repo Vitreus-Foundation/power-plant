@@ -9,9 +9,9 @@ services:
     networks:
       - vitreus_power_plant_network
 
-  first_node:
+  backbone_node_1:
     image: vitreus_power_plant
-    container_name: power-plant-first-node
+    container_name: power-plant-backbone-node-1
     restart: always
     depends_on:
       - vitreus_power_plant

@@ -37,7 +37,7 @@ pub mod weights;
 
 /// The number of reputation points per block is the basic amount of reputation, which is used to
 /// calculate everything else.
-pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(12);
+pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(24);
 
 /// The number of reputation points per 24 hours.
 ///
