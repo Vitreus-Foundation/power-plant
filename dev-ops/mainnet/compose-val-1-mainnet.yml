@@ -9,9 +9,9 @@ services:
     networks:
       - vitreus_power_plant_network
 
-  backbone_node_1:
+  power_plant_first_node:
     image: vitreus_power_plant
-    container_name: power-plant-backbone-node-1
+    container_name: power-plant-first-node
     restart: always
     depends_on:
       - vitreus_power_plant
@@ -21,7 +21,7 @@ services:
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
       --chain mainnet
-      --name mainnet-val-1
+      --name backbone-node-1
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
