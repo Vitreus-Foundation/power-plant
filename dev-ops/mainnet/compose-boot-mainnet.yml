@@ -9,9 +9,9 @@ services:
     networks:
       - vitreus_power_plant_network
 
-  boot_node:
+  my_little_pony:
     image: vitreus_power_plant
-    container_name: power-plant-boot-node
+    container_name: power-plant-my-little-pony
     restart: always
     depends_on:
       - vitreus_power_plant
