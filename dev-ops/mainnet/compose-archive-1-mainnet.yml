@@ -9,9 +9,9 @@ services:
     networks:
       - vitreus_power_plant-network
 
-  smithsonian:
+  archive_node_1:
     image: vitreus_power_plant
-    container_name: power-plant-smithsonian
+    container_name: power-plant-archive-node-1
     restart: always
     depends_on:
       - vitreus_power_plant
@@ -21,7 +21,7 @@ services:
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
       --chain mainnet
-      --name mainnet-archive-1
+      --name smithsonian
       --port 30333
       --rpc-port 9944
       --rpc-external
