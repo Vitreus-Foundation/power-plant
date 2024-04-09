@@ -482,7 +482,7 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::unbounded]
     pub type UnappliedSlashes<T: Config> =
-        StorageMap<_, Twox64Concat, EraIndex, Vec<UnappliedSlash<T::AccountId>>, ValueQuery>;
+        StorageMap<_, Twox64Concat, EraIndex, Vec<UnappliedSlash<T::AccountId, slashing::SlashEntity<T>>>, ValueQuery>;
 
     /// A mapping from still-bonded eras to the first session index of that era.
     ///
@@ -502,13 +502,13 @@ pub mod pallet {
         EraIndex,
         Twox64Concat,
         T::AccountId,
-        (Perbill, ReputationPoint),
+        (slashing::SlashEntityPerbill, slashing::SlashEntity<T>),
     >;
 
     /// All slashing events on cooperators, mapped by era to the highest slash value of the era.
     #[pallet::storage]
     pub(crate) type CooperatorSlashInEra<T: Config> =
-        StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, ReputationPoint>;
+        StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, slashing::SlashEntity<T>>;
 
     /// Slashing spans for stash accounts.
     #[pallet::storage]

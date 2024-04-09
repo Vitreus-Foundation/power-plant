@@ -15,12 +15,12 @@
 #![warn(clippy::all)]
 #![warn(missing_docs)]
 
-use core::ops::{Deref, DerefMut};
+use core::ops::{Deref, DerefMut, Add};
 
 use libm::{ceil, pow};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::traits::SaturatedConversion;
+use sp_runtime::traits::{SaturatedConversion, Zero, One};
 
 pub use pallet::*;
 
@@ -404,5 +404,21 @@ impl DerefMut for ReputationPoint {
 impl AsRef<u64> for ReputationPoint {
     fn as_ref(&self) -> &u64 {
         &self.0
+    }
+}
+
+impl Add for ReputationPoint {
+    type Output = Self;
+    fn add(self, other: Self) -> Self {
+        Self(self.0 + other.0)
+    }
+}
+
+impl Zero for ReputationPoint {
+    fn zero() -> Self {
+        Self(0)
+    }
+    fn is_zero(&self) -> bool {
+        self.0 == 0
     }
 }
