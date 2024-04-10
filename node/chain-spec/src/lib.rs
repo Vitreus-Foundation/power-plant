@@ -434,6 +434,7 @@ pub fn testnet_genesis(
                 .map(|account| (VNRG::get(), account, INITIAL_ENERGY_BALANCE))
                 .collect(),
         },
+        pool_assets: Default::default(),
         reputation: ReputationConfig {
             accounts: stakers
                 .iter()
@@ -579,6 +580,7 @@ fn mainnet_genesis(
             )],
             accounts: vec![],
         },
+        pool_assets: Default::default(),
         reputation: ReputationConfig {
             accounts: stakers
                 .iter()

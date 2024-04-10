@@ -253,6 +253,7 @@ parity-scale-codec = { version = "3.2", default-features = false, features = [
     "derive",
 ] }
 paste = "1.0"
+primitive-types = { version = "0.12.2", default-features = false }
 scale-info = { version = "2.3", default-features = false, features = [
     "derive",
     "serde",
@@ -339,6 +340,7 @@ frame-system-benchmarking = { git = "https://github.com/paritytech/substrate", b
 frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 frame-try-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-asset-conversion = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-asset-rate = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-atomic-swap = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-authority-discovery = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }

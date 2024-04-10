@@ -8,7 +8,6 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use frame_support::traits::tokens::ConversionToAssetBalance;
 use frame_support::PalletId;
 use pallet_balances::NegativeImbalance;
 use polkadot_primitives::{
@@ -34,8 +33,8 @@ use runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_support::traits::tokens::{
-    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
-    Preservation, Provenance, WithdrawConsequence,
+    fungible::Inspect as FungibleInspect, fungibles::SwapNative, nonfungibles_v2::Inspect,
+    DepositConsequence, Fortitude, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, SignedImbalance, WithdrawReasons,
@@ -74,18 +73,16 @@ use frame_support::weights::constants::RocksDbWeight as RuntimeDbWeight;
 use frame_support::{
     construct_runtime,
     dispatch::GetDispatchInfo,
-    parameter_types,
+    ord_parameter_types, parameter_types,
     traits::{
-        fungible::ItemOf, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall,
-        FindAuthor, Hooks, KeyOwnerProofSystem,
+        fungible::ItemOf, AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8,
+        ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
 };
-use frame_system::{EnsureRoot, EnsureSigned};
-use pallet_energy_fee::{
-    traits::{AssetsBalancesConverter, NativeExchange},
-    CallFee, CustomFee,
-};
+use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
+use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
+use pallet_energy_fee::{CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -788,15 +785,76 @@ impl pallet_asset_rate::Config for Runtime {
     type WeightInfo = pallet_asset_rate::weights::SubstrateWeight<Runtime>;
 }
 
+pub type PoolAssetsInstance = pallet_assets::Instance1;
+impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Balance = Balance;
+    type AssetId = AssetId;
+    type AssetIdParameter = Compact<AssetId>;
+    type Currency = Balances;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<AssetConversionOrigin, AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    // Deposits are zero because creation/admin is limited to Asset Conversion pallet.
+    type AssetDeposit = ConstU128<0>;
+    type AssetAccountDeposit = ConstU128<0>;
+    type MetadataDepositBase = ConstU128<0>;
+    type MetadataDepositPerByte = ConstU128<0>;
+    type RemoveItemsLimit = ConstU32<500>;
+    type ApprovalDeposit = ApprovalDeposit;
+    type StringLimit = AssetsStringLimit;
+    type Freezer = ();
+    type Extra = ();
+    type CallbackHandle = ();
+    type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
+}
+
+parameter_types! {
+    pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
+    pub const AllowMultiAssetPools: bool = false;
+    pub const LiquidityWithdrawalFee: Permill = Permill::from_percent(0);
+    pub const PoolSetupFee: Balance = 0;
+    pub const PoolSwapFee: u32 = 3; // 0.3%
+    pub const MaxSwapPathLength: u32 = 2;
+    pub const MintMinLiquidity: Balance = 100;
+}
+
+ord_parameter_types! {
+    pub const AssetConversionOrigin: AccountId =
+        AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
+}
+
+impl pallet_asset_conversion::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type Balance = Balance;
+    type HigherPrecisionBalance = sp_core::U256;
+    type AssetBalance = Balance;
+    type AssetId = AssetId;
+    type Assets = Assets;
+    type PoolAssetId = AssetId;
+    type PoolAssets = PoolAssets;
+    type PalletId = AssetConversionPalletId;
+    type LPFee = PoolSwapFee;
+    type PoolSetupFee = PoolSetupFee;
+    type PoolSetupFeeReceiver = AssetConversionOrigin;
+    type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
+    type AllowMultiAssetPools = AllowMultiAssetPools;
+    type MaxSwapPathLength = MaxSwapPathLength;
+    type MintMinLiquidity = MintMinLiquidity;
+    type MultiAssetId = NativeOrAssetId<AssetId>;
+    type MultiAssetIdConverter = NativeOrAssetIdConverter<AssetId>;
+    type WeightInfo = pallet_asset_conversion::weights::SubstrateWeight<Runtime>;
+}
+
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
     pub GetConstantGasLimit: U256 = U256::from(100_000);
     pub EnergyBrokerPalletId: PalletId = PalletId(*b"enrgbrkr");
 }
 
-pub type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
-pub type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
-pub type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
+type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
 
 pub struct EnergyBrokerSink;
 
@@ -808,12 +866,51 @@ impl OnUnbalanced<NegativeImbalance<Runtime>> for EnergyBrokerSink {
     }
 }
 
+pub struct LiquidityPoolExchange;
+
+impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
+    for LiquidityPoolExchange
+{
+    fn convert_from_input(amount: Balance) -> Result<Balance, DispatchError> {
+        let reserve = LiquidityPool::get_reserves(
+            &NativeOrAssetId::Native,
+            &NativeOrAssetId::Asset(VNRG::get()),
+        )?;
+        Ok(LiquidityPool::get_amount_out(&amount, &reserve.0, &reserve.1)?)
+    }
+
+    fn convert_from_output(amount: Balance) -> Result<Balance, DispatchError> {
+        let reserve = LiquidityPool::get_reserves(
+            &NativeOrAssetId::Native,
+            &NativeOrAssetId::Asset(VNRG::get()),
+        )?;
+        Ok(LiquidityPool::get_amount_in(&amount, &reserve.0, &reserve.1)?)
+    }
+
+    fn exchange_from_input(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
+        LiquidityPool::swap_exact_native_for_tokens(*who, VNRG::get(), amount, None, *who, true)
+    }
+
+    fn exchange_from_output(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
+        let amount_in = Self::convert_from_output(amount)?;
+        Self::exchange_from_input(who, amount_in)
+    }
+
+    fn exchange_inner(
+        _who: &AccountId,
+        _amount_in: Balance,
+        _amount_out: Balance,
+    ) -> Result<Balance, DispatchError> {
+        Err(DispatchError::Other("Unimplemented"))
+    }
+}
+
 impl pallet_energy_fee::Config for Runtime {
     type ManageOrigin = MoreThanHalfCouncil;
     type RuntimeEvent = RuntimeEvent;
     type FeeTokenBalanced = EnergyItem;
     type MainTokenBalanced = Balances;
-    type EnergyExchange = EnergyExchange;
+    type EnergyExchange = LiquidityPoolExchange;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAssetId = VNRG;
@@ -1283,6 +1380,9 @@ construct_runtime!(
         AssetRate: pallet_asset_rate = 6,
         TransactionPayment: pallet_transaction_payment = 7,
         Sudo: pallet_sudo = 8,
+
+        PoolAssets: pallet_assets::<Instance1> = 10,
+        LiquidityPool: pallet_asset_conversion = 11,
 
         EVM: pallet_evm = 15,
         EVMChainId: pallet_evm_chain_id = 16,
@@ -2109,7 +2209,44 @@ impl_runtime_apis! {
         }
 
         fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
-            EnergyRate::to_asset_balance(UNITS, VNRG::get()).ok()
+            LiquidityPool::quote_price_exact_tokens_for_tokens(
+                NativeOrAssetId::Native,
+                NativeOrAssetId::Asset(VNRG::get()),
+                UNITS,
+                true
+            )
+        }
+    }
+
+    impl pallet_asset_conversion::AssetConversionApi<
+        Block,
+        Balance,
+        Balance,
+        NativeOrAssetId<AssetId>
+    > for Runtime {
+        fn quote_price_tokens_for_exact_tokens(
+            asset1: NativeOrAssetId<AssetId>,
+            asset2: NativeOrAssetId<AssetId>,
+            amount: Balance,
+            include_fee: bool,
+        ) -> Option<Balance> {
+            LiquidityPool::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
+        }
+
+        fn quote_price_exact_tokens_for_tokens(
+            asset1: NativeOrAssetId<AssetId>,
+            asset2: NativeOrAssetId<AssetId>,
+            amount: Balance,
+            include_fee: bool,
+        ) -> Option<Balance> {
+            LiquidityPool::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
+        }
+
+        fn get_reserves(
+            asset1: NativeOrAssetId<AssetId>,
+            asset2: NativeOrAssetId<AssetId>,
+        ) -> Option<(Balance, Balance)> {
+            LiquidityPool::get_reserves(&asset1, &asset2).ok()
         }
     }
 
