@@ -15,12 +15,12 @@
 #![warn(clippy::all)]
 #![warn(missing_docs)]
 
-use core::ops::{Deref, DerefMut, Add};
+use core::ops::{Add, Deref, DerefMut};
 
 use libm::{ceil, pow};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::traits::{SaturatedConversion, Zero, One};
+use sp_runtime::traits::{SaturatedConversion, Zero};
 
 pub use pallet::*;
 

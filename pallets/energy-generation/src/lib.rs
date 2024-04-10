@@ -305,7 +305,7 @@ use frame_support::{
     traits::{tokens::fungibles::Debt, Currency, Defensive, Get},
     BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use pallet_reputation::{Reputation, ReputationPoint};
+use pallet_reputation::Reputation;
 use parity_scale_codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -756,7 +756,13 @@ pub struct UnappliedSlash<AccountId, SlashEntity> {
 impl<AccountId, SlashEntity: Zero> UnappliedSlash<AccountId, SlashEntity> {
     /// Initializes the default object using the given `validator`.
     pub fn default_from(validator: AccountId) -> Self {
-        Self { validator, own: Zero::zero(), others: vec![], reporters: vec![], payout: Zero::zero() }
+        Self {
+            validator,
+            own: Zero::zero(),
+            others: vec![],
+            reporters: vec![],
+            payout: Zero::zero(),
+        }
     }
 }
 

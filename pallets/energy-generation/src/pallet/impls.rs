@@ -728,7 +728,8 @@ impl<T: Config> Pallet<T> {
             active_era,
         );
         for slash in era_slashes {
-            slashing::apply_slash::<T>(slash)?;
+            let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
+            slashing::apply_slash::<T>(slash, slash_era)?;
         }
 
         Ok(())
@@ -1068,7 +1069,7 @@ where
                 unapplied.reporters = details.reporters.clone();
                 if slash_defer_duration == 0 {
                     // Apply right away.
-                    if let Err(e) = slashing::apply_slash::<T>(unapplied) {
+                    if let Err(e) = slashing::apply_slash::<T>(unapplied, slash_era) {
                         frame_support::print(format!("failed to apply slash: {:?}", e).as_str());
                     }
                     {
