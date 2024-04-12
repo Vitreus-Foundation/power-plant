@@ -89,11 +89,15 @@ impl OnRuntimeUpgrade for FixRewards {
                 }
 
                 if account.1.data.reserved != 0 {
-                    weight += RocksDbWeight::get().reads_writes(3, 3);
-                    if NacManaging::mint(RawOrigin::Signed(admin).into(), 1, account.0).is_err() {
-                        log::warn!("NacManaging::mint call failed, abort migration");
+                    weight += RocksDbWeight::get().reads_writes(4, 3);
+                    if pallet_nac_managing::UsersNft::<Runtime>::contains_key(account.0) {
+                        log::info!("User {:?} already has NAC (2 level)", account.0);
                     } else {
-                        log::info!("Mint NAC (1 level) to {:?}", account.0);
+                        if NacManaging::mint(RawOrigin::Root.into(), 1, account.0).is_err() {
+                            log::warn!("NacManaging::mint call failed for {:?}", account.0);
+                        } else {
+                            log::info!("Mint NAC (1 level) to {:?}", account.0);
+                        }
                     }
                 }
 
