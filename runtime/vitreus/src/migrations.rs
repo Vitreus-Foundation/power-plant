@@ -94,6 +94,7 @@ impl OnRuntimeUpgrade for FixRewards {
                         log::warn!("NacManaging::mint call failed, abort migration");
                         return weight;
                     } else {
+                        weight += RocksDbWeight::get().reads_writes(1, 1);
                         log::info!("Mint NAC (1 level) to {:?}", account.0);
                     }
                 }
