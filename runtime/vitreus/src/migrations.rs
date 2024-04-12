@@ -31,7 +31,6 @@ impl OnRuntimeUpgrade for FixRewards {
             log::warn!(
                 "EnergyGeneration::set_energy_per_stake_currency call failed, abort migration"
             );
-            return weight;
         }
 
         let new_min_cooperator_bond = 1_000_000_000_000_000_000;
@@ -93,7 +92,6 @@ impl OnRuntimeUpgrade for FixRewards {
                     weight += RocksDbWeight::get().reads_writes(1, 1);
                     if NacManaging::mint(RawOrigin::Signed(admin).into(), 1, account.0).is_err() {
                         log::warn!("NacManaging::mint call failed, abort migration");
-                        return weight;
                     } else {
                         log::info!("Mint NAC (1 level) to {:?}", account.0);
                     }
