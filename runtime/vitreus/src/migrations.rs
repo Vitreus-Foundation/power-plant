@@ -89,7 +89,7 @@ impl OnRuntimeUpgrade for FixRewards {
                 }
 
                 if account.1.data.reserved != 0 {
-                    weight += RocksDbWeight::get().reads_writes(1, 1);
+                    weight += RocksDbWeight::get().reads_writes(3, 3);
                     if NacManaging::mint(RawOrigin::Signed(admin).into(), 1, account.0).is_err() {
                         log::warn!("NacManaging::mint call failed, abort migration");
                     } else {
