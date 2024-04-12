@@ -14794,6 +14794,7 @@ dependencies = [
  "frame-system",
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
+ "frame-try-runtime",
  "libsecp256k1",
  "log",
  "num_enum",
