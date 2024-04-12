@@ -46,6 +46,7 @@ runtime-benchmarks = [
     "polkadot-cli/runtime-benchmarks",
     "polkadot-service/runtime-benchmarks",
 ]
+try-runtime = ["polkadot-service/try-runtime"]
 fast-runtime = [
     "polkadot-cli/fast-runtime",
     "polkadot-service/fast-runtime",
@@ -336,6 +337,7 @@ frame-support = { git = "https://github.com/paritytech/substrate", branch = "pol
 frame-system = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 frame-system-benchmarking = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+frame-try-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-assets = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-asset-rate = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-atomic-swap = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }

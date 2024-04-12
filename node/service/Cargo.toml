@@ -230,6 +230,7 @@ try-runtime = [
     "kusama-runtime?/try-runtime",
     "westend-runtime?/try-runtime",
     "rococo-runtime?/try-runtime",
+    "vitreus-power-plant-runtime/try-runtime",
 ]
 fast-runtime = [
     "polkadot-runtime?/fast-runtime",
