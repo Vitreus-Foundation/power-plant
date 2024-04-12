@@ -8,8 +8,8 @@ use frame_support::weights::constants::RocksDbWeight;
 use pallet_assets::WeightInfo;
 use pallet_energy_generation::ConfigOp;
 
-pub type V0101 = ();
-pub type Unreleased = (FixRewards);
+pub type V0101 = (FixRewards);
+pub type Unreleased = ();
 
 pub struct FixRewards;
 
