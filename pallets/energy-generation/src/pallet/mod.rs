@@ -50,6 +50,9 @@ use crate::{
     StakeNegativeImbalanceOf, StakeOf, StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
+#[cfg(feature = "try-runtime")]
+use sp_runtime::TryRuntimeError;
+
 const STAKING_ID: LockIdentifier = *b"staking ";
 // The speculative number of spans are used as an input of the weight annotation of
 // [`Call::unbond`], as the post dipatch weight may depend on the number of slashing span on the
@@ -805,8 +808,8 @@ pub mod pallet {
         }
 
         #[cfg(feature = "try-runtime")]
-        fn try_state(n: BlockNumberFor<T>) -> Result<(), &'static str> {
-            Self::do_try_state(n)
+        fn try_state(n: BlockNumberFor<T>) -> Result<(), TryRuntimeError> {
+            Self::do_try_state(n).map_err(TryRuntimeError::Other)
         }
     }
 

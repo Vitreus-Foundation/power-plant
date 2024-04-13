@@ -47,6 +47,7 @@ frame-support = { workspace = true }
 frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
 frame-system-rpc-runtime-api = { workspace = true }
+frame-try-runtime = { workspace = true, optional = true }
 pallet-assets = { workspace = true }
 pallet-asset-rate = { workspace = true }
 pallet-atomic-swap = { workspace = true }
@@ -123,6 +124,51 @@ substrate-wasm-builder = { workspace = true, optional = true }
 default = ["std", "with-rocksdb-weights"]
 with-rocksdb-weights = []
 with-paritydb-weights = []
+try-runtime = [
+    "frame-try-runtime",
+    "frame-executive/try-runtime",
+    "frame-system/try-runtime",
+    "runtime-common/try-runtime",
+    "runtime-parachains/try-runtime",
+    "pallet-assets/try-runtime",
+    "pallet-asset-rate/try-runtime",
+    "pallet-atomic-swap/try-runtime",
+    "pallet-authority-discovery/try-runtime",
+    "pallet-authorship/try-runtime",
+    "pallet-babe/try-runtime",
+    "pallet-balances/try-runtime",
+    "pallet-bounties/try-runtime",
+    "pallet-collective/try-runtime",
+    "pallet-democracy/try-runtime",
+    "pallet-grandpa/try-runtime",
+    "pallet-im-online/try-runtime",
+    "pallet-membership/try-runtime",
+    "pallet-nfts/try-runtime",
+    "pallet-offences/try-runtime",
+    "pallet-preimage/try-runtime",
+    "pallet-scheduler/try-runtime",
+    "pallet-session/try-runtime",
+    "pallet-sudo/try-runtime",
+    "pallet-timestamp/try-runtime",
+    "pallet-transaction-payment/try-runtime",
+    "pallet-treasury/try-runtime",
+    "pallet-vesting/try-runtime",
+    "pallet-utility/try-runtime",
+    "fp-self-contained/try-runtime",
+    "pallet-base-fee/try-runtime",
+    "pallet-dynamic-fee/try-runtime",
+    "pallet-ethereum/try-runtime",
+    "pallet-evm/try-runtime",
+    "pallet-evm-chain-id/try-runtime",
+    "pallet-claiming/try-runtime",
+    "pallet-energy-fee/try-runtime",
+    "pallet-energy-generation/try-runtime",
+    "pallet-hotfix-sufficients/try-runtime",
+    "pallet-nac-managing/try-runtime",
+    "pallet-reputation/try-runtime",
+    "pallet-simple-vesting/try-runtime",
+    "pallet-treasury-extension/try-runtime"
+]
 fast-runtime = []
 std = [
     "libsecp256k1/std",
@@ -162,6 +208,7 @@ std = [
     "frame-system/std",
     "frame-system-rpc-runtime-api/std",
     "frame-system-benchmarking?/std",
+    "frame-try-runtime?/std",
     "pallet-atomic-swap/std",
     "pallet-assets/std",
     "pallet-asset-rate/std",
