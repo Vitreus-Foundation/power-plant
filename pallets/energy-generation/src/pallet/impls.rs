@@ -37,6 +37,12 @@ use crate::{
 use super::{pallet::*, STAKING_ID};
 
 impl<T: Config> Pallet<T> {
+    /// The total balance that can be slashed from a stash account as of right now.
+    pub fn slashable_balance_of(stash: &T::AccountId) -> StakeOf<T> {
+        // Weight note: consider making the stake accessible through stash.
+        Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
+    }
+
     /// Checks if the account has enough reputation to be a validator.
     pub fn is_legit_for_validator(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {

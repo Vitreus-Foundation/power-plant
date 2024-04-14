@@ -273,10 +273,12 @@ impl SlashEntityPerbill {
 
 pub trait StorageEssentials: FullCodec + Clone + TypeInfo + Default + MaxEncodedLen {}
 
+impl<T: FullCodec + Clone + TypeInfo + Default + MaxEncodedLen> StorageEssentials for T {}
+
 #[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, Default, Debug, TypeInfo, MaxEncodedLen)]
 pub struct SlashEntity<Stake: StorageEssentials + Copy> {
-    reputation: ReputationPoint,
-    stake: Stake,
+    pub reputation: ReputationPoint,
+    pub stake: Stake,
 }
 
 impl<Stake: StorageEssentials + Copy> SlashEntity<Stake> {
@@ -688,8 +690,7 @@ impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
         let mut span_record = SpanSlash::<T>::get(&span_slash_key);
         let mut changed = false;
 
-        let slash_difference =
-            span_record.slashed.saturating_add(One::one()).saturating_sub(slash);
+        let slash_difference = slash.saturating_add(One::one()).saturating_sub(span_record.slashed);
         let reward = match slash_difference {
             mut difference @ SlashEntity { reputation, stake, .. }
                 if *reputation > 1 && stake > One::one() =>

@@ -46,7 +46,7 @@ pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(24);
 ///
 /// REPUTATION_POINTS_PER_BLOCK * 20 blocks/minute * 60 minutes * 24 hours
 pub const REPUTATION_POINTS_PER_DAY: ReputationPoint =
-    ReputationPoint(REPUTATION_POINTS_PER_BLOCK.0 * 20 * 60 * 24);
+    ReputationPoint(REPUTATION_POINTS_PER_BLOCK.0 * 10 * 60 * 24);
 
 /// The number of repputation points per 30 days.
 pub const REPUTATION_POINTS_PER_MONTH: ReputationPoint =

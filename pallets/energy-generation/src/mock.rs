@@ -404,8 +404,14 @@ impl crate::pallet::pallet::Config for Test {
 pub(crate) type StakingCall = crate::Call<Test>;
 pub(crate) type TestCall = <Test as frame_system::Config>::RuntimeCall;
 
+pub enum CooperateSelector {
+    CooperateWithDefault,
+    CooperateWith(Vec<(AccountId, Balance)>),
+    NoCooperate,
+}
+
 pub struct ExtBuilder {
-    cooperate: bool,
+    cooperate: CooperateSelector,
     validator_count: u32,
     minimum_validator_count: u32,
     invulnerables: Vec<AccountId>,
@@ -425,7 +431,7 @@ pub struct ExtBuilder {
 impl Default for ExtBuilder {
     fn default() -> Self {
         Self {
-            cooperate: true,
+            cooperate: CooperateSelector::CooperateWithDefault,
             validator_count: 2,
             minimum_validator_count: 0,
             balance_factor: 1,
@@ -449,8 +455,16 @@ impl ExtBuilder {
         EXISTENTIAL_DEPOSIT.with(|v| *v.borrow_mut() = existential_deposit);
         self
     }
-    pub fn cooperate(mut self, cooperate: bool) -> Self {
+    pub fn cooperate(mut self, cooperate: CooperateSelector) -> Self {
         self.cooperate = cooperate;
+        self
+    }
+    pub fn no_cooperate(mut self) -> Self {
+        self.cooperate = CooperateSelector::NoCooperate;
+        self
+    }
+    pub fn default_cooperate(mut self) -> Self {
+        self.cooperate = CooperateSelector::CooperateWithDefault;
         self
     }
     pub fn validator_count(mut self, count: u32) -> Self {
@@ -601,13 +615,20 @@ impl ExtBuilder {
                 (41, 40, self.balance_factor * 1000, StakerStatus::Idle),
             ];
             // optionally add a cooperator
-            if self.cooperate {
-                stakers.push((
+            match self.cooperate {
+                CooperateSelector::CooperateWithDefault => stakers.push((
                     101,
                     100,
                     self.balance_factor * 500,
                     StakerStatus::Cooperator(vec![(11, 200), (21, 300)]),
-                ))
+                )),
+                CooperateSelector::CooperateWith(target) => stakers.push((
+                    101,
+                    100,
+                    self.balance_factor * 500,
+                    StakerStatus::Cooperator(target),
+                )),
+                CooperateSelector::NoCooperate => (),
             }
             // replace any of the status if needed.
             self.status.into_iter().for_each(|(stash, status)| {
