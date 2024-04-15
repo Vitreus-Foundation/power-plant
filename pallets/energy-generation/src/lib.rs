@@ -296,6 +296,7 @@ pub(crate) mod mock;
 mod tests;
 
 pub mod inflation;
+pub mod migrations;
 pub mod slashing;
 pub mod weights;
 
@@ -763,6 +764,16 @@ impl<AccountId, SlashEntity: Zero> UnappliedSlash<AccountId, SlashEntity> {
             reporters: vec![],
             payout: Zero::zero(),
         }
+    }
+
+    pub fn new(
+        validator: AccountId,
+        own: SlashEntity,
+        others: Vec<(AccountId, SlashEntity)>,
+        reporters: Vec<AccountId>,
+        payout: SlashEntity,
+    ) -> Self {
+        Self { validator, own, others, reporters, payout }
     }
 }
 

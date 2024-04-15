@@ -660,6 +660,7 @@ impl ExtBuilder {
             min_common_validator_bond: self.min_common_validator_bond,
             min_trust_validator_bond: self.min_trust_validator_bond,
             energy_per_stake_currency: self.energy_per_stake_currency,
+            block_authoring_reward: self.block_authoring_reward,
             ..Default::default()
         }
         .assimilate_storage(&mut storage);

@@ -190,6 +190,12 @@ impl<SlashEntity: Encode + Decode + Default + TypeInfo + MaxEncodedLen> SpanReco
     }
 }
 
+impl<SlashEntity: Encode + Decode + Default + TypeInfo + MaxEncodedLen> SpanRecord<SlashEntity> {
+    pub fn new(slashed: SlashEntity, paid_out: SlashEntity) -> Self {
+        Self { slashed, paid_out }
+    }
+}
+
 /// Parameters for performing a slash.
 #[derive(Clone)]
 pub(crate) struct SlashParams<'a, T: 'a + Config> {
@@ -221,6 +227,12 @@ enum UpdateDecision {
 pub struct SlashEntityPerbill {
     reputation: Perbill,
     stake: Perbill,
+}
+
+impl SlashEntityPerbill {
+    pub fn new(reputation: Perbill, stake: Perbill) -> Self {
+        Self { reputation, stake }
+    }
 }
 
 impl<Stake> Mul<SlashEntity<Stake>> for SlashEntityPerbill
