@@ -19,7 +19,7 @@ use polkadot_primitives::{
     ValidationCodeHash, ValidatorId, ValidatorIndex, ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
 };
 
-use runtime_common::{paras_registrar, paras_sudo_wrapper, slots};
+use runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use runtime_parachains::{
     configuration as parachains_configuration, disputes as parachains_disputes,
@@ -123,7 +123,6 @@ pub use areas::{CouncilCollective, TechnicalCollective};
 
 mod precompiles;
 mod helpers {
-    mod macros;
     pub mod runner;
 }
 pub mod areas;
@@ -239,7 +238,7 @@ pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
 // NOTE: Currently it is not possible to change the epoch duration after the chain has started.
 //       Attempting to do so will brick block production.
-pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 60 * MINUTES;
+pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = prod_or_fast!(60 * MINUTES, 10 * MINUTES);
 pub const EPOCH_DURATION_IN_SLOTS: u64 = {
     const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
 
