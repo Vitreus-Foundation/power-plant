@@ -1,4 +1,5 @@
 #![allow(unused_parens)]
+#![allow(clippy::collapsible_else_if)]
 
 use super::*;
 use frame_support::dispatch::RawOrigin;
@@ -6,10 +7,11 @@ use frame_support::traits::fungibles::roles::Inspect;
 use frame_support::traits::OnRuntimeUpgrade;
 use frame_support::weights::constants::RocksDbWeight;
 use pallet_assets::WeightInfo;
+use pallet_energy_generation::migrations::UpdateSlashStorages;
 use pallet_energy_generation::ConfigOp;
 
 pub type V0101 = (FixRewards);
-pub type Unreleased = ();
+pub type Unreleased = (UpdateSlashStorages<Runtime>);
 
 pub struct FixRewards;
 
@@ -92,10 +94,12 @@ impl OnRuntimeUpgrade for FixRewards {
                     weight += RocksDbWeight::get().reads_writes(4, 3);
                     if pallet_nac_managing::UsersNft::<Runtime>::contains_key(account.0) {
                         log::info!("User {:?} already has NAC (2 level)", account.0);
-                    } else if NacManaging::mint(RawOrigin::Root.into(), 1, account.0).is_err() {
-                        log::warn!("NacManaging::mint call failed for {:?}", account.0);
                     } else {
-                        log::info!("Mint NAC (1 level) to {:?}", account.0);
+                        if NacManaging::mint(RawOrigin::Root.into(), 1, account.0).is_err() {
+                            log::warn!("NacManaging::mint call failed for {:?}", account.0);
+                        } else {
+                            log::info!("Mint NAC (1 level) to {:?}", account.0);
+                        }
                     }
                 }
 
