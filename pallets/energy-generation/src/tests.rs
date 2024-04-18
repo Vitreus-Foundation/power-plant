@@ -2551,37 +2551,50 @@ fn slash_in_old_span_does_not_deselect() {
     });
 }
 
-// #[test]
-// fn reporters_receive_their_slice() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         let initial_reputation_1 = *ReputationPallet::reputation(1).unwrap().reputation.points();
-//         let initial_reputation_2 = *ReputationPallet::reputation(2).unwrap().reputation.points();
-//
-//         let offender_before = *ReputationPallet::reputation(11).unwrap().reputation.points();
-//         on_offence_now(
-//             &[OffenceDetails {
-//                 offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-//                 reporters: vec![1, 2],
-//             }],
-//             &[Perbill::from_percent(50)],
-//         );
-//         let offender_after = *ReputationPallet::reputation(11).unwrap().reputation.points();
-//
-//         // F1 * slash * reward_proportion / num_of_reporters * energy_per_reputation
-//         let slash = offender_before - offender_after;
-//         let reward = slash / 2 / 10; // F! (50%) and reward prop (10%)
-//         let reward_each = reward / 2; // split between reporters
-//         assert!(!reward_each.is_zero());
-//         assert_eq!(
-//             *ReputationPallet::reputation(1).unwrap().reputation.points(),
-//             initial_reputation_1 + reward_each
-//         );
-//         assert_eq!(
-//             *ReputationPallet::reputation(2).unwrap().reputation.points(),
-//             initial_reputation_2 + reward_each
-//         );
-//     });
-// }
+#[test]
+fn reporters_receive_their_slice() {
+    ExtBuilder::default().build_and_execute(|| {
+        // The reporters' reward is calculated from the total exposure.
+        let initial_balance = 1200;
+
+        let initial_reputation_1 = *ReputationPallet::reputation(1).unwrap().reputation.points();
+        let initial_reputation_2 = *ReputationPallet::reputation(2).unwrap().reputation.points();
+
+        let offender_before = *ReputationPallet::reputation(11).unwrap().reputation.points();
+
+        assert_eq!(PowerPlant::eras_stakers(active_era(), 11).total, initial_balance);
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![1, 2],
+            }],
+            &[Perbill::from_percent(50)],
+        );
+        let offender_after = *ReputationPallet::reputation(11).unwrap().reputation.points();
+
+        // F1 * slash * reward_proportion / num_of_reporters * energy_per_reputation
+        let slash = offender_before - offender_after;
+        let reward = slash / 2 / 10; // F! (50%) and reward prop (10%)
+        let reward_each = reward / 2; // split between reporters
+        assert!(!reward_each.is_zero());
+        assert_eq!(
+            *ReputationPallet::reputation(1).unwrap().reputation.points(),
+            initial_reputation_1 + reward_each
+        );
+        assert_eq!(
+            *ReputationPallet::reputation(2).unwrap().reputation.points(),
+            initial_reputation_2 + reward_each
+        );
+
+        // F1 * (reward_proportion * slash - 0)
+        // 50% * (10% * initial_balance / 2)
+        let reward = (initial_balance / 20) / 2;
+        let reward_each = reward / 2; // split into two pieces.
+        assert_eq!(Balances::free_balance(1), 10 + reward_each);
+        assert_eq!(Balances::free_balance(2), 20 + reward_each);
+    });
+}
 
 #[test]
 fn subsequent_reports_in_same_span_pay_out_less() {
