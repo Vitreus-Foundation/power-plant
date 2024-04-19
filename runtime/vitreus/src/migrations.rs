@@ -5,12 +5,14 @@ use frame_support::dispatch::RawOrigin;
 use frame_support::traits::fungibles::roles::Inspect;
 use frame_support::traits::OnRuntimeUpgrade;
 use frame_support::weights::constants::RocksDbWeight;
+use hex_literal::hex;
 use pallet_assets::WeightInfo;
+use pallet_claiming::EthereumAddress;
 use pallet_energy_generation::migrations::UpdateSlashStorages;
 use pallet_energy_generation::ConfigOp;
 
 pub type V0101 = (FixRewards);
-pub type Unreleased = (UpdateSlashStorages<Runtime>);
+pub type Unreleased = (UpdateSlashStorages<Runtime>, TransferClaimFrom0x66C6To0xE621);
 
 pub struct FixRewards;
 
@@ -109,3 +111,11 @@ impl OnRuntimeUpgrade for FixRewards {
         weight
     }
 }
+
+parameter_types! {
+    pub const ClaimAddress0x66C6: EthereumAddress = EthereumAddress(hex!("66C688840c1c2502c603457B0f916bC73b7a1EEA"));
+    pub const ClaimAddress0xE621: EthereumAddress = EthereumAddress(hex!("E6219dc7F606EeD6221d23081e82DC747Adf200d"));
+}
+
+pub type TransferClaimFrom0x66C6To0xE621 =
+    pallet_claiming::migrations::TransferClaim<Runtime, ClaimAddress0x66C6, ClaimAddress0xE621>;

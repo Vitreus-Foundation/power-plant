@@ -18,6 +18,7 @@ num_enum = { workspace = true }
 log = { workspace = true }
 libsecp256k1 = { workspace = true }
 orml-traits = { workspace = true }
+hex-literal = { workspace = true }
 
 # Polkadot
 polkadot-primitives = { workspace = true }
