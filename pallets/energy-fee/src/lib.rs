@@ -6,6 +6,7 @@ use frame_support::dispatch::{DispatchClass, RawOrigin};
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
     tokens::{Fortitude, Imbalance, Precision, Preservation},
+    Currency,
 };
 pub use pallet::*;
 use pallet_asset_rate::Pallet as AssetRatePallet;
@@ -35,6 +36,9 @@ pub mod extension;
 pub mod traits;
 
 pub(crate) type BalanceOf<T> = <T as pallet_asset_rate::Config>::Balance;
+pub(crate) type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+pub(crate) type NegativeImbalanceOf<T> =
+    <<T as Config>::MainTokenBalanced as Currency<AccountIdOf<T>>>::NegativeImbalance;
 
 pub type MainCreditOf<T> =
     Credit<<T as frame_system::Config>::AccountId, <T as Config>::MainTokenBalanced>;
@@ -99,8 +103,7 @@ pub mod pallet {
         type FeeTokenBalanced: Balanced<Self::AccountId>
             + Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
         /// Chain currency (main token) manipulation traits
-        type MainTokenBalanced: Balanced<Self::AccountId>
-            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
+        type MainTokenBalanced: Currency<Self::AccountId, Balance = BalanceOf<Self>>;
         /// Exchange main token -> fee token
         /// Could not be used for fee token -> main token exchange
         type EnergyExchange: TokenExchange<
@@ -113,7 +116,7 @@ pub mod pallet {
         /// Used for initializing the pallet
         type EnergyAssetId: Get<Self::AssetId>;
 
-        type MainRecycleDestination: OnUnbalanced<MainCreditOf<Self>>;
+        type MainRecycleDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
         type FeeRecycleDestination: OnUnbalanced<FeeCreditOf<Self>>;
     }
 

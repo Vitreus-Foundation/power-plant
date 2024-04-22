@@ -10,7 +10,7 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::traits::tokens::ConversionToAssetBalance;
 use frame_support::PalletId;
-use pallet_energy_fee::MainCreditOf;
+use pallet_balances::NegativeImbalance;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
     CommittedCandidateReceipt, CoreState, DisputeState, ExecutorParams, GroupRotationInfo,
@@ -38,7 +38,7 @@ use frame_support::traits::tokens::{
     Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    fungible::Balanced, Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced,
+    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced,
     SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
@@ -796,17 +796,17 @@ parameter_types! {
     pub EnergyBrokerPalletId: PalletId = PalletId(*b"enrgbrkr");
 }
 
-type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
-type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
-type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
+pub type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
+pub type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
+pub type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
 pub struct EnergyBrokerSink;
 
-impl OnUnbalanced<MainCreditOf<Runtime>> for EnergyBrokerSink {
-    fn on_nonzero_unbalanced(amount: MainCreditOf<Runtime>) {
+impl OnUnbalanced<NegativeImbalance<Runtime>> for EnergyBrokerSink {
+    fn on_nonzero_unbalanced(amount: NegativeImbalance<Runtime>) {
         let energy_broker_address: AccountId =
             EnergyBrokerPalletId::get().into_account_truncating();
-        let _ = Balances::resolve(&energy_broker_address, amount);
+        Balances::resolve_creating(&energy_broker_address, amount);
     }
 }
 
