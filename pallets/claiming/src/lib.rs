@@ -14,7 +14,7 @@ use frame_support::{pallet_prelude::*, DefaultNoBound, PalletId};
 use scale_info::prelude::vec::Vec;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
-use sp_runtime::traits::{AccountIdConversion, CheckedSub};
+use sp_runtime::traits::{AccountIdConversion, CheckedSub, Saturating};
 
 #[cfg(not(feature = "std"))]
 use sp_std::alloc::{format, string::String};
@@ -241,14 +241,13 @@ pub mod pallet {
             origin: OriginFor<T>,
             who: EthereumAddress,
             value: BalanceOf<T>,
-            vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
         ) -> DispatchResult {
             ensure_root(origin)?;
 
-            <Claims<T>>::insert(who, value);
-            if let Some(vs) = vesting_schedule {
-                <Vesting<T>>::insert(who, vs);
-            }
+            <Claims<T>>::mutate(who, |amount| {
+                *amount = Some(amount.unwrap_or_default().saturating_add(value))
+            });
+
             Ok(())
         }
     }
