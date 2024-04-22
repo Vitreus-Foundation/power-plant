@@ -1,5 +1,4 @@
-#![allow(unused_parens)]
-#![allow(clippy::collapsible_else_if)]
+#![allow(clippy::collapsible_else_if, unused_parens)]
 
 use super::*;
 use frame_support::dispatch::RawOrigin;
