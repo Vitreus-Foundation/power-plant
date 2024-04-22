@@ -53,6 +53,13 @@ impl<AccountId, Balance> OnClaimHandler<AccountId, Balance> for () {
 #[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
 pub struct EthereumAddress(pub [u8; 20]);
 
+impl sp_std::fmt::Display for EthereumAddress {
+    fn fmt(&self, f: &mut sp_std::fmt::Formatter<'_>) -> sp_std::fmt::Result {
+        let hex: String = rustc_hex::ToHex::to_hex(&self.0[..]);
+        write!(f, "0x{}", hex)
+    }
+}
+
 impl Serialize for EthereumAddress {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -329,6 +336,70 @@ fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
         push_nibble(b % 16);
     }
     r
+}
+
+/// Migrations
+pub mod migrations {
+    use super::*;
+    use frame_support::traits::OnRuntimeUpgrade;
+
+    #[cfg(feature = "try-runtime")]
+    use sp_runtime::{traits::Zero, Saturating, TryRuntimeError};
+
+    /// Tranfers a claim and vesting schedule from `Source` to `Destination`.
+    pub struct TransferClaim<T, Source, Destination>(PhantomData<(T, Source, Destination)>);
+
+    impl<T, Source, Destination> OnRuntimeUpgrade for TransferClaim<T, Source, Destination>
+    where
+        T: Config,
+        Source: Get<EthereumAddress>,
+        Destination: Get<EthereumAddress>,
+    {
+        fn on_runtime_upgrade() -> Weight {
+            let source = Source::get();
+            let destination = Destination::get();
+
+            if !<Claims<T>>::contains_key(destination) {
+                if !<Vesting<T>>::contains_key(destination) {
+                    if let Some(amount) = <Claims<T>>::take(source) {
+                        <Claims<T>>::insert(destination, amount);
+                        log::info!("Transfer claim from {source} to {destination}");
+
+                        if let Some(vesting) = <Vesting<T>>::take(source) {
+                            <Vesting<T>>::insert(destination, vesting);
+                            log::info!("Transfer vesting schedule from {source} to {destination}");
+                        }
+                    }
+                } else {
+                    // is that possible?
+                    log::warn!("Address {destination} has vesting schedule without a claim, skip migration");
+                }
+            } else {
+                log::info!("Address {destination} already has a claim, skip migration");
+            }
+
+            T::DbWeight::get().reads_writes(4, 4)
+        }
+
+        #[cfg(feature = "try-runtime")]
+        fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
+            let total =
+                <Claims<T>>::iter_values().fold(BalanceOf::<T>::zero(), |a, i| a.saturating_add(i));
+            Ok(total.encode())
+        }
+
+        #[cfg(feature = "try-runtime")]
+        fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
+            let old_total: BalanceOf<T> =
+                Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
+
+            let new_total =
+                <Claims<T>>::iter_values().fold(BalanceOf::<T>::zero(), |a, i| a.saturating_add(i));
+
+            ensure!(new_total == old_total, "Total balance of claims should not change");
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]
