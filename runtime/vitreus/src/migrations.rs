@@ -6,10 +6,11 @@ use frame_support::traits::fungibles::roles::Inspect;
 use frame_support::traits::OnRuntimeUpgrade;
 use frame_support::weights::constants::RocksDbWeight;
 use pallet_assets::WeightInfo;
+use pallet_energy_generation::migrations::UpdateSlashStorages;
 use pallet_energy_generation::ConfigOp;
 
 pub type V0101 = (FixRewards);
-pub type Unreleased = ();
+pub type Unreleased = (UpdateSlashStorages<Runtime>);
 
 pub struct FixRewards;
 
