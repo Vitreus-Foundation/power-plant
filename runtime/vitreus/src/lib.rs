@@ -38,8 +38,7 @@ use frame_support::traits::tokens::{
     Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced,
-    SignedImbalance, WithdrawReasons,
+    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
