@@ -587,16 +587,13 @@ impl<T: Config> Pallet<T> {
                 exposure_clipped.others.truncate(clipped_max_len);
             }
             <ErasStakersClipped<T>>::insert(new_planned_era, &stash, exposure_clipped);
+
+            let pref = Self::validators(&stash);
+            <ErasValidatorPrefs<T>>::insert(new_planned_era, stash, pref);
         });
 
         // Insert current era staking information
         <ErasTotalStake<T>>::insert(new_planned_era, total_stake);
-
-        // Collect the pref of all winners.
-        for stash in &elected_stashes {
-            let pref = Self::validators(stash);
-            <ErasValidatorPrefs<T>>::insert(new_planned_era, stash, pref);
-        }
 
         if new_planned_era > 0 {
             log!(
