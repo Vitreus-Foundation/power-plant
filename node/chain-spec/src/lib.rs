@@ -173,44 +173,6 @@ pub fn devnet_config() -> ChainSpec {
     )
 }
 
-pub fn stagenet_config() -> ChainSpec {
-    use devnet_keys::*;
-
-    let wasm_binary = WASM_BINARY.expect("WASM not available");
-
-    ChainSpec::from_genesis(
-        // Name
-        "Stagenet",
-        // ID
-        "stagenet",
-        ChainType::Custom("Stagenet".to_string()),
-        move || {
-            testnet_genesis(
-                wasm_binary,
-                // Sudo account
-                alith(),
-                // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
-                // Initial Validators
-                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
-                vec![],
-                SS58Prefix::get() as u64,
-            )
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        None,
-        // Protocol ID
-        None,
-        None,
-        // Properties
-        Some(properties()),
-        // Extensions
-        Default::default(),
-    )
-}
-
 pub fn localnet_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
@@ -297,7 +259,41 @@ pub fn testnet_config() -> ChainSpec {
     )
 }
 
+pub fn stagenet_config() -> ChainSpec {
+    use devnet_keys::*;
+
+    let wasm_binary = WASM_BINARY.expect("WASM not available");
+
+    ChainSpec::from_genesis(
+        // Name
+        "Stagenet",
+        // ID
+        "stagenet",
+        ChainType::Custom("Stagenet".to_string()),
+        move || {
+            mainnet_genesis(
+                wasm_binary,
+                // Initial Validators
+                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+            )
+        },
+        // Bootnodes
+        vec![],
+        // Telemetry
+        None,
+        // Protocol ID
+        None,
+        None,
+        // Properties
+        Some(properties()),
+        // Extensions
+        Default::default(),
+    )
+}
+
 pub fn mainnet_config() -> ChainSpec {
+    use mainnet_keys::*;
+
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
     ChainSpec::from_genesis(
@@ -306,7 +302,19 @@ pub fn mainnet_config() -> ChainSpec {
         // ID
         "mainnet",
         ChainType::Live,
-        move || mainnet_genesis(wasm_binary),
+        move || {
+            mainnet_genesis(
+                wasm_binary,
+                // Initial Validators
+                vec![
+                    validator_1_keys(),
+                    validator_2_keys(),
+                    validator_3_keys(),
+                    validator_4_keys(),
+                    validator_5_keys(),
+                ],
+            )
+        },
         // Bootnodes
         vec![],
         // Telemetry
@@ -484,18 +492,23 @@ pub fn testnet_genesis(
 }
 
 /// Configure initial storage state for FRAME modules.
-fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
+fn mainnet_genesis(
+    wasm_binary: &[u8],
+    initial_validators: Vec<(
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    )>,
+) -> RuntimeGenesisConfig {
     use mainnet_keys::*;
 
     let root_key = root();
     let endowed_accounts = [root()];
-    let initial_validators = vec![
-        validator_1_keys(),
-        validator_2_keys(),
-        validator_3_keys(),
-        validator_4_keys(),
-        validator_5_keys(),
-    ];
 
     const ENDOWMENT: Balance = 1_000 * vtrs::UNITS;
     const STASH: Balance = 1 * vtrs::UNITS;
