@@ -5,7 +5,10 @@ use crate::slashing::{SlashEntityOf, SlashEntityPerbill, SpanRecord};
 use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use frame_support::ensure;
-use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
+use frame_support::{
+    dispatch::GetStorageVersion,
+    traits::{OnRuntimeUpgrade, StorageVersion},
+};
 use pallet_reputation::ReputationPoint;
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
@@ -37,7 +40,7 @@ struct StorageElementsCounter {
 
 impl<T: Config> OnRuntimeUpgrade for UpdateSlashStorages<T> {
     fn on_runtime_upgrade() -> frame_support::weights::Weight {
-        let storage_version = StorageVersion::get::<Pallet<T>>();
+        let storage_version = Pallet::<T>::on_chain_storage_version();
         if storage_version != 13 {
             log::info!("Invalid storage version (current {:?}), skip migration", storage_version);
             return Zero::zero();
@@ -94,10 +97,10 @@ impl<T: Config> OnRuntimeUpgrade for UpdateSlashStorages<T> {
     #[cfg(feature = "try-runtime")]
     fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
         let counter = StorageElementsCounter {
-            unapplied_slashes: UnappliedSlashes::<T>::iter().count() as u128,
-            validator_slash_in_era: ValidatorSlashInEra::<T>::iter().count() as u128,
-            cooperator_slash_in_era: CooperatorSlashInEra::<T>::iter().count() as u128,
-            span_slash: SpanSlash::<T>::iter().count() as u128,
+            unapplied_slashes: UnappliedSlashes::<T>::iter_keys().count() as u128,
+            validator_slash_in_era: ValidatorSlashInEra::<T>::iter_keys().count() as u128,
+            cooperator_slash_in_era: CooperatorSlashInEra::<T>::iter_keys().count() as u128,
+            span_slash: SpanSlash::<T>::iter_keys().count() as u128,
         };
         Ok(counter.encode())
     }
@@ -105,10 +108,10 @@ impl<T: Config> OnRuntimeUpgrade for UpdateSlashStorages<T> {
     #[cfg(feature = "try-runtime")]
     fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
         let new_counter = StorageElementsCounter {
-            unapplied_slashes: UnappliedSlashes::<T>::iter().count() as u128,
-            validator_slash_in_era: ValidatorSlashInEra::<T>::iter().count() as u128,
-            cooperator_slash_in_era: CooperatorSlashInEra::<T>::iter().count() as u128,
-            span_slash: SpanSlash::<T>::iter().count() as u128,
+            unapplied_slashes: UnappliedSlashes::<T>::iter_keys().count() as u128,
+            validator_slash_in_era: ValidatorSlashInEra::<T>::iter_keys().count() as u128,
+            cooperator_slash_in_era: CooperatorSlashInEra::<T>::iter_keys().count() as u128,
+            span_slash: SpanSlash::<T>::iter_keys().count() as u128,
         };
         let old_counter = StorageElementsCounter::decode(&mut state.as_slice())
             .map_err(|_| TryRuntimeError::Corruption)?;
