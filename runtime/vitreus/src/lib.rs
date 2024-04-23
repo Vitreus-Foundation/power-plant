@@ -107,6 +107,7 @@ pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
 pub use pallet_energy_generation::StakerStatus;
 pub use pallet_nac_managing;
+pub use pallet_privileges;
 pub use pallet_reputation::ReputationPoint;
 
 // A few exports that help ease life for downstream crates.
@@ -764,6 +765,20 @@ impl pallet_nac_managing::Config for Runtime {
 }
 
 parameter_types! {
+    pub const BlocksPerDays: BlockNumber = DAYS;
+}
+
+impl pallet_privileges::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BlocksPerDays = BlocksPerDays;
+    type WeightInfo = pallet_privileges::weights::SubstrateWeight<Runtime>;
+
+    const MAX_ACCOUNT_VIP_SLOTS: u32 = 20;
+}
+
+
+parameter_types! {
     pub const TransactionByteFee: Balance = 1;
     pub const TransactionPicosecondFee: Balance = 8;
 }
@@ -1307,6 +1322,7 @@ construct_runtime!(
         Historical: pallet_session::historical = 37,
         AuthorityDiscovery: pallet_authority_discovery = 38,
         EnergyGeneration: pallet_energy_generation = 39,
+        Privileges: pallet_privileges = 40,
 
         // Governance-related pallets
         Scheduler: pallet_scheduler = 45,
