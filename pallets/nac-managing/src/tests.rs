@@ -134,7 +134,7 @@ fn on_claim_should_work() {
         let item_id = 123_u32;
         let collection_id = NftCollectionId::get();
 
-        NacManaging::create_collection(&account(1));
+        NacManaging::create_collection(&account(1)).expect("Expected to create a NAC collection");
 
         NacManaging::do_mint(item_id, owner.clone()).expect("Minting failed");
         NacManaging::update_nft_info(&collection_id, &item_id, nac_level, owner.clone())

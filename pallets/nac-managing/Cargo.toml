@@ -23,9 +23,9 @@ sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 sp-staking = { workspace = true }
 sp-std = { workspace = true }
+frame-benchmarking = { workspace = true, optional = true }
 
 [dev-dependencies]
-frame-benchmarking = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-staking-reward-curve = { workspace = true }
 rand_chacha = { workspace = true }

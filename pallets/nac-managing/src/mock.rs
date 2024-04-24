@@ -22,8 +22,7 @@ use crate as pallet_nac_managing;
 
 use frame_support::{
     construct_runtime, parameter_types,
-    traits::{AsEnsureOriginWithArg, ConstU32, ConstU64, WithdrawReasons},
-    Identity,
+    traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
 };
 use sp_core::H256;
 use sp_runtime::{
