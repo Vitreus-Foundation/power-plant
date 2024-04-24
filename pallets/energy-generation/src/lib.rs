@@ -296,6 +296,7 @@ pub(crate) mod mock;
 mod tests;
 
 pub mod inflation;
+pub mod migrations;
 pub mod slashing;
 pub mod weights;
 
@@ -305,7 +306,7 @@ use frame_support::{
     traits::{tokens::fungibles::Debt, Currency, Defensive, Get},
     BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
-use pallet_reputation::{Reputation, ReputationPoint};
+use pallet_reputation::Reputation;
 use parity_scale_codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -740,23 +741,39 @@ impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, B
 /// A pending slash record. The value of the slash has been computed but not applied yet,
 /// rather deferred for several eras.
 #[derive(Encode, Decode, RuntimeDebug, TypeInfo)]
-pub struct UnappliedSlash<AccountId> {
+pub struct UnappliedSlash<AccountId, SlashEntity> {
     /// The stash ID of the offending validator.
     validator: AccountId,
     /// The validator's own slash.
-    own: ReputationPoint,
+    own: SlashEntity,
     /// All other slashed stakers and amounts.
-    others: Vec<(AccountId, ReputationPoint)>,
+    others: Vec<(AccountId, SlashEntity)>,
     /// Reporters of the offence; bounty payout recipients.
     reporters: Vec<AccountId>,
     /// The amount of payout.
-    payout: ReputationPoint,
+    payout: SlashEntity,
 }
 
-impl<AccountId> UnappliedSlash<AccountId> {
+impl<AccountId, SlashEntity: Zero> UnappliedSlash<AccountId, SlashEntity> {
     /// Initializes the default object using the given `validator`.
     pub fn default_from(validator: AccountId) -> Self {
-        Self { validator, own: 0.into(), others: vec![], reporters: vec![], payout: 0.into() }
+        Self {
+            validator,
+            own: Zero::zero(),
+            others: vec![],
+            reporters: vec![],
+            payout: Zero::zero(),
+        }
+    }
+
+    pub fn new(
+        validator: AccountId,
+        own: SlashEntity,
+        others: Vec<(AccountId, SlashEntity)>,
+        reporters: Vec<AccountId>,
+        payout: SlashEntity,
+    ) -> Self {
+        Self { validator, own, others, reporters, payout }
     }
 }
 

@@ -52,6 +52,9 @@ const MIN_COMMON_VALIDATOR_BOND: Balance = 1_000_000 * vtrs::UNITS;
 /// Min validator stake for user who has NAC level > 1.
 const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 
+const MIN_COOPERATOR_BOND: Balance = 1_000_000_000_000_000_000;
+const ENERGY_PER_STAKE_CURRENCY: Balance = 19_909_091_036_891;
+
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
 #[derive(Serialize, Deserialize)]
 pub struct DevGenesisExt {
@@ -173,44 +176,6 @@ pub fn devnet_config() -> ChainSpec {
     )
 }
 
-pub fn stagenet_config() -> ChainSpec {
-    use devnet_keys::*;
-
-    let wasm_binary = WASM_BINARY.expect("WASM not available");
-
-    ChainSpec::from_genesis(
-        // Name
-        "Stagenet",
-        // ID
-        "stagenet",
-        ChainType::Custom("Stagenet".to_string()),
-        move || {
-            testnet_genesis(
-                wasm_binary,
-                // Sudo account
-                alith(),
-                // Pre-funded accounts
-                vec![alith(), baltathar(), charleth(), dorothy(), ethan(), faith(), goliath()],
-                // Initial Validators
-                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
-                vec![],
-                SS58Prefix::get() as u64,
-            )
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        None,
-        // Protocol ID
-        None,
-        None,
-        // Properties
-        Some(properties()),
-        // Extensions
-        Default::default(),
-    )
-}
-
 pub fn localnet_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
@@ -297,7 +262,41 @@ pub fn testnet_config() -> ChainSpec {
     )
 }
 
+pub fn stagenet_config() -> ChainSpec {
+    use devnet_keys::*;
+
+    let wasm_binary = WASM_BINARY.expect("WASM not available");
+
+    ChainSpec::from_genesis(
+        // Name
+        "Stagenet",
+        // ID
+        "stagenet",
+        ChainType::Custom("Stagenet".to_string()),
+        move || {
+            mainnet_genesis(
+                wasm_binary,
+                // Initial Validators
+                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+            )
+        },
+        // Bootnodes
+        vec![],
+        // Telemetry
+        None,
+        // Protocol ID
+        None,
+        None,
+        // Properties
+        Some(properties()),
+        // Extensions
+        Default::default(),
+    )
+}
+
 pub fn mainnet_config() -> ChainSpec {
+    use mainnet_keys::*;
+
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
     ChainSpec::from_genesis(
@@ -306,7 +305,19 @@ pub fn mainnet_config() -> ChainSpec {
         // ID
         "mainnet",
         ChainType::Live,
-        move || mainnet_genesis(wasm_binary),
+        move || {
+            mainnet_genesis(
+                wasm_binary,
+                // Initial Validators
+                vec![
+                    validator_1_keys(),
+                    validator_2_keys(),
+                    validator_3_keys(),
+                    validator_4_keys(),
+                    validator_5_keys(),
+                ],
+            )
+        },
         // Bootnodes
         vec![],
         // Telemetry
@@ -468,10 +479,11 @@ pub fn testnet_genesis(
             minimum_validator_count: initial_validators.len() as u32,
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
+            min_cooperator_bond: MIN_COOPERATOR_BOND,
             min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
-            energy_per_stake_currency: 1_000_000u128,
+            energy_per_stake_currency: ENERGY_PER_STAKE_CURRENCY,
             block_authoring_reward: ReputationPoint(24),
             ..Default::default()
         },
@@ -484,18 +496,23 @@ pub fn testnet_genesis(
 }
 
 /// Configure initial storage state for FRAME modules.
-fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
+fn mainnet_genesis(
+    wasm_binary: &[u8],
+    initial_validators: Vec<(
+        AccountId,
+        AccountId,
+        BabeId,
+        GrandpaId,
+        ImOnlineId,
+        ValidatorId,
+        AssignmentId,
+        AuthorityDiscoveryId,
+    )>,
+) -> RuntimeGenesisConfig {
     use mainnet_keys::*;
 
     let root_key = root();
     let endowed_accounts = [root()];
-    let initial_validators = vec![
-        validator_1_keys(),
-        validator_2_keys(),
-        validator_3_keys(),
-        validator_4_keys(),
-        validator_5_keys(),
-    ];
 
     const ENDOWMENT: Balance = 1_000 * vtrs::UNITS;
     const STASH: Balance = 1 * vtrs::UNITS;
@@ -610,11 +627,12 @@ fn mainnet_genesis(wasm_binary: &[u8]) -> RuntimeGenesisConfig {
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
             min_commission: Perbill::from_percent(20),
+            min_cooperator_bond: MIN_COOPERATOR_BOND,
             min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
             disable_collaboration: true,
-            energy_per_stake_currency: 1_000_000u128,
+            energy_per_stake_currency: ENERGY_PER_STAKE_CURRENCY,
             block_authoring_reward: ReputationPoint(24),
             ..Default::default()
         },

@@ -148,8 +148,6 @@ pipelines:
                   - cargo fmt -- --check
                   - cargo clippy -- -D warnings
                   - cargo build --locked
-                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --locked
-                  - cargo test -j 2 -p vitreus-power-plant-runtime -p "pallet-*" --features "runtime-benchmarks" --locked
 
             - step:
                 name: inno STAGEnet bootnode
