@@ -1,14 +1,14 @@
 use core::marker::PhantomData;
 
 use crate::traits::{AssetsBalancesConverter, NativeExchange};
-use crate::{self as pallet_energy_fee, FeeCreditOf, MainCreditOf};
+use crate::{self as pallet_energy_fee, FeeCreditOf};
 use crate::{CallFee, CustomFee};
 use fp_account::AccountId20;
 
 use frame_support::dispatch::GetDispatchInfo;
 use frame_support::traits::fungible::{Balanced, ItemOf};
 use frame_support::traits::tokens::imbalance::SplitTwoWays;
-use frame_support::traits::OnUnbalanced;
+use frame_support::traits::{Currency, OnUnbalanced};
 use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
     pallet_prelude::Weight,
@@ -16,6 +16,7 @@ use frame_support::{
     traits::{AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
+use pallet_balances::NegativeImbalance;
 use pallet_ethereum::PostLogContent;
 use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::{Compact, Encode};
@@ -116,7 +117,7 @@ impl frame_system::Config for Test {
 
 impl pallet_balances::Config for Test {
     type MaxLocks = ConstU32<1024>;
-    type MaxReserves = ();
+    type MaxReserves = ConstU32<1>;
     type ReserveIdentifier = [u8; 8];
     type Balance = Balance;
     type RuntimeEvent = RuntimeEvent;
@@ -125,7 +126,7 @@ impl pallet_balances::Config for Test {
     type AccountStore = System;
     type WeightInfo = ();
     type FreezeIdentifier = ();
-    type MaxFreezes = ();
+    type MaxFreezes = ConstU32<1>;
     type MaxHolds = ();
     type RuntimeHoldReason = ();
 }
@@ -159,14 +160,17 @@ impl<GetAccountId: Get<AccountId>> OnUnbalanced<FeeCreditOf<Test>>
 
 pub struct MainBurnDestination<GetAccountId: Get<AccountId>>(PhantomData<GetAccountId>);
 
-impl<GetAccountId: Get<AccountId>> OnUnbalanced<MainCreditOf<Test>>
+impl<GetAccountId: Get<AccountId>> OnUnbalanced<NegativeImbalance<Test>>
     for MainBurnDestination<GetAccountId>
 {
-    fn on_nonzero_unbalanced(amount: MainCreditOf<Test>) {
+    fn on_nonzero_unbalanced(amount: NegativeImbalance<Test>) {
         let account_id = GetAccountId::get();
-        let _ = <BalancesVTRS as Balanced<AccountId>>::resolve(&account_id, amount);
+        <BalancesVTRS as Currency<AccountId>>::resolve_creating(&account_id, amount);
     }
 }
+
+pub(crate) type EnergyExchange =
+    NativeExchange<AssetId, BalancesVTRS, BalancesVNRG, EnergyRate, GetVNRG>;
 
 impl pallet_energy_fee::Config for Test {
     type RuntimeEvent = RuntimeEvent;
@@ -175,7 +179,7 @@ impl pallet_energy_fee::Config for Test {
     type CustomFee = EnergyFee;
     type FeeTokenBalanced = BalancesVNRG;
     type MainTokenBalanced = BalancesVTRS;
-    type EnergyExchange = NativeExchange<AssetId, BalancesVTRS, BalancesVNRG, EnergyRate, GetVNRG>;
+    type EnergyExchange = EnergyExchange;
     type EnergyAssetId = GetVNRG;
     type MainRecycleDestination = MainBurnDestination<MainBurnAccount>;
     type FeeRecycleDestination =

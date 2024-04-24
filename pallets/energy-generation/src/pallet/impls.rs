@@ -37,6 +37,12 @@ use crate::{
 use super::{pallet::*, STAKING_ID};
 
 impl<T: Config> Pallet<T> {
+    /// The total balance that can be slashed from a stash account as of right now.
+    pub fn slashable_balance_of(stash: &T::AccountId) -> StakeOf<T> {
+        // Weight note: consider making the stake accessible through stash.
+        Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
+    }
+
     /// Checks if the account has enough reputation to be a validator.
     pub fn is_legit_for_validator(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {
@@ -587,16 +593,13 @@ impl<T: Config> Pallet<T> {
                 exposure_clipped.others.truncate(clipped_max_len);
             }
             <ErasStakersClipped<T>>::insert(new_planned_era, &stash, exposure_clipped);
+
+            let pref = Self::validators(&stash);
+            <ErasValidatorPrefs<T>>::insert(new_planned_era, stash, pref);
         });
 
         // Insert current era staking information
         <ErasTotalStake<T>>::insert(new_planned_era, total_stake);
-
-        // Collect the pref of all winners.
-        for stash in &elected_stashes {
-            let pref = Self::validators(stash);
-            <ErasValidatorPrefs<T>>::insert(new_planned_era, stash, pref);
-        }
 
         if new_planned_era > 0 {
             log!(
@@ -728,7 +731,8 @@ impl<T: Config> Pallet<T> {
             active_era,
         );
         for slash in era_slashes {
-            slashing::apply_slash::<T>(slash)?;
+            let slash_era = active_era.saturating_sub(T::SlashDeferDuration::get());
+            slashing::apply_slash::<T>(slash, slash_era)?;
         }
 
         Ok(())
@@ -1068,7 +1072,7 @@ where
                 unapplied.reporters = details.reporters.clone();
                 if slash_defer_duration == 0 {
                     // Apply right away.
-                    if let Err(e) = slashing::apply_slash::<T>(unapplied) {
+                    if let Err(e) = slashing::apply_slash::<T>(unapplied, slash_era) {
                         frame_support::print(format!("failed to apply slash: {:?}", e).as_str());
                     }
                     {

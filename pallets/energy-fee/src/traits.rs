@@ -1,15 +1,11 @@
 use crate::CallFee;
 use frame_support::ensure;
-use frame_support::traits::fungible::Credit;
-use frame_support::traits::OnUnbalanced;
 use frame_support::traits::{
     fungible::{Balanced, Inspect},
-    tokens::{
-        Balance, ConversionFromAssetBalance, ConversionToAssetBalance, Fortitude, Precision,
-        Preservation,
-    },
+    tokens::{Balance, ConversionFromAssetBalance, ConversionToAssetBalance, Precision},
     Get, Imbalance,
 };
+use frame_support::traits::{Currency, ExistenceRequirement, OnUnbalanced, WithdrawReasons};
 use pallet_asset_rate::{Config as AssetRateConfig, Error as AssetRateError};
 use sp_runtime::{DispatchError, FixedPointNumber, FixedPointOperand, TokenError};
 use sp_std::marker::PhantomData;
@@ -43,9 +39,9 @@ where
 
 pub trait TokenExchange<AccountId, SourceToken, TargetToken, SourceTokenRecycleDest, TokenBalance>
 where
-    SourceToken: Balanced<AccountId> + Inspect<AccountId, Balance = TokenBalance>,
+    SourceToken: Currency<AccountId, Balance = TokenBalance>,
     TargetToken: Balanced<AccountId> + Inspect<AccountId, Balance = TokenBalance>,
-    SourceTokenRecycleDest: OnUnbalanced<Credit<AccountId, SourceToken>>,
+    SourceTokenRecycleDest: OnUnbalanced<<SourceToken as Currency<AccountId>>::NegativeImbalance>,
     TokenBalance: Balance,
 {
     /// Calculate the amount of `TargetToken` corresponding to `amount` of `SourceToken`
@@ -88,9 +84,8 @@ where
         let credit = SourceToken::withdraw(
             who,
             amount_in,
-            Precision::BestEffort,
-            Preservation::Protect,
-            Fortitude::Polite,
+            WithdrawReasons::TRANSACTION_PAYMENT,
+            ExistenceRequirement::KeepAlive,
         )?;
         let credit_amount = credit.peek();
         // Regardless of whether the conversion is successful or not, we need to recycle the credit
@@ -162,8 +157,8 @@ impl<AC, AS, TT, ST, STD, B, G, R> TokenExchange<AC, ST, TT, STD, B>
     for NativeExchange<AS, ST, TT, R, G>
 where
     TT: Balanced<AC> + Inspect<AC, Balance = B>,
-    ST: Balanced<AC> + Inspect<AC, Balance = B>,
-    STD: OnUnbalanced<Credit<AC, ST>>,
+    ST: Currency<AC, Balance = B>,
+    STD: OnUnbalanced<<ST as Currency<AC>>::NegativeImbalance>,
     B: Balance,
     G: Get<AS>,
     R: ConversionFromAssetBalance<B, AS, B, Error = DispatchError>
