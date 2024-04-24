@@ -10,9 +10,11 @@ targets = ["x86_64-unknown-linux-gnu"]
 
 
 [dependencies]
+chrono = { workspace = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 pallet-nac-managing = { workspace = true }
+pallet-energy-generation = { workspace = true }
 pallet-nfts = { workspace = true }
 pallet-timestamp = { workspace = true }
 parity-scale-codec = { workspace = true }
@@ -38,6 +40,7 @@ substrate-test-utils = { workspace = true }
 default = ["std"]
 runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
 std = [
+    "chrono/std",
     "frame-benchmarking/std",
     "frame-support/std",
     "frame-system/std",

@@ -27,6 +27,7 @@ use sp_staking::{
     EraIndex, SessionIndex,
 };
 use sp_std::prelude::*;
+use crate::OnVipMembershipHandler;
 
 use crate::{
     log, slashing, weights::WeightInfo, ActiveEraInfo, Cooperations, EnergyDebtOf, EnergyOf,
@@ -41,6 +42,11 @@ impl<T: Config> Pallet<T> {
     pub fn slashable_balance_of(stash: &T::AccountId) -> StakeOf<T> {
         // Weight note: consider making the stake accessible through stash.
         Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
+    }
+
+    /// The user is in Validators list.
+    pub fn is_user_validator(stash: &T::AccountId) -> bool {
+        Validators::<T>::contains_key(stash)
     }
 
     /// Checks if the account has enough reputation to be a validator.
@@ -351,6 +357,9 @@ impl<T: Config> Pallet<T> {
                     return None;
                 },
             }
+
+            // Update quarter info for VIP / VIPP members.
+            T::OnVipMembershipHandler::change_quarter_info();
 
             // New era.
             let maybe_new_era_validators = Self::try_trigger_new_era(session_index);

@@ -238,7 +238,7 @@ pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
 // NOTE: Currently it is not possible to change the epoch duration after the chain has started.
 //       Attempting to do so will brick block production.
-pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = prod_or_fast!(60 * MINUTES, 10 * MINUTES);
+pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 10 * MINUTES;
 pub const EPOCH_DURATION_IN_SLOTS: u64 = {
     const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
 
@@ -695,6 +695,7 @@ impl pallet_energy_generation::Config for Runtime {
     type SlashDeferDuration = SlashDeferDuration;
     type StakeBalance = Balance;
     type StakeCurrency = Balances;
+    type OnVipMembershipHandler = Privileges;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
 }
@@ -764,17 +765,11 @@ impl pallet_nac_managing::Config for Runtime {
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
 }
 
-parameter_types! {
-    pub const BlocksPerDays: BlockNumber = DAYS;
-}
-
 impl pallet_privileges::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
-    type BlocksPerDays = BlocksPerDays;
+    type UnixTime = Timestamp;
     type WeightInfo = pallet_privileges::weights::SubstrateWeight<Runtime>;
-
-    const MAX_ACCOUNT_VIP_SLOTS: u32 = 20;
 }
 
 

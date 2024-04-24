@@ -271,6 +271,7 @@ slices = "0.2"
 smallvec = "1.11.0"
 xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.42", default-features = false }
 rand = "0.8"
+chrono = { version = "0.4.38", default-features = false }
 
 sc-basic-authorship = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-block-builder = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
