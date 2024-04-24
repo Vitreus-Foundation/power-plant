@@ -62,12 +62,12 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[allow(clippy::module_inception)]
 #[frame_support::pallet]
 pub mod pallet {
-    use crate::{BenchmarkingConfig, EnergyOf};
+    use crate::{slashing::StorageEssentials, BenchmarkingConfig, EnergyOf};
 
     use super::*;
 
     /// The current storage version.
-    const STORAGE_VERSION: StorageVersion = StorageVersion::new(13);
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(14);
 
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]
@@ -101,15 +101,12 @@ pub mod pallet {
         /// Just the `StakeCurrency::Balance` type; we have this item to allow us to constrain it to
         /// `From<u64>`.
         type StakeBalance: AtLeast32BitUnsigned
-            + parity_scale_codec::FullCodec
             + Copy
             + MaybeSerializeDeserialize
             + sp_std::fmt::Debug
-            + Default
             + From<u64>
             + Into<<Self as pallet_assets::Config>::Balance>
-            + TypeInfo
-            + MaxEncodedLen;
+            + StorageEssentials;
 
         /// Energy asset ID.
         type EnergyAssetId: Get<Self::AssetId>;
@@ -484,8 +481,13 @@ pub mod pallet {
     /// All unapplied slashes that are queued for later.
     #[pallet::storage]
     #[pallet::unbounded]
-    pub type UnappliedSlashes<T: Config> =
-        StorageMap<_, Twox64Concat, EraIndex, Vec<UnappliedSlash<T::AccountId>>, ValueQuery>;
+    pub type UnappliedSlashes<T: Config> = StorageMap<
+        _,
+        Twox64Concat,
+        EraIndex,
+        Vec<UnappliedSlash<T::AccountId, slashing::SlashEntityOf<T>>>,
+        ValueQuery,
+    >;
 
     /// A mapping from still-bonded eras to the first session index of that era.
     ///
@@ -505,13 +507,19 @@ pub mod pallet {
         EraIndex,
         Twox64Concat,
         T::AccountId,
-        (Perbill, ReputationPoint),
+        (slashing::SlashEntityPerbill, slashing::SlashEntityOf<T>),
     >;
 
     /// All slashing events on cooperators, mapped by era to the highest slash value of the era.
     #[pallet::storage]
-    pub(crate) type CooperatorSlashInEra<T: Config> =
-        StorageDoubleMap<_, Twox64Concat, EraIndex, Twox64Concat, T::AccountId, ReputationPoint>;
+    pub(crate) type CooperatorSlashInEra<T: Config> = StorageDoubleMap<
+        _,
+        Twox64Concat,
+        EraIndex,
+        Twox64Concat,
+        T::AccountId,
+        slashing::SlashEntityOf<T>,
+    >;
 
     /// Slashing spans for stash accounts.
     #[pallet::storage]
@@ -527,7 +535,7 @@ pub mod pallet {
         _,
         Twox64Concat,
         (T::AccountId, slashing::SpanIndex),
-        slashing::SpanRecord<ReputationPoint>,
+        slashing::SpanRecord<slashing::SlashEntityOf<T>>,
         ValueQuery,
     >;
 
@@ -666,7 +674,7 @@ pub mod pallet {
         /// The cooperator has been rewarded by this amount.
         Rewarded { stash: T::AccountId, amount: EnergyOf<T> },
         /// A staker (validator or cooperator) has been slashed by the given amount.
-        Slashed { staker: T::AccountId, amount: ReputationPoint },
+        Slashed { staker: T::AccountId, amount: slashing::SlashEntityOf<T> },
         /// A slash for the given validator, for the given percentage of their stake, at the given
         /// era as been reported.
         SlashReported { validator: T::AccountId, fraction: Perbill, slash_era: EraIndex },

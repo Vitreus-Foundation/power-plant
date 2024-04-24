@@ -10,7 +10,7 @@ include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::traits::tokens::ConversionToAssetBalance;
 use frame_support::PalletId;
-use pallet_energy_fee::MainCreditOf;
+use pallet_balances::NegativeImbalance;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
     CommittedCandidateReceipt, CoreState, DisputeState, ExecutorParams, GroupRotationInfo,
@@ -19,7 +19,7 @@ use polkadot_primitives::{
     ValidationCodeHash, ValidatorId, ValidatorIndex, ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
 };
 
-use runtime_common::{paras_registrar, paras_sudo_wrapper, slots};
+use runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use runtime_parachains::{
     configuration as parachains_configuration, disputes as parachains_disputes,
@@ -38,8 +38,7 @@ use frame_support::traits::tokens::{
     Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    fungible::Balanced, Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced,
-    SignedImbalance, WithdrawReasons,
+    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
@@ -123,7 +122,6 @@ pub use areas::{CouncilCollective, TechnicalCollective};
 
 mod precompiles;
 mod helpers {
-    mod macros;
     pub mod runner;
 }
 pub mod areas;
@@ -219,7 +217,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 101,
+    spec_version: 103,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -239,7 +237,7 @@ pub const PRIMARY_PROBABILITY: (u64, u64) = (1, 4);
 
 // NOTE: Currently it is not possible to change the epoch duration after the chain has started.
 //       Attempting to do so will brick block production.
-pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = 60 * MINUTES;
+pub const EPOCH_DURATION_IN_BLOCKS: BlockNumber = prod_or_fast!(60 * MINUTES, 10 * MINUTES);
 pub const EPOCH_DURATION_IN_SLOTS: u64 = {
     const SLOT_FILL_RATE: f64 = MILLISECS_PER_BLOCK as f64 / SLOT_DURATION as f64;
 
@@ -796,17 +794,17 @@ parameter_types! {
     pub EnergyBrokerPalletId: PalletId = PalletId(*b"enrgbrkr");
 }
 
-type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
-type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
-type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
+pub type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
+pub type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
+pub type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
 pub struct EnergyBrokerSink;
 
-impl OnUnbalanced<MainCreditOf<Runtime>> for EnergyBrokerSink {
-    fn on_nonzero_unbalanced(amount: MainCreditOf<Runtime>) {
+impl OnUnbalanced<NegativeImbalance<Runtime>> for EnergyBrokerSink {
+    fn on_nonzero_unbalanced(amount: NegativeImbalance<Runtime>) {
         let energy_broker_address: AccountId =
             EnergyBrokerPalletId::get().into_account_truncating();
-        let _ = Balances::resolve(&energy_broker_address, amount);
+        Balances::resolve_creating(&energy_broker_address, amount);
     }
 }
 
@@ -1403,7 +1401,7 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations = (migrations::V0101, migrations::Unreleased);
+pub type Migrations = (migrations::V0101, migrations::V0103, migrations::Unreleased);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<

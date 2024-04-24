@@ -1,14 +1,15 @@
-use crate::{prod_or_fast, MICRO_VTRS, MILLI_VTRS, UNITS};
 use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, MoreThanHalfCouncil,
     OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, Scheduler,
-    TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MINUTES, NANO_VTRS, PICO_VTRS,
+    TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES,
+    NANO_VTRS, PICO_VTRS, UNITS,
 };
 
 use frame_support::traits::{Currency, EitherOf, OnUnbalanced};
 use frame_support::{parameter_types, traits::EitherOfDiverse, weights::Weight, PalletId};
 use frame_system::{EnsureRoot, EnsureWithSuccess};
 use pallet_treasury::NegativeImbalanceOf;
+use runtime_common::prod_or_fast;
 use sp_core::ConstU32;
 use sp_runtime::traits::AccountIdConversion;
 use sp_runtime::{Perbill, Permill};
