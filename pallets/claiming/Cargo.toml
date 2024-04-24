@@ -25,16 +25,21 @@ serde = { workspace = true, default-features = false, features = ["alloc"] }
 serde_derive = { workspace = true }
 rustc-hex = { version = "2.1.0", default-features = false }
 
-[dev-dependencies]
-pallet-balances = { workspace = true }
 pallet-vesting = { workspace = true }
+
+libsecp256k1 = {version = "0.7.0", optional = true}
+
+[dev-dependencies]
 sp-runtime = { workspace = true }
 libsecp256k1 = "0.7.0"
 hex-literal = "0.4.1"
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+    "libsecp256k1",
+]
 std = [
     "rustc-hex/std",
     "serde/std",

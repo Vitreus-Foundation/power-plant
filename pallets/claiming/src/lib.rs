@@ -21,6 +21,8 @@ use sp_std::alloc::{format, string::String};
 
 pub use pallet::*;
 
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]
@@ -402,7 +404,7 @@ pub mod migrations {
     }
 }
 
-#[cfg(test)]
+#[cfg(any(test, feature = "runtime-benchmarks"))]
 mod secp_utils {
     use super::*;
 
