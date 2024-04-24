@@ -12,7 +12,9 @@ use pallet_energy_generation::migrations::UpdateSlashStorages;
 use pallet_energy_generation::ConfigOp;
 
 pub type V0101 = (FixRewards);
-pub type Unreleased = (UpdateSlashStorages<Runtime>, TransferClaimFrom0x66C6To0xE621);
+pub type V0103 = (UpdateSlashStorages<Runtime>, TransferClaimFrom0x66C6To0xE621);
+
+pub type Unreleased = ();
 
 pub struct FixRewards;
 
