@@ -18,6 +18,7 @@ num_enum = { workspace = true }
 log = { workspace = true }
 libsecp256k1 = { workspace = true }
 orml-traits = { workspace = true }
+hex-literal = { workspace = true }
 
 # Polkadot
 polkadot-primitives = { workspace = true }
@@ -167,7 +168,8 @@ try-runtime = [
     "pallet-nac-managing/try-runtime",
     "pallet-reputation/try-runtime",
     "pallet-simple-vesting/try-runtime",
-    "pallet-treasury-extension/try-runtime"
+    "pallet-treasury-extension/try-runtime",
+    "pallet-energy-generation/try-runtime",
 ]
 fast-runtime = []
 std = [

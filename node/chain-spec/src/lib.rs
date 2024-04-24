@@ -52,6 +52,9 @@ const MIN_COMMON_VALIDATOR_BOND: Balance = 1_000_000 * vtrs::UNITS;
 /// Min validator stake for user who has NAC level > 1.
 const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 
+const MIN_COOPERATOR_BOND: Balance = 1_000_000_000_000_000_000;
+const ENERGY_PER_STAKE_CURRENCY: Balance = 19_909_091_036_891;
+
 /// Extension for the dev genesis config to support a custom changes to the genesis state.
 #[derive(Serialize, Deserialize)]
 pub struct DevGenesisExt {
@@ -476,10 +479,11 @@ pub fn testnet_genesis(
             minimum_validator_count: initial_validators.len() as u32,
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
+            min_cooperator_bond: MIN_COOPERATOR_BOND,
             min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
-            energy_per_stake_currency: 1_000_000u128,
+            energy_per_stake_currency: ENERGY_PER_STAKE_CURRENCY,
             block_authoring_reward: ReputationPoint(24),
             ..Default::default()
         },
@@ -623,11 +627,12 @@ fn mainnet_genesis(
             invulnerables: initial_validators.iter().map(|x| x.0).collect(),
             slash_reward_fraction: Perbill::from_percent(10),
             min_commission: Perbill::from_percent(20),
+            min_cooperator_bond: MIN_COOPERATOR_BOND,
             min_common_validator_bond: MIN_COMMON_VALIDATOR_BOND,
             min_trust_validator_bond: MIN_TRUST_VALIDATOR_BOND,
             stakers,
             disable_collaboration: true,
-            energy_per_stake_currency: 1_000_000u128,
+            energy_per_stake_currency: ENERGY_PER_STAKE_CURRENCY,
             block_authoring_reward: ReputationPoint(24),
             ..Default::default()
         },

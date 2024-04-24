@@ -32,18 +32,23 @@
 //!
 //! Based on research at <https://research.web3.foundation/en/latest/polkadot/slashing/npos.html>
 
+use core::ops::{Add, Mul};
+
 use crate::{
     Config, CooperatorSlashInEra, Error, Exposure, OffendingValidators, Pallet, Perbill,
     SessionInterface, SpanSlash, StakeOf, UnappliedSlash, ValidatorSlashInEra,
 };
 use frame_support::{
     ensure,
-    traits::{Defensive, Get},
+    traits::{tokens::Imbalance, Currency, Defensive, Get, OnUnbalanced},
 };
 use pallet_reputation::{Reputation, ReputationPoint, ReputationRecord, RANKS_PER_TIER};
-use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
+use parity_scale_codec::{Decode, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
-use sp_runtime::{traits::Zero, DispatchResult, RuntimeDebug};
+use sp_runtime::{
+    traits::{AtLeast32BitUnsigned, One, Saturating, Zero},
+    DispatchError, DispatchResult, RuntimeDebug,
+};
 use sp_staking::{offence::DisableStrategy, EraIndex};
 use sp_std::vec::Vec;
 
@@ -53,6 +58,13 @@ const REWARD_F1: Perbill = Perbill::from_percent(50);
 
 /// The index of a slashing span - unique to each stash.
 pub type SpanIndex = u32;
+
+pub type SlashEntityOf<T> = SlashEntity<StakeOf<T>>;
+
+pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+
+pub type NegativeImbalanceOf<T> =
+    <<T as Config>::StakeCurrency as Currency<AccountIdOf<T>>>::NegativeImbalance;
 
 // A range of start..end eras for a slashing span.
 #[derive(Encode, Decode, TypeInfo)]
@@ -164,17 +176,23 @@ impl SlashingSpans {
 
 /// A slashing-span record for a particular stash.
 #[derive(Encode, Decode, Default, TypeInfo, MaxEncodedLen)]
-pub(crate) struct SpanRecord<ReputationPoint> {
-    slashed: ReputationPoint,
-    paid_out: ReputationPoint,
+pub struct SpanRecord<SlashEntity: Encode + Decode + Default + TypeInfo + MaxEncodedLen> {
+    slashed: SlashEntity,
+    paid_out: SlashEntity,
 }
 
-impl<ReputationPoint> SpanRecord<ReputationPoint> {
+impl<SlashEntity: Encode + Decode + Default + TypeInfo + MaxEncodedLen> SpanRecord<SlashEntity> {
     /// The value of stash balance slashed in this span.
     #[allow(dead_code)]
     #[cfg(test)]
-    pub(crate) fn amount(&self) -> &ReputationPoint {
+    pub(crate) fn amount(&self) -> &SlashEntity {
         &self.slashed
+    }
+}
+
+impl<SlashEntity: Encode + Decode + Default + TypeInfo + MaxEncodedLen> SpanRecord<SlashEntity> {
+    pub fn new(slashed: SlashEntity, paid_out: SlashEntity) -> Self {
+        Self { slashed, paid_out }
     }
 }
 
@@ -200,6 +218,191 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
     pub(crate) disable_strategy: DisableStrategy,
 }
 
+enum UpdateDecision {
+    Update,
+    NoUpdate,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, Default, Debug, TypeInfo, MaxEncodedLen)]
+pub struct SlashEntityPerbill {
+    reputation: Perbill,
+    stake: Perbill,
+}
+
+impl SlashEntityPerbill {
+    pub fn new(reputation: Perbill, stake: Perbill) -> Self {
+        Self { reputation, stake }
+    }
+}
+
+impl<Stake> Mul<SlashEntity<Stake>> for SlashEntityPerbill
+where
+    Stake: AtLeast32BitUnsigned + StorageEssentials + Copy,
+{
+    type Output = SlashEntity<Stake>;
+
+    fn mul(self, rhs: SlashEntity<Stake>) -> Self::Output {
+        SlashEntity::new((self.reputation * *rhs.reputation).into(), self.stake * rhs.stake)
+    }
+}
+
+impl Add<Self> for SlashEntityPerbill {
+    type Output = Self;
+
+    fn add(self, rhs: Self) -> Self {
+        Self { reputation: self.reputation + rhs.reputation, stake: self.stake + rhs.stake }
+    }
+}
+
+impl Zero for SlashEntityPerbill {
+    fn zero() -> Self {
+        Self { reputation: Zero::zero(), stake: Zero::zero() }
+    }
+
+    fn is_zero(&self) -> bool {
+        self.reputation.is_zero() && self.stake.is_zero()
+    }
+}
+
+impl SlashEntityPerbill {
+    fn from_rational<T: Config>(p: SlashEntityOf<T>, q: SlashEntityOf<T>) -> Self {
+        Self {
+            reputation: Perbill::from_rational(*p.reputation, *q.reputation),
+            stake: Perbill::from_rational(p.stake, q.stake),
+        }
+    }
+
+    fn compare_with(&self, prior: Self) -> UpdateDecision {
+        if prior.reputation.deconstruct() < self.reputation.deconstruct()
+            || prior.stake.deconstruct() < self.stake.deconstruct()
+        {
+            UpdateDecision::Update
+        } else {
+            UpdateDecision::NoUpdate
+        }
+    }
+}
+
+pub trait StorageEssentials: FullCodec + Clone + TypeInfo + Default + MaxEncodedLen {}
+
+impl<T: FullCodec + Clone + TypeInfo + Default + MaxEncodedLen> StorageEssentials for T {}
+
+#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, Default, Debug, TypeInfo, MaxEncodedLen)]
+pub struct SlashEntity<Stake: StorageEssentials + Copy> {
+    pub reputation: ReputationPoint,
+    pub stake: Stake,
+}
+
+impl<Stake: StorageEssentials + Copy> SlashEntity<Stake> {
+    pub fn new(reputation: ReputationPoint, stake: Stake) -> Self {
+        Self { reputation, stake }
+    }
+
+    // get the maximum possible amount of slash for an account
+    pub fn max_slash_amount(reputation: &Reputation, stake: Stake) -> Self {
+        let rank = reputation.tier().map(|t| t.rank()).unwrap_or(0);
+        // RANKS_PER_TIER + 1 because we want take 0-rank into account
+        Self::new(
+            reputation
+                .points()
+                .saturating_sub(*ReputationPoint::from_rank(
+                    rank.saturating_sub(RANKS_PER_TIER + 1),
+                ))
+                .into(),
+            stake,
+        )
+    }
+}
+
+impl<Stake> SlashEntity<Stake>
+where
+    Stake: StorageEssentials + AtLeast32BitUnsigned + Copy,
+{
+    pub fn is_any_zero(&self) -> bool {
+        self.reputation.is_zero() || self.stake.is_zero()
+    }
+}
+
+impl<Stake> Mul<Perbill> for SlashEntity<Stake>
+where
+    Stake: AtLeast32BitUnsigned + StorageEssentials + Copy,
+{
+    type Output = Self;
+    fn mul(self, rhs: Perbill) -> Self {
+        Self::new((rhs * *self.reputation).into(), rhs * self.stake)
+    }
+}
+
+impl<Stake> Mul<SlashEntityPerbill> for SlashEntity<Stake>
+where
+    Stake: AtLeast32BitUnsigned + StorageEssentials + Copy,
+{
+    type Output = Self;
+    fn mul(self, rhs: SlashEntityPerbill) -> Self {
+        Self::new((rhs.reputation * *self.reputation).into(), rhs.stake * self.stake)
+    }
+}
+
+impl<Stake> Mul<Self> for SlashEntity<Stake>
+where
+    Stake: AtLeast32BitUnsigned + StorageEssentials + Copy,
+{
+    type Output = Self;
+    fn mul(self, rhs: Self) -> Self {
+        Self::new((*self.reputation * *rhs.reputation).into(), self.stake * rhs.stake)
+    }
+}
+
+impl<Stake> Add<Self> for SlashEntity<Stake>
+where
+    Stake: AtLeast32BitUnsigned + StorageEssentials + Copy,
+{
+    type Output = Self;
+    fn add(self, rhs: Self) -> Self {
+        Self::new((*self.reputation + *rhs.reputation).into(), self.stake + rhs.stake)
+    }
+}
+
+impl<Stake: AtLeast32BitUnsigned + StorageEssentials + Copy> Zero for SlashEntity<Stake> {
+    fn zero() -> Self {
+        Self::new(Zero::zero(), Zero::zero())
+    }
+
+    fn is_zero(&self) -> bool {
+        self.reputation.is_zero() && self.stake.is_zero()
+    }
+}
+
+impl<Stake: AtLeast32BitUnsigned + StorageEssentials + Copy> One for SlashEntity<Stake> {
+    fn one() -> Self {
+        Self::new(ReputationPoint(One::one()), One::one())
+    }
+}
+
+macro_rules! impl_saturating_for_slash_entity {
+    ($method:ident, $op:ident) => {
+        fn $method(self, rhs: Self) -> Self {
+            Self::new(
+                ReputationPoint((*self.reputation).$op(*rhs.reputation)),
+                self.stake.$op(rhs.stake),
+            )
+        }
+    };
+}
+
+impl<Stake: Saturating + StorageEssentials + Copy> Saturating for SlashEntity<Stake> {
+    impl_saturating_for_slash_entity!(saturating_add, saturating_add);
+    impl_saturating_for_slash_entity!(saturating_sub, saturating_sub);
+    impl_saturating_for_slash_entity!(saturating_mul, saturating_mul);
+
+    fn saturating_pow(self, exp: usize) -> Self {
+        Self::new(
+            ReputationPoint((*self.reputation).saturating_pow(exp as u32)),
+            self.stake.saturating_pow(exp),
+        )
+    }
+}
+
 /// Computes a slash of a validator and cooperators. It returns an unapplied record to be applied at
 /// some later point. Slashing metadata is updated in storage, since unapplied records are only
 /// rarely intended to be dropped.
@@ -208,16 +411,20 @@ pub(crate) struct SlashParams<'a, T: 'a + Config> {
 /// higher level, if any.
 pub(crate) fn compute_slash<T: Config>(
     params: SlashParams<T>,
-) -> Option<UnappliedSlash<T::AccountId>> {
-    let mut reward_payout = 0.into();
-    let mut val_slashed = 0.into();
+) -> Option<UnappliedSlash<T::AccountId, SlashEntityOf<T>>> {
+    let mut reward_payout = Zero::zero();
+    let mut val_slashed = Zero::zero();
 
     // is the slash amount here a maximum for the era?
     let reputation_record = pallet_reputation::AccountReputation::<T>::get(params.stash)
         .unwrap_or(ReputationRecord::with_now::<T>());
-    let max_slash = max_slash_amount(&reputation_record.reputation);
-    let own_slash: ReputationPoint = (params.slash * *max_slash).into();
-    if *own_slash == 0 {
+    let max_slash =
+        SlashEntityOf::<T>::max_slash_amount(&reputation_record.reputation, params.exposure.own);
+    // used for calculating real validator loss as denominator.
+    let current_values =
+        SlashEntityOf::<T>::new(reputation_record.reputation.points(), params.exposure.own);
+    let own_slash: SlashEntityOf<T> = max_slash * params.slash;
+    if own_slash.is_any_zero() {
         // kick out the validator even if they won't be slashed,
         // as long as the misbehavior is from their most recent slashing span.
         kick_out_if_recent::<T>(params);
@@ -226,25 +433,28 @@ pub(crate) fn compute_slash<T: Config>(
 
     let prior_slash_p = ValidatorSlashInEra::<T>::get(params.slash_era, params.stash)
         .map_or(Zero::zero(), |(prior_slash_proportion, _)| prior_slash_proportion);
-    let validator_loss = Perbill::from_rational(*own_slash, *reputation_record.reputation.points());
+    let validator_loss = SlashEntityPerbill::from_rational::<T>(own_slash, current_values);
 
     // compare slash proportions rather than slash values to avoid issues due to rounding
     // error.
-    if validator_loss.deconstruct() > prior_slash_p.deconstruct() {
-        ValidatorSlashInEra::<T>::insert(
-            params.slash_era,
-            params.stash,
-            (validator_loss, own_slash),
-        );
-    } else {
-        // we slash based on the max in era - this new event is not the max,
-        // so neither the validator or any cooperators will need an update.
-        //
-        // this does lead to a divergence of our system from the paper, which
-        // pays out some reward even if the latest report is not max-in-era.
-        // we opt to avoid the cooperator lookups and edits and leave more rewards
-        // for more drastic misbehavior.
-        return None;
+    match validator_loss.compare_with(prior_slash_p) {
+        UpdateDecision::Update => {
+            ValidatorSlashInEra::<T>::insert(
+                params.slash_era,
+                params.stash,
+                (validator_loss, own_slash),
+            );
+        },
+        UpdateDecision::NoUpdate => {
+            // we slash based on the max in era - this new event is not the max,
+            // so neither the validator or any cooperators will need an update.
+            //
+            // this does lead to a divergence of our system from the paper, which
+            // pays out some reward even if the latest report is not max-in-era.
+            // we opt to avoid the cooperator lookups and edits and leave more rewards
+            // for more drastic misbehavior.
+            return None;
+        },
     }
 
     // apply slash to validator.
@@ -273,12 +483,13 @@ pub(crate) fn compute_slash<T: Config>(
     add_offending_validator::<T>(params.stash, disable_when_slashed);
 
     let mut cooperators_slashed = Vec::new();
-    *reward_payout += *slash_cooperators::<T>(
-        params.clone(),
-        validator_loss,
-        prior_slash_p,
-        &mut cooperators_slashed,
-    );
+    reward_payout = reward_payout
+        + slash_cooperators::<T>(
+            params.clone(),
+            validator_loss,
+            prior_slash_p,
+            &mut cooperators_slashed,
+        );
 
     Some(UnappliedSlash {
         validator: params.stash.clone(),
@@ -289,22 +500,12 @@ pub(crate) fn compute_slash<T: Config>(
     })
 }
 
-// get the maximum possible amount of slash for an account
-pub(crate) fn max_slash_amount(reputation: &Reputation) -> ReputationPoint {
-    let rank = reputation.tier().map(|t| t.rank()).unwrap_or(0);
-    // RANKS_PER_TIER + 1 because we want take 0-rank into account
-    reputation
-        .points()
-        .saturating_sub(*ReputationPoint::from_rank(rank.saturating_sub(RANKS_PER_TIER + 1)))
-        .into()
-}
-
 // doesn't apply any slash, but kicks out the validator if the misbehavior is from the most recent
 // slashing span.
 fn kick_out_if_recent<T: Config>(params: SlashParams<T>) {
     // these are not updated by era-span or end-span.
-    let mut reward_payout = 0.into();
-    let mut val_slashed = 0.into();
+    let mut reward_payout = Zero::zero();
+    let mut val_slashed = Zero::zero();
     let mut spans = fetch_spans::<T>(
         params.stash,
         params.window_start,
@@ -368,16 +569,16 @@ fn add_offending_validator<T: Config>(stash: &T::AccountId, disable: bool) {
 /// Returns the amount of reward to pay out.
 fn slash_cooperators<T: Config>(
     params: SlashParams<T>,
-    validator_loss: Perbill,
-    prior_slash_p: Perbill,
-    cooperators_slashed: &mut Vec<(T::AccountId, ReputationPoint)>,
-) -> ReputationPoint {
-    let mut reward_payout = 0.into();
+    validator_loss: SlashEntityPerbill,
+    prior_slash_p: SlashEntityPerbill,
+    cooperators_slashed: &mut Vec<(T::AccountId, SlashEntityOf<T>)>,
+) -> SlashEntityOf<T> {
+    let mut reward_payout = Zero::zero();
 
     cooperators_slashed.reserve(params.exposure.others.len());
     for cooperator in &params.exposure.others {
         let stash = &cooperator.who;
-        let mut coop_slashed = 0.into();
+        let mut coop_slashed = Zero::zero();
 
         // the era slash of a cooperator always grows, if the validator had a new max slash for the
         // era.
@@ -385,13 +586,14 @@ fn slash_cooperators<T: Config>(
             let reputation = pallet_reputation::AccountReputation::<T>::get(stash)
                 .map(|r| r.reputation.points())
                 .unwrap_or_default();
-            let own_slash_prior = prior_slash_p * *reputation;
-            let own_slash = validator_loss * *reputation;
+            let own_slash_prior =
+                SlashEntityOf::<T>::new(reputation, cooperator.value) * prior_slash_p;
+            let own_slash = SlashEntityOf::<T>::new(reputation, cooperator.value) * validator_loss;
             let own_slash_difference = own_slash.saturating_sub(own_slash_prior);
 
-            let mut era_slash =
-                CooperatorSlashInEra::<T>::get(params.slash_era, stash).unwrap_or_else(|| 0.into());
-            *era_slash += own_slash_difference;
+            let era_slash = CooperatorSlashInEra::<T>::get(params.slash_era, stash)
+                .unwrap_or_else(Zero::zero)
+                .saturating_add(own_slash_difference);
             CooperatorSlashInEra::<T>::insert(params.slash_era, stash, era_slash);
 
             era_slash
@@ -432,8 +634,8 @@ struct InspectingSpans<'a, T: Config + 'a> {
     window_start: EraIndex,
     stash: &'a T::AccountId,
     spans: SlashingSpans,
-    paid_out: &'a mut ReputationPoint,
-    slash_of: &'a mut ReputationPoint,
+    paid_out: &'a mut SlashEntityOf<T>,
+    slash_of: &'a mut SlashEntityOf<T>,
     reward_proportion: Perbill,
     _marker: sp_std::marker::PhantomData<T>,
 }
@@ -442,8 +644,8 @@ struct InspectingSpans<'a, T: Config + 'a> {
 fn fetch_spans<'a, T: Config + 'a>(
     stash: &'a T::AccountId,
     window_start: EraIndex,
-    paid_out: &'a mut ReputationPoint,
-    slash_of: &'a mut ReputationPoint,
+    paid_out: &'a mut SlashEntityOf<T>,
+    slash_of: &'a mut SlashEntityOf<T>,
     reward_proportion: Perbill,
 ) -> InspectingSpans<'a, T> {
     let spans = crate::SlashingSpans::<T>::get(stash).unwrap_or_else(|| {
@@ -476,8 +678,8 @@ impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
     // add some value to the slash of the staker.
     // invariant: the staker is being slashed for non-zero value here
     // although `amount` may be zero, as it is only a difference.
-    fn add_slash(&mut self, amount: ReputationPoint, slash_era: EraIndex) {
-        **self.slash_of += *amount;
+    fn add_slash(&mut self, amount: SlashEntityOf<T>, slash_era: EraIndex) {
+        *self.slash_of = *self.slash_of + amount;
         self.spans.last_nonzero_slash = sp_std::cmp::max(self.spans.last_nonzero_slash, slash_era);
     }
 
@@ -493,37 +695,40 @@ impl<'a, T: 'a + Config> InspectingSpans<'a, T> {
     fn compare_and_update_span_slash(
         &mut self,
         slash_era: EraIndex,
-        slash: ReputationPoint,
+        slash: SlashEntityOf<T>,
     ) -> Option<SpanIndex> {
         let target_span = self.era_span(slash_era)?;
         let span_slash_key = (self.stash.clone(), target_span.index);
         let mut span_record = SpanSlash::<T>::get(&span_slash_key);
         let mut changed = false;
 
-        let reward = if *span_record.slashed < *slash {
-            // new maximum span slash. apply the difference.
-            let difference = *slash - *span_record.slashed;
-            span_record.slashed = slash;
+        let slash_difference = slash.saturating_add(One::one()).saturating_sub(span_record.slashed);
+        let reward = match slash_difference {
+            mut difference @ SlashEntity { reputation, stake, .. }
+                if *reputation > 1 && stake > One::one() =>
+            {
+                difference = difference.saturating_sub(One::one());
+                span_record.slashed = slash;
+                let reward = (slash * self.reward_proportion).saturating_sub(span_record.paid_out)
+                    * REWARD_F1;
+                self.add_slash(difference, slash_era);
+                changed = true;
 
-            // compute reward.
-            let reward =
-                REWARD_F1 * (self.reward_proportion * *slash).saturating_sub(*span_record.paid_out);
-
-            self.add_slash(difference.into(), slash_era);
-            changed = true;
-
-            reward
-        } else if span_record.slashed == slash {
-            // compute reward. no slash difference to apply.
-            REWARD_F1 * (self.reward_proportion * *slash).saturating_sub(*span_record.paid_out)
-        } else {
-            Zero::zero()
+                reward
+            },
+            // All parts of slash are less than `span_record.slashed`
+            SlashEntity { reputation: ReputationPoint(0), stake, .. } if stake.is_zero() => {
+                Zero::zero()
+            },
+            // Case where the part of the slash equals `span_record.slashed` and the other part
+            // is less than `span_record.slashed`
+            _ => (slash * self.reward_proportion).saturating_sub(span_record.paid_out) * REWARD_F1,
         };
 
         if !reward.is_zero() {
             changed = true;
-            *span_record.paid_out += reward;
-            **self.paid_out += reward;
+            span_record.paid_out = span_record.paid_out + reward;
+            *self.paid_out = *self.paid_out + reward;
         }
 
         if changed {
@@ -590,12 +795,36 @@ pub(crate) fn clear_stash_metadata<T: Config>(
 }
 
 /// apply the slash to a stash account saturating at 0.
-pub fn do_slash<T: Config>(stash: &T::AccountId, value: ReputationPoint) -> DispatchResult {
-    if <Pallet<T>>::bonded(stash).defensive().is_none() {
-        return Err(Error::<T>::NotController.into());
-    };
+pub fn do_slash<T: Config>(
+    stash: &T::AccountId,
+    mut value: SlashEntityOf<T>,
+    reward_payout: &mut StakeOf<T>,
+    slashed_imbalance: &mut NegativeImbalanceOf<T>,
+    slash_era: EraIndex,
+) -> DispatchResult {
+    let controller = <Pallet<T>>::bonded(stash)
+        .defensive()
+        .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
 
-    <pallet_reputation::Pallet<T>>::do_slash(stash, value)?;
+    let mut ledger = <Pallet<T>>::ledger(&controller)
+        .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
+
+    let stake_value =
+        ledger.slash_stake(value.stake, T::StakeCurrency::minimum_balance(), slash_era);
+
+    if !stake_value.is_zero() {
+        let (imbalance, missing) = T::StakeCurrency::slash(stash, stake_value);
+        slashed_imbalance.subsume(imbalance);
+
+        if !missing.is_zero() {
+            // deduct overslash from the reward payout
+            *reward_payout = reward_payout.saturating_sub(missing);
+        }
+
+        <Pallet<T>>::update_ledger(&controller, &ledger);
+    }
+    value.stake = stake_value;
+    <pallet_reputation::Pallet<T>>::do_slash(stash, value.reputation)?;
 
     // trigger the event
     <Pallet<T>>::deposit_event(super::Event::<T>::Slashed { staker: stash.clone(), amount: value });
@@ -605,36 +834,71 @@ pub fn do_slash<T: Config>(stash: &T::AccountId, value: ReputationPoint) -> Disp
 
 /// Apply a previously-unapplied slash.
 pub(crate) fn apply_slash<T: Config>(
-    unapplied_slash: UnappliedSlash<T::AccountId>,
+    unapplied_slash: UnappliedSlash<T::AccountId, SlashEntityOf<T>>,
+    slash_era: EraIndex,
 ) -> DispatchResult {
-    let reward_payout = unapplied_slash.payout;
+    let mut stake_reward_payout = unapplied_slash.payout.stake;
+    let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 
-    do_slash::<T>(&unapplied_slash.validator, unapplied_slash.own)?;
+    do_slash::<T>(
+        &unapplied_slash.validator,
+        unapplied_slash.own,
+        &mut stake_reward_payout,
+        &mut slashed_imbalance,
+        slash_era,
+    )?;
     Pallet::<T>::check_reputation_validator(&unapplied_slash.validator);
     Pallet::<T>::try_check_reputation_collab(&unapplied_slash.validator);
 
     for &(ref cooperator, cooperator_slash) in &unapplied_slash.others {
-        do_slash::<T>(cooperator, cooperator_slash)?;
+        do_slash::<T>(
+            cooperator,
+            cooperator_slash,
+            &mut stake_reward_payout,
+            &mut slashed_imbalance,
+            slash_era,
+        )?;
         Pallet::<T>::check_reputation_cooperator(&unapplied_slash.validator, cooperator);
     }
 
-    pay_reporters::<T>(reward_payout, &unapplied_slash.reporters)
+    let reward_payout = SlashEntity::new(unapplied_slash.payout.reputation, stake_reward_payout);
+
+    pay_reporters::<T>(reward_payout, slashed_imbalance, &unapplied_slash.reporters)
 }
 
 /// Apply a reward payout to some reporters, paying the rewards out of the slashed imbalance.
 fn pay_reporters<T: Config>(
-    reward_payout: ReputationPoint,
+    reward_payout: SlashEntityOf<T>,
+    slashed_imbalance: NegativeImbalanceOf<T>,
     reporters: &[T::AccountId],
 ) -> DispatchResult {
     if reward_payout.is_zero() || reporters.is_empty() {
+        T::Slash::on_unbalanced(slashed_imbalance);
         return Ok(());
     }
 
+    let (reputation_reward, stake_reward): (ReputationPoint, StakeOf<T>) = {
+        let SlashEntity { reputation, stake } = reward_payout;
+        (reputation, stake.min(slashed_imbalance.peek()))
+    };
+    let (mut stake_reward, mut value_slashed) = slashed_imbalance.split(stake_reward);
+
     let prop = Perbill::from_rational(1, reporters.len() as u64);
-    let per_reporter = prop * *reward_payout;
+    let reputation_per_reporter: ReputationPoint = (prop * *reputation_reward).into();
+    let stake_per_reporter = prop * stake_reward.peek();
     for reporter in reporters {
-        pallet_reputation::Pallet::<T>::increase_creating(reporter, per_reporter.into());
+        pallet_reputation::Pallet::<T>::increase_creating(reporter, reputation_per_reporter);
+
+        let (reporter_reward, rest) = stake_reward.split(stake_per_reporter);
+        stake_reward = rest;
+
+        // this cancels out the reporter reward imbalance internally, leading
+        // to no change in total issuance.
+        T::StakeCurrency::resolve_creating(reporter, reporter_reward);
     }
+
+    value_slashed.subsume(stake_reward); // remainder of reward division remains.
+    T::Slash::on_unbalanced(value_slashed);
 
     Ok(())
 }

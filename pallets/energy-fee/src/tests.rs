@@ -1,9 +1,12 @@
 //! Tests for the module.
 
-use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event};
+use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event, TokenExchange};
 use frame_support::{
     dispatch::{DispatchInfo, GetDispatchInfo},
-    traits::{fungible::Inspect, Hooks},
+    traits::{
+        fungible::Inspect, Hooks, LockIdentifier, LockableCurrency, NamedReservableCurrency,
+        WithdrawReasons,
+    },
 };
 use frame_system::{
     mocking::MockUncheckedExtrinsic,
@@ -556,4 +559,41 @@ fn update_base_fee_works() {
             initial_energy_balance - constant_fee_1 - constant_fee_2,
         );
     });
+}
+
+#[test]
+fn exchange_should_not_withdraw_reserved_balance() {
+    new_test_ext(0).execute_with(|| {
+        assert_eq!(BalancesVTRS::free_balance(&ALICE), VTRS_INITIAL_BALANCE);
+        let exchange_amount = 10;
+        let freeze_amount = 100;
+
+        const VESTING_ID: [u8; 8] = *b"vesting ";
+        const STAKING_ID: LockIdentifier = *b"staking ";
+        BalancesVTRS::reserve_named(
+            &VESTING_ID,
+            &ALICE,
+            VTRS_INITIAL_BALANCE - exchange_amount - freeze_amount,
+        )
+        .expect("Expected to reserve VTRS");
+        BalancesVTRS::set_lock(STAKING_ID, &ALICE, freeze_amount, WithdrawReasons::all());
+
+        assert!(<EnergyExchange as TokenExchange<
+            AccountId,
+            BalancesVTRS,
+            BalancesVNRG,
+            MainBurnDestination<MainBurnAccount>,
+            Balance,
+        >>::exchange_inner(&ALICE, exchange_amount + 1, 1)
+        .is_err());
+
+        assert!(<EnergyExchange as TokenExchange<
+            AccountId,
+            BalancesVTRS,
+            BalancesVNRG,
+            MainBurnDestination<MainBurnAccount>,
+            Balance,
+        >>::exchange_inner(&ALICE, exchange_amount, 1)
+        .is_ok());
+    })
 }
