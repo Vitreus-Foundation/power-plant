@@ -1,6 +1,6 @@
 //! Benchmarking setup for pallet-claiming
 #![cfg(feature = "runtime-benchmarks")]
-use super::secp_utils::{sig, eth};
+use super::secp_utils::{eth, sig};
 use super::*;
 
 use frame_benchmarking::v2::*;

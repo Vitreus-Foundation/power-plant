@@ -27,9 +27,7 @@ mod benchmarks {
         _(RawOrigin::Root, nac_level, who.clone());
 
         assert_eq!(Pallet::<T>::get_nac_level(&who), Some((nac_level, item_id)));
-        assert_last_event::<T>(
-            Event::<T>::NftUpdated { owner: who, nac_level }.into(),
-        );
+        assert_last_event::<T>(Event::<T>::NftUpdated { owner: who, nac_level }.into());
     }
 
     #[benchmark]
