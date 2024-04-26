@@ -92,6 +92,8 @@ pub mod pallet {
         AccountNotLegitForVip,
         /// Account already has VIP status.
         AlreadyVipMember,
+        /// Account hasn't VIP status.
+        AccountHasNotVipStatus,
     }
 
     #[pallet::call]
@@ -103,12 +105,15 @@ pub mod pallet {
             tax_type: PenaltyType,
         ) -> DispatchResult {
             let who = ensure_signed(origin.clone())?;
-
-            // Check VIP requirements.
-            ensure!(Self::is_legit_for_vip(&who),Error::<T>::AccountNotLegitForVip);
             ensure!(VipMembers::<T>::contains_key(&who), Error::<T>::AlreadyVipMember);
 
-            Self::do_set_user_privilege(who, tax_type)
+            if let Some(staking_status) = Self::is_legit_for_vip(&who) {
+                Self::do_set_user_privilege(&who, tax_type, staking_status);
+                Self::deposit_event(Event::<T>::NewVipMember { account: who });
+                Ok(())
+            } else {
+                Err(Error::<T>::AccountNotLegitForVip.into())
+            }
         }
 
         #[pallet::call_index(1)]
@@ -119,41 +124,75 @@ pub mod pallet {
             Self::update_quarter_info();
             Ok(())
         }
+
+        #[pallet::call_index(2)]
+        #[pallet::weight(<T as Config>::WeightInfo::set_quarter_revenue())]
+        pub fn exit_vip(
+            origin: OriginFor<T>,
+        ) -> DispatchResult {
+            let who = ensure_signed(origin.clone())?;
+            ensure!(!VipMembers::<T>::contains_key(&who), Error::<T>::AccountHasNotVipStatus);
+
+            Self::do_exit_vip(&who)
+        }
     }
 }
 
 impl<T: Config> Pallet<T> {
     /// Set user privilege as VIP.
     fn do_set_user_privilege(
-        account: T::AccountId,
-        tax_type: PenaltyType
-    ) -> DispatchResult {
+        account: &T::AccountId,
+        tax_type: PenaltyType,
+        staking_status: StakingStatus,
+    ) {
         let now_as_millis_u64 =  <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>();
         let vip_member_info = VipMemberInfo {
             start: now_as_millis_u64,
             tax_type,
-            points: 0
+            points: 0,
+            staking_status,
         };
 
-        VipMembers::<T>::insert(&account, vip_member_info);
+        VipMembers::<T>::insert(account, vip_member_info);
+    }
 
-        Self::deposit_event(Event::<T>::NewVipMember { account });
+    /// Exit VIP.
+    pub fn do_exit_vip(
+        account: &T::AccountId,
+    ) -> DispatchResult {
+        let current_date = Self::current_date();
+        let vip_info = Self::vip_members(account);
+        match vip_info {
+            Some(vip_member_info) => {
+                let slash_percent = vip_member_info.tax_type.penalty_percent(current_date.current_quarter);
+                pallet_energy_generation::Pallet::<T>::slash_vip_account(account, slash_percent)?;
 
-        Ok(())
+                Ok(())
+            },
+            None => {
+                Err(Error::<T>::AccountHasNotVipStatus.into())
+            }
+        }
+
+        //pallet_energy_generation::Pallet::<T>::is_user_validator();
     }
 
     /// Assesses whether a user qualifies as a VIP, and whether they are a validator or a cooperator within the network.
-    fn is_legit_for_vip(account: &T::AccountId) -> bool {
+    fn is_legit_for_vip(account: &T::AccountId) -> Option<StakingStatus> {
         // Check account validator status.
         if pallet_energy_generation::Pallet::<T>::is_user_validator(account) {
-            return true;
+            return Some(StakingStatus::Validator);
         }
 
         // Check account cooperator status.
         return if let Some(cooperation) = pallet_energy_generation::Pallet::<T>::cooperators(account) {
-            !cooperation.targets.is_empty()
+            return if cooperation.targets.is_empty() {
+                None
+            } else {
+                Some(StakingStatus::Cooperator)
+            }
         } else {
-            false
+            None
         }
     }
 
@@ -216,6 +255,8 @@ for Pallet<T> {
     }
 
     fn kick_account_from_vip(account: &T::AccountId) -> Weight {
-        todo!()
+        let mut consumed_weight = Weight::from_parts(0, 0);
+        Self::do_exit_vip(account);
+        consumed_weight
     }
 }

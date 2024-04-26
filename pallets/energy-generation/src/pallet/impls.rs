@@ -12,6 +12,7 @@ use frame_support::{
     },
     weights::Weight,
 };
+use frame_support::traits::Defensive;
 use frame_system::pallet_prelude::BlockNumberFor;
 use orml_traits::GetByKey;
 use scale_info::prelude::*;
@@ -42,6 +43,20 @@ impl<T: Config> Pallet<T> {
     pub fn slashable_balance_of(stash: &T::AccountId) -> StakeOf<T> {
         // Weight note: consider making the stake accessible through stash.
         Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
+    }
+
+    /// Slash account stake (reason: exit VIP).
+    pub fn slash_vip_account(account: T::AccountId, percent: Perbill) -> DispatchResult {
+        let controller = <Pallet<T>>::bonded(account)
+            .defensive()
+            .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
+
+        let mut ledger = <Pallet<T>>::ledger(&controller)
+            .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
+
+        T::Slash::on_unbalanced()
+
+        Ok(())
     }
 
     /// The user is in Validators list.
