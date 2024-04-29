@@ -17,8 +17,10 @@
 
 use super::*;
 use core::marker::PhantomData;
+use frame_support::traits::Get;
 use sp_std::cmp::Ordering;
 
+use frame_support::traits::tokens::{ConversionFromAssetBalance, ConversionToAssetBalance};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 
@@ -124,5 +126,174 @@ impl<AssetId: Ord + Clone> MultiAssetIdConverter<NativeOrAssetId<AssetId>, Asset
 
     fn into_multiasset_id(asset: &AssetId) -> NativeOrAssetId<AssetId> {
         NativeOrAssetId::Asset((*asset).clone())
+    }
+}
+
+/// A trait that contains conversion logic.
+pub trait Formula<T: Config> {
+    /// Calculates the optimal liquidity amount.
+    fn get_liquidity_amount(
+        desired: (T::AssetBalance, T::AssetBalance),
+        min: (T::AssetBalance, T::AssetBalance),
+        reserve: (T::AssetBalance, T::AssetBalance),
+    ) -> Result<(T::AssetBalance, T::AssetBalance), Error<T>>;
+
+    /// Calculates LP tokens amount.
+    fn get_lp_token_amount(
+        liquidity: (T::AssetBalance, T::AssetBalance),
+        reserve: (T::AssetBalance, T::AssetBalance),
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+        total_supply: T::AssetBalance,
+    ) -> Result<T::HigherPrecisionBalance, Error<T>>;
+
+    /// Calculates the output amount including the swap fee.
+    fn get_amount_out(
+        amount_in: T::HigherPrecisionBalance,
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+    ) -> Result<T::HigherPrecisionBalance, Error<T>>;
+
+    /// Calculates the input amount including the swap fee.
+    fn get_amount_in(
+        amount_out: T::HigherPrecisionBalance,
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+    ) -> Result<T::HigherPrecisionBalance, Error<T>>;
+
+    /// Calculates the output amount ignoring the swap fee.
+    fn quote(
+        amount: T::HigherPrecisionBalance,
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+    ) -> Result<T::HigherPrecisionBalance, Error<T>>;
+}
+
+/// Fixed rate conversion.
+pub struct ConstantSum<R>(PhantomData<R>);
+
+impl<T, R> Formula<T> for ConstantSum<R>
+where
+    T: Config,
+    R: ConversionFromAssetBalance<T::AssetBalance, T::AssetId, T::Balance>,
+    R: ConversionToAssetBalance<T::Balance, T::AssetId, T::AssetBalance>,
+{
+    fn get_liquidity_amount(
+        desired: (T::AssetBalance, T::AssetBalance),
+        _min: (T::AssetBalance, T::AssetBalance),
+        _reserve: (T::AssetBalance, T::AssetBalance),
+    ) -> Result<(T::AssetBalance, T::AssetBalance), Error<T>> {
+        Ok(desired)
+    }
+
+    fn get_lp_token_amount(
+        liquidity: (T::AssetBalance, T::AssetBalance),
+        reserve: (T::AssetBalance, T::AssetBalance),
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+        total_supply: T::AssetBalance,
+    ) -> Result<T::HigherPrecisionBalance, Error<T>> {
+        let total_liquidity = Self::normalize_assets(liquidity.0, liquidity.1, path)?;
+
+        if !total_supply.is_zero() {
+            let total_reserve = Self::normalize_assets(reserve.0, reserve.1, path)?;
+
+            total_liquidity
+                .checked_mul(&T::HigherPrecisionBalance::from(total_supply))
+                .ok_or(Error::<T>::Overflow)?
+                .checked_div(&total_reserve)
+                .ok_or(Error::<T>::Overflow)
+        } else {
+            Ok(total_liquidity)
+        }
+    }
+
+    fn get_amount_out(
+        amount_in: T::HigherPrecisionBalance,
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+    ) -> Result<T::HigherPrecisionBalance, Error<T>> {
+        let amount_in = amount_in
+            .checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - (T::LPFee::get().into())))
+            .ok_or(Error::<T>::Overflow)?
+            .checked_div(&T::HigherPrecisionBalance::from(1000u32))
+            .ok_or(Error::<T>::Overflow)?;
+
+        Self::quote(amount_in, path)
+    }
+
+    fn get_amount_in(
+        amount_out: T::HigherPrecisionBalance,
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+    ) -> Result<T::HigherPrecisionBalance, Error<T>> {
+        let amount_in = Self::quote(amount_out, (path.1, path.0))?;
+        let amount_in = amount_in
+            .checked_mul(&T::HigherPrecisionBalance::from(1000u32))
+            .ok_or(Error::<T>::Overflow)?
+            .checked_div(&(T::HigherPrecisionBalance::from(1000u32) - (T::LPFee::get().into())))
+            .ok_or(Error::<T>::Overflow)?;
+
+        Ok(amount_in)
+    }
+
+    fn quote(
+        amount: T::HigherPrecisionBalance,
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+    ) -> Result<T::HigherPrecisionBalance, Error<T>> {
+        match (
+            T::MultiAssetIdConverter::try_convert(path.0),
+            T::MultiAssetIdConverter::try_convert(path.1),
+        ) {
+            (Ok(asset), Err(_)) => Self::from_asset_balance(amount, asset),
+            (Err(_), Ok(asset)) => Self::to_asset_balance(amount, asset),
+            _ => Err(Error::<T>::PoolMustContainNativeCurrency),
+        }
+    }
+}
+
+impl<R> ConstantSum<R> {
+    fn normalize_assets<T>(
+        amount1: T::AssetBalance,
+        amount2: T::AssetBalance,
+        path: (&T::MultiAssetId, &T::MultiAssetId),
+    ) -> Result<T::HigherPrecisionBalance, Error<T>>
+    where
+        T: Config,
+        R: ConversionFromAssetBalance<T::AssetBalance, T::AssetId, T::Balance>,
+    {
+        let asset1 = path.0;
+        let asset2 = path.1;
+        let amount1 = T::HigherPrecisionBalance::from(amount1);
+        let amount2 = T::HigherPrecisionBalance::from(amount2);
+
+        let total = match (
+            T::MultiAssetIdConverter::try_convert(asset1),
+            T::MultiAssetIdConverter::try_convert(asset2),
+        ) {
+            (Ok(asset), Err(_)) => Self::from_asset_balance(amount1, asset)?.checked_add(&amount2),
+            (Err(_), Ok(asset)) => Self::from_asset_balance(amount2, asset)?.checked_add(&amount1),
+            _ => return Err(Error::<T>::PoolNotFound),
+        };
+        total.ok_or(Error::<T>::Overflow)
+    }
+
+    fn from_asset_balance<T>(
+        amount: T::HigherPrecisionBalance,
+        asset: T::AssetId,
+    ) -> Result<T::HigherPrecisionBalance, Error<T>>
+    where
+        T: Config,
+        R: ConversionFromAssetBalance<T::AssetBalance, T::AssetId, T::Balance>,
+    {
+        let amount = amount.try_into().map_err(|_| Error::<T>::Overflow)?;
+        let amount = R::from_asset_balance(amount, asset).map_err(|_| Error::<T>::PoolNotFound)?;
+        Ok(T::HigherPrecisionBalance::from(amount))
+    }
+
+    fn to_asset_balance<T>(
+        amount: T::HigherPrecisionBalance,
+        asset: T::AssetId,
+    ) -> Result<T::HigherPrecisionBalance, Error<T>>
+    where
+        T: Config,
+        R: ConversionToAssetBalance<T::Balance, T::AssetId, T::AssetBalance>,
+    {
+        let amount = amount.try_into().map_err(|_| Error::<T>::Overflow)?;
+        let amount = R::to_asset_balance(amount, asset).map_err(|_| Error::<T>::PoolNotFound)?;
+        Ok(T::HigherPrecisionBalance::from(amount))
     }
 }

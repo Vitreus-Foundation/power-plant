@@ -81,8 +81,8 @@ use frame_support::{
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use pallet_asset_conversion::{NativeOrAssetId, NativeOrAssetIdConverter};
-use pallet_energy_fee::{CallFee, CustomFee, TokenExchange};
+use pallet_asset_conversion::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
+use pallet_energy_fee::{traits::AssetsBalancesConverter, CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -813,9 +813,9 @@ impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
 parameter_types! {
     pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
     pub const AllowMultiAssetPools: bool = false;
-    pub const LiquidityWithdrawalFee: Permill = Permill::from_percent(0);
+    pub const LiquidityWithdrawalFee: Permill = Permill::from_percent(1);
     pub const PoolSetupFee: Balance = 0;
-    pub const PoolSwapFee: u32 = 3; // 0.3%
+    pub const PoolSwapFee: u32 = 10; // 1%
     pub const MaxSwapPathLength: u32 = 2;
     pub const MintMinLiquidity: Balance = 100;
 }
@@ -825,8 +825,12 @@ ord_parameter_types! {
         AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
+type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
+type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
+
 impl pallet_asset_conversion::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type Formula = ConstantSum<EnergyRate>;
     type Currency = Balances;
     type Balance = Balance;
     type HigherPrecisionBalance = sp_core::U256;
@@ -854,8 +858,6 @@ parameter_types! {
     pub EnergyBrokerPalletId: PalletId = PalletId(*b"enrgbrkr");
 }
 
-type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
-
 pub struct EnergyBrokerSink;
 
 impl OnUnbalanced<NegativeImbalance<Runtime>> for EnergyBrokerSink {
@@ -872,19 +874,19 @@ impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
     for LiquidityPoolExchange
 {
     fn convert_from_input(amount: Balance) -> Result<Balance, DispatchError> {
-        let reserve = LiquidityPool::get_reserves(
-            &NativeOrAssetId::Native,
-            &NativeOrAssetId::Asset(VNRG::get()),
-        )?;
-        Ok(LiquidityPool::get_amount_out(&amount, &reserve.0, &reserve.1)?)
+        LiquidityPool::get_amount_out(
+            &amount,
+            (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
+        )
+        .map_err(|e| e.into())
     }
 
     fn convert_from_output(amount: Balance) -> Result<Balance, DispatchError> {
-        let reserve = LiquidityPool::get_reserves(
-            &NativeOrAssetId::Native,
-            &NativeOrAssetId::Asset(VNRG::get()),
-        )?;
-        Ok(LiquidityPool::get_amount_in(&amount, &reserve.0, &reserve.1)?)
+        LiquidityPool::get_amount_in(
+            &amount,
+            (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
+        )
+        .map_err(|e| e.into())
     }
 
     fn exchange_from_input(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {

@@ -24,11 +24,14 @@ use frame_support::{
     construct_runtime,
     instances::{Instance1, Instance2},
     ord_parameter_types, parameter_types,
-    traits::{AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64},
+    traits::{
+        tokens::{ConversionFromAssetBalance, ConversionToAssetBalance},
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64,
+    },
     PalletId,
 };
 use frame_system::{EnsureSigned, EnsureSignedBy};
-use sp_arithmetic::Permill;
+use sp_arithmetic::{FixedPointNumber, FixedU128, Permill};
 use sp_core::H256;
 use sp_runtime::{
     traits::{AccountIdConversion, BlakeTwo256, IdentityLookup},
@@ -77,7 +80,7 @@ impl pallet_balances::Config for Test {
     type Balance = u128;
     type DustRemoval = ();
     type RuntimeEvent = RuntimeEvent;
-    type ExistentialDeposit = ConstU128<100>;
+    type ExistentialDeposit = ConstU128<10>;
     type AccountStore = System;
     type WeightInfo = ();
     type MaxLocks = ();
@@ -148,8 +151,35 @@ ord_parameter_types! {
     pub const AssetConversionOrigin: u128 = AccountIdConversion::<u128>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
+pub struct AssetRate;
+impl AssetRate {
+    const RATE: FixedU128 = FixedU128::from_rational(1, 2);
+}
+
+impl ConversionFromAssetBalance<u128, u32, u128> for AssetRate {
+    type Error = DispatchError;
+
+    fn from_asset_balance(balance: u128, _asset_id: u32) -> Result<u128, Self::Error> {
+        Ok(Self::RATE.saturating_mul_int(balance))
+    }
+}
+
+impl ConversionToAssetBalance<u128, u32, u128> for AssetRate {
+    type Error = DispatchError;
+
+    fn to_asset_balance(balance: u128, _asset_id: u32) -> Result<u128, Self::Error> {
+        let result = Self::RATE
+            .reciprocal()
+            .ok_or(DispatchError::Other("Asset rate too low"))?
+            .saturating_mul_int(balance);
+
+        Ok(result)
+    }
+}
+
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type Formula = ConstantSum<AssetRate>;
     type Currency = Balances;
     type AssetBalance = <Self as pallet_balances::Config>::Balance;
     type AssetId = u32;
@@ -158,7 +188,7 @@ impl Config for Test {
     type PoolAssets = PoolAssets;
     type PalletId = AssetConversionPalletId;
     type WeightInfo = ();
-    type LPFee = ConstU32<3>; // means 0.3%
+    type LPFee = ConstU32<20>; // means 2%
     type PoolSetupFee = ConstU128<100>; // should be more or equal to the existential deposit
     type PoolSetupFeeReceiver = AssetConversionOrigin;
     type LiquidityWithdrawalFee = LiquidityWithdrawalFee;

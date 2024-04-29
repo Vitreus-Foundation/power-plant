@@ -51,8 +51,8 @@
 //! http://localhost:9933/
 //! ```
 //! (This can be run against the kitchen sync node in the `node` folder of this repo.)
-#![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
+#![warn(missing_docs)]
 use frame_support::traits::{DefensiveOption, Incrementable};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -120,6 +120,9 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         /// Overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// Type to calculate conversion rate.
+        type Formula: Formula<Self>;
 
         /// Currency type that this works on.
         type Currency: InspectFungible<Self::AccountId, Balance = Self::Balance>
@@ -473,39 +476,15 @@ pub mod pallet {
             let maybe_pool = Pools::<T>::get(pool_id.clone());
             let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
-            let amount1: T::AssetBalance;
-            let amount2: T::AssetBalance;
             let pool_account = Self::get_pool_account(&pool_id);
             let reserve1 = Self::get_balance(&pool_account, &asset1)?;
             let reserve2 = Self::get_balance(&pool_account, &asset2)?;
 
-            if reserve1.is_zero() || reserve2.is_zero() {
-                amount1 = amount1_desired;
-                amount2 = amount2_desired;
-            } else {
-                let amount2_optimal = Self::quote(&amount1_desired, &reserve1, &reserve2)?;
-
-                if amount2_optimal <= amount2_desired {
-                    ensure!(
-                        amount2_optimal >= amount2_min,
-                        Error::<T>::AssetTwoDepositDidNotMeetMinimum
-                    );
-                    amount1 = amount1_desired;
-                    amount2 = amount2_optimal;
-                } else {
-                    let amount1_optimal = Self::quote(&amount2_desired, &reserve2, &reserve1)?;
-                    ensure!(
-                        amount1_optimal <= amount1_desired,
-                        Error::<T>::OptimalAmountLessThanDesired
-                    );
-                    ensure!(
-                        amount1_optimal >= amount1_min,
-                        Error::<T>::AssetOneDepositDidNotMeetMinimum
-                    );
-                    amount1 = amount1_optimal;
-                    amount2 = amount2_desired;
-                }
-            }
+            let (amount1, amount2) = T::Formula::get_liquidity_amount(
+                (amount1_desired, amount2_desired),
+                (amount1_min, amount2_min),
+                (reserve1, reserve2),
+            )?;
 
             Self::validate_minimal_amount(amount1.saturating_add(reserve1), &asset1)
                 .map_err(|_| Error::<T>::AmountOneLessThanMinimal)?;
@@ -517,19 +496,25 @@ pub mod pallet {
 
             let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
 
-            let lp_token_amount: T::AssetBalance;
+            let mut lp_token_amount = T::Formula::get_lp_token_amount(
+                (amount1, amount2),
+                (reserve1, reserve2),
+                (&asset1, &asset2),
+                total_supply,
+            )?;
+
             if total_supply.is_zero() {
-                lp_token_amount = Self::calc_lp_amount_for_zero_supply(&amount1, &amount2)?;
+                lp_token_amount = lp_token_amount
+                    .checked_sub(&T::MintMinLiquidity::get().into())
+                    .ok_or(Error::<T>::InsufficientLiquidityMinted)?;
+
                 T::PoolAssets::mint_into(
                     pool.lp_token.clone(),
                     &pool_account,
                     T::MintMinLiquidity::get(),
                 )?;
-            } else {
-                let side1 = Self::mul_div(&amount1, &total_supply, &reserve1)?;
-                let side2 = Self::mul_div(&amount2, &total_supply, &reserve2)?;
-                lp_token_amount = side1.min(side2);
             }
+            let lp_token_amount = lp_token_amount.try_into().map_err(|_| Error::<T>::Overflow)?;
 
             ensure!(
                 lp_token_amount > T::MintMinLiquidity::get(),
@@ -878,9 +863,8 @@ pub mod pallet {
 
             for assets_pair in path.windows(2).rev() {
                 if let [asset1, asset2] = assets_pair {
-                    let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
                     let prev_amount = amounts.last().expect("Always has at least one element");
-                    let amount_in = Self::get_amount_in(prev_amount, &reserve_in, &reserve_out)?;
+                    let amount_in = Self::get_amount_in(prev_amount, (asset1, asset2))?;
                     amounts.push(amount_in);
                 }
             }
@@ -898,9 +882,8 @@ pub mod pallet {
 
             for assets_pair in path.windows(2) {
                 if let [asset1, asset2] = assets_pair {
-                    let (reserve_in, reserve_out) = Self::get_reserves(asset1, asset2)?;
                     let prev_amount = amounts.last().expect("Always has at least one element");
-                    let amount_out = Self::get_amount_out(prev_amount, &reserve_in, &reserve_out)?;
+                    let amount_out = Self::get_amount_out(prev_amount, (asset1, asset2))?;
                     amounts.push(amount_out);
                 }
             }
@@ -915,19 +898,10 @@ pub mod pallet {
             amount: T::AssetBalance,
             include_fee: bool,
         ) -> Option<T::AssetBalance> {
-            let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-            let pool_account = Self::get_pool_account(&pool_id);
-
-            let balance1 = Self::get_balance(&pool_account, &asset1).ok()?;
-            let balance2 = Self::get_balance(&pool_account, &asset2).ok()?;
-            if !balance1.is_zero() {
-                if include_fee {
-                    Self::get_amount_out(&amount, &balance1, &balance2).ok()
-                } else {
-                    Self::quote(&amount, &balance1, &balance2).ok()
-                }
+            if include_fee {
+                Self::get_amount_out(&amount, (&asset1, &asset2)).ok()
             } else {
-                None
+                Self::quote(&amount, (&asset1, &asset2)).ok()
             }
         }
 
@@ -938,47 +912,23 @@ pub mod pallet {
             amount: T::AssetBalance,
             include_fee: bool,
         ) -> Option<T::AssetBalance> {
-            let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-            let pool_account = Self::get_pool_account(&pool_id);
-
-            let balance1 = Self::get_balance(&pool_account, &asset1).ok()?;
-            let balance2 = Self::get_balance(&pool_account, &asset2).ok()?;
-            if !balance1.is_zero() {
-                if include_fee {
-                    Self::get_amount_in(&amount, &balance1, &balance2).ok()
-                } else {
-                    Self::quote(&amount, &balance2, &balance1).ok()
-                }
+            if include_fee {
+                Self::get_amount_in(&amount, (&asset1, &asset2)).ok()
             } else {
-                None
+                Self::quote(&amount, (&asset1, &asset2)).ok()
             }
         }
 
-        /// Calculates the optimal amount from the reserves.
+        /// Calculates the optimal amount.
         pub fn quote(
             amount: &T::AssetBalance,
-            reserve1: &T::AssetBalance,
-            reserve2: &T::AssetBalance,
+            path: (&T::MultiAssetId, &T::MultiAssetId),
         ) -> Result<T::AssetBalance, Error<T>> {
-            // amount * reserve2 / reserve1
-            Self::mul_div(amount, reserve2, reserve1)
-        }
+            let amount = T::HigherPrecisionBalance::from(*amount);
 
-        pub(super) fn calc_lp_amount_for_zero_supply(
-            amount1: &T::AssetBalance,
-            amount2: &T::AssetBalance,
-        ) -> Result<T::AssetBalance, Error<T>> {
-            let amount1 = T::HigherPrecisionBalance::from(*amount1);
-            let amount2 = T::HigherPrecisionBalance::from(*amount2);
+            Self::validate_pool(path.0, path.1)?;
 
-            let result = amount1
-                .checked_mul(&amount2)
-                .ok_or(Error::<T>::Overflow)?
-                .integer_sqrt()
-                .checked_sub(&T::MintMinLiquidity::get().into())
-                .ok_or(Error::<T>::InsufficientLiquidityMinted)?;
-
-            result.try_into().map_err(|_| Error::<T>::Overflow)
+            T::Formula::quote(amount, path)?.try_into().map_err(|_| Error::<T>::Overflow)
         }
 
         fn mul_div(
@@ -1001,79 +951,36 @@ pub mod pallet {
 
         /// Calculates amount out.
         ///
-        /// Given an input amount of an asset and pair reserves, returns the maximum output amount
+        /// Given an input amount of an asset and swap path, returns the maximum output amount
         /// of the other asset.
         pub fn get_amount_out(
             amount_in: &T::AssetBalance,
-            reserve_in: &T::AssetBalance,
-            reserve_out: &T::AssetBalance,
+            path: (&T::MultiAssetId, &T::MultiAssetId),
         ) -> Result<T::AssetBalance, Error<T>> {
             let amount_in = T::HigherPrecisionBalance::from(*amount_in);
-            let reserve_in = T::HigherPrecisionBalance::from(*reserve_in);
-            let reserve_out = T::HigherPrecisionBalance::from(*reserve_out);
 
-            if reserve_in.is_zero() || reserve_out.is_zero() {
-                return Err(Error::<T>::ZeroLiquidity.into());
-            }
+            Self::validate_pool(path.0, path.1)?;
 
-            let amount_in_with_fee = amount_in
-                .checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - (T::LPFee::get().into())))
-                .ok_or(Error::<T>::Overflow)?;
-
-            let numerator =
-                amount_in_with_fee.checked_mul(&reserve_out).ok_or(Error::<T>::Overflow)?;
-
-            let denominator = reserve_in
-                .checked_mul(&1000u32.into())
-                .ok_or(Error::<T>::Overflow)?
-                .checked_add(&amount_in_with_fee)
-                .ok_or(Error::<T>::Overflow)?;
-
-            let result = numerator.checked_div(&denominator).ok_or(Error::<T>::Overflow)?;
-
-            result.try_into().map_err(|_| Error::<T>::Overflow)
+            T::Formula::get_amount_out(amount_in, path)?
+                .try_into()
+                .map_err(|_| Error::<T>::Overflow)
         }
 
         /// Calculates amount in.
         ///
-        /// Given an output amount of an asset and pair reserves, returns a required input amount
+        /// Given an output amount of an asset and swap path, returns a required input amount
         /// of the other asset.
         pub fn get_amount_in(
             amount_out: &T::AssetBalance,
-            reserve_in: &T::AssetBalance,
-            reserve_out: &T::AssetBalance,
+            path: (&T::MultiAssetId, &T::MultiAssetId),
         ) -> Result<T::AssetBalance, Error<T>> {
             let amount_out = T::HigherPrecisionBalance::from(*amount_out);
-            let reserve_in = T::HigherPrecisionBalance::from(*reserve_in);
-            let reserve_out = T::HigherPrecisionBalance::from(*reserve_out);
 
-            if reserve_in.is_zero() || reserve_out.is_zero() {
-                Err(Error::<T>::ZeroLiquidity.into())?
-            }
+            Self::validate_pool(path.0, path.1)?;
 
-            if amount_out >= reserve_out {
-                Err(Error::<T>::AmountOutTooHigh.into())?
-            }
-
-            let numerator = reserve_in
-                .checked_mul(&amount_out)
-                .ok_or(Error::<T>::Overflow)?
-                .checked_mul(&1000u32.into())
-                .ok_or(Error::<T>::Overflow)?;
-
-            let denominator = reserve_out
-                .checked_sub(&amount_out)
-                .ok_or(Error::<T>::Overflow)?
-                .checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - T::LPFee::get().into()))
-                .ok_or(Error::<T>::Overflow)?;
-
-            let result = numerator
-                .checked_div(&denominator)
-                .ok_or(Error::<T>::Overflow)?
-                .checked_add(&One::one())
-                .ok_or(Error::<T>::Overflow)?;
-
-            result.try_into().map_err(|_| Error::<T>::Overflow)
+            T::Formula::get_amount_in(amount_out, path)?
+                .try_into()
+                .map_err(|_| Error::<T>::Overflow)
         }
 
         /// Ensure that a `value` meets the minimum balance requirements of an `asset` class.
@@ -1113,6 +1020,14 @@ pub mod pallet {
                 }
             }
             Ok(())
+        }
+
+        /// Ensure that a pool is valid.
+        fn validate_pool(
+            asset1: &T::MultiAssetId,
+            asset2: &T::MultiAssetId,
+        ) -> Result<(), Error<T>> {
+            Self::get_reserves(asset1, asset2).map(|_| ())
         }
 
         /// Returns the next pool asset id for benchmark purposes only.
