@@ -35,8 +35,7 @@
 use core::ops::{Add, Mul};
 
 use crate::{
-    Config, CooperatorSlashInEra, Error, Exposure, OffendingValidators, Pallet, Perbill,
-    SessionInterface, SpanSlash, StakeOf, UnappliedSlash, ValidatorSlashInEra,
+    Config, CooperatorSlashInEra, Error, Exposure, MinCooperatorBond, OffendingValidators, Pallet, Perbill, SessionInterface, SpanSlash, StakeOf, UnappliedSlash, ValidatorSlashInEra
 };
 use frame_support::{
     ensure,
@@ -801,6 +800,7 @@ pub fn do_slash<T: Config>(
     reward_payout: &mut StakeOf<T>,
     slashed_imbalance: &mut NegativeImbalanceOf<T>,
     slash_era: EraIndex,
+    min_stake: StakeOf<T>,
 ) -> DispatchResult {
     let controller = <Pallet<T>>::bonded(stash)
         .defensive()
@@ -810,7 +810,7 @@ pub fn do_slash<T: Config>(
         .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
 
     let stake_value =
-        ledger.slash_stake(value.stake, T::StakeCurrency::minimum_balance(), slash_era);
+        ledger.slash_stake(value.stake, min_stake, slash_era);
 
     if !stake_value.is_zero() {
         let (imbalance, missing) = T::StakeCurrency::slash(stash, stake_value);
@@ -846,9 +846,10 @@ pub(crate) fn apply_slash<T: Config>(
         &mut stake_reward_payout,
         &mut slashed_imbalance,
         slash_era,
+        Pallet::<T>::min_bond_for_validator(&unapplied_slash.validator),
     )?;
-    Pallet::<T>::check_reputation_validator(&unapplied_slash.validator);
-    Pallet::<T>::try_check_reputation_collab(&unapplied_slash.validator);
+    Pallet::<T>::check_validator(&unapplied_slash.validator);
+    Pallet::<T>::try_check_collab(&unapplied_slash.validator);
 
     for &(ref cooperator, cooperator_slash) in &unapplied_slash.others {
         do_slash::<T>(
@@ -857,8 +858,9 @@ pub(crate) fn apply_slash<T: Config>(
             &mut stake_reward_payout,
             &mut slashed_imbalance,
             slash_era,
+            MinCooperatorBond::<T>::get(),
         )?;
-        Pallet::<T>::check_reputation_cooperator(&unapplied_slash.validator, cooperator);
+        Pallet::<T>::check_cooperator(&unapplied_slash.validator, cooperator);
     }
 
     let reward_payout = SlashEntity::new(unapplied_slash.payout.reputation, stake_reward_payout);

@@ -45,12 +45,15 @@ impl<T: Config> Pallet<T> {
 
     /// Checks if the account has enough reputation to be a validator.
     pub fn is_legit_for_validator(stash: &T::AccountId) -> bool {
-        match pallet_reputation::AccountReputation::<T>::get(stash) {
+        let reputation = pallet_reputation::AccountReputation::<T>::get(stash);
+        let stake = Self::slashable_balance_of(stash);
+
+        match reputation {
             Some(record) => record
                 .reputation
                 .tier()
                 .map(|tier| tier >= T::ValidatorReputationTier::get())
-                .unwrap_or(false),
+                .unwrap_or(false) && stake >= Self::min_bond_for_validator(stash),
             None => false,
         }
     }
@@ -71,23 +74,26 @@ impl<T: Config> Pallet<T> {
 
     /// Check if the account has enough reputation for collaborative staking.
     pub fn is_legit_for_collab(stash: &T::AccountId) -> bool {
-        match pallet_reputation::AccountReputation::<T>::get(stash) {
+        let reputation = pallet_reputation::AccountReputation::<T>::get(stash);
+        let stake = Self::slashable_balance_of(stash);
+
+        match reputation {
             Some(record) => record
                 .reputation
                 .tier()
                 .map(|tier| tier >= T::CollaborativeValidatorReputationTier::get())
-                .unwrap_or(false),
+                .unwrap_or(false) && stake >= MinCooperatorBond::<T>::get(),
             None => false,
         }
     }
 
-    pub(crate) fn check_reputation_validator(acc: &T::AccountId) {
+    pub(crate) fn check_validator(acc: &T::AccountId) {
         if !Self::is_legit_for_validator(acc) {
             Self::chill_stash(acc);
         }
     }
 
-    pub(crate) fn try_check_reputation_collab(acc: &T::AccountId) {
+    pub(crate) fn try_check_collab(acc: &T::AccountId) {
         let prefs = Self::validators(acc);
 
         if prefs.collaborative && !Self::is_legit_for_collab(acc) {
@@ -95,7 +101,7 @@ impl<T: Config> Pallet<T> {
         }
     }
 
-    pub(crate) fn check_reputation_cooperator(validator: &T::AccountId, cooperator: &T::AccountId) {
+    pub(crate) fn check_cooperator(validator: &T::AccountId, cooperator: &T::AccountId) {
         let prefs = Self::validators(validator);
         let record = pallet_reputation::AccountReputation::<T>::get(cooperator)
             .unwrap_or_else(ReputationRecord::with_now::<T>);
