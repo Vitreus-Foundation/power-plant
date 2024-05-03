@@ -35,9 +35,11 @@ use sp_runtime::{
 use sp_staking::{CurrencyToVote, SessionIndex};
 use sp_std::prelude::*;
 
-pub use frame_benchmarking::v1::{
-    account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
-};
+// pub use frame_benchmarking::v1::{
+//     account, benchmarks, impl_benchmark_test_suite, whitelist_account, whitelisted_caller,
+// };
+
+pub use frame_benchmarking::v2::*;
 use frame_system::RawOrigin;
 
 const SEED: u32 = 0;
@@ -214,21 +216,42 @@ impl<T: Config> ListScenario<T> {
 
 const USER_SEED: u32 = 999666;
 
-benchmarks! {
-    bond {
+struct MaxCooperationsEnumeration<T>(PhantomData<T>);
+
+impl<T: Config> ParamRange for MaxCooperationsEnumeration<T>
+where T::MaxCooperations: Get<u32>
+{
+    fn stop(&self) -> u32 {
+        T::MaxCooperations::get()
+    }
+    
+    fn start(&self) -> u32 {
+        1
+    }
+}
+
+#[benchmarks]
+mod benchmarks {
+    use super::*;
+
+    #[benchmark]
+    fn bond() {
         let stash = create_funded_user::<T>("stash", USER_SEED, 100);
         let controller = create_funded_user::<T>("controller", USER_SEED, 100);
         let controller_lookup = T::Lookup::unlookup(controller.clone());
         let reward_destination = RewardDestination::Staked;
         let amount = T::Currency::minimum_balance() * 10u32.into();
         whitelist_account!(stash);
-    }: _(RawOrigin::Signed(stash.clone()), controller_lookup, amount, reward_destination)
-    verify {
+
+        #[extrinsic_call]
+        _(RawOrigin::Signed(stash.clone()), controller_lookup, amount, reward_destination);
+
         assert!(Bonded::<T>::contains_key(stash));
         assert!(Ledger::<T>::contains_key(controller));
     }
 
-    bond_extra {
+    #[benchmark]
+    fn bond_extra() {
         // clean up any existing state.
         clear_validators_and_cooperators::<T>();
 
@@ -249,14 +272,17 @@ benchmarks! {
         T::Currency::deposit_into_existing(&stash, max_additional).unwrap();
 
         whitelist_account!(stash);
-    }: _(RawOrigin::Signed(stash), max_additional)
-    verify {
+
+        #[extrinsic_call]
+        _(RawOrigin::Signed(stash), max_additional);
+
         let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
         let new_bonded: BalanceOf<T> = ledger.active;
         assert!(original_bonded < new_bonded);
     }
 
-    unbond {
+    #[benchmark]
+    fn unbond() {
         // clean up any existing state.
         clear_validators_and_cooperators::<T>();
 
@@ -276,17 +302,18 @@ benchmarks! {
         let original_bonded: BalanceOf<T> = ledger.active;
 
         whitelist_account!(controller);
-    }: _(RawOrigin::Signed(controller.clone()), amount)
-    verify {
+
+        #[extrinsic_call]
+        _(RawOrigin::Signed(controller.clone()), amount);
+
         let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
         let new_bonded: BalanceOf<T> = ledger.active;
         assert!(original_bonded > new_bonded);
     }
 
     // Withdraw only updates the ledger
-    withdraw_unbonded_update {
-        // Slashing Spans
-        let s in 0 .. MAX_SPANS;
+    #[benchmark]
+    fn withdraw_unbonded_update(s: Linear<0, 100>) {
         let (stash, controller) = create_stash_controller::<T>(0, 100, Default::default())?;
         add_slashing_spans::<T>(&stash, s);
         let amount = T::Currency::minimum_balance() * 5u32.into(); // Half of total
@@ -295,17 +322,20 @@ benchmarks! {
         let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created before")?;
         let original_total: BalanceOf<T> = ledger.total;
         whitelist_account!(controller);
-    }: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
-    verify {
+
+        #[block]
+        {
+            crate::Pallet::<T>::withdraw_unbonded(RawOrigin::Signed(controller.clone()), s);
+        }
+
         let ledger = Ledger::<T>::get(&controller).ok_or("ledger not created after")?;
         let new_total: BalanceOf<T> = ledger.total;
         assert!(original_total > new_total);
     }
 
     // Worst case scenario, everything is removed after the bonding duration
-    withdraw_unbonded_kill {
-        // Slashing Spans
-        let s in 0 .. MAX_SPANS;
+    #[benchmark]
+    fn withdraw_unbonded_kill(s: Linear<0, 100>) {
         // clean up any existing state.
         clear_validators_and_cooperators::<T>();
 
@@ -326,35 +356,22 @@ benchmarks! {
         CurrentEra::<T>::put(EraIndex::max_value());
 
         whitelist_account!(controller);
-    }: withdraw_unbonded(RawOrigin::Signed(controller.clone()), s)
-    verify {
+
+        #[block]
+        {
+            crate::Pallet::<T>::withdraw_unbonded(RawOrigin::Signed(controller.clone()), s);
+        }
+
         assert!(!Ledger::<T>::contains_key(controller));
         assert!(!T::VoterList::contains(&stash));
     }
 
-    validate {
-        let (stash, controller) = create_stash_controller::<T>(
-            T::MaxCooperations::get() - 1,
-            100,
-            Default::default(),
-        )?;
-        // because it is chilled.
-        assert!(!T::VoterList::contains(&stash));
-
-        let prefs = ValidatorPrefs::default();
-        whitelist_account!(controller);
-    }: _(RawOrigin::Signed(controller), prefs)
-    verify {
-        assert!(Validators::<T>::contains_key(&stash));
-        assert!(T::VoterList::contains(&stash));
-    }
-
-    kick {
+    #[benchmark]
+    fn kick(k: Linear<1, 128>) {
         // scenario: we want to kick `k` cooperators from cooperating us (we are a validator).
         // we'll assume that `k` is under 128 for the purposes of determining the slope.
         // each cooperator should have `T::MaxCooperations::get()` validators cooperated, and our validator
         // should be somewhere in there.
-        let k in 1 .. 128;
 
         // these are the other validators; there are `T::MaxCooperations::get() - 1` of them, so
         // there are a total of `T::MaxCooperations::get()` validators in the system.
@@ -404,8 +421,10 @@ benchmarks! {
             .collect::<Vec<_>>();
 
         whitelist_account!(controller);
-    }: _(RawOrigin::Signed(controller), kicks)
-    verify {
+
+        #[extrinsic_call]
+        _(RawOrigin::Signed(controller), kicks);
+
         // all cooperators now should *not* be cooperating our validator...
         for n in cooperator_stashes.iter() {
             assert!(!Cooperators::<T>::get(n).unwrap().targets.contains(&stash));
@@ -413,9 +432,8 @@ benchmarks! {
     }
 
     // Worst case scenario, T::MaxCooperations::get()
-    cooperate {
-        let n in 1 .. T::MaxCooperations::get();
-
+    #[benchmark]
+    fn cooperate(n: MaxCooperationsEnumeration<T>) {
         // clean up any existing state.
         clear_validators_and_cooperators::<T>();
 
@@ -435,13 +453,16 @@ benchmarks! {
 
         let validators = create_validators::<T>(n, 100).unwrap();
         whitelist_account!(controller);
-    }: _(RawOrigin::Signed(controller), validators)
-    verify {
+
+        #[extrinsic_call]
+        _(RawOrigin::Signed(controller), validators);
+
         assert!(Cooperators::<T>::contains_key(&stash));
         assert!(T::VoterList::contains(&stash))
     }
 
-    chill {
+    #[benchmark]
+    fn chill() {
         // clean up any existing state.
         clear_validators_and_cooperators::<T>();
 
@@ -455,39 +476,53 @@ benchmarks! {
         assert!(T::VoterList::contains(&stash));
 
         whitelist_account!(controller);
-    }: _(RawOrigin::Signed(controller))
-    verify {
+
+        #[extrinsic_call]
+        _(RawOrigin::Signed(controller));
+
         assert!(!T::VoterList::contains(&stash));
     }
 
-    set_payee {
+    #[benchmark]
+    fn set_payee() {
         let (stash, controller) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
         assert_eq!(Payee::<T>::get(&stash), RewardDestination::Staked);
         whitelist_account!(controller);
-    }: _(RawOrigin::Signed(controller), RewardDestination::Controller)
-    verify {
+
+        #[extrinsic_call]
+        _(RawOrigin::Signed(controller), RewardDestination::Controller);
+
         assert_eq!(Payee::<T>::get(&stash), RewardDestination::Controller);
     }
 
-    set_controller {
+    #[benchmark]
+    fn set_controller() {
         let (stash, _) = create_stash_controller::<T>(USER_SEED, 100, Default::default())?;
         let new_controller = create_funded_user::<T>("new_controller", USER_SEED, 100);
         let new_controller_lookup = T::Lookup::unlookup(new_controller.clone());
         whitelist_account!(stash);
-    }: _(RawOrigin::Signed(stash), new_controller_lookup)
-    verify {
+        
+        #[extrinsic_call]
+        _(RawOrigin::Signed(stash), new_controller_lookup);
+
         assert!(Ledger::<T>::contains_key(&new_controller));
     }
 
-    set_validator_count {
+    #[benchmark]
+    fn set_validator_count() {
         let validator_count = MaxValidators::<T>::get();
-    }: _(RawOrigin::Root, validator_count)
-    verify {
+
+        #[extrinsic_call]
+        _(RawOrigin::Root, validator_count);
+
         assert_eq!(ValidatorCount::<T>::get(), validator_count);
     }
 
-    force_no_eras {}: _(RawOrigin::Root)
-    verify { assert_eq!(ForceEra::<T>::get(), Forcing::ForceNone); }
+    #[benchmark]
+    fn force_no_eras () {
+        _(RawOrigin::Root)
+        assert_eq!(ForceEra::<T>::get(), Forcing::ForceNone);
+    }
 
     force_new_era {}: _(RawOrigin::Root)
     verify { assert_eq!(ForceEra::<T>::get(), Forcing::ForceNew); }

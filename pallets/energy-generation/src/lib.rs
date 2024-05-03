@@ -284,9 +284,8 @@
 #![warn(clippy::all)]
 #![recursion_limit = "256"]
 
-// TODO: fix benchmarks
-// #[cfg(feature = "runtime-benchmarks")]
-// pub mod benchmarking;
+#[cfg(feature = "runtime-benchmarks")]
+pub mod benchmarking;
 #[cfg(any(feature = "runtime-benchmarks", test))]
 pub mod testing_utils;
 
