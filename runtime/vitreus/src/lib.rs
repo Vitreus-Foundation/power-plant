@@ -2128,6 +2128,7 @@ impl_runtime_apis! {
 
             let mut list = Vec::<BenchmarkList>::new();
             list_benchmarks!(list, extra);
+            // TODO: run those benchmarks and remove this line
             list_benchmark!(list, extra, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
             list_benchmark!(list, extra, pallet_nac_managing, PalletNacManaging::<Runtime>);
             list_benchmark!(list, extra, pallet_claiming, PalletClaiming::<Runtime>);
