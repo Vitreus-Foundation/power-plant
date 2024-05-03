@@ -1,4 +1,3 @@
-//! Benchmarking setup for pallet-treasury-extension
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 

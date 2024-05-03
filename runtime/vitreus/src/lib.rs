@@ -2122,10 +2122,16 @@ impl_runtime_apis! {
             use frame_benchmarking::{Benchmarking, BenchmarkList};
             use frame_support::traits::StorageInfoTrait;
             use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
+            use pallet_nac_managing::Pallet as PalletNacManaging;
+            use pallet_claiming::Pallet as PalletClaiming;
+            use pallet_energy_fee::Pallet as PalletEnergyFee;
 
             let mut list = Vec::<BenchmarkList>::new();
             list_benchmarks!(list, extra);
             list_benchmark!(list, extra, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
+            list_benchmark!(list, extra, pallet_nac_managing, PalletNacManaging::<Runtime>);
+            list_benchmark!(list, extra, pallet_claiming, PalletClaiming::<Runtime>);
+            list_benchmark!(list, extra, pallet_energy_fee, PalletEnergyFee::<Runtime>);
 
             let storage_info = AllPalletsWithSystem::storage_info();
             (list, storage_info)
@@ -2136,6 +2142,10 @@ impl_runtime_apis! {
         ) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
             use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
             use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
+            use pallet_nac_managing::Pallet as PalletNacManaging;
+            use pallet_claiming::Pallet as PalletClaiming;
+            use pallet_energy_fee::Pallet as PalletEnergyFee;
+
             impl frame_system_benchmarking::Config for Runtime {}
 
             let whitelist: Vec<TrackedStorageKey> = vec![];
@@ -2144,6 +2154,9 @@ impl_runtime_apis! {
             let params = (&config, &whitelist);
 
             add_benchmark!(params, batches, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
+            add_benchmark!(params, batches, pallet_energy_fee, PalletEnergyFee::<Runtime>);
+            add_benchmark!(params, batches, pallet_claiming, PalletClaiming::<Runtime>);
+            add_benchmark!(params, batches, pallet_nac_managing, PalletNacManaging::<Runtime>);
 
             if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
             Ok(batches)

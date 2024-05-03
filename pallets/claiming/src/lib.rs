@@ -22,7 +22,7 @@ use sp_std::alloc::{format, string::String};
 pub use pallet::*;
 
 #[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
+mod benchmarking;
 #[cfg(test)]
 pub mod mock;
 #[cfg(test)]

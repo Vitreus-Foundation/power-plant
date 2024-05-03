@@ -1,4 +1,3 @@
-//! Benchmarking setup for pallet-claiming
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 
