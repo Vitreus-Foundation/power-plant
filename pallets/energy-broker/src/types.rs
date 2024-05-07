@@ -179,6 +179,11 @@ where
         _min: (T::AssetBalance, T::AssetBalance),
         _reserve: (T::AssetBalance, T::AssetBalance),
     ) -> Result<(T::AssetBalance, T::AssetBalance), Error<T>> {
+        ensure!(
+            desired.0 > Zero::zero() || desired.1 > Zero::zero(),
+            Error::<T>::WrongDesiredAmount
+        );
+
         Ok(desired)
     }
 

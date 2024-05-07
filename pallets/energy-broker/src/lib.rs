@@ -468,11 +468,6 @@ pub mod pallet {
                 };
             let (asset1, asset2) = pool_id.clone();
 
-            ensure!(
-                amount1_desired > Zero::zero() && amount2_desired > Zero::zero(),
-                Error::<T>::WrongDesiredAmount
-            );
-
             let maybe_pool = Pools::<T>::get(pool_id.clone());
             let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
 
