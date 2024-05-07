@@ -81,7 +81,7 @@ use frame_support::{
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use pallet_asset_conversion::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
+use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_energy_fee::{traits::AssetsBalancesConverter, CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -828,7 +828,7 @@ ord_parameter_types! {
 type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
 
-impl pallet_asset_conversion::Config for Runtime {
+impl pallet_energy_broker::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Formula = ConstantSum<EnergyRate>;
     type Currency = Balances;
@@ -849,7 +849,7 @@ impl pallet_asset_conversion::Config for Runtime {
     type MintMinLiquidity = MintMinLiquidity;
     type MultiAssetId = NativeOrAssetId<AssetId>;
     type MultiAssetIdConverter = NativeOrAssetIdConverter<AssetId>;
-    type WeightInfo = pallet_asset_conversion::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = pallet_energy_broker::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -868,13 +868,13 @@ impl OnUnbalanced<NegativeImbalance<Runtime>> for EnergyBrokerSink {
     }
 }
 
-pub struct LiquidityPoolExchange;
+pub struct EnergyBrokerExchange;
 
 impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
-    for LiquidityPoolExchange
+    for EnergyBrokerExchange
 {
     fn convert_from_input(amount: Balance) -> Result<Balance, DispatchError> {
-        LiquidityPool::get_amount_out(
+        EnergyBroker::get_amount_out(
             &amount,
             (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
         )
@@ -882,7 +882,7 @@ impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
     }
 
     fn convert_from_output(amount: Balance) -> Result<Balance, DispatchError> {
-        LiquidityPool::get_amount_in(
+        EnergyBroker::get_amount_in(
             &amount,
             (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
         )
@@ -890,11 +890,11 @@ impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
     }
 
     fn exchange_from_input(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        LiquidityPool::swap_exact_native_for_tokens(*who, VNRG::get(), amount, None, *who, true)
+        EnergyBroker::swap_exact_native_for_tokens(*who, VNRG::get(), amount, None, *who, true)
     }
 
     fn exchange_from_output(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        LiquidityPool::swap_native_for_exact_tokens(*who, VNRG::get(), amount, None, *who, true)
+        EnergyBroker::swap_native_for_exact_tokens(*who, VNRG::get(), amount, None, *who, true)
     }
 
     fn exchange_inner(
@@ -911,7 +911,7 @@ impl pallet_energy_fee::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type FeeTokenBalanced = EnergyItem;
     type MainTokenBalanced = Balances;
-    type EnergyExchange = LiquidityPoolExchange;
+    type EnergyExchange = EnergyBrokerExchange;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAssetId = VNRG;
@@ -1381,9 +1381,7 @@ construct_runtime!(
         AssetRate: pallet_asset_rate = 6,
         TransactionPayment: pallet_transaction_payment = 7,
         Sudo: pallet_sudo = 8,
-
-        PoolAssets: pallet_assets::<Instance1> = 10,
-        LiquidityPool: pallet_asset_conversion = 11,
+        PoolAssets: pallet_assets::<Instance1> = 9,
 
         EVM: pallet_evm = 15,
         EVMChainId: pallet_evm_chain_id = 16,
@@ -1408,6 +1406,7 @@ construct_runtime!(
         Historical: pallet_session::historical = 37,
         AuthorityDiscovery: pallet_authority_discovery = 38,
         EnergyGeneration: pallet_energy_generation = 39,
+        EnergyBroker: pallet_energy_broker = 40,
 
         // Governance-related pallets
         Scheduler: pallet_scheduler = 45,
@@ -2210,7 +2209,7 @@ impl_runtime_apis! {
         }
 
         fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
-            LiquidityPool::quote_price_exact_tokens_for_tokens(
+            EnergyBroker::quote_price_exact_tokens_for_tokens(
                 NativeOrAssetId::Native,
                 NativeOrAssetId::Asset(VNRG::get()),
                 UNITS,
@@ -2219,7 +2218,7 @@ impl_runtime_apis! {
         }
     }
 
-    impl pallet_asset_conversion::AssetConversionApi<
+    impl pallet_energy_broker::AssetConversionApi<
         Block,
         Balance,
         Balance,
@@ -2231,7 +2230,7 @@ impl_runtime_apis! {
             amount: Balance,
             include_fee: bool,
         ) -> Option<Balance> {
-            LiquidityPool::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
+            EnergyBroker::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
         }
 
         fn quote_price_exact_tokens_for_tokens(
@@ -2240,14 +2239,14 @@ impl_runtime_apis! {
             amount: Balance,
             include_fee: bool,
         ) -> Option<Balance> {
-            LiquidityPool::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
+            EnergyBroker::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
         }
 
         fn get_reserves(
             asset1: NativeOrAssetId<AssetId>,
             asset2: NativeOrAssetId<AssetId>,
         ) -> Option<(Balance, Balance)> {
-            LiquidityPool::get_reserves(&asset1, &asset2).ok()
+            EnergyBroker::get_reserves(&asset1, &asset2).ok()
         }
     }
 

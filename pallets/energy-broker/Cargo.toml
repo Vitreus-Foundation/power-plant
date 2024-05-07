@@ -1,5 +1,5 @@
 [package]
-name = "pallet-asset-conversion"
+name = "pallet-energy-broker"
 version = "0.1.0"
 authors = ["Innowise FinTech Team"]
 edition = "2021"

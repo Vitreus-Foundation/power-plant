@@ -51,7 +51,6 @@ frame-system-benchmarking = { workspace = true, optional = true }
 frame-system-rpc-runtime-api = { workspace = true }
 frame-try-runtime = { workspace = true, optional = true }
 pallet-assets = { workspace = true }
-pallet-asset-conversion = { workspace = true }
 pallet-asset-rate = { workspace = true }
 pallet-atomic-swap = { workspace = true }
 pallet-authority-discovery = { workspace = true }
@@ -62,6 +61,7 @@ pallet-bounties = { workspace = true }
 pallet-claiming = { workspace = true }
 pallet-collective = { workspace = true }
 pallet-democracy = { workspace = true }
+pallet-energy-broker = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-faucet = { workspace = true }
@@ -216,7 +216,6 @@ std = [
     "frame-try-runtime?/std",
     "pallet-atomic-swap/std",
     "pallet-assets/std",
-    "pallet-asset-conversion/std",
     "pallet-asset-rate/std",
     "pallet-authority-discovery/std",
     "pallet-authorship/std",
@@ -263,6 +262,7 @@ std = [
     "pallet-simple-vesting/std",
     "pallet-nac-managing/std",
     "pallet-reputation/std",
+    "pallet-energy-broker/std",
     "pallet-energy-generation/std",
     "pallet-energy-fee/std",
     "energy-fee-runtime-api/std",

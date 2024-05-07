@@ -6396,26 +6396,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-asset-conversion"
-version = "0.1.0"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "pallet-assets",
- "pallet-balances",
- "parity-scale-codec",
- "primitive-types",
- "scale-info",
- "sp-api",
- "sp-arithmetic",
- "sp-core",
- "sp-io",
- "sp-runtime",
- "sp-std",
-]
-
-[[package]]
 name = "pallet-asset-rate"
 version = "4.0.0-dev"
 source = "git+https://github.com/paritytech/substrate?branch=polkadot-v1.0.0#948fbd2fd1233dc26dbb9f9bbc1d2cca2c03945d"
@@ -6786,6 +6766,26 @@ dependencies = [
  "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-energy-broker"
+version = "0.1.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "parity-scale-codec",
+ "primitive-types",
+ "scale-info",
+ "sp-api",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -14833,7 +14833,6 @@ dependencies = [
  "log",
  "num_enum",
  "orml-traits",
- "pallet-asset-conversion",
  "pallet-asset-rate",
  "pallet-assets",
  "pallet-atomic-swap",
@@ -14847,6 +14846,7 @@ dependencies = [
  "pallet-collective",
  "pallet-democracy",
  "pallet-dynamic-fee",
+ "pallet-energy-broker",
  "pallet-energy-fee",
  "pallet-energy-generation",
  "pallet-ethereum",
