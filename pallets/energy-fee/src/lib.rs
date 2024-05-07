@@ -363,16 +363,21 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-    /// Check if user `who` owns reducible balance of token used for chargin fees
+    /// Check if user `who` owns reducible balance of token used for charging fees
     /// of at least `amount`, and if no, then exchange missing funds for user `who` using
     /// `T::EnergyExchange`
     fn on_low_balance_exchange(
         who: &T::AccountId,
         amount: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
-        let (_, missing_amount) = Self::calculate_fee_parts(who, amount)?;
-        (missing_amount > BalanceOf::<T>::zero())
-            .then(|| T::EnergyExchange::exchange_from_input(who, missing_amount).map(|_| ()))
+        let current_balance =
+            T::FeeTokenBalanced::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
+
+        (current_balance < amount)
+            .then(|| {
+                T::EnergyExchange::exchange_from_output(who, amount.saturating_sub(current_balance))
+                    .map(|_| ())
+            })
             .map_or(Ok(()), |v| v)
     }
 

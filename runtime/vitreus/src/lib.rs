@@ -894,8 +894,7 @@ impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
     }
 
     fn exchange_from_output(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        let amount_in = Self::convert_from_output(amount)?;
-        Self::exchange_from_input(who, amount_in)
+        LiquidityPool::swap_native_for_exact_tokens(*who, VNRG::get(), amount, None, *who, true)
     }
 
     fn exchange_inner(

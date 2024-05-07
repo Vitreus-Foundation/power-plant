@@ -1127,6 +1127,47 @@ where
     }
 }
 
+impl<T: Config> Pallet<T> {
+    /// Take an `asset_id` and swap some amount of the chain's native asset for `amount_out` of it.
+    /// If an `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
+    /// too costly.
+    ///
+    /// If successful returns the amount of the native asset taken to provide `amount_out`.
+    pub fn swap_native_for_exact_tokens(
+        sender: T::AccountId,
+        asset_id: T::AssetId,
+        amount_out: T::Balance,
+        amount_in_max: Option<T::AssetBalance>,
+        send_to: T::AccountId,
+        keep_alive: bool,
+    ) -> Result<T::AssetBalance, DispatchError> {
+        ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
+        if let Some(amount_in_max) = amount_in_max {
+            ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
+        }
+        let mut path = sp_std::vec::Vec::new();
+        path.push(T::MultiAssetIdConverter::get_native());
+        path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
+        let path = path.try_into().expect(
+            "`MaxSwapPathLength` is ensured by to be greater than 2; pushed only twice; qed",
+        );
+
+        // convert `amount_out` from native balance type, to asset balance type
+        let amount_out = Self::convert_native_balance_to_asset_balance(amount_out)?;
+
+        // calculate the amount we need to provide
+        let amounts = Self::get_amounts_in(&amount_out, &path)?;
+        let amount_in =
+            *amounts.first().defensive_ok_or("get_amounts_in() returned an empty result")?;
+        if let Some(amount_in_max) = amount_in_max {
+            ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
+        }
+
+        Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
+        Ok(amount_in)
+    }
+}
+
 sp_api::decl_runtime_apis! {
     /// This runtime api allows people to query the size of the liquidity pools
     /// and quote prices for swaps.
