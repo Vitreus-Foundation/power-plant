@@ -471,6 +471,7 @@ pub mod pallet {
                 amount1_min,
                 amount2_min,
                 mint_to,
+                true,
             )?;
 
             Ok(())
@@ -630,6 +631,7 @@ pub mod pallet {
             amount1_min: T::AssetBalance,
             amount2_min: T::AssetBalance,
             mint_to: T::AccountId,
+            keep_alive: bool,
         ) -> DispatchResult {
             ensure_root(origin)?;
             let sender = T::Lookup::lookup(source)?;
@@ -643,6 +645,7 @@ pub mod pallet {
                 amount1_min,
                 amount2_min,
                 mint_to,
+                keep_alive,
             )?;
 
             Ok(())
@@ -715,6 +718,7 @@ pub mod pallet {
             amount1_min: T::AssetBalance,
             amount2_min: T::AssetBalance,
             mint_to: T::AccountId,
+            keep_alive: bool,
         ) -> Result<(), DispatchError> {
             let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
             // swap params if needed
@@ -744,8 +748,8 @@ pub mod pallet {
             Self::validate_minimal_amount(amount2.saturating_add(reserve2), &asset2)
                 .map_err(|_| Error::<T>::AmountTwoLessThanMinimal)?;
 
-            Self::transfer(&asset1, &sender, &pool_account, amount1, true)?;
-            Self::transfer(&asset2, &sender, &pool_account, amount2, true)?;
+            Self::transfer(&asset1, &sender, &pool_account, amount1, keep_alive)?;
+            Self::transfer(&asset2, &sender, &pool_account, amount2, keep_alive)?;
 
             let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
 

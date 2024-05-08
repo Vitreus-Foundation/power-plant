@@ -371,7 +371,8 @@ fn can_force_add_liquidity() {
                 500,
                 0,
                 0,
-                user
+                user,
+                true
             ),
             BadOrigin
         );
@@ -385,7 +386,8 @@ fn can_force_add_liquidity() {
             500,
             0,
             0,
-            user
+            user,
+            true
         ));
     });
 }
