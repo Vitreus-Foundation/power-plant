@@ -276,6 +276,7 @@ runtime-benchmarks = [
     "frame-system/runtime-benchmarks",
     "pallet-assets/runtime-benchmarks",
     "pallet-collective/runtime-benchmarks",
+    "pallet-energy-broker/runtime-benchmarks",
     "pallet-energy-fee/runtime-benchmarks",
     "pallet-ethereum/runtime-benchmarks",
     "pallet-hotfix-sufficients/runtime-benchmarks",

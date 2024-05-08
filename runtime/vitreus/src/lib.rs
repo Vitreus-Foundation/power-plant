@@ -850,6 +850,8 @@ impl pallet_energy_broker::Config for Runtime {
     type MultiAssetId = NativeOrAssetId<AssetId>;
     type MultiAssetIdConverter = NativeOrAssetIdConverter<AssetId>;
     type WeightInfo = pallet_energy_broker::weights::SubstrateWeight<Runtime>;
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
 }
 
 parameter_types! {
