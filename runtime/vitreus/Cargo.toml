@@ -164,6 +164,7 @@ try-runtime = [
     "pallet-evm/try-runtime",
     "pallet-evm-chain-id/try-runtime",
     "pallet-claiming/try-runtime",
+    "pallet-energy-broker/try-runtime",
     "pallet-energy-fee/try-runtime",
     "pallet-energy-generation/try-runtime",
     "pallet-hotfix-sufficients/try-runtime",
