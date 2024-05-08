@@ -53,6 +53,8 @@
 //! (This can be run against the kitchen sync node in the `node` folder of this repo.)
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
+#![allow(clippy::result_unit_err, clippy::too_many_arguments)]
+
 use frame_support::traits::{DefensiveOption, Incrementable};
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -676,7 +678,7 @@ pub mod pallet {
                 )?)?)
             } else {
                 T::Assets::transfer(
-                    T::MultiAssetIdConverter::try_convert(&asset_id)
+                    T::MultiAssetIdConverter::try_convert(asset_id)
                         .map_err(|_| Error::<T>::Overflow)?,
                     from,
                     to,
@@ -1120,10 +1122,13 @@ where
         if let Some(amount_in_max) = amount_in_max {
             ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
         }
-        let mut path = sp_std::vec::Vec::new();
-        path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
-        path.push(T::MultiAssetIdConverter::get_native());
-        let path = path.try_into().unwrap();
+
+        let path = vec![
+            T::MultiAssetIdConverter::into_multiasset_id(&asset_id),
+            T::MultiAssetIdConverter::get_native(),
+        ]
+        .try_into()
+        .unwrap();
 
         // convert `amount_out` from native balance type, to asset balance type
         let amount_out = Self::convert_native_balance_to_asset_balance(amount_out)?;
@@ -1157,12 +1162,13 @@ where
         if let Some(amount_out_min) = amount_out_min {
             ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
         }
-        let mut path = sp_std::vec::Vec::new();
-        path.push(T::MultiAssetIdConverter::get_native());
-        path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
-        let path = path.try_into().expect(
-            "`MaxSwapPathLength` is ensured by to be greater than 2; pushed only twice; qed",
-        );
+
+        let path = vec![
+            T::MultiAssetIdConverter::get_native(),
+            T::MultiAssetIdConverter::into_multiasset_id(&asset_id),
+        ]
+        .try_into()
+        .expect("`MaxSwapPathLength` is ensured by to be greater than 2; pushed only twice; qed");
 
         // convert `amount_in` from native balance type, to asset balance type
         let amount_in = Self::convert_native_balance_to_asset_balance(amount_in)?;
@@ -1198,12 +1204,13 @@ impl<T: Config> Pallet<T> {
         if let Some(amount_in_max) = amount_in_max {
             ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
         }
-        let mut path = sp_std::vec::Vec::new();
-        path.push(T::MultiAssetIdConverter::get_native());
-        path.push(T::MultiAssetIdConverter::into_multiasset_id(&asset_id));
-        let path = path.try_into().expect(
-            "`MaxSwapPathLength` is ensured by to be greater than 2; pushed only twice; qed",
-        );
+
+        let path = vec![
+            T::MultiAssetIdConverter::get_native(),
+            T::MultiAssetIdConverter::into_multiasset_id(&asset_id),
+        ]
+        .try_into()
+        .expect("`MaxSwapPathLength` is ensured by to be greater than 2; pushed only twice; qed");
 
         // convert `amount_out` from native balance type, to asset balance type
         let amount_out = Self::convert_native_balance_to_asset_balance(amount_out)?;
