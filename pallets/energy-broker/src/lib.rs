@@ -72,7 +72,7 @@ use frame_support::{
     traits::tokens::{AssetId, Balance},
 };
 use frame_system::{
-    ensure_signed,
+    ensure_root, ensure_signed,
     pallet_prelude::{BlockNumberFor, OriginFor},
 };
 pub use pallet::*;
@@ -80,14 +80,16 @@ use parity_scale_codec::Codec;
 use sp_arithmetic::traits::Unsigned;
 use sp_runtime::{
     traits::{
-        CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Ensure, MaybeDisplay, TrailingZeroInput,
-        Zero,
+        CheckedAdd, CheckedDiv, CheckedMul, CheckedSub, Ensure, MaybeDisplay, StaticLookup,
+        TrailingZeroInput, Zero,
     },
     DispatchError,
 };
 use sp_std::vec;
 pub use types::*;
 pub use weights::WeightInfo;
+
+type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -458,75 +460,16 @@ pub mod pallet {
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
 
-            let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
-            // swap params if needed
-            let (amount1_desired, amount2_desired, amount1_min, amount2_min) =
-                if pool_id.0 == asset1 {
-                    (amount1_desired, amount2_desired, amount1_min, amount2_min)
-                } else {
-                    (amount2_desired, amount1_desired, amount2_min, amount1_min)
-                };
-            let (asset1, asset2) = pool_id.clone();
-
-            let maybe_pool = Pools::<T>::get(pool_id.clone());
-            let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
-
-            let pool_account = Self::get_pool_account(&pool_id);
-            let reserve1 = Self::get_balance(&pool_account, &asset1)?;
-            let reserve2 = Self::get_balance(&pool_account, &asset2)?;
-
-            let (amount1, amount2) = T::Formula::get_liquidity_amount(
-                (amount1_desired, amount2_desired),
-                (amount1_min, amount2_min),
-                (reserve1, reserve2),
-            )?;
-
-            Self::validate_minimal_amount(amount1.saturating_add(reserve1), &asset1)
-                .map_err(|_| Error::<T>::AmountOneLessThanMinimal)?;
-            Self::validate_minimal_amount(amount2.saturating_add(reserve2), &asset2)
-                .map_err(|_| Error::<T>::AmountTwoLessThanMinimal)?;
-
-            Self::transfer(&asset1, &sender, &pool_account, amount1, true)?;
-            Self::transfer(&asset2, &sender, &pool_account, amount2, true)?;
-
-            let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
-
-            let mut lp_token_amount = T::Formula::get_lp_token_amount(
-                (amount1, amount2),
-                (reserve1, reserve2),
-                (&asset1, &asset2),
-                total_supply,
-            )?;
-
-            if total_supply.is_zero() {
-                lp_token_amount = lp_token_amount
-                    .checked_sub(&T::MintMinLiquidity::get().into())
-                    .ok_or(Error::<T>::InsufficientLiquidityMinted)?;
-
-                T::PoolAssets::mint_into(
-                    pool.lp_token.clone(),
-                    &pool_account,
-                    T::MintMinLiquidity::get(),
-                )?;
-            }
-            let lp_token_amount = lp_token_amount.try_into().map_err(|_| Error::<T>::Overflow)?;
-
-            ensure!(
-                lp_token_amount > T::MintMinLiquidity::get(),
-                Error::<T>::InsufficientLiquidityMinted
-            );
-
-            T::PoolAssets::mint_into(pool.lp_token.clone(), &mint_to, lp_token_amount)?;
-
-            Self::deposit_event(Event::LiquidityAdded {
-                who: sender,
+            Self::do_add_liquidity(
+                sender,
+                asset1,
+                asset2,
+                amount1_desired,
+                amount2_desired,
+                amount1_min,
+                amount2_min,
                 mint_to,
-                pool_id,
-                amount1_provided: amount1,
-                amount2_provided: amount2,
-                lp_token: pool.lp_token.clone(),
-                lp_token_minted: lp_token_amount,
-            });
+            )?;
 
             Ok(())
         }
@@ -670,6 +613,38 @@ pub mod pallet {
             Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
             Ok(())
         }
+
+        /// Exactly as [`Pallet::add_liquidity`], except the origin must be root and the source account
+        /// may be specified.
+        #[pallet::call_index(5)]
+        #[pallet::weight(T::WeightInfo::add_liquidity())]
+        pub fn force_add_liquidity(
+            origin: OriginFor<T>,
+            source: AccountIdLookupOf<T>,
+            asset1: T::MultiAssetId,
+            asset2: T::MultiAssetId,
+            amount1_desired: T::AssetBalance,
+            amount2_desired: T::AssetBalance,
+            amount1_min: T::AssetBalance,
+            amount2_min: T::AssetBalance,
+            mint_to: T::AccountId,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+            let sender = T::Lookup::lookup(source)?;
+
+            Self::do_add_liquidity(
+                sender,
+                asset1,
+                asset2,
+                amount1_desired,
+                amount2_desired,
+                amount1_min,
+                amount2_min,
+                mint_to,
+            )?;
+
+            Ok(())
+        }
     }
 
     impl<T: Config> Pallet<T> {
@@ -727,6 +702,89 @@ pub mod pallet {
             T::HigherPrecisionBalance::from(amount)
                 .try_into()
                 .map_err(|_| Error::<T>::Overflow)
+        }
+
+        fn do_add_liquidity(
+            sender: T::AccountId,
+            asset1: T::MultiAssetId,
+            asset2: T::MultiAssetId,
+            amount1_desired: T::AssetBalance,
+            amount2_desired: T::AssetBalance,
+            amount1_min: T::AssetBalance,
+            amount2_min: T::AssetBalance,
+            mint_to: T::AccountId,
+        ) -> Result<(), DispatchError> {
+            let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
+            // swap params if needed
+            let (amount1_desired, amount2_desired, amount1_min, amount2_min) =
+                if pool_id.0 == asset1 {
+                    (amount1_desired, amount2_desired, amount1_min, amount2_min)
+                } else {
+                    (amount2_desired, amount1_desired, amount2_min, amount1_min)
+                };
+            let (asset1, asset2) = pool_id.clone();
+
+            let maybe_pool = Pools::<T>::get(pool_id.clone());
+            let pool = maybe_pool.as_ref().ok_or(Error::<T>::PoolNotFound)?;
+
+            let pool_account = Self::get_pool_account(&pool_id);
+            let reserve1 = Self::get_balance(&pool_account, &asset1)?;
+            let reserve2 = Self::get_balance(&pool_account, &asset2)?;
+
+            let (amount1, amount2) = T::Formula::get_liquidity_amount(
+                (amount1_desired, amount2_desired),
+                (amount1_min, amount2_min),
+                (reserve1, reserve2),
+            )?;
+
+            Self::validate_minimal_amount(amount1.saturating_add(reserve1), &asset1)
+                .map_err(|_| Error::<T>::AmountOneLessThanMinimal)?;
+            Self::validate_minimal_amount(amount2.saturating_add(reserve2), &asset2)
+                .map_err(|_| Error::<T>::AmountTwoLessThanMinimal)?;
+
+            Self::transfer(&asset1, &sender, &pool_account, amount1, true)?;
+            Self::transfer(&asset2, &sender, &pool_account, amount2, true)?;
+
+            let total_supply = T::PoolAssets::total_issuance(pool.lp_token.clone());
+
+            let mut lp_token_amount = T::Formula::get_lp_token_amount(
+                (amount1, amount2),
+                (reserve1, reserve2),
+                (&asset1, &asset2),
+                total_supply,
+            )?;
+
+            if total_supply.is_zero() {
+                lp_token_amount = lp_token_amount
+                    .checked_sub(&T::MintMinLiquidity::get().into())
+                    .ok_or(Error::<T>::InsufficientLiquidityMinted)?;
+
+                T::PoolAssets::mint_into(
+                    pool.lp_token.clone(),
+                    &pool_account,
+                    T::MintMinLiquidity::get(),
+                )?;
+            }
+            let lp_token_amount = lp_token_amount.try_into().map_err(|_| Error::<T>::Overflow)?;
+
+            ensure!(
+                lp_token_amount > T::MintMinLiquidity::get(),
+                Error::<T>::InsufficientLiquidityMinted
+            );
+
+            T::PoolAssets::mint_into(pool.lp_token.clone(), &mint_to, lp_token_amount)?;
+
+            Self::deposit_event(Event::LiquidityAdded {
+                who: sender,
+                mint_to,
+                pool_id,
+                amount1_provided: amount1,
+                amount2_provided: amount2,
+                lp_token: pool.lp_token.clone(),
+                lp_token_minted: lp_token_amount,
+            });
+
+            Ok(())
         }
 
         /// Swap assets along a `path`, depositing in `send_to`.

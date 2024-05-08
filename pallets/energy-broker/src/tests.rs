@@ -22,6 +22,7 @@ use frame_support::{
     traits::{fungible::Inspect, fungibles::InspectEnumerable, Get},
 };
 use sp_arithmetic::Permill;
+use sp_runtime::DispatchError::BadOrigin;
 use sp_runtime::{DispatchError, TokenError};
 
 fn events() -> Vec<Event<Test>> {
@@ -344,6 +345,48 @@ fn can_add_liquidity() {
         assert_eq!(balance(user, token_1), ed);
         assert_eq!(balance(user, token_3), 1000 - 10);
         assert_eq!(pool_balance(user, lp_token2), 9905);
+    });
+}
+
+#[test]
+fn can_force_add_liquidity() {
+    new_test_ext().execute_with(|| {
+        let user = 1;
+        let token_1 = NativeOrAssetId::Native;
+        let token_2 = NativeOrAssetId::Asset(2);
+
+        create_tokens(user, vec![token_2]);
+        assert_ok!(AssetConversion::create_pool(RuntimeOrigin::signed(user), token_1, token_2));
+
+        assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), user, 1000));
+        assert_ok!(Assets::mint(RuntimeOrigin::signed(user), 2, user, 1000));
+
+        assert_noop!(
+            AssetConversion::force_add_liquidity(
+                RuntimeOrigin::signed(user),
+                user,
+                token_1,
+                token_2,
+                500,
+                500,
+                0,
+                0,
+                user
+            ),
+            BadOrigin
+        );
+
+        assert_ok!(AssetConversion::force_add_liquidity(
+            RuntimeOrigin::root(),
+            user,
+            token_1,
+            token_2,
+            500,
+            500,
+            0,
+            0,
+            user
+        ));
     });
 }
 
