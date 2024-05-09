@@ -118,7 +118,7 @@ pub mod pallet {
         #[pallet::weight(<T as Config>::WeightInfo::become_vip_status())]
         pub fn become_vip_status(origin: OriginFor<T>, tax_type: PenaltyType) -> DispatchResult {
             let who = ensure_signed(origin.clone())?;
-            ensure!(VipMembers::<T>::contains_key(&who), Error::<T>::AlreadyVipMember);
+            ensure!(!VipMembers::<T>::contains_key(&who), Error::<T>::AlreadyVipMember);
 
             if Self::is_legit_for_vip(&who) {
                 Self::do_set_user_privilege(&who, tax_type);
