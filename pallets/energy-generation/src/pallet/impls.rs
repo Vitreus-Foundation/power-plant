@@ -2,7 +2,6 @@
 
 use core::cmp::Ordering;
 
-use frame_support::traits::Defensive;
 use frame_support::{
     dispatch::WithPostDispatchInfo,
     pallet_prelude::*,
@@ -46,18 +45,8 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Slash account stake (reason: exit VIP).
-    pub fn slash_vip_account(account: &T::AccountId, percent: Perbill) -> DispatchResult {
-        let controller = <Pallet<T>>::bonded(account)
-            .defensive()
-            .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
-
-        let mut ledger = <Pallet<T>>::ledger(&controller)
-            .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
-
-        //T::Slash::on_unbalanced()
-        // slashing::apply_slash::<T>(slash, slash_era)?;
-
-        Ok(())
+    pub fn slash_vip_account(_account: &T::AccountId, _percent: Perbill) -> DispatchResult {
+        todo!()
     }
 
     /// The total stake of VIP member.

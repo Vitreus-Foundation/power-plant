@@ -65,7 +65,6 @@ pub mod pallet {
     use crate::{
         slashing::StorageEssentials, BenchmarkingConfig, EnergyOf, OnVipMembershipHandler,
     };
-    use sp_staking::offence::OnOffenceHandler;
 
     use super::*;
 
