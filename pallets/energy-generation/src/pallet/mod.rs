@@ -62,8 +62,10 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[allow(clippy::module_inception)]
 #[frame_support::pallet]
 pub mod pallet {
+    use crate::{
+        slashing::StorageEssentials, BenchmarkingConfig, EnergyOf, OnVipMembershipHandler,
+    };
     use sp_staking::offence::OnOffenceHandler;
-    use crate::{slashing::StorageEssentials, BenchmarkingConfig, EnergyOf, OnVipMembershipHandler};
 
     use super::*;
 

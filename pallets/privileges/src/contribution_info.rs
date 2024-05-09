@@ -61,16 +61,11 @@ impl PenaltyType {
     }
 }
 
-#[derive(Copy, Clone, Encode, Decode, RuntimeDebug, Eq, PartialEq, TypeInfo)]
-pub enum StakingStatus {
-    Validator,
-    Cooperator,
-}
-
 #[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
-pub struct VipMemberInfo {
+#[scale_info(skip_type_params(T))]
+pub struct VipMemberInfo<T: pallet_energy_generation::Config> {
     pub start: u64,
     pub tax_type: PenaltyType,
-    pub points: u128,
-    pub staking_status: StakingStatus,
+    pub points: T::StakeBalance,
+    pub active_stake: T::StakeBalance,
 }

@@ -2,6 +2,7 @@
 
 use core::cmp::Ordering;
 
+use frame_support::traits::Defensive;
 use frame_support::{
     dispatch::WithPostDispatchInfo,
     pallet_prelude::*,
@@ -12,11 +13,11 @@ use frame_support::{
     },
     weights::Weight,
 };
-use frame_support::traits::Defensive;
 use frame_system::pallet_prelude::BlockNumberFor;
 use orml_traits::GetByKey;
 use scale_info::prelude::*;
 
+use crate::OnVipMembershipHandler;
 use pallet_reputation::{ReputationPoint, ReputationRecord};
 use pallet_session::historical;
 use sp_runtime::{
@@ -28,7 +29,6 @@ use sp_staking::{
     EraIndex, SessionIndex,
 };
 use sp_std::prelude::*;
-use crate::OnVipMembershipHandler;
 
 use crate::{
     log, slashing, weights::WeightInfo, ActiveEraInfo, Cooperations, EnergyDebtOf, EnergyOf,
@@ -46,7 +46,7 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Slash account stake (reason: exit VIP).
-    pub fn slash_vip_account(account: T::AccountId, percent: Perbill) -> DispatchResult {
+    pub fn slash_vip_account(account: &T::AccountId, percent: Perbill) -> DispatchResult {
         let controller = <Pallet<T>>::bonded(account)
             .defensive()
             .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
@@ -54,9 +54,21 @@ impl<T: Config> Pallet<T> {
         let mut ledger = <Pallet<T>>::ledger(&controller)
             .ok_or::<DispatchError>(Error::<T>::NotController.into())?;
 
-        T::Slash::on_unbalanced()
+        //T::Slash::on_unbalanced()
+        // slashing::apply_slash::<T>(slash, slash_era)?;
 
         Ok(())
+    }
+
+    /// The total stake of VIP member.
+    pub fn get_active_stake(account: &T::AccountId) -> StakeOf<T> {
+        let ledger_info = Self::ledger(account);
+
+        if let Some(ledger_info) = ledger_info {
+            ledger_info.active
+        } else {
+            T::StakeBalance::default()
+        }
     }
 
     /// The user is in Validators list.
@@ -332,6 +344,7 @@ impl<T: Config> Pallet<T> {
     pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
         T::StakeCurrency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
         <Ledger<T>>::insert(controller, ledger);
+        T::OnVipMembershipHandler::update_active_stake(controller);
     }
 
     /// Chill a stash account.
@@ -341,6 +354,7 @@ impl<T: Config> Pallet<T> {
         if chilled_as_validator || chilled_as_cooperator {
             Self::deposit_event(Event::<T>::Chilled { stash: stash.clone() });
         }
+        T::OnVipMembershipHandler::kick_account_from_vip(stash);
     }
 
     /// Plan a new session potentially trigger a new era.

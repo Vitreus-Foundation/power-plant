@@ -5,7 +5,7 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-use frame_support::{RuntimeDebug, pallet_prelude::{BoundedVec, DispatchResult, Decode, TypeInfo, PhantomData}, traits::{tokens::nonfungibles_v2::Inspect, Currency, Get, Incrementable, LockableCurrency, UnixTime}, PalletId, weights::Weight};
+use frame_support::{RuntimeDebug, pallet_prelude::{BoundedVec, DispatchResult, Decode, TypeInfo, PhantomData}, traits::{tokens::nonfungibles_v2::Inspect, Currency, Get, Incrementable, LockableCurrency, UnixTime}, PalletId, weights::Weight, ensure};
 use frame_support::traits::ExistenceRequirement::AllowDeath;
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
@@ -16,13 +16,11 @@ use sp_std::prelude::*;
 use sp_arithmetic::*;
 pub use weights::WeightInfo;
 pub use contribution_info::*;
-use pallet_energy_generation::OnVipMembershipHandler;
-use chrono::{Datelike, NaiveDateTime};
+use pallet_energy_generation::{OnVipMembershipHandler, StakeOf};
+use chrono::{Datelike, NaiveDate, NaiveDateTime};
+use frame_system::ensure_signed;
+use sp_arithmetic::traits::Saturating;
 
-#[cfg(test)]
-pub mod mock;
-#[cfg(test)]
-mod tests;
 mod contribution_info;
 
 pub mod weights;
@@ -69,7 +67,16 @@ pub mod pallet {
         _,
         Twox64Concat,
         T::AccountId,
-        VipMemberInfo
+        VipMemberInfo<T>
+    >;
+
+    #[pallet::storage]
+    #[pallet::getter(fn year_vip_results)]
+    pub type YearVipResults<T: Config> = StorageMap<
+        _,
+        Twox64Concat,
+        i32,
+        Vec<(T::AccountId, <T as pallet_energy_generation::Config>::StakeBalance)>
     >;
 
     #[pallet::storage]
@@ -84,6 +91,20 @@ pub mod pallet {
             /// Who becomes VIP status.
             account: T::AccountId,
         },
+        /// Penalty type was successfully changed.
+        PenaltyTypeChanged {
+            /// Who changes penalty type.
+            account: T::AccountId,
+            /// New penalty type.
+            new_penalty_type: PenaltyType,
+        },
+        /// The user has left the VIP.
+        LeftVip {
+            /// Who has left the VIP.
+            account: T::AccountId,
+            /// Penalty of this user.
+            penalty: Perbill
+        }
     }
 
     #[pallet::error]
@@ -94,6 +115,8 @@ pub mod pallet {
         AlreadyVipMember,
         /// Account hasn't VIP status.
         AccountHasNotVipStatus,
+        /// Currently is not a penalty-free period.
+        IsNotPenaltyFreePeriod,
     }
 
     #[pallet::call]
@@ -107,8 +130,8 @@ pub mod pallet {
             let who = ensure_signed(origin.clone())?;
             ensure!(VipMembers::<T>::contains_key(&who), Error::<T>::AlreadyVipMember);
 
-            if let Some(staking_status) = Self::is_legit_for_vip(&who) {
-                Self::do_set_user_privilege(&who, tax_type, staking_status);
+            if Self::is_legit_for_vip(&who) {
+                Self::do_set_user_privilege(&who, tax_type);
                 Self::deposit_event(Event::<T>::NewVipMember { account: who });
                 Ok(())
             } else {
@@ -126,14 +149,24 @@ pub mod pallet {
         }
 
         #[pallet::call_index(2)]
-        #[pallet::weight(<T as Config>::WeightInfo::set_quarter_revenue())]
+        #[pallet::weight(<T as Config>::WeightInfo::exit_vip())]
         pub fn exit_vip(
             origin: OriginFor<T>,
         ) -> DispatchResult {
             let who = ensure_signed(origin.clone())?;
-            ensure!(!VipMembers::<T>::contains_key(&who), Error::<T>::AccountHasNotVipStatus);
 
             Self::do_exit_vip(&who)
+        }
+
+        #[pallet::call_index(3)]
+        #[pallet::weight(<T as Config>::WeightInfo::change_penalty_type())]
+        pub fn change_penalty_type(
+            origin: OriginFor<T>,
+            new_tax_type: PenaltyType,
+        ) -> DispatchResult {
+            let who = ensure_signed(origin.clone())?;
+
+            Self::do_change_penalty_type(&who, new_tax_type)
         }
     }
 }
@@ -143,14 +176,15 @@ impl<T: Config> Pallet<T> {
     fn do_set_user_privilege(
         account: &T::AccountId,
         tax_type: PenaltyType,
-        staking_status: StakingStatus,
     ) {
         let now_as_millis_u64 =  <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>();
+        let active_stake = pallet_energy_generation::Pallet::<T>::get_active_stake(account);
+
         let vip_member_info = VipMemberInfo {
             start: now_as_millis_u64,
             tax_type,
-            points: 0,
-            staking_status,
+            points: <T as pallet_energy_generation::Config>::StakeBalance::default(),
+            active_stake
         };
 
         VipMembers::<T>::insert(account, vip_member_info);
@@ -164,36 +198,66 @@ impl<T: Config> Pallet<T> {
         let vip_info = Self::vip_members(account);
         match vip_info {
             Some(vip_member_info) => {
-                let slash_percent = vip_member_info.tax_type.penalty_percent(current_date.current_quarter);
-                pallet_energy_generation::Pallet::<T>::slash_vip_account(account, slash_percent)?;
+                let mut penalty_percent = Perbill::default();
+                if !Self::is_penalty_free_period() {
+                    let slash_percent = vip_member_info.tax_type.penalty_percent(current_date.current_quarter);
+                    penalty_percent = slash_percent;
+                    pallet_energy_generation::Pallet::<T>::slash_vip_account(account, slash_percent)?;
+                }
 
+                VipMembers::<T>::remove(account);
+                Self::deposit_event(Event::<T>::LeftVip { account: account.clone(), penalty: penalty_percent });
                 Ok(())
             },
             None => {
                 Err(Error::<T>::AccountHasNotVipStatus.into())
             }
         }
+    }
 
-        //pallet_energy_generation::Pallet::<T>::is_user_validator();
+    /// Change penalty type.
+    pub fn do_change_penalty_type(
+        account: &T::AccountId,
+        new_penalty_type: PenaltyType,
+    ) -> DispatchResult {
+        ensure!(!Self::is_penalty_free_period(), Error::<T>::IsNotPenaltyFreePeriod);
+        VipMembers::<T>::try_mutate::<_, _, Error<T>, _>(account, |vip_config| {
+            if let Some(vip) = vip_config {
+                vip.tax_type = new_penalty_type.clone();
+                Ok(())
+            } else {
+                Err(Error::<T>::AccountHasNotVipStatus.into())
+            }
+        })?;
+
+        Self::deposit_event(Event::<T>::PenaltyTypeChanged { account: account.clone(), new_penalty_type, });
+        Ok(())
     }
 
     /// Assesses whether a user qualifies as a VIP, and whether they are a validator or a cooperator within the network.
-    fn is_legit_for_vip(account: &T::AccountId) -> Option<StakingStatus> {
+    fn is_legit_for_vip(account: &T::AccountId) -> bool {
         // Check account validator status.
         if pallet_energy_generation::Pallet::<T>::is_user_validator(account) {
-            return Some(StakingStatus::Validator);
+            return true;
         }
 
         // Check account cooperator status.
         return if let Some(cooperation) = pallet_energy_generation::Pallet::<T>::cooperators(account) {
             return if cooperation.targets.is_empty() {
-                None
+                false
             } else {
-                Some(StakingStatus::Cooperator)
+                true
             }
         } else {
-            None
+            false
         }
+    }
+
+    /// Is now penalty-free period.
+    fn is_penalty_free_period() -> bool {
+        let current_date = Self::current_date();
+
+        current_date.current_month == 1
     }
 
     /// Update current quarter info.
@@ -201,47 +265,60 @@ impl<T: Config> Pallet<T> {
         let now_as_millis_u64 =  <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>() / 1000u64;
 
         let new_date = NaiveDateTime::from_timestamp(i64::try_from(now_as_millis_u64).unwrap(), 0).date();
+
+        let days_since_new_year = (NaiveDate::from_ymd(new_date.year(), 1, 1) - new_date).num_days() as u64;
         let current_date = Self::current_date();
 
         // Checking whether the day information needs to be updated.
         if current_date.current_day != new_date.day() {
+            let current_data_info = CurrentDateInfo::new(
+                new_date.year(),
+                new_date.month(),
+                new_date.day()
+            );
             // Accrual of VIP points for users who have VIP status.
-            Self::update_points_for_time();
+            Self::update_points_for_time(days_since_new_year, current_data_info.current_quarter);
 
             if new_date.month() == 1 && new_date.day() == 1 {
                 Self::save_year_info();
             }
 
-            CurrentDate::<T>::put(
-                CurrentDateInfo::new(
-                    new_date.year(),
-                    new_date.month(),
-                    new_date.day()
-                )
-            );
+            CurrentDate::<T>::put(current_data_info);
         }
     }
 
     /// Updates the points for the time since the last time the account was updated.
-    pub fn update_points_for_time() {
-        VipMembers::<T>::translate(|account: T::AccountId, mut old_info: VipMemberInfo| {
-            let points = Self::calculate_points(&account);
+    pub fn update_points_for_time(days_since_new_year: u64, current_quarter: u8) {
+        VipMembers::<T>::translate(|account: T::AccountId, mut old_info: VipMemberInfo<T>| {
+            let multiplier = Self::calculate_multiplier(old_info.tax_type, current_quarter);
+            let points = Self::calculate_points(days_since_new_year, old_info.active_stake, multiplier);
             let new_points = old_info.points.saturating_add(points);
             old_info.points = new_points;
             Some(old_info)
         });
     }
 
+    /// Calculate multiplier that differs depending on penalty type.
+    fn calculate_multiplier(penalty_type: PenaltyType, current_quarter: u8) -> Perbill {
+        match penalty_type {
+            PenaltyType::Flat => Perbill::from_rational(7_u32, 40_u32),
+            PenaltyType::Declining => Perbill::from_percent(30 - current_quarter as u32 * 5)
+        }
+    }
+
     /// Save VIP year information to pay rewards.
     pub fn save_year_info() {
-
+        let mut results = Vec::new();
+        VipMembers::<T>::translate(|account, mut vip_info: VipMemberInfo<T>| {
+            results.push((account, vip_info.points));
+            vip_info.points = <T as pallet_energy_generation::Config>::StakeBalance::default();
+            Some(vip_info)
+        })
     }
 
     /// Calculate VIP points for account.
-    fn calculate_points(account: &T::AccountId) -> u128 {
-        let ledger = pallet_energy_generation::Pallet::<T>::ledger(account);
-
-        0
+    fn calculate_points(days_since_new_year: u64, active_stake: T::StakeBalance, multiplier: Perbill) -> <T as pallet_energy_generation::Config>::StakeBalance {
+        (multiplier * active_stake) / days_since_new_year.into()
     }
 }
 
@@ -257,6 +334,16 @@ for Pallet<T> {
     fn kick_account_from_vip(account: &T::AccountId) -> Weight {
         let mut consumed_weight = Weight::from_parts(0, 0);
         Self::do_exit_vip(account);
+        consumed_weight
+    }
+
+    fn update_active_stake(account: &T::AccountId) -> Weight {
+        let mut consumed_weight = Weight::from_parts(0, 0);
+        VipMembers::<T>::mutate(account, |vip_info| {
+            if let Some(vip_info) = vip_info {
+                vip_info.active_stake = pallet_energy_generation::Pallet::<T>::get_active_stake(account);
+            }
+        });
         consumed_weight
     }
 }

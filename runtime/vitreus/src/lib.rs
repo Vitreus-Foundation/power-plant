@@ -772,7 +772,6 @@ impl pallet_privileges::Config for Runtime {
     type WeightInfo = pallet_privileges::weights::SubstrateWeight<Runtime>;
 }
 
-
 parameter_types! {
     pub const TransactionByteFee: Balance = 1;
     pub const TransactionPicosecondFee: Balance = 8;
