@@ -218,7 +218,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 103,
+    spec_version: 104,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -1316,7 +1316,7 @@ construct_runtime!(
         Historical: pallet_session::historical = 37,
         AuthorityDiscovery: pallet_authority_discovery = 38,
         EnergyGeneration: pallet_energy_generation = 39,
-        Privileges: pallet_privileges = 40,
+        Privileges: pallet_privileges = 41,
 
         // Governance-related pallets
         Scheduler: pallet_scheduler = 45,
