@@ -1,5 +1,5 @@
-use core::default::Default;
 use super::*;
+use core::default::Default;
 
 /// Current date info.
 #[derive(Clone, Encode, Decode, Default, RuntimeDebug, PartialEq, TypeInfo)]
@@ -16,11 +16,7 @@ pub struct CurrentDateInfo {
 
 impl CurrentDateInfo {
     /// Create new Current Date Info.
-    pub fn new(
-        current_year: i32,
-        current_month: u32,
-        current_day: u32,
-    ) -> CurrentDateInfo {
+    pub fn new(current_year: i32, current_month: u32, current_day: u32) -> CurrentDateInfo {
         CurrentDateInfo {
             current_month,
             current_day,
@@ -36,7 +32,7 @@ impl CurrentDateInfo {
             4..=6 => 2,
             7..=9 => 3,
             10..=12 => 4,
-            _ => 0
+            _ => 0,
         }
     }
 }
@@ -55,7 +51,7 @@ impl PenaltyType {
     pub fn penalty_percent(&self, current_quarter: u8) -> Perbill {
         match self {
             PenaltyType::Flat => Perbill::from_rational(7_u32, 40_u32),
-            PenaltyType::Declining => Perbill::from_percent(30 - (5 * current_quarter as u32))
+            PenaltyType::Declining => Perbill::from_percent(30 - (5 * current_quarter as u32)),
         }
     }
 }
