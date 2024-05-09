@@ -8,7 +8,6 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use frame_support::traits::tokens::ConversionToAssetBalance;
 use frame_support::PalletId;
 use pallet_balances::NegativeImbalance;
 use polkadot_primitives::{
@@ -34,8 +33,8 @@ use runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_support::traits::tokens::{
-    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
-    Preservation, Provenance, WithdrawConsequence,
+    fungible::Inspect as FungibleInspect, fungibles::SwapNative, nonfungibles_v2::Inspect,
+    DepositConsequence, Fortitude, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, SignedImbalance, WithdrawReasons,
@@ -74,18 +73,16 @@ use frame_support::weights::constants::RocksDbWeight as RuntimeDbWeight;
 use frame_support::{
     construct_runtime,
     dispatch::GetDispatchInfo,
-    parameter_types,
+    ord_parameter_types, parameter_types,
     traits::{
-        fungible::ItemOf, AsEnsureOriginWithArg, ConstU32, ConstU64, ConstU8, ExtrinsicCall,
-        FindAuthor, Hooks, KeyOwnerProofSystem,
+        fungible::ItemOf, AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8,
+        ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
     weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
 };
-use frame_system::{EnsureRoot, EnsureSigned};
-use pallet_energy_fee::{
-    traits::{AssetsBalancesConverter, NativeExchange},
-    CallFee, CustomFee,
-};
+use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
+use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
+use pallet_energy_fee::{traits::AssetsBalancesConverter, CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -797,15 +794,80 @@ impl pallet_asset_rate::Config for Runtime {
     type WeightInfo = pallet_asset_rate::weights::SubstrateWeight<Runtime>;
 }
 
+pub type PoolAssetsInstance = pallet_assets::Instance1;
+impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Balance = Balance;
+    type AssetId = AssetId;
+    type AssetIdParameter = Compact<AssetId>;
+    type Currency = Balances;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSignedBy<AssetConversionOrigin, AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    // Deposits are zero because creation/admin is limited to Asset Conversion pallet.
+    type AssetDeposit = ConstU128<0>;
+    type AssetAccountDeposit = ConstU128<0>;
+    type MetadataDepositBase = ConstU128<0>;
+    type MetadataDepositPerByte = ConstU128<0>;
+    type RemoveItemsLimit = ConstU32<500>;
+    type ApprovalDeposit = ApprovalDeposit;
+    type StringLimit = AssetsStringLimit;
+    type Freezer = ();
+    type Extra = ();
+    type CallbackHandle = ();
+    type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
+}
+
+parameter_types! {
+    pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
+    pub const AllowMultiAssetPools: bool = false;
+    pub const LiquidityWithdrawalFee: Permill = Permill::from_percent(1);
+    pub const PoolSetupFee: Balance = 0;
+    pub const PoolSwapFee: u32 = 10; // 1%
+    pub const MaxSwapPathLength: u32 = 2;
+    pub const MintMinLiquidity: Balance = 100;
+}
+
+ord_parameter_types! {
+    pub const AssetConversionOrigin: AccountId =
+        AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
+}
+
+type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
+type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
+
+impl pallet_energy_broker::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Formula = ConstantSum<EnergyRate>;
+    type Currency = Balances;
+    type Balance = Balance;
+    type HigherPrecisionBalance = sp_core::U256;
+    type AssetBalance = Balance;
+    type AssetId = AssetId;
+    type Assets = Assets;
+    type PoolAssetId = AssetId;
+    type PoolAssets = PoolAssets;
+    type PalletId = AssetConversionPalletId;
+    type LPFee = PoolSwapFee;
+    type PoolSetupFee = PoolSetupFee;
+    type PoolSetupFeeReceiver = AssetConversionOrigin;
+    type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
+    type AllowMultiAssetPools = AllowMultiAssetPools;
+    type MaxSwapPathLength = MaxSwapPathLength;
+    type MintMinLiquidity = MintMinLiquidity;
+    type MultiAssetId = NativeOrAssetId<AssetId>;
+    type MultiAssetIdConverter = NativeOrAssetIdConverter<AssetId>;
+    type WeightInfo = pallet_energy_broker::weights::SubstrateWeight<Runtime>;
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
+}
+
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
     pub GetConstantGasLimit: U256 = U256::from(100_000);
     pub EnergyBrokerPalletId: PalletId = PalletId(*b"enrgbrkr");
 }
-
-pub type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
-pub type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
-pub type EnergyExchange = NativeExchange<AssetId, Balances, EnergyItem, EnergyRate, VNRG>;
 
 pub struct EnergyBrokerSink;
 
@@ -817,12 +879,50 @@ impl OnUnbalanced<NegativeImbalance<Runtime>> for EnergyBrokerSink {
     }
 }
 
+pub struct EnergyBrokerExchange;
+
+impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
+    for EnergyBrokerExchange
+{
+    fn convert_from_input(amount: Balance) -> Result<Balance, DispatchError> {
+        EnergyBroker::get_amount_out(
+            &amount,
+            (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
+        )
+        .map_err(|e| e.into())
+    }
+
+    fn convert_from_output(amount: Balance) -> Result<Balance, DispatchError> {
+        EnergyBroker::get_amount_in(
+            &amount,
+            (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
+        )
+        .map_err(|e| e.into())
+    }
+
+    fn exchange_from_input(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
+        EnergyBroker::swap_exact_native_for_tokens(*who, VNRG::get(), amount, None, *who, true)
+    }
+
+    fn exchange_from_output(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
+        EnergyBroker::swap_native_for_exact_tokens(*who, VNRG::get(), amount, None, *who, true)
+    }
+
+    fn exchange_inner(
+        _who: &AccountId,
+        _amount_in: Balance,
+        _amount_out: Balance,
+    ) -> Result<Balance, DispatchError> {
+        Err(DispatchError::Other("Unimplemented"))
+    }
+}
+
 impl pallet_energy_fee::Config for Runtime {
     type ManageOrigin = MoreThanHalfCouncil;
     type RuntimeEvent = RuntimeEvent;
     type FeeTokenBalanced = EnergyItem;
     type MainTokenBalanced = Balances;
-    type EnergyExchange = EnergyExchange;
+    type EnergyExchange = EnergyBrokerExchange;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAssetId = VNRG;
@@ -1292,6 +1392,7 @@ construct_runtime!(
         AssetRate: pallet_asset_rate = 6,
         TransactionPayment: pallet_transaction_payment = 7,
         Sudo: pallet_sudo = 8,
+        PoolAssets: pallet_assets::<Instance1> = 9,
 
         EVM: pallet_evm = 15,
         EVMChainId: pallet_evm_chain_id = 16,
@@ -1316,6 +1417,7 @@ construct_runtime!(
         Historical: pallet_session::historical = 37,
         AuthorityDiscovery: pallet_authority_discovery = 38,
         EnergyGeneration: pallet_energy_generation = 39,
+        EnergyBroker: pallet_energy_broker = 40,
         Privileges: pallet_privileges = 41,
 
         // Governance-related pallets
@@ -1411,7 +1513,8 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations = (migrations::V0101, migrations::V0103, migrations::Unreleased);
+pub type Migrations =
+    (migrations::V0101, migrations::V0103, migrations::V0104, migrations::Unreleased);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
@@ -2119,7 +2222,44 @@ impl_runtime_apis! {
         }
 
         fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
-            EnergyRate::to_asset_balance(UNITS, VNRG::get()).ok()
+            EnergyBroker::quote_price_exact_tokens_for_tokens(
+                NativeOrAssetId::Native,
+                NativeOrAssetId::Asset(VNRG::get()),
+                UNITS,
+                true
+            )
+        }
+    }
+
+    impl pallet_energy_broker::AssetConversionApi<
+        Block,
+        Balance,
+        Balance,
+        NativeOrAssetId<AssetId>
+    > for Runtime {
+        fn quote_price_tokens_for_exact_tokens(
+            asset1: NativeOrAssetId<AssetId>,
+            asset2: NativeOrAssetId<AssetId>,
+            amount: Balance,
+            include_fee: bool,
+        ) -> Option<Balance> {
+            EnergyBroker::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
+        }
+
+        fn quote_price_exact_tokens_for_tokens(
+            asset1: NativeOrAssetId<AssetId>,
+            asset2: NativeOrAssetId<AssetId>,
+            amount: Balance,
+            include_fee: bool,
+        ) -> Option<Balance> {
+            EnergyBroker::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
+        }
+
+        fn get_reserves(
+            asset1: NativeOrAssetId<AssetId>,
+            asset2: NativeOrAssetId<AssetId>,
+        ) -> Option<(Balance, Balance)> {
+            EnergyBroker::get_reserves(&asset1, &asset2).ok()
         }
     }
 

@@ -254,6 +254,7 @@ parity-scale-codec = { version = "3.2", default-features = false, features = [
     "derive",
 ] }
 paste = "1.0"
+primitive-types = { version = "0.12.2", default-features = false }
 scale-info = { version = "2.3", default-features = false, features = [
     "derive",
     "serde",
@@ -421,8 +422,9 @@ polkadot-primitives = { path = "primitives", default-features = false }
 vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
 vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false }
 
-pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-claiming = { path = "pallets/claiming", default-features = false }
+pallet-energy-broker = { path = "pallets/energy-broker", default-features = false }
+pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }
 pallet-faucet = { path = "pallets/faucet", default-features = false }
 pallet-nac-managing = { path = "pallets/nac-managing", default-features = false }

@@ -19,6 +19,7 @@ log = { workspace = true }
 libsecp256k1 = { workspace = true }
 orml-traits = { workspace = true }
 hex-literal = { workspace = true }
+primitive-types = { workspace = true, features = ["codec", "scale-info", "num-traits"] }
 
 # Polkadot
 polkadot-primitives = { workspace = true }
@@ -60,6 +61,7 @@ pallet-bounties = { workspace = true }
 pallet-claiming = { workspace = true }
 pallet-collective = { workspace = true }
 pallet-democracy = { workspace = true }
+pallet-energy-broker = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-faucet = { workspace = true }
@@ -163,6 +165,7 @@ try-runtime = [
     "pallet-evm/try-runtime",
     "pallet-evm-chain-id/try-runtime",
     "pallet-claiming/try-runtime",
+    "pallet-energy-broker/try-runtime",
     "pallet-energy-fee/try-runtime",
     "pallet-energy-generation/try-runtime",
     "pallet-hotfix-sufficients/try-runtime",
@@ -181,6 +184,7 @@ std = [
     # "precompile-utils/std",
     # "pallet-evm-precompile-balances-erc20/std",
     "parity-scale-codec/std",
+    "primitive-types/std",
     "scale-info/std",
     "orml-traits/std",
     # Polkadot
@@ -262,6 +266,7 @@ std = [
     "pallet-nac-managing/std",
     "pallet-privileges/std",
     "pallet-reputation/std",
+    "pallet-energy-broker/std",
     "pallet-energy-generation/std",
     "pallet-energy-fee/std",
     "energy-fee-runtime-api/std",
@@ -274,6 +279,7 @@ runtime-benchmarks = [
     "frame-system/runtime-benchmarks",
     "pallet-assets/runtime-benchmarks",
     "pallet-collective/runtime-benchmarks",
+    "pallet-energy-broker/runtime-benchmarks",
     "pallet-energy-fee/runtime-benchmarks",
     "pallet-ethereum/runtime-benchmarks",
     "pallet-hotfix-sufficients/runtime-benchmarks",

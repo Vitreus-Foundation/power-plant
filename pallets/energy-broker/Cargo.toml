@@ -1,0 +1,46 @@
+[package]
+name = "pallet-energy-broker"
+version = "0.1.0"
+authors = ["Innowise FinTech Team"]
+edition = "2021"
+readme = "README.md"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+parity-scale-codec = { workspace = true, default-features = false }
+frame-support = { workspace = true, default-features = false }
+frame-system = { workspace = true, default-features = false }
+frame-benchmarking = { workspace = true, default-features = false, optional = true }
+scale-info = { workspace = true, default-features = false, features = ["derive"] }
+sp-api = { workspace = true, default-features = false }
+sp-core = { workspace = true, default-features = false }
+sp-io = { workspace = true, default-features = false }
+sp-std = { workspace = true, default-features = false }
+sp-runtime = { workspace = true, default-features = false }
+sp-arithmetic = { workspace = true, default-features = false }
+
+[dev-dependencies]
+pallet-balances = { workspace = true, features = ["std"] }
+pallet-assets = { workspace = true, features = ["std"] }
+primitive-types = { workspace = true, default-features = false, features = ["codec", "scale-info", "num-traits"] }
+
+[features]
+default = ["std"]
+std = [
+	"parity-scale-codec/std",
+	"frame-benchmarking?/std",
+	"frame-support/std",
+	"frame-system/std",
+	"scale-info/std",
+	"sp-std/std",
+	"sp-runtime/std",
+	"sp-arithmetic/std"
+]
+runtime-benchmarks = [
+	"frame-benchmarking/runtime-benchmarks",
+	"frame-system/runtime-benchmarks",
+	"sp-runtime/runtime-benchmarks",
+]
+try-runtime = ["frame-support/try-runtime"]

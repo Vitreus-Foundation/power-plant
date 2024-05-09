@@ -4222,6 +4222,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "impl-num-traits"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "951641f13f873bff03d4bf19ae8bec531935ac0ac2cc775f84d7edfdcfed3f17"
+dependencies = [
+ "integer-sqrt",
+ "num-traits",
+ "uint",
+]
+
+[[package]]
 name = "impl-rlp"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6754,6 +6765,26 @@ dependencies = [
  "sp-npos-elections",
  "sp-runtime",
  "sp-staking",
+ "sp-std",
+]
+
+[[package]]
+name = "pallet-energy-broker"
+version = "0.1.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "pallet-assets",
+ "pallet-balances",
+ "parity-scale-codec",
+ "primitive-types",
+ "scale-info",
+ "sp-api",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
  "sp-std",
 ]
 
@@ -9858,12 +9889,13 @@ dependencies = [
 
 [[package]]
 name = "primitive-types"
-version = "0.12.1"
+version = "0.12.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9f3486ccba82358b11a77516035647c34ba167dfa53312630de83b12bd4f3d66"
+checksum = "0b34d9fd68ae0b74a41b21c03c2f62847aa0ffea044eee893b4c140b37e244e2"
 dependencies = [
  "fixed-hash",
  "impl-codec",
+ "impl-num-traits",
  "impl-rlp",
  "impl-serde",
  "scale-info",
@@ -14829,6 +14861,7 @@ dependencies = [
  "pallet-collective",
  "pallet-democracy",
  "pallet-dynamic-fee",
+ "pallet-energy-broker",
  "pallet-energy-fee",
  "pallet-energy-generation",
  "pallet-ethereum",
@@ -14866,6 +14899,7 @@ dependencies = [
  "polkadot-primitives",
  "polkadot-runtime-common",
  "polkadot-runtime-parachains",
+ "primitive-types",
  "scale-info",
  "sp-api",
  "sp-authority-discovery",
