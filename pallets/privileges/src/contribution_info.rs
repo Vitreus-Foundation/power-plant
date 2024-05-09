@@ -2,7 +2,7 @@ use core::default::Default;
 use super::*;
 
 /// Current date info.
-#[derive(Clone, Encode, Decode, RuntimeDebug, PartialEq, TypeInfo)]
+#[derive(Clone, Encode, Decode, Default, RuntimeDebug, PartialEq, TypeInfo)]
 pub struct CurrentDateInfo {
     /// Current year.
     pub current_year: i32,
@@ -12,18 +12,6 @@ pub struct CurrentDateInfo {
     pub current_day: u32,
     /// Current quarter.
     pub current_quarter: u8,
-}
-
-impl Default for CurrentDateInfo
-{
-    fn default() -> Self {
-        CurrentDateInfo {
-            current_year: 0,
-            current_month: 0,
-            current_day: 0,
-            current_quarter: 0
-        }
-    }
 }
 
 impl CurrentDateInfo {

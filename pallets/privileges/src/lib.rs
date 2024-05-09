@@ -239,10 +239,10 @@ impl<T: Config> Pallet<T> {
         ensure!(!Self::is_penalty_free_period(), Error::<T>::IsNotPenaltyFreePeriod);
         VipMembers::<T>::try_mutate::<_, _, Error<T>, _>(account, |vip_config| {
             if let Some(vip) = vip_config {
-                vip.tax_type = new_penalty_type.clone();
+                vip.tax_type = new_penalty_type;
                 Ok(())
             } else {
-                Err(Error::<T>::AccountHasNotVipStatus.into())
+                Err(Error::<T>::AccountHasNotVipStatus)
             }
         })?;
 
@@ -258,12 +258,8 @@ impl<T: Config> Pallet<T> {
         }
 
         // Check account cooperator status.
-        return if let Some(cooperation) = pallet_energy_generation::Pallet::<T>::cooperators(account) {
-            return if cooperation.targets.is_empty() {
-                false
-            } else {
-                true
-            }
+        if let Some(cooperation) = pallet_energy_generation::Pallet::<T>::cooperators(account) {
+            !cooperation.targets.is_empty()
         } else {
             false
         }
