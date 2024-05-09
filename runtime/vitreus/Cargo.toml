@@ -71,6 +71,7 @@ pallet-nfts = { workspace = true }
 pallet-nfts-runtime-api = { workspace = true }
 pallet-offences = { workspace = true }
 pallet-preimage = { workspace = true }
+pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-scheduler = { workspace = true }
 pallet-session = { workspace = true }
@@ -166,6 +167,7 @@ try-runtime = [
     "pallet-energy-generation/try-runtime",
     "pallet-hotfix-sufficients/try-runtime",
     "pallet-nac-managing/try-runtime",
+    "pallet-privileges/try-runtime",
     "pallet-reputation/try-runtime",
     "pallet-simple-vesting/try-runtime",
     "pallet-treasury-extension/try-runtime",
@@ -258,6 +260,7 @@ std = [
     "pallet-claiming/std",
     "pallet-simple-vesting/std",
     "pallet-nac-managing/std",
+    "pallet-privileges/std",
     "pallet-reputation/std",
     "pallet-energy-generation/std",
     "pallet-energy-fee/std",

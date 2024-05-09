@@ -62,7 +62,9 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[allow(clippy::module_inception)]
 #[frame_support::pallet]
 pub mod pallet {
-    use crate::{slashing::StorageEssentials, BenchmarkingConfig, EnergyOf};
+    use crate::{
+        slashing::StorageEssentials, BenchmarkingConfig, EnergyOf, OnVipMembershipHandler,
+    };
 
     use super::*;
 
@@ -233,6 +235,9 @@ pub mod pallet {
 
         /// `ReputationTier` -> `Perbill` mapping, depicting additional energy reward ratio per tier.
         type ReputationTierEnergyRewardAdditionalPercentMapping: GetByKey<ReputationTier, Perbill>;
+
+        /// A handler called for every operation depends on VIP status.
+        type OnVipMembershipHandler: OnVipMembershipHandler<Self::AccountId, Weight>;
 
         /// Some parameters of the benchmarking.
         type BenchmarkingConfig: BenchmarkingConfig;
