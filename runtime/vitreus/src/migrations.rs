@@ -157,7 +157,7 @@ impl OnRuntimeUpgrade for InitEnergyBroker {
         }
 
         weight += RocksDbWeight::get().reads(1);
-        let signer = match Sudo::key() {
+        let depositor = match Sudo::key() {
             Some(account) => account,
             None => {
                 log::warn!("Failed to get sudo account, abort migration");
@@ -176,7 +176,8 @@ impl OnRuntimeUpgrade for InitEnergyBroker {
 
         weight += <Runtime as pallet_energy_broker::Config>::WeightInfo::create_pool();
         if EnergyBroker::create_pool(
-            RuntimeOrigin::signed(signer),
+            RuntimeOrigin::root(),
+            depositor,
             NativeOrAssetId::Native,
             NativeOrAssetId::Asset(VNRG::get()),
         )

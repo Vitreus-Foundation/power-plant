@@ -76,7 +76,8 @@ where
     let (caller, caller_lookup) = create_asset::<T>(asset2);
 
     assert_ok!(AssetConversion::<T>::create_pool(
-        SystemOrigin::Signed(caller.clone()).into(),
+        SystemOrigin::Root.into(),
+        caller_lookup.clone(),
         asset1.clone(),
         asset2.clone()
     ));
@@ -108,12 +109,12 @@ benchmarks! {
     create_pool {
         let asset1 = T::MultiAssetIdConverter::get_native();
         let asset2 = T::MultiAssetIdConverter::into_multiasset_id(&T::BenchmarkHelper::asset_id(0_u32));
-        let (caller, _) = create_asset::<T>(&asset2);
-    }: _(SystemOrigin::Signed(caller.clone()), asset1.clone(), asset2.clone())
+        let (caller, caller_lookup) = create_asset::<T>(&asset2);
+    }: _(SystemOrigin::Root, caller_lookup, asset1.clone(), asset2.clone())
     verify {
         let lp_token = get_lp_token_id::<T>();
         let pool_id = (asset1.clone(), asset2.clone());
-        assert_last_event::<T>(Event::PoolCreated { creator: caller.clone(), pool_id, lp_token }.into());
+        assert_last_event::<T>(Event::PoolCreated { creator: caller, pool_id, lp_token }.into());
     }
 
     add_liquidity {

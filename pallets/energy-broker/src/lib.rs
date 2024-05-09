@@ -387,10 +387,13 @@ pub mod pallet {
         #[pallet::weight(T::WeightInfo::create_pool())]
         pub fn create_pool(
             origin: OriginFor<T>,
+            depositor: AccountIdLookupOf<T>,
             asset1: T::MultiAssetId,
             asset2: T::MultiAssetId,
         ) -> DispatchResult {
-            let sender = ensure_signed(origin)?;
+            ensure_root(origin)?;
+            let depositor = T::Lookup::lookup(depositor)?;
+
             ensure!(asset1 != asset2, Error::<T>::EqualAssets);
 
             let pool_id = Self::get_pool_id(asset1.clone(), asset2.clone());
@@ -407,7 +410,7 @@ pub mod pallet {
 
             // pay the setup fee
             T::Currency::transfer(
-                &sender,
+                &depositor,
                 &T::PoolSetupFeeReceiver::get(),
                 T::PoolSetupFee::get(),
                 Preserve,
@@ -415,12 +418,12 @@ pub mod pallet {
 
             if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset1) {
                 if !T::Assets::contains(&asset, &pool_account) {
-                    T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
+                    T::Assets::touch(asset, pool_account.clone(), depositor.clone())?;
                 }
             }
             if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset2) {
                 if !T::Assets::contains(&asset, &pool_account) {
-                    T::Assets::touch(asset, pool_account.clone(), sender.clone())?;
+                    T::Assets::touch(asset, pool_account.clone(), depositor.clone())?;
                 }
             }
 
@@ -429,12 +432,12 @@ pub mod pallet {
             NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
             T::PoolAssets::create(lp_token.clone(), pool_account.clone(), false, 1u32.into())?;
-            T::PoolAssets::touch(lp_token.clone(), pool_account.clone(), sender.clone())?;
+            T::PoolAssets::touch(lp_token.clone(), pool_account.clone(), depositor.clone())?;
 
             let pool_info = PoolInfo { lp_token: lp_token.clone() };
             Pools::<T>::insert(pool_id.clone(), pool_info);
 
-            Self::deposit_event(Event::PoolCreated { creator: sender, pool_id, lp_token });
+            Self::deposit_event(Event::PoolCreated { creator: depositor, pool_id, lp_token });
 
             Ok(())
         }
