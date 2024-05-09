@@ -16,6 +16,7 @@ use frame_system::pallet_prelude::BlockNumberFor;
 use orml_traits::GetByKey;
 use scale_info::prelude::*;
 
+use crate::OnVipMembershipHandler;
 use pallet_reputation::{ReputationPoint, ReputationRecord};
 use pallet_session::historical;
 use sp_runtime::{
@@ -41,6 +42,27 @@ impl<T: Config> Pallet<T> {
     pub fn slashable_balance_of(stash: &T::AccountId) -> StakeOf<T> {
         // Weight note: consider making the stake accessible through stash.
         Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
+    }
+
+    /// Slash account stake (reason: exit VIP).
+    pub fn slash_vip_account(_account: &T::AccountId, _percent: Perbill) -> DispatchResult {
+        todo!()
+    }
+
+    /// The total stake of VIP member.
+    pub fn get_active_stake(account: &T::AccountId) -> StakeOf<T> {
+        let ledger_info = Self::ledger(account);
+
+        if let Some(ledger_info) = ledger_info {
+            ledger_info.active
+        } else {
+            T::StakeBalance::default()
+        }
+    }
+
+    /// The user is in Validators list.
+    pub fn is_user_validator(stash: &T::AccountId) -> bool {
+        Validators::<T>::contains_key(stash)
     }
 
     /// Checks if the account has enough reputation to be a validator.
@@ -311,6 +333,7 @@ impl<T: Config> Pallet<T> {
     pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
         T::StakeCurrency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
         <Ledger<T>>::insert(controller, ledger);
+        T::OnVipMembershipHandler::update_active_stake(controller);
     }
 
     /// Chill a stash account.
@@ -320,6 +343,7 @@ impl<T: Config> Pallet<T> {
         if chilled_as_validator || chilled_as_cooperator {
             Self::deposit_event(Event::<T>::Chilled { stash: stash.clone() });
         }
+        T::OnVipMembershipHandler::kick_account_from_vip(stash);
     }
 
     /// Plan a new session potentially trigger a new era.
@@ -351,6 +375,9 @@ impl<T: Config> Pallet<T> {
                     return None;
                 },
             }
+
+            // Update quarter info for VIP / VIPP members.
+            T::OnVipMembershipHandler::change_quarter_info();
 
             // New era.
             let maybe_new_era_validators = Self::try_trigger_new_era(session_index);

@@ -104,6 +104,7 @@ pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
 pub use pallet_energy_generation::StakerStatus;
 pub use pallet_nac_managing;
+pub use pallet_privileges;
 pub use pallet_reputation::ReputationPoint;
 
 // A few exports that help ease life for downstream crates.
@@ -214,7 +215,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 103,
+    spec_version: 104,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -691,6 +692,7 @@ impl pallet_energy_generation::Config for Runtime {
     type SlashDeferDuration = SlashDeferDuration;
     type StakeBalance = Balance;
     type StakeCurrency = Balances;
+    type OnVipMembershipHandler = Privileges;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
 }
@@ -758,6 +760,13 @@ impl pallet_nac_managing::Config for Runtime {
     type KeyLimit = ConstU32<50>;
     type ValueLimit = ConstU32<50>;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
+}
+
+impl pallet_privileges::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type UnixTime = Timestamp;
+    type WeightInfo = pallet_privileges::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1409,6 +1418,7 @@ construct_runtime!(
         AuthorityDiscovery: pallet_authority_discovery = 38,
         EnergyGeneration: pallet_energy_generation = 39,
         EnergyBroker: pallet_energy_broker = 40,
+        Privileges: pallet_privileges = 41,
 
         // Governance-related pallets
         Scheduler: pallet_scheduler = 45,
