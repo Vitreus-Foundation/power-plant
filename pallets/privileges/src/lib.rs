@@ -215,10 +215,6 @@ impl<T: Config> Pallet<T> {
                     let slash_percent =
                         vip_member_info.tax_type.penalty_percent(current_date.current_quarter);
                     penalty_percent = slash_percent;
-                    pallet_energy_generation::Pallet::<T>::slash_vip_account(
-                        account,
-                        slash_percent,
-                    )?;
                 }
 
                 VipMembers::<T>::remove(account);
