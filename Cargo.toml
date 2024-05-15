@@ -270,7 +270,6 @@ similar-asserts = "1.4"
 sqlx = "0.7.0-alpha.3"
 slices = "0.2"
 smallvec = "1.11.0"
-xcm = { git = "https://github.com/paritytech/polkadot", branch = "release-v0.9.42", default-features = false }
 rand = "0.8"
 chrono = { version = "0.4.38", default-features = false }
 
@@ -355,6 +354,7 @@ pallet-democracy = { git = "https://github.com/paritytech/substrate", branch = "
 pallet-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-im-online = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-membership = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-message-queue = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-offences = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-preimage = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-scheduler = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
@@ -418,6 +418,11 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # Polkadot
 polkadot-primitives = { path = "primitives", default-features = false }
 
+# XCM
+xcm = { path = "xcm", default-features = false }
+xcm-executor = { path = "xcm/xcm-executor", default-features = false }
+xcm-builder = { path = "xcm/xcm-builder", default-features = false }
+
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
 vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false }
@@ -432,6 +437,7 @@ pallet-privileges = { path = "pallets/privileges", default-features = false }
 pallet-reputation = { path = "pallets/reputation", default-features = false }
 pallet-simple-staking = { path = "pallets/simple-staking", default-features = false }
 pallet-simple-vesting = { path = "pallets/simple-vesting", default-features = false }
+pallet-xcm = { path = "xcm/pallet-xcm", default-features = false }
 
 # Node utility
 chain-spec = { path = "node/chain-spec" }
