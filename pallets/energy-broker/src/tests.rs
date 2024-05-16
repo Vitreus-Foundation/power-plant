@@ -694,7 +694,7 @@ fn can_swap_with_native() {
             RuntimeOrigin::signed(user),
             bvec![token_2, token_1],
             input_amount,
-            1,
+            Some(1),
             user,
             false,
         ));
@@ -741,7 +741,7 @@ fn can_swap_with_realistic_values() {
             RuntimeOrigin::signed(user),
             bvec![usd, dot],
             input_amount,
-            1,
+            Some(1),
             user,
             false,
         ));
@@ -772,7 +772,7 @@ fn can_not_swap_in_pool_with_no_liquidity_added_yet() {
                 RuntimeOrigin::signed(user),
                 bvec![token_2, token_1],
                 10,
-                1,
+                Some(1),
                 user,
                 false,
             ),
@@ -832,7 +832,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
                 RuntimeOrigin::signed(user),
                 bvec![token_2, token_1],
                 liquidity1 - ed + 1, // amount_out
-                u128::MAX,           // amount_in_max
+                None,                // amount_in_max
                 user,
                 false,
             ),
@@ -843,7 +843,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
             RuntimeOrigin::signed(user),
             bvec![token_2, token_1],
             liquidity1 - ed, // amount_out
-            u128::MAX,       // amount_in_max
+            None,            // amount_in_max
             user,
             false,
         ));
@@ -856,7 +856,7 @@ fn check_no_panic_when_try_swap_close_to_empty_pool() {
                 RuntimeOrigin::signed(user),
                 bvec![token_2, token_1],
                 token_1_left - 1, // amount_out
-                1,                // amount_in_max
+                Some(1),          // amount_in_max
                 user,
                 false,
             ),
@@ -899,7 +899,7 @@ fn swap_should_not_work_if_too_much_slippage() {
                 RuntimeOrigin::signed(user),
                 bvec![token_2, token_1],
                 exchange_amount, // amount_in
-                4000,            // amount_out_min
+                Some(4000),      // amount_out_min
                 user,
                 false,
             ),
@@ -950,7 +950,7 @@ fn can_swap_tokens_for_exact_tokens() {
             RuntimeOrigin::signed(user),
             bvec![token_1, token_2],
             exchange_out, // amount_out
-            3500,         // amount_in_max
+            Some(3500),   // amount_in_max
             user,
             true,
         ));
@@ -1020,7 +1020,7 @@ fn can_swap_tokens_for_exact_tokens_when_not_liquidity_provider() {
             RuntimeOrigin::signed(user),
             bvec![token_1, token_2],
             exchange_out, // amount_out
-            3500,         // amount_in_max
+            Some(3500),   // amount_in_max
             user,
             true,
         ));
@@ -1088,8 +1088,8 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
             AssetConversion::swap_tokens_for_exact_tokens(
                 RuntimeOrigin::signed(user),
                 bvec![token_1, token_2],
-                196, // amount_out
-                101, // amount_in_max
+                196,       // amount_out
+                Some(101), // amount_in_max
                 user,
                 true,
             ),
@@ -1100,8 +1100,8 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
             AssetConversion::swap_exact_tokens_for_tokens(
                 RuntimeOrigin::signed(user),
                 bvec![token_1, token_2],
-                100, // amount_in
-                1,   // amount_out_min
+                100,     // amount_in
+                Some(1), // amount_out_min
                 user,
                 true,
             ),
@@ -1144,7 +1144,7 @@ fn swap_tokens_for_exact_tokens_should_not_work_if_too_much_slippage() {
                 RuntimeOrigin::signed(user),
                 bvec![token_1, token_2],
                 exchange_out, // amount_out
-                4,            // amount_in_max just greater than slippage.
+                Some(4),      // amount_in_max just greater than slippage.
                 user,
                 true
             ),
@@ -1211,7 +1211,7 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
                 RuntimeOrigin::signed(user),
                 bvec![token_1],
                 input_amount,
-                80,
+                Some(80),
                 user,
                 true,
             ),
@@ -1223,7 +1223,7 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
                 RuntimeOrigin::signed(user),
                 bvec![token_1, token_2, token_3, token_2],
                 input_amount,
-                80,
+                Some(80),
                 user,
                 true,
             ),
@@ -1234,7 +1234,7 @@ fn swap_exact_tokens_for_tokens_in_multi_hops() {
             RuntimeOrigin::signed(user),
             bvec![token_1, token_2, token_3],
             input_amount, // amount_in
-            80,           // amount_out_min
+            Some(80),     // amount_out_min
             user,
             true,
         ));
@@ -1309,7 +1309,7 @@ fn swap_tokens_for_exact_tokens_in_multi_hops() {
             RuntimeOrigin::signed(user),
             bvec![token_1, token_2, token_3],
             exchange_out3, // amount_out
-            1000,          // amount_in_max
+            Some(1000),    // amount_in_max
             user,
             true,
         ));
@@ -1359,7 +1359,7 @@ fn can_not_swap_same_asset() {
                 RuntimeOrigin::signed(user),
                 bvec![token_1, token_1],
                 exchange_amount,
-                1,
+                Some(1),
                 user,
                 true,
             ),
@@ -1371,7 +1371,7 @@ fn can_not_swap_same_asset() {
                 RuntimeOrigin::signed(user),
                 bvec![NativeOrAssetId::Native, NativeOrAssetId::Native],
                 exchange_amount,
-                1,
+                Some(1),
                 user,
                 true,
             ),
