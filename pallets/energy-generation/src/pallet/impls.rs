@@ -51,55 +51,30 @@ impl<T: Config> Pallet<T> {
     pub fn slash_vip_account(account: &T::AccountId, tax_percent: Perbill) -> DispatchResult {
         let mut ledger_info = Self::ledger(account).ok_or(Error::<T>::NotController)?;
         let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
+        let slash_era = Self::current_era().ok_or(Error::<T>::InvalidEraToSlash)?;
 
-        if Self::is_user_validator(account) {
+        let tax = if Self::is_user_validator(account) {
             let tax = tax_percent * ledger_info.active;
             if ledger_info.active - tax < Self::min_bond_for_validator(account) {
                 Self::chill_stash(account);
             }
-
-            let slash_era = Self::current_era().ok_or(Error::<T>::InvalidEraToSlash)?;
-            let stake_value =
-                ledger_info.slash_stake(tax, T::StakeCurrency::minimum_balance(), slash_era);
-
-            if !stake_value.is_zero() {
-                let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
-                slashed_imbalance.subsume(imbalance);
-
-                <Pallet<T>>::update_ledger(account, &ledger_info);
-            }
+            tax
         } else {
             match Self::cooperators(account) {
-                None => {
-                    let tax = tax_percent * ledger_info.active;
-
-                    let slash_era = Self::current_era().ok_or(Error::<T>::InvalidEraToSlash)?;
-                    let stake_value = ledger_info.slash_stake(
-                        tax,
-                        T::StakeCurrency::minimum_balance(),
-                        slash_era,
-                    );
-
-                    if !stake_value.is_zero() {
-                        let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
-                        slashed_imbalance.subsume(imbalance);
-
-                        <Pallet<T>>::update_ledger(account, &ledger_info);
-                    }
-                },
                 Some(cooperations) => {
                     let mut tax_value = T::StakeBalance::default();
                     let min_cooperator_bond = MinCooperatorBond::<T>::get();
                     let mut new_targets: Vec<(T::AccountId, StakeOf<T>)> = Default::default();
                     for targets in cooperations.targets {
-                        let collaborations = Self::collaborations(&targets.0);
-                        if collaborations.is_some() && collaborations.unwrap().contains(account) {
-                            let tax = tax_percent * targets.1;
-                            if targets.1 - tax >= min_cooperator_bond {
-                                new_targets.push((targets.0, targets.1 - tax));
-                            }
+                        if let Some(collaborations) = Self::collaborations(&targets.0) {
+                            if collaborations.contains(account) {
+                                let tax = tax_percent * targets.1;
+                                if targets.1 - tax >= min_cooperator_bond {
+                                    new_targets.push((targets.0, targets.1 - tax));
+                                }
 
-                            tax_value += tax;
+                                tax_value += tax;
+                            }
                         }
                     }
 
@@ -120,21 +95,20 @@ impl<T: Config> Pallet<T> {
 
                     Self::do_add_cooperator(account, new_cooperations)?;
 
-                    let slash_era = Self::current_era().ok_or(Error::<T>::InvalidEraToSlash)?;
-                    let stake_value = ledger_info.slash_stake(
-                        tax_value,
-                        T::StakeCurrency::minimum_balance(),
-                        slash_era,
-                    );
-
-                    if !stake_value.is_zero() {
-                        let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
-                        slashed_imbalance.subsume(imbalance);
-
-                        <Pallet<T>>::update_ledger(account, &ledger_info);
-                    }
+                    tax_value
                 },
+                None => tax_percent * ledger_info.active,
             }
+        };
+
+        let stake_value =
+            ledger_info.slash_stake(tax, T::StakeCurrency::minimum_balance(), slash_era);
+
+        if !stake_value.is_zero() {
+            let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
+            slashed_imbalance.subsume(imbalance);
+
+            <Pallet<T>>::update_ledger(account, &ledger_info);
         }
 
         Ok(())
@@ -145,14 +119,9 @@ impl<T: Config> Pallet<T> {
         let ledger_info = Self::ledger(account);
 
         if Self::is_user_validator(account) {
-            if let Some(ledger_info) = ledger_info {
-                ledger_info.active
-            } else {
-                T::StakeBalance::default()
-            }
+            ledger_info.map_or_else(T::StakeBalance::default, |ledger| ledger.active)
         } else {
             match Self::cooperators(account) {
-                None => T::StakeBalance::default(),
                 Some(cooperations) => {
                     let mut active_stake = T::StakeBalance::default();
                     for targets in cooperations.targets {
@@ -169,6 +138,7 @@ impl<T: Config> Pallet<T> {
 
                     active_stake
                 },
+                None => T::StakeBalance::default(),
             }
         }
     }
