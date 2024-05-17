@@ -652,6 +652,7 @@ pub mod pallet {
 
                 let collaborative =
                     !self.disable_collaboration && Pallet::<T>::is_legit_for_collab(stash);
+                // println!("{:?}, {:?}", stash, controller);
                 frame_support::assert_ok!(match status {
                     crate::StakerStatus::Validator => <Pallet<T>>::validate(
                         T::RuntimeOrigin::from(Some(controller.clone()).into()),
@@ -742,6 +743,8 @@ pub mod pallet {
         FundedTarget,
         /// Invalid era to reward.
         InvalidEraToReward,
+        /// Invalid era to slash.
+        InvalidEraToSlash,
         /// Invalid number of cooperations.
         InvalidNumberOfCooperations,
         /// Items are not sorted and unique.
@@ -928,6 +931,7 @@ pub mod pallet {
 
                 // NOTE: ledger must be updated prior to calling `Self::weight_of`.
                 Self::update_ledger(&controller, &ledger);
+                T::OnVipMembershipHandler::update_active_stake(&stash);
 
                 Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
             }
@@ -1198,6 +1202,7 @@ pub mod pallet {
 
             Self::do_remove_validator(stash);
             Self::do_add_cooperator(stash, cooperations)?;
+            T::OnVipMembershipHandler::update_active_stake(stash);
 
             Self::deposit_event(Event::<T>::Cooperated { controller, targets: cooperator_targets });
 

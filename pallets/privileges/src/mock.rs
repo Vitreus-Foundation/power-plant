@@ -1,8 +1,6 @@
-//! Test utilities
+use crate::{self as pallet_privileges, *};
+use std::collections::BTreeMap;
 
-#![allow(unused_imports)]
-
-use crate::{self as pallet_energy_generation, *};
 use frame_support::{
     assert_ok, ord_parameter_types, parameter_types,
     storage::StorageValue,
@@ -12,22 +10,32 @@ use frame_support::{
     },
     weights::constants::RocksDbWeight,
 };
-use frame_support::weights::Weight;
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use orml_traits::GetByKey;
+use pallet_energy_generation::{
+    CurrentEra, EnergyDebtOf, EnergyOf, ErasEnergyPerStakeCurrency, ErasStakers, ErasTotalStake,
+    Ledger, RewardDestination, SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakerStatus,
+    TestBenchmarkingConfig, ValidatorPrefs,
+};
 use pallet_reputation::{
     ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_BLOCK,
 };
 use parity_scale_codec::Compact;
 use sp_core::H256;
+use sp_runtime::traits::BlakeTwo256;
 use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{Header, TestSignature, UintAuthorityId},
     traits::{IdentifyAccount, IdentityLookup, Verify, Zero},
-    BuildStorage, MultiSignature, Percent,
+    BoundToRuntimeAppPublic, BuildStorage, MultiSignature, Percent,
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::{
+    offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+    EraIndex, OnStakingUpdate, SessionIndex,
+};
 use sp_std::vec;
+
+type Block = frame_system::mocking::MockBlock<Test>;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -42,6 +50,11 @@ pub(crate) type AccountPublic = UintAuthorityId;
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
+
+impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
+    type Public = UintAuthorityId;
+}
+
 impl OneSessionHandler<AccountId> for OtherSessionHandler {
     type Key = UintAuthorityId;
 
@@ -62,37 +75,32 @@ impl OneSessionHandler<AccountId> for OtherSessionHandler {
     fn on_disabled(_validator_index: u32) {}
 }
 
-impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
-    type Public = UintAuthorityId;
-}
-
-pub fn is_disabled(controller: AccountId) -> bool {
-    let stash = PowerPlant::ledger(controller).unwrap().stash;
-    let validator_index = match Session::validators().iter().position(|v| *v == stash) {
-        Some(index) => index as u32,
-        None => return false,
-    };
-
-    Session::disabled_validators().contains(&validator_index)
-}
-
-type Block = frame_system::mocking::MockBlock<Test>;
-
+// Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
-    pub enum Test {
+    pub enum Test
+    {
+        System: frame_system,
         Assets: pallet_assets,
+        Timestamp: pallet_timestamp,
         Authorship: pallet_authorship,
         Balances: pallet_balances,
+        EnergyGeneration: pallet_energy_generation,
+        Session: pallet_session,
+        Reputation: pallet_reputation,
+        Nfts: pallet_nfts,
         Historical: pallet_session::historical,
         NacManaging: pallet_nac_managing,
-        Nfts: pallet_nfts,
-        ReputationPallet: pallet_reputation,
-        Session: pallet_session,
-        PowerPlant: pallet_energy_generation,
-        System: frame_system,
-        Timestamp: pallet_timestamp,
+        Privileges: pallet_privileges,
     }
 );
+
+parameter_types! {
+    pub static SessionsPerEra: SessionIndex = 3;
+    pub static ExistentialDeposit: Balance = 1;
+    pub static SlashDeferDuration: EraIndex = 0;
+    pub static Period: BlockNumber = 5;
+    pub static Offset: BlockNumber = 0;
+}
 
 /// Author of block is always 11
 pub struct Author11;
@@ -105,191 +113,30 @@ impl FindAuthor<AccountId> for Author11 {
     }
 }
 
-parameter_types! {
-    pub static SessionsPerEra: SessionIndex = 3;
-    pub static ExistentialDeposit: Balance = 1;
-    pub static SlashDeferDuration: EraIndex = 0;
-    pub static Period: BlockNumber = 5;
-    pub static Offset: BlockNumber = 0;
-}
-
 impl frame_system::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
     type BaseCallFilter = frame_support::traits::Everything;
     type BlockWeights = ();
     type BlockLength = ();
-    type DbWeight = RocksDbWeight;
     type RuntimeOrigin = RuntimeOrigin;
     type RuntimeCall = RuntimeCall;
     type Nonce = Nonce;
-    type Block = Block;
     type Hash = H256;
-    type Hashing = ::sp_runtime::traits::BlakeTwo256;
+    type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
-    type RuntimeEvent = RuntimeEvent;
-    type BlockHashCount = frame_support::traits::ConstU64<250>;
+    type Block = Block;
+    type BlockHashCount = ConstU64<250>;
+    type DbWeight = RocksDbWeight;
     type Version = ();
     type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = ReputationPallet;
-    type OnKilledAccount = ReputationPallet;
+    type OnNewAccount = ();
+    type OnKilledAccount = ();
     type SystemWeightInfo = ();
     type SS58Prefix = ();
     type OnSetCode = ();
-    type MaxConsumers = frame_support::traits::ConstU32<16>;
-}
-
-impl pallet_balances::Config for Test {
-    type MaxLocks = frame_support::traits::ConstU32<1024>;
-    type MaxReserves = ();
-    type ReserveIdentifier = [u8; 8];
-    type Balance = Balance;
-    type RuntimeEvent = RuntimeEvent;
-    type DustRemoval = ();
-    type ExistentialDeposit = ExistentialDeposit;
-    type AccountStore = System;
-    type WeightInfo = ();
-    type FreezeIdentifier = ();
-    type MaxFreezes = ();
-    type MaxHolds = ();
-    type RuntimeHoldReason = ();
-}
-
-impl pallet_reputation::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type WeightInfo = ();
-}
-
-parameter_types! {
-    pub const AssetDeposit: Balance = 0;
-    pub const AssetAccountDeposit: Balance = 0;
-    pub const ApprovalDeposit: Balance = 0;
-    pub const AssetsStringLimit: u32 = 50;
-    pub const MetadataDepositBase: Balance = 0;
-    pub const MetadataDepositPerByte: Balance = 0;
-}
-
-pub type AssetId = u32;
-
-impl pallet_assets::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type Balance = Balance;
-    type AssetId = AssetId;
-    type Currency = Balances;
-    type ForceOrigin = EnsureRoot<AccountId>;
-    type AssetDeposit = AssetDeposit;
-    type AssetAccountDeposit = AssetAccountDeposit;
-    type MetadataDepositBase = MetadataDepositBase;
-    type MetadataDepositPerByte = MetadataDepositPerByte;
-    type ApprovalDeposit = ApprovalDeposit;
-    type StringLimit = AssetsStringLimit;
-    type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
-    type RemoveItemsLimit = ConstU32<1000>;
-    type AssetIdParameter = Compact<AssetId>;
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type CallbackHandle = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
-}
-
-sp_runtime::impl_opaque_keys! {
-    pub struct SessionKeys {
-        pub other: OtherSessionHandler,
-    }
-}
-
-impl pallet_session::Config for Test {
-    type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, PowerPlant>;
-    type Keys = SessionKeys;
-    type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-    type SessionHandler = (OtherSessionHandler,);
-    type RuntimeEvent = RuntimeEvent;
-    type ValidatorId = AccountId;
-    type ValidatorIdOf = crate::StashOf<Test>;
-    type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
-    type WeightInfo = ();
-}
-
-impl pallet_session::historical::Config for Test {
-    type FullIdentification = crate::Exposure<AccountId, Balance>;
-    type FullIdentificationOf = crate::ExposureOf<Test>;
-}
-
-impl pallet_authorship::Config for Test {
-    type FindAuthor = Author11;
-    type EventHandler = Pallet<Test>;
-}
-
-impl pallet_timestamp::Config for Test {
-    type Moment = u64;
-    type OnTimestampSet = ();
-    type MinimumPeriod = ConstU64<5>;
-    type WeightInfo = ();
-}
-
-pallet_staking_reward_curve::build! {
-    const I_NPOS: PiecewiseLinear<'static> = curve!(
-        min_inflation: 0_025_000,
-        max_inflation: 0_100_000,
-        ideal_stake: 0_500_000,
-        falloff: 0_050_000,
-        max_piece_count: 40,
-        test_precision: 0_005_000,
-    );
-}
-
-parameter_types! {
-    pub const BondingDuration: EraIndex = 3;
-    pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
-    pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
-}
-
-parameter_types! {
-    pub static RewardRemainderUnbalanced: u128 = 0;
-}
-
-pub struct RewardRemainderMock;
-
-impl OnUnbalanced<StakeNegativeImbalanceOf<Test>> for RewardRemainderMock {
-    fn on_nonzero_unbalanced(amount: StakeNegativeImbalanceOf<Test>) {
-        RewardRemainderUnbalanced::mutate(|v| {
-            *v += amount.peek();
-        });
-        drop(amount);
-    }
-}
-
-parameter_types! {
-    pub const VNRG: AssetId = 1;
-    pub static BatterySlotCapacity: EnergyOf<Test> = EnergyOf::<Test>::from(100_000_000_000u128);
-    pub static MaxCooperations: u32 = 16;
-    pub static HistoryDepth: u32 = 80;
-    pub static MaxUnlockingChunks: u32 = 32;
-    pub static RewardOnUnbalanceWasCalled: bool = false;
-    pub static LedgerSlashPerEra: (StakeOf<Test>, BTreeMap<EraIndex, StakeOf<Test>>) = (Zero::zero(), BTreeMap::new());
-    pub static MaxWinners: u32 = 100;
-    pub static ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
-    pub static CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Trailblazer(1);
-}
-
-pub struct MockReward;
-impl OnUnbalanced<EnergyDebtOf<Test>> for MockReward {
-    fn on_unbalanced(_: EnergyDebtOf<Test>) {
-        RewardOnUnbalanceWasCalled::set(true);
-    }
-}
-
-pub struct EventListenerMock;
-impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
-    fn on_slash(
-        _pool_account: &AccountId,
-        slashed_bonded: Balance,
-        slashed_chunks: &BTreeMap<EraIndex, Balance>,
-    ) {
-        LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
-    }
+    type MaxConsumers = ConstU32<16>;
 }
 
 pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
@@ -354,6 +201,13 @@ impl pallet_nfts::Config for Test {
     type Locker = ();
 }
 
+impl pallet_timestamp::Config for Test {
+    type MinimumPeriod = ConstU64<1000>;
+    type Moment = u64;
+    type OnTimestampSet = ();
+    type WeightInfo = ();
+}
+
 parameter_types! {
     pub const NftCollectionId: CollectionId = 0;
 }
@@ -371,57 +225,199 @@ impl pallet_nac_managing::Config for Test {
     type WeightInfo = ();
 }
 
+parameter_types! {
+    pub const AssetDeposit: Balance = 0;
+    pub const AssetAccountDeposit: Balance = 0;
+    pub const ApprovalDeposit: Balance = 0;
+    pub const AssetsStringLimit: u32 = 50;
+    pub const MetadataDepositBase: Balance = 0;
+    pub const MetadataDepositPerByte: Balance = 0;
+}
+
+pub type AssetId = u32;
+
+impl pallet_assets::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Balance = Balance;
+    type AssetId = AssetId;
+    type Currency = Balances;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type AssetDeposit = AssetDeposit;
+    type AssetAccountDeposit = AssetAccountDeposit;
+    type MetadataDepositBase = MetadataDepositBase;
+    type MetadataDepositPerByte = MetadataDepositPerByte;
+    type ApprovalDeposit = ApprovalDeposit;
+    type StringLimit = AssetsStringLimit;
+    type Freezer = ();
+    type Extra = ();
+    type WeightInfo = ();
+    type RemoveItemsLimit = ConstU32<1000>;
+    type AssetIdParameter = Compact<AssetId>;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type CallbackHandle = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
+}
+
+sp_runtime::impl_opaque_keys! {
+    pub struct SessionKeys {
+        pub other: OtherSessionHandler,
+    }
+}
+
+impl pallet_session::Config for Test {
+    type SessionManager = pallet_session::historical::NoteHistoricalRoot<Test, EnergyGeneration>;
+    type Keys = SessionKeys;
+    type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
+    type SessionHandler = (OtherSessionHandler,);
+    type RuntimeEvent = RuntimeEvent;
+    type ValidatorId = AccountId;
+    type ValidatorIdOf = pallet_energy_generation::StashOf<Test>;
+    type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
+    type WeightInfo = ();
+}
+
+impl pallet_session::historical::Config for Test {
+    type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
+    type FullIdentificationOf = pallet_energy_generation::ExposureOf<Test>;
+}
+
+impl pallet_reputation::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
+}
+
+impl pallet_authorship::Config for Test {
+    type FindAuthor = Author11;
+    type EventHandler = pallet_energy_generation::Pallet<Test>;
+}
+
+impl pallet_privileges::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type UnixTime = Timestamp;
+    type WeightInfo = ();
+}
+
+impl pallet_balances::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type WeightInfo = ();
+    type Balance = Balance;
+    type DustRemoval = ();
+    type ExistentialDeposit = ConstU128<1>;
+    type AccountStore = System;
+    type ReserveIdentifier = [u8; 8];
+    type RuntimeHoldReason = ();
+    type FreezeIdentifier = ();
+    type MaxLocks = ();
+    type MaxReserves = ();
+    type MaxHolds = ();
+    type MaxFreezes = ();
+}
+
+pallet_staking_reward_curve::build! {
+    const I_NPOS: PiecewiseLinear<'static> = curve!(
+        min_inflation: 0_025_000,
+        max_inflation: 0_100_000,
+        ideal_stake: 0_500_000,
+        falloff: 0_050_000,
+        max_piece_count: 40,
+        test_precision: 0_005_000,
+    );
+}
+
+parameter_types! {
+    pub const BondingDuration: EraIndex = 3;
+    pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
+    pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(75);
+}
+
+parameter_types! {
+    static StakingEventsIndex: usize = 0;
+}
+ord_parameter_types! {
+    pub const One: u64 = 1;
+}
+
+type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<AccountId>, EnsureSignedBy<One, AccountId>>;
+
+parameter_types! {
+    pub static RewardRemainderUnbalanced: u128 = 0;
+}
+
+pub struct RewardRemainderMock;
+
+impl OnUnbalanced<StakeNegativeImbalanceOf<Test>> for RewardRemainderMock {
+    fn on_nonzero_unbalanced(amount: StakeNegativeImbalanceOf<Test>) {
+        RewardRemainderUnbalanced::mutate(|v| {
+            *v += amount.peek();
+        });
+        drop(amount);
+    }
+}
+
+pub struct MockReward;
+impl OnUnbalanced<EnergyDebtOf<Test>> for MockReward {
+    fn on_unbalanced(_: EnergyDebtOf<Test>) {
+        RewardOnUnbalanceWasCalled::set(true);
+    }
+}
+
+pub struct EventListenerMock;
+impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
+    fn on_slash(
+        _pool_account: &AccountId,
+        slashed_bonded: Balance,
+        slashed_chunks: &BTreeMap<EraIndex, Balance>,
+    ) {
+        LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
+    }
+}
+
+parameter_types! {
+    pub const VNRG: AssetId = 1;
+    pub static BatterySlotCapacity: EnergyOf<Test> = EnergyOf::<Test>::from(100_000_000_000u128);
+    pub static MaxCooperations: u32 = 16;
+    pub static HistoryDepth: u32 = 80;
+    pub static MaxUnlockingChunks: u32 = 32;
+    pub static RewardOnUnbalanceWasCalled: bool = false;
+    pub static LedgerSlashPerEra: (StakeOf<Test>, BTreeMap<EraIndex, StakeOf<Test>>) = (Zero::zero(), BTreeMap::new());
+    pub static MaxWinners: u32 = 100;
+    pub static ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
+    pub static CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
+}
+
 impl pallet_energy_generation::Config for Test {
-    type AdminOrigin = EnsureOneOrRoot;
-    type BatterySlotCapacity = BatterySlotCapacity;
-    type BenchmarkingConfig = TestBenchmarkingConfig;
-    type BondingDuration = BondingDuration;
-    type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
+    type StakeCurrency = Balances;
+    type StakeBalance = <Self as pallet_balances::Config>::Balance;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = PowerPlant;
-    type HistoryDepth = HistoryDepth;
+    type BatterySlotCapacity = BatterySlotCapacity;
+    type UnixTime = Timestamp;
     type MaxCooperations = MaxCooperations;
-    type MaxCooperatorRewardedPerValidator = ConstU32<64>;
-    type MaxUnlockingChunks = MaxUnlockingChunks;
-    type NextNewSession = Session;
-    type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
-    type EventListeners = EventListenerMock;
-    type ReputationTierEnergyRewardAdditionalPercentMapping =
-        ReputationTierEnergyRewardAdditionalPercentMapping;
-    type Reward = MockReward;
+    type HistoryDepth = HistoryDepth;
     type RewardRemainder = RewardRemainderMock;
     type RuntimeEvent = RuntimeEvent;
-    type SessionInterface = Self;
-    type SessionsPerEra = SessionsPerEra;
     type Slash = ();
+    type Reward = MockReward;
+    type SessionsPerEra = SessionsPerEra;
+    type BondingDuration = BondingDuration;
     type SlashDeferDuration = SlashDeferDuration;
-    type StakeBalance = <Self as pallet_balances::Config>::Balance;
-    type StakeCurrency = Balances;
-    type ThisWeightInfo = ();
-    type UnixTime = Timestamp;
+    type AdminOrigin = EnsureOneOrRoot;
+    type SessionInterface = Self;
+    type EnergyPerStakeCurrency = EnergyGeneration;
+    type NextNewSession = Session;
+    type MaxCooperatorRewardedPerValidator = ConstU32<64>;
+    type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
+    type MaxUnlockingChunks = MaxUnlockingChunks;
+    type EventListeners = EventListenerMock;
     type ValidatorReputationTier = ValidatorReputationTier;
-    type OnVipMembershipHandler = TestVipMembershipHandler;
+    type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
+    type ReputationTierEnergyRewardAdditionalPercentMapping =
+        ReputationTierEnergyRewardAdditionalPercentMapping;
+    type OnVipMembershipHandler = Privileges;
+    type BenchmarkingConfig = TestBenchmarkingConfig;
+    type ThisWeightInfo = ();
 }
-
-// Implement the trait for a specific type
-pub struct TestVipMembershipHandler;
-
-impl OnVipMembershipHandler<u64, Weight> for TestVipMembershipHandler {
-    fn change_quarter_info() -> Weight {
-        Weight::zero()
-    }
-
-    fn kick_account_from_vip(_account: &u64) -> Weight {
-        Weight::zero()
-    }
-
-    fn update_active_stake(_account: &u64) -> Weight {
-        Weight::zero()
-    }
-}
-
-pub(crate) type StakingCall = crate::Call<Test>;
-pub(crate) type TestCall = <Test as frame_system::Config>::RuntimeCall;
 
 pub enum CooperateSelector {
     CooperateWithDefault,
@@ -567,22 +563,25 @@ impl ExtBuilder {
         .assimilate_storage(&mut storage);
 
         let validator_reputation = ReputationRecord {
-            reputation: <Test as pallet::pallet::Config>::ValidatorReputationTier::get().into(),
+            reputation: <Test as pallet_energy_generation::Config>::ValidatorReputationTier::get()
+                .into(),
             updated: 0,
         };
         let collab_validator_rep = ReputationRecord {
             reputation:
-                <Test as pallet::pallet::Config>::CollaborativeValidatorReputationTier::get().into(),
+            <Test as pallet_energy_generation::Config>::CollaborativeValidatorReputationTier::get().into(),
             updated: 0,
         };
         let _ = pallet_reputation::GenesisConfig::<Test> {
             accounts: vec![
                 // collaborative validators
-                (11, collab_validator_rep.clone()),
-                (21, collab_validator_rep),
+                (10, collab_validator_rep.clone()),
+                (20, collab_validator_rep.clone()),
                 // simple validators
-                (31, validator_reputation.clone()),
-                (41, validator_reputation),
+                (30, validator_reputation.clone()),
+                (40, validator_reputation.clone()),
+                // cooperators
+                (100, validator_reputation.clone()),
             ],
         }
         .assimilate_storage(&mut storage);
@@ -594,11 +593,11 @@ impl ExtBuilder {
                 (3, 300 * self.balance_factor),
                 (4, 400 * self.balance_factor),
                 // controllers
-                (10, self.balance_factor),
-                (20, self.balance_factor),
-                (30, self.balance_factor),
-                (40, self.balance_factor),
-                (50, self.balance_factor),
+                (10, self.balance_factor * 1000),
+                (20, self.balance_factor * 2000),
+                (30, self.balance_factor * 2000),
+                (40, self.balance_factor * 2000),
+                (50, self.balance_factor * 2000),
                 // stashes
                 (11, self.balance_factor * 1000),
                 (21, self.balance_factor * 2000),
@@ -626,23 +625,23 @@ impl ExtBuilder {
             stakers = vec![
                 // (stash, ctrl, stake, status)
                 // these two will be elected in the default test where we elect 2.
-                (11, 10, self.balance_factor * 1000, StakerStatus::Validator),
-                (21, 20, self.balance_factor * 1000, StakerStatus::Validator),
+                (10, 10, self.balance_factor * 1000, StakerStatus::Validator),
+                (20, 20, self.balance_factor * 500, StakerStatus::Validator),
                 // a loser validator
-                (31, 30, self.balance_factor * 500, StakerStatus::Validator),
+                (30, 30, self.balance_factor * 500, StakerStatus::Validator),
                 // an idle validator
-                (41, 40, self.balance_factor * 1000, StakerStatus::Idle),
+                (40, 40, self.balance_factor * 1000, StakerStatus::Idle),
             ];
             // optionally add a cooperator
             match self.cooperate {
                 CooperateSelector::CooperateWithDefault => stakers.push((
-                    101,
+                    100,
                     100,
                     self.balance_factor * 500,
-                    StakerStatus::Cooperator(vec![(11, 200), (21, 300)]),
+                    StakerStatus::Cooperator(vec![(10, 200), (20, 300)]),
                 )),
                 CooperateSelector::CooperateWith(target) => stakers.push((
-                    101,
+                    100,
                     100,
                     self.balance_factor * 500,
                     StakerStatus::Cooperator(target),
@@ -676,10 +675,16 @@ impl ExtBuilder {
             invulnerables: self.invulnerables,
             slash_reward_fraction: Perbill::from_percent(10),
             min_cooperator_bond: self.min_cooperator_bond,
-            min_common_validator_bond: self.min_common_validator_bond,
+            min_common_validator_bond: 500,
             min_trust_validator_bond: self.min_trust_validator_bond,
             energy_per_stake_currency: self.energy_per_stake_currency,
             block_authoring_reward: self.block_authoring_reward,
+            ..Default::default()
+        }
+        .assimilate_storage(&mut storage);
+
+        let _ = pallet_privileges::GenesisConfig::<Test> {
+            date: Some((2020, 1, 1)),
             ..Default::default()
         }
         .assimilate_storage(&mut storage);
@@ -709,7 +714,7 @@ impl ExtBuilder {
             ext.execute_with(|| {
                 System::set_block_number(1);
                 Session::on_initialize(1);
-                <PowerPlant as Hooks<u64>>::on_initialize(1);
+                <EnergyGeneration as Hooks<u64>>::on_initialize(1);
                 Timestamp::set_timestamp(INIT_TIMESTAMP);
             });
         }
@@ -721,23 +726,23 @@ impl ExtBuilder {
         let mut ext = self.build();
         ext.execute_with(test);
         ext.execute_with(|| {
-            PowerPlant::do_try_state(System::block_number()).unwrap();
+            // EnergyGeneration::do_try_state(System::block_number()).unwrap();
         });
     }
 }
 
 pub(crate) fn active_era() -> EraIndex {
-    PowerPlant::active_era().unwrap().index
+    EnergyGeneration::active_era().unwrap().index
 }
 
 pub(crate) fn current_era() -> EraIndex {
-    PowerPlant::current_era().unwrap()
+    EnergyGeneration::current_era().unwrap()
 }
 
 pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
     let _ = Balances::make_free_balance_be(&stash, val);
     let _ = Balances::make_free_balance_be(&ctrl, val);
-    assert_ok!(PowerPlant::bond(
+    assert_ok!(EnergyGeneration::bond(
         RuntimeOrigin::signed(stash),
         ctrl,
         val,
@@ -752,7 +757,7 @@ pub(crate) fn bond_cooperator(
     target: Vec<(AccountId, Balance)>,
 ) {
     bond(stash, ctrl, val);
-    assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(ctrl), target));
+    assert_ok!(EnergyGeneration::cooperate(RuntimeOrigin::signed(ctrl), target));
 }
 
 /// Progress to the given block, triggering session and era changes as we progress.
@@ -761,14 +766,14 @@ pub(crate) fn bond_cooperator(
 /// a block import/propose process where we first initialize the block, then execute some stuff (not
 /// in the function), and then finalize the block.
 pub(crate) fn run_to_block(n: BlockNumber) {
-    PowerPlant::on_finalize(System::block_number());
+    EnergyGeneration::on_finalize(System::block_number());
     for b in (System::block_number() + 1)..=n {
         System::set_block_number(b);
         Session::on_initialize(b);
-        <PowerPlant as Hooks<u64>>::on_initialize(b);
+        <EnergyGeneration as Hooks<u64>>::on_initialize(b);
         Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
         if b != n {
-            PowerPlant::on_finalize(System::block_number());
+            EnergyGeneration::on_finalize(System::block_number());
         }
     }
 }
@@ -820,13 +825,13 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
 }
 
 pub(crate) fn make_validator(controller: AccountId, stash: AccountId, balance: Balance) {
-    assert_ok!(ReputationPallet::force_set_points(
+    assert_ok!(Reputation::force_set_points(
         RuntimeOrigin::root(),
         controller,
         CollaborativeValidatorReputationTier::get().into()
     ));
 
-    assert_ok!(ReputationPallet::force_set_points(
+    assert_ok!(Reputation::force_set_points(
         RuntimeOrigin::root(),
         stash,
         CollaborativeValidatorReputationTier::get().into()
@@ -834,7 +839,7 @@ pub(crate) fn make_validator(controller: AccountId, stash: AccountId, balance: B
 
     bond(stash, controller, balance);
 
-    assert_ok!(PowerPlant::validate(
+    assert_ok!(EnergyGeneration::validate(
         RuntimeOrigin::signed(controller),
         ValidatorPrefs::default_collaborative()
     ));
@@ -877,71 +882,18 @@ pub(crate) fn reward_time_per_era() -> u64 {
 }
 
 pub(crate) fn reward_all_elected() {
-    let rewards = <Test as Config>::SessionInterface::validators()
+    let rewards = <Test as pallet_energy_generation::Config>::SessionInterface::validators()
         .into_iter()
         .map(|v| (v, 1.into()));
 
-    <Pallet<Test>>::reward_by_ids(rewards)
+    <pallet_energy_generation::Pallet<Test>>::reward_by_ids(rewards)
 }
 
 pub(crate) fn validator_controllers() -> Vec<AccountId> {
     Session::validators()
         .into_iter()
-        .map(|s| PowerPlant::bonded(s).expect("no controller for validator"))
+        .map(|s| EnergyGeneration::bonded(s).expect("no controller for validator"))
         .collect()
-}
-
-pub(crate) fn on_offence_in_era(
-    offenders: &[OffenceDetails<
-        AccountId,
-        pallet_session::historical::IdentificationTuple<Test>,
-    >],
-    slash_fraction: &[Perbill],
-    era: EraIndex,
-    disable_strategy: DisableStrategy,
-) {
-    let bonded_eras = crate::BondedEras::<Test>::get();
-    for &(bonded_era, start_session) in bonded_eras.iter() {
-        if bonded_era == era {
-            let _ =
-                PowerPlant::on_offence(offenders, slash_fraction, start_session, disable_strategy);
-            return;
-        } else if bonded_era > era {
-            break;
-        }
-    }
-
-    if PowerPlant::active_era().unwrap().index == era {
-        let _ = PowerPlant::on_offence(
-            offenders,
-            slash_fraction,
-            PowerPlant::eras_start_session_index(era).unwrap(),
-            disable_strategy,
-        );
-    } else {
-        panic!("cannot slash in era {}", era);
-    }
-}
-
-pub(crate) fn on_offence_now(
-    offenders: &[OffenceDetails<
-        AccountId,
-        pallet_session::historical::IdentificationTuple<Test>,
-    >],
-    slash_fraction: &[Perbill],
-) {
-    let now = PowerPlant::active_era().unwrap().index;
-    on_offence_in_era(offenders, slash_fraction, now, DisableStrategy::WhenSlashed)
-}
-
-pub(crate) fn add_slash(who: &AccountId) {
-    on_offence_now(
-        &[OffenceDetails {
-            offender: (*who, PowerPlant::eras_stakers(active_era(), *who)),
-            reporters: vec![],
-        }],
-        &[Perbill::from_percent(10)],
-    );
 }
 
 /// Make all validator and cooperator request their payment
@@ -951,9 +903,13 @@ pub(crate) fn make_all_reward_payment(era: EraIndex) {
         .collect();
 
     // reward validators
-    for validator_controller in validators.iter().filter_map(PowerPlant::bonded) {
+    for validator_controller in validators.iter().filter_map(EnergyGeneration::bonded) {
         let ledger = <Ledger<Test>>::get(validator_controller).unwrap();
-        assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), ledger.stash, era));
+        assert_ok!(EnergyGeneration::payout_stakers(
+            RuntimeOrigin::signed(1337),
+            ledger.stash,
+            era
+        ));
     }
 }
 
@@ -977,189 +933,6 @@ macro_rules! assert_session_era {
     };
 }
 
-pub(crate) fn staking_events() -> Vec<crate::Event<Test>> {
-    System::events()
-        .into_iter()
-        .map(|r| r.event)
-        .filter_map(|e| if let RuntimeEvent::PowerPlant(inner) = e { Some(inner) } else { None })
-        .collect()
-}
-
-parameter_types! {
-    static StakingEventsIndex: usize = 0;
-}
-ord_parameter_types! {
-    pub const One: u64 = 1;
-}
-
-type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<AccountId>, EnsureSignedBy<One, AccountId>>;
-
-pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
-    let all: Vec<_> = System::events()
-        .into_iter()
-        .filter_map(
-            |r| if let RuntimeEvent::PowerPlant(inner) = r.event { Some(inner) } else { None },
-        )
-        .collect();
-    let seen = StakingEventsIndex::get();
-    StakingEventsIndex::set(all.len());
-    all.into_iter().skip(seen).collect()
-}
-
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
     (Balances::free_balance(who), Balances::reserved_balance(who))
-}
-
-pub(crate) fn controller_stash_reputation_tier(controller: &AccountId) -> Option<ReputationTier> {
-    let stash = pallet_energy_generation::Ledger::<Test>::get(controller)
-        .expect("Expected to get a controller's ledger")
-        .stash;
-
-    account_reputation_tier(&stash)
-}
-
-pub(crate) fn account_reputation_tier(account: &AccountId) -> Option<ReputationTier> {
-    pallet_reputation::AccountReputation::<Test>::get(account)
-        .expect("Expected to get account's reputation record")
-        .reputation
-        .tier()
-}
-
-pub(crate) fn calculate_reward(
-    total_payout: Balance,
-    total_stake: Balance,
-    personal_stake: Balance,
-    bonus_percent: Percent,
-) -> Balance {
-    let part = Perbill::from_rational(personal_stake, total_stake);
-    let reward = part * total_payout;
-    bonus_percent.mul_floor(reward) + reward
-}
-
-fn on_offence(
-    offenders: &[OffenceDetails<
-        T::AccountId,
-        pallet_session::historical::IdentificationTuple<T>,
-    >],
-    slash_fraction: &[Perbill],
-    slash_session: SessionIndex,
-    disable_strategy: DisableStrategy,
-) -> Weight {
-    let reward_proportion = SlashRewardFraction::<T>::get();
-    let mut consumed_weight = Weight::from_parts(0, 0);
-    let mut add_db_reads_writes = |reads, writes| {
-        consumed_weight += T::DbWeight::get().reads_writes(reads, writes);
-    };
-
-    let active_era = {
-        let active_era = Self::active_era();
-        add_db_reads_writes(1, 0);
-        if active_era.is_none() {
-            // This offence need not be re-submitted.
-            return consumed_weight;
-        }
-        active_era.expect("value checked not to be `None`; qed").index
-    };
-    let active_era_start_session_index = Self::eras_start_session_index(active_era)
-        .unwrap_or_else(|| {
-            frame_support::print("Error: start_session_index must be set for current_era");
-            0
-        });
-    add_db_reads_writes(1, 0);
-
-    let window_start = active_era.saturating_sub(T::BondingDuration::get());
-
-    // Fast path for active-era report - most likely.
-    // `slash_session` cannot be in a future active era. It must be in `active_era` or before.
-    let slash_era = if slash_session >= active_era_start_session_index {
-        active_era
-    } else {
-        let eras = BondedEras::<T>::get();
-        add_db_reads_writes(1, 0);
-
-        // Reverse because it's more likely to find reports from recent eras.
-        match eras.iter().rev().find(|&(_, sesh)| sesh <= &slash_session) {
-            Some((slash_era, _)) => *slash_era,
-            // Before bonding period. defensive - should be filtered out.
-            None => return consumed_weight,
-        }
-    };
-
-    add_db_reads_writes(1, 1);
-
-    let slash_defer_duration = T::SlashDeferDuration::get();
-
-    let invulnerables = Self::invulnerables();
-    add_db_reads_writes(1, 0);
-
-    for (details, slash_fraction) in offenders.iter().zip(slash_fraction) {
-        let (stash, exposure) = &details.offender;
-
-        // Skip if the validator is invulnerable.
-        if invulnerables.contains(stash) {
-            continue;
-        }
-
-        let unapplied = slashing::compute_slash::<T>(slashing::SlashParams {
-            stash,
-            slash: *slash_fraction,
-            exposure,
-            slash_era,
-            window_start,
-            now: active_era,
-            reward_proportion,
-            disable_strategy,
-        });
-
-        Self::deposit_event(Event::<T>::SlashReported {
-            validator: stash.clone(),
-            fraction: *slash_fraction,
-            slash_era,
-        });
-
-        if let Some(mut unapplied) = unapplied {
-            let cooperators_len = unapplied.others.len() as u64;
-            let reporters_len = details.reporters.len() as u64;
-
-            {
-                let upper_bound = 1 /* Validator/CooperatorSlashInEra */ + 2 /* fetch_spans */;
-                let rw = upper_bound + cooperators_len * upper_bound;
-                add_db_reads_writes(rw, rw);
-            }
-            unapplied.reporters = details.reporters.clone();
-            if slash_defer_duration == 0 {
-                // Apply right away.
-                if let Err(e) = slashing::apply_slash::<T>(unapplied, slash_era) {
-                    frame_support::print(format!("failed to apply slash: {:?}", e).as_str());
-                }
-                {
-                    let slash_cost = (6, 5);
-                    let reward_cost = (2, 2);
-                    add_db_reads_writes(
-                        (1 + cooperators_len) * slash_cost.0 + reward_cost.0 * reporters_len,
-                        (1 + cooperators_len) * slash_cost.1 + reward_cost.1 * reporters_len,
-                    );
-                }
-            } else {
-                // Defer to end of some `slash_defer_duration` from now.
-                log!(
-                        debug,
-                        "deferring slash of {:?}% happened in {:?} (reported in {:?}) to {:?}",
-                        slash_fraction,
-                        slash_era,
-                        active_era,
-                        slash_era + slash_defer_duration + 1,
-                    );
-                UnappliedSlashes::<T>::mutate(
-                    slash_era.saturating_add(slash_defer_duration).saturating_add(orml_traits::arithmetic::One::one()),
-                    move |for_later| for_later.push(unapplied),
-                );
-                add_db_reads_writes(1, 1);
-            }
-        } else {
-            add_db_reads_writes(4 /* fetch_spans */, 5 /* kick_out_if_recent */)
-        }
-    }
-
-    consumed_weight
 }
