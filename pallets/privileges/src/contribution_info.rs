@@ -2,7 +2,6 @@ use super::*;
 use core::default::Default;
 use sp_runtime::DispatchError;
 
-
 /// Current date info.
 #[derive(Clone, Encode, Decode, Default, RuntimeDebug, PartialEq, TypeInfo)]
 pub struct CurrentDateInfo {

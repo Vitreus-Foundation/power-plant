@@ -17,9 +17,9 @@ use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
     BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
     EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, PrivilegesConfig,
-    SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig,
-    SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint,
+    RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus,
+    SudoConfig, SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -450,10 +450,7 @@ pub fn testnet_genesis(
             accounts: endowed_accounts.iter().map(|x| (*x, 2)).collect(),
             owners: vec![root_key],
         },
-        privileges: PrivilegesConfig {
-            date: Some((2024, 5, 15)),
-            ..Default::default()
-        },
+        privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
             keys: initial_validators
                 .iter()
@@ -605,10 +602,7 @@ fn mainnet_genesis(
                 .collect(),
             owners: vec![root_key],
         },
-        privileges: PrivilegesConfig {
-            date: Some((2024, 5, 15)),
-            ..Default::default()
-        },
+        privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
             keys: initial_validators
                 .iter()

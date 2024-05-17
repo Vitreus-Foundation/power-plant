@@ -17,20 +17,17 @@ use pallet_energy_generation::{
     Ledger, RewardDestination, SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakerStatus,
     TestBenchmarkingConfig, ValidatorPrefs,
 };
-use pallet_reputation::{
-    ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER,
-};
+use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER};
 use parity_scale_codec::Compact;
 use sp_core::H256;
 use sp_runtime::traits::BlakeTwo256;
 use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{TestSignature, UintAuthorityId},
-    traits::{IdentityLookup, Zero}, BuildStorage,
+    traits::{IdentityLookup, Zero},
+    BuildStorage,
 };
-use sp_staking::{
-    EraIndex, OnStakingUpdate, SessionIndex,
-};
+use sp_staking::{EraIndex, OnStakingUpdate, SessionIndex};
 use sp_std::vec;
 
 type Block = frame_system::mocking::MockBlock<Test>;

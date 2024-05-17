@@ -3,6 +3,7 @@
 #![allow(unused_imports)]
 
 use crate::{self as pallet_energy_generation, *};
+use frame_support::weights::Weight;
 use frame_support::{
     assert_ok, ord_parameter_types, parameter_types,
     storage::StorageValue,
@@ -12,7 +13,6 @@ use frame_support::{
     },
     weights::constants::RocksDbWeight,
 };
-use frame_support::weights::Weight;
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use orml_traits::GetByKey;
 use pallet_reputation::{
@@ -1060,8 +1060,8 @@ fn on_offence(
         }
         active_era.expect("value checked not to be `None`; qed").index
     };
-    let active_era_start_session_index = Self::eras_start_session_index(active_era)
-        .unwrap_or_else(|| {
+    let active_era_start_session_index =
+        Self::eras_start_session_index(active_era).unwrap_or_else(|| {
             frame_support::print("Error: start_session_index must be set for current_era");
             0
         });
@@ -1143,15 +1143,17 @@ fn on_offence(
             } else {
                 // Defer to end of some `slash_defer_duration` from now.
                 log!(
-                        debug,
-                        "deferring slash of {:?}% happened in {:?} (reported in {:?}) to {:?}",
-                        slash_fraction,
-                        slash_era,
-                        active_era,
-                        slash_era + slash_defer_duration + 1,
-                    );
+                    debug,
+                    "deferring slash of {:?}% happened in {:?} (reported in {:?}) to {:?}",
+                    slash_fraction,
+                    slash_era,
+                    active_era,
+                    slash_era + slash_defer_duration + 1,
+                );
                 UnappliedSlashes::<T>::mutate(
-                    slash_era.saturating_add(slash_defer_duration).saturating_add(orml_traits::arithmetic::One::one()),
+                    slash_era
+                        .saturating_add(slash_defer_duration)
+                        .saturating_add(orml_traits::arithmetic::One::one()),
                     move |for_later| for_later.push(unapplied),
                 );
                 add_db_reads_writes(1, 1);

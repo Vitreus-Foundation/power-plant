@@ -20,8 +20,7 @@ pub use pallet::*;
 use pallet_energy_generation::OnVipMembershipHandler;
 use parity_scale_codec::Encode;
 use sp_arithmetic::traits::Saturating;
-use sp_arithmetic::*;
-use sp_runtime::SaturatedConversion;
+use sp_runtime::{Perbill, SaturatedConversion};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -193,7 +192,9 @@ pub mod pallet {
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
+        /// Initial date.
         pub date: Option<(i32, u32, u32)>,
+        /// Phantom date.
         pub _config: PhantomData<T>,
     }
 
@@ -365,10 +366,10 @@ impl<T: Config> Pallet<T> {
         elapsed_day: u64,
     ) -> Perbill {
         match penalty_type {
-            PenaltyType::Flat => Perbill::from_float(7_f64 / (40_f64 * elapsed_day as f64)),
-            PenaltyType::Declining => Perbill::from_float(
-                (30_f64 - current_quarter as f64 * 5_f64) / 100_f64 * elapsed_day as f64,
-            ),
+            PenaltyType::Flat => Perbill::from_rational(7, 40 * elapsed_day),
+            PenaltyType::Declining => {
+                Perbill::from_rational(30 - current_quarter as u64 * 5, 100 * elapsed_day)
+            },
         }
     }
 

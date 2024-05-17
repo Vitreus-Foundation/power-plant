@@ -1,18 +1,7 @@
-use super::{*};
+use super::*;
 use crate::mock::*;
 use crate::{Error, PenaltyType};
-use frame_support::{
-    assert_err, assert_ok,
-};
-
-
-
-
-
-
-
-
-
+use frame_support::{assert_err, assert_ok};
 
 #[test]
 fn test_data_building() {
