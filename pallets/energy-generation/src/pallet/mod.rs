@@ -742,6 +742,8 @@ pub mod pallet {
         FundedTarget,
         /// Invalid era to reward.
         InvalidEraToReward,
+        /// Invalid era to slash.
+        InvalidEraToSlash,
         /// Invalid number of cooperations.
         InvalidNumberOfCooperations,
         /// Items are not sorted and unique.
@@ -928,6 +930,7 @@ pub mod pallet {
 
                 // NOTE: ledger must be updated prior to calling `Self::weight_of`.
                 Self::update_ledger(&controller, &ledger);
+                T::OnVipMembershipHandler::update_active_stake(&stash);
 
                 Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
             }
@@ -1198,6 +1201,7 @@ pub mod pallet {
 
             Self::do_remove_validator(stash);
             Self::do_add_cooperator(stash, cooperations)?;
+            T::OnVipMembershipHandler::update_active_stake(stash);
 
             Self::deposit_event(Event::<T>::Cooperated { controller, targets: cooperator_targets });
 

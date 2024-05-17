@@ -152,7 +152,6 @@ pub mod pallet {
     }
 
     #[pallet::call]
-
     impl<T: Config> Pallet<T> {
         /// Mint a NFT item of a particular collection.
         #[pallet::call_index(0)]
