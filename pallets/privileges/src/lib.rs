@@ -335,7 +335,7 @@ impl<T: Config> Pallet<T> {
             Self::update_points_for_time(new_date.days_since_new_year, new_date.current_quarter);
 
             if new_date.current_month == 1 && new_date.current_day == 1 {
-                Self::save_year_info(new_date.year() - 1);
+                Self::save_year_info(new_date.current_year - 1);
             }
 
             CurrentDate::<T>::put(new_date);
