@@ -5,8 +5,9 @@
 #![warn(missing_docs)]
 #![warn(clippy::all)]
 
-use chrono::{DateTime, Datelike, NaiveDate};
+use chrono::{DateTime, Datelike, Days, NaiveDate};
 pub use contribution_info::*;
+use frame_support::pallet_prelude::BuildGenesisConfig;
 use frame_support::{
     ensure,
     pallet_prelude::{Decode, DispatchResult, TypeInfo},
@@ -19,10 +20,14 @@ pub use pallet::*;
 use pallet_energy_generation::OnVipMembershipHandler;
 use parity_scale_codec::Encode;
 use sp_arithmetic::traits::Saturating;
-use sp_arithmetic::*;
-use sp_runtime::SaturatedConversion;
+use sp_runtime::{Perbill, SaturatedConversion};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
+
+#[cfg(test)]
+pub mod mock;
+#[cfg(test)]
+mod tests;
 
 mod contribution_info;
 
@@ -40,9 +45,7 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config:
-        frame_system::Config + pallet_nac_managing::Config + pallet_energy_generation::Config
-    {
+    pub trait Config: frame_system::Config + pallet_energy_generation::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -139,27 +142,26 @@ pub mod pallet {
             new_date_day: u32,
         ) -> DispatchResult {
             ensure_root(origin)?;
-            let current_date = Self::current_date();
-            let new_date = CurrentDateInfo::new(new_date_year, new_date_month, new_date_day);
+            let mut current_date = Self::current_date();
+            let new_date = CurrentDateInfo::new::<T>(new_date_year, new_date_month, new_date_day)?;
 
-            let current_date_naive = NaiveDate::from_ymd_opt(
-                current_date.current_year,
-                current_date.current_month,
-                current_date.current_day,
-            )
-            .ok_or(Error::<T>::NotCorrectDate)?;
-            let new_date_naive =
-                NaiveDate::from_ymd_opt(new_date_year, new_date_month, new_date_day)
-                    .ok_or(Error::<T>::NotCorrectDate)?;
-
-            let days_since_new_year = (new_date_naive - current_date_naive).num_days() as u64;
-
-            // Accrual of VIP points for users who have VIP status.
-            Self::update_points_for_time(days_since_new_year, new_date.current_quarter);
-
-            if new_date.current_month == 1 && new_date.current_day == 1 {
-                Self::save_year_info(new_date.current_year - 1);
+            if !Self::check_correct_date(&current_date, &new_date) {
+                return Err(Error::<T>::NotCorrectDate.into());
             }
+
+            while Self::check_correct_date(&current_date, &new_date) {
+                current_date.add_days::<T>(1)?;
+                // Accrual of VIP points for users who have VIP status.
+                Self::update_points_for_time(
+                    current_date.days_since_new_year,
+                    new_date.current_quarter,
+                );
+
+                if current_date.current_month == 1 && current_date.current_day == 1 {
+                    Self::save_year_info(current_date.current_year - 1);
+                }
+            }
+
             CurrentDate::<T>::put(new_date);
 
             Ok(())
@@ -184,6 +186,47 @@ pub mod pallet {
             let who = ensure_signed(origin.clone())?;
 
             Self::do_change_penalty_type(&who, new_tax_type)
+        }
+    }
+
+    #[pallet::genesis_config]
+    #[derive(frame_support::DefaultNoBound)]
+    pub struct GenesisConfig<T: Config> {
+        /// Initial date.
+        pub date: Option<(i32, u32, u32)>,
+        /// Phantom date.
+        pub _config: PhantomData<T>,
+    }
+
+    #[pallet::genesis_build]
+    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+        fn build(&self) {
+            match self.date {
+                Some(date) => {
+                    let current_data_info =
+                        CurrentDateInfo::new::<T>(date.0, date.1, date.2).unwrap();
+
+                    CurrentDate::<T>::put(current_data_info);
+                },
+                None => {
+                    let now_as_millis_u64 =
+                        <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>()
+                            / 1000u64;
+
+                    let new_date =
+                        DateTime::from_timestamp(i64::try_from(now_as_millis_u64).unwrap(), 0)
+                            .expect("Cannot get date");
+
+                    let current_data_info = CurrentDateInfo::new::<T>(
+                        new_date.year(),
+                        new_date.month(),
+                        new_date.day(),
+                    )
+                    .unwrap();
+
+                    CurrentDate::<T>::put(current_data_info);
+                },
+            }
         }
     }
 }
@@ -215,6 +258,11 @@ impl<T: Config> Pallet<T> {
                     let slash_percent =
                         vip_member_info.tax_type.penalty_percent(current_date.current_quarter);
                     penalty_percent = slash_percent;
+
+                    pallet_energy_generation::Pallet::<T>::slash_vip_account(
+                        account,
+                        slash_percent,
+                    )?;
                 }
 
                 VipMembers::<T>::remove(account);
@@ -233,7 +281,7 @@ impl<T: Config> Pallet<T> {
         account: &T::AccountId,
         new_penalty_type: PenaltyType,
     ) -> DispatchResult {
-        ensure!(!Self::is_penalty_free_period(), Error::<T>::IsNotPenaltyFreePeriod);
+        ensure!(Self::is_penalty_free_period(), Error::<T>::IsNotPenaltyFreePeriod);
         VipMembers::<T>::try_mutate::<_, _, Error<T>, _>(account, |vip_config| {
             if let Some(vip) = vip_config {
                 vip.tax_type = new_penalty_type;
@@ -276,38 +324,35 @@ impl<T: Config> Pallet<T> {
     pub fn update_quarter_info() {
         let now_as_millis_u64 =
             <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>() / 1000u64;
-
         let new_date =
             DateTime::from_timestamp(i64::try_from(now_as_millis_u64).unwrap(), 0).unwrap();
-        let new_date_naive =
-            NaiveDate::from_ymd_opt(new_date.year(), new_date.month(), new_date.day()).unwrap();
 
-        let start_date = NaiveDate::from_ymd_opt(new_date.year(), 1, 1).unwrap();
-
-        let days_since_new_year = (start_date - new_date_naive).num_days() as u64;
         let current_date = Self::current_date();
+        let new_date =
+            CurrentDateInfo::new::<T>(new_date.year(), new_date.month(), new_date.day()).unwrap();
 
-        // Checking whether the day information needs to be updated.
-        if current_date.current_day != new_date.day() {
-            let current_data_info =
-                CurrentDateInfo::new(new_date.year(), new_date.month(), new_date.day());
+        if current_date.days_since_new_year != new_date.days_since_new_year {
             // Accrual of VIP points for users who have VIP status.
-            Self::update_points_for_time(days_since_new_year, current_data_info.current_quarter);
+            Self::update_points_for_time(new_date.days_since_new_year, new_date.current_quarter);
 
-            if new_date.month() == 1 && new_date.day() == 1 {
-                Self::save_year_info(new_date.year() - 1);
+            if new_date.current_month == 1 && new_date.current_day == 1 {
+                Self::save_year_info(new_date.current_year - 1);
             }
 
-            CurrentDate::<T>::put(current_data_info);
+            CurrentDate::<T>::put(new_date);
         }
     }
 
     /// Updates the points for the time since the last time the account was updated.
-    pub fn update_points_for_time(days_since_new_year: u64, current_quarter: u8) {
+    pub fn update_points_for_time(elapsed_day: u64, current_quarter: u8) {
+        if elapsed_day == 0 {
+            return;
+        }
+
         VipMembers::<T>::translate(|_, mut old_info: VipMemberInfo<T>| {
-            let multiplier = Self::calculate_multiplier(old_info.tax_type, current_quarter);
-            let points =
-                Self::calculate_points(days_since_new_year, old_info.active_stake, multiplier);
+            let multiplier =
+                Self::calculate_multiplier(old_info.tax_type, current_quarter, elapsed_day);
+            let points = Self::calculate_points(old_info.active_stake, multiplier);
             let new_points = old_info.points.saturating_add(points);
             old_info.points = new_points;
             Some(old_info)
@@ -315,10 +360,16 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Calculate multiplier that differs depending on penalty type.
-    fn calculate_multiplier(penalty_type: PenaltyType, current_quarter: u8) -> Perbill {
+    fn calculate_multiplier(
+        penalty_type: PenaltyType,
+        current_quarter: u8,
+        elapsed_day: u64,
+    ) -> Perbill {
         match penalty_type {
-            PenaltyType::Flat => Perbill::from_rational(7_u32, 40_u32),
-            PenaltyType::Declining => Perbill::from_percent(30 - current_quarter as u32 * 5),
+            PenaltyType::Flat => Perbill::from_rational(7, 40 * elapsed_day),
+            PenaltyType::Declining => {
+                Perbill::from_rational(30 - current_quarter as u64 * 5, 100 * elapsed_day)
+            },
         }
     }
 
@@ -336,11 +387,17 @@ impl<T: Config> Pallet<T> {
 
     /// Calculate VIP points for account.
     fn calculate_points(
-        days_since_new_year: u64,
         active_stake: T::StakeBalance,
         multiplier: Perbill,
     ) -> <T as pallet_energy_generation::Config>::StakeBalance {
-        (multiplier * active_stake) / days_since_new_year.into()
+        multiplier * active_stake
+    }
+
+    /// Check if the new date is correct.
+    fn check_correct_date(last_date: &CurrentDateInfo, new_date: &CurrentDateInfo) -> bool {
+        new_date.current_year > last_date.current_year
+            || (new_date.current_year == last_date.current_year
+                && new_date.days_since_new_year > last_date.days_since_new_year)
     }
 }
 
@@ -351,7 +408,13 @@ impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight> for Pallet<T> {
     }
 
     fn kick_account_from_vip(account: &T::AccountId) -> Weight {
-        let _ = Self::do_exit_vip(account);
+        VipMembers::<T>::mutate(account, |vip_info| {
+            if let Some(vip_info) = vip_info {
+                vip_info.active_stake =
+                    <T as pallet_energy_generation::Config>::StakeBalance::default();
+            }
+        });
+
         Weight::from_parts(1, 1)
     }
 

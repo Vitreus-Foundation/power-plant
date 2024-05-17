@@ -2,6 +2,7 @@
 
 use core::cmp::Ordering;
 
+use frame_support::traits::Imbalance;
 use frame_support::{
     dispatch::WithPostDispatchInfo,
     pallet_prelude::*,
@@ -11,6 +12,7 @@ use frame_support::{
         Currency, DefensiveResult, Get, LockableCurrency, OnUnbalanced, WithdrawReasons,
     },
     weights::Weight,
+    BoundedBTreeMap,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use orml_traits::GetByKey;
@@ -29,6 +31,7 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 
+use crate::slashing::NegativeImbalanceOf;
 use crate::{
     log, slashing, weights::WeightInfo, ActiveEraInfo, Cooperations, EnergyDebtOf, EnergyOf,
     EnergyRateCalculator, Exposure, ExposureOf, Forcing, IndividualExposure, RewardDestination,
@@ -45,18 +48,98 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Slash account stake (reason: exit VIP).
-    pub fn slash_vip_account(_account: &T::AccountId, _percent: Perbill) -> DispatchResult {
-        todo!()
+    pub fn slash_vip_account(account: &T::AccountId, tax_percent: Perbill) -> DispatchResult {
+        let mut ledger_info = Self::ledger(account).ok_or(Error::<T>::NotController)?;
+        let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
+        let slash_era = Self::current_era().ok_or(Error::<T>::InvalidEraToSlash)?;
+
+        let tax = if Self::is_user_validator(account) {
+            let tax = tax_percent * ledger_info.active;
+            if ledger_info.active - tax < Self::min_bond_for_validator(account) {
+                Self::chill_stash(account);
+            }
+            tax
+        } else {
+            match Self::cooperators(account) {
+                Some(cooperations) => {
+                    let mut tax_value = T::StakeBalance::default();
+                    let min_cooperator_bond = MinCooperatorBond::<T>::get();
+                    let mut new_targets: Vec<(T::AccountId, StakeOf<T>)> = Default::default();
+                    for targets in cooperations.targets {
+                        if let Some(collaborations) = Self::collaborations(&targets.0) {
+                            if collaborations.contains(account) {
+                                let tax = tax_percent * targets.1;
+                                if targets.1 - tax >= min_cooperator_bond {
+                                    new_targets.push((targets.0, targets.1 - tax));
+                                }
+
+                                tax_value += tax;
+                            }
+                        }
+                    }
+
+                    let mut targets =
+                        BoundedBTreeMap::<T::AccountId, StakeOf<T>, T::MaxCooperations>::new();
+
+                    for (account_id, stake) in new_targets {
+                        targets
+                            .try_insert(account_id, stake)
+                            .map_err(|_| Error::<T>::TooManyCooperators)?;
+                    }
+
+                    let new_cooperations = Cooperations {
+                        targets,
+                        submitted_in: cooperations.submitted_in,
+                        suppressed: cooperations.suppressed,
+                    };
+
+                    Self::do_add_cooperator(account, new_cooperations)?;
+
+                    tax_value
+                },
+                None => tax_percent * ledger_info.active,
+            }
+        };
+
+        let stake_value =
+            ledger_info.slash_stake(tax, T::StakeCurrency::minimum_balance(), slash_era);
+
+        if !stake_value.is_zero() {
+            let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
+            slashed_imbalance.subsume(imbalance);
+
+            <Pallet<T>>::update_ledger(account, &ledger_info);
+        }
+
+        Ok(())
     }
 
     /// The total stake of VIP member.
     pub fn get_active_stake(account: &T::AccountId) -> StakeOf<T> {
         let ledger_info = Self::ledger(account);
 
-        if let Some(ledger_info) = ledger_info {
-            ledger_info.active
+        if Self::is_user_validator(account) {
+            ledger_info.map_or_else(T::StakeBalance::default, |ledger| ledger.active)
         } else {
-            T::StakeBalance::default()
+            match Self::cooperators(account) {
+                Some(cooperations) => {
+                    let mut active_stake = T::StakeBalance::default();
+                    for targets in cooperations.targets {
+                        let collaborations = Self::collaborations(targets.0);
+                        match collaborations {
+                            None => {},
+                            Some(collab) => {
+                                if collab.contains(account) {
+                                    active_stake += targets.1;
+                                }
+                            },
+                        }
+                    }
+
+                    active_stake
+                },
+                None => T::StakeBalance::default(),
+            }
         }
     }
 
@@ -343,7 +426,6 @@ impl<T: Config> Pallet<T> {
         if chilled_as_validator || chilled_as_cooperator {
             Self::deposit_event(Event::<T>::Chilled { stash: stash.clone() });
         }
-        T::OnVipMembershipHandler::kick_account_from_vip(stash);
     }
 
     /// Plan a new session potentially trigger a new era.
