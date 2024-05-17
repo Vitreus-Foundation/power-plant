@@ -989,6 +989,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Balances(..)
             | RuntimeCall::Bounties(..)
             | RuntimeCall::EnergyGeneration(..)
+            | RuntimeCall::EnergyBroker(..)
             | RuntimeCall::Nfts(..)
             | RuntimeCall::AtomicSwap(..)
             | RuntimeCall::Claiming(..)
