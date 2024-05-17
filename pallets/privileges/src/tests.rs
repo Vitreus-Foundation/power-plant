@@ -1,25 +1,18 @@
-use super::{VipMemberInfo, *};
+use super::{*};
 use crate::mock::*;
-use crate::{self as pallet_privileges, Error, PenaltyType};
+use crate::{Error, PenaltyType};
 use frame_support::{
-    assert_err, assert_noop, assert_ok, assert_storage_noop, bounded_vec,
-    dispatch::{extract_actual_weight, Dispatchable, GetDispatchInfo, WithPostDispatchInfo},
-    pallet_prelude::*,
-    traits::{Currency, Get, ReservableCurrency},
-    weights::Weight,
+    assert_err, assert_ok,
 };
-use pallet_balances::Error as BalancesError;
 
-use frame_support::metadata::v14::StorageEntryModifier::Default;
-use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
-use sp_runtime::{
-    assert_eq_error_rate, traits::BadOrigin, FixedPointNumber, FixedU128, Perbill, Percent,
-    TokenError,
-};
-use sp_staking::offence::{DisableStrategy, OffenceDetails};
-use sp_std::prelude::*;
-use std::ops::Deref;
-use substrate_test_utils::assert_eq_uvec;
+
+
+
+
+
+
+
+
 
 #[test]
 fn test_data_building() {
@@ -127,7 +120,7 @@ fn become_a_vip_as_validator() {
             current_date.current_day + 1
         ));
 
-        let vip_points = (EnergyGeneration::ledger(10).unwrap().active * 7 / 40) * 1;
+        let vip_points = EnergyGeneration::ledger(10).unwrap().active * 7 / 40;
         assert_eq!(Privileges::vip_members(10).unwrap().points, vip_points);
     })
 }
@@ -151,7 +144,7 @@ fn become_a_vip_as_cooperator() {
             current_date.current_day + 1
         ));
 
-        let vip_points = (200 + 300) * 1 / 4 * 1;
+        let vip_points = (200 + 300) / 4;
         assert_eq!(Privileges::vip_members(100).unwrap().points, vip_points);
     })
 }
@@ -208,7 +201,7 @@ fn exit_a_vip_as_validator_non_free_tax_period() {
         assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 1000 - 1000 / 4);
         assert_eq!(System::account(10).data.frozen, 1000 - 1000 / 4);
         assert_eq!(System::account(10).data.free, 1000 - 1000 / 4);
-        assert_eq!(EnergyGeneration::is_user_validator(&10), true);
+        assert!(EnergyGeneration::is_user_validator(&10));
     })
 }
 
@@ -228,7 +221,7 @@ fn exit_a_vip_as_validator_non_free_tax_period_and_kick() {
         assert_eq!(EnergyGeneration::ledger(20).unwrap().active, 500 - 500 / 4);
         assert_eq!(System::account(20).data.frozen, 500 - 500 / 4);
         assert_eq!(System::account(20).data.free, 2000 - 500 / 4);
-        assert_eq!(EnergyGeneration::is_user_validator(&20), false);
+        assert!(!EnergyGeneration::is_user_validator(&20));
     })
 }
 
@@ -292,7 +285,7 @@ fn test_calculation_vip_points() {
             current_date.current_month + 5,
             current_date.current_day + 10
         ));
-        let current_date = Privileges::current_date();
+        let _current_date = Privileges::current_date();
 
         assert_eq!(Privileges::vip_members(10).unwrap().points, 982);
     })
@@ -348,7 +341,7 @@ fn test_upgrade_active_stake_throw_bond_extra() {
             current_date.current_day + 1
         ));
 
-        let mut vip_points = (EnergyGeneration::ledger(30).unwrap().active * 7 / 40) * 1;
+        let mut vip_points = EnergyGeneration::ledger(30).unwrap().active * 7 / 40;
         assert_eq!(Privileges::vip_members(30).unwrap().points, vip_points);
         assert_eq!(EnergyGeneration::ledger(30).unwrap().active, 500);
         assert_eq!(System::account(30).data.frozen, 500);

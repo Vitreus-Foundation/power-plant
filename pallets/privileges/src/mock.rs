@@ -18,19 +18,17 @@ use pallet_energy_generation::{
     TestBenchmarkingConfig, ValidatorPrefs,
 };
 use pallet_reputation::{
-    ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_BLOCK,
+    ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER,
 };
 use parity_scale_codec::Compact;
 use sp_core::H256;
 use sp_runtime::traits::BlakeTwo256;
 use sp_runtime::{
     curve::PiecewiseLinear,
-    testing::{Header, TestSignature, UintAuthorityId},
-    traits::{IdentifyAccount, IdentityLookup, Verify, Zero},
-    BoundToRuntimeAppPublic, BuildStorage, MultiSignature, Percent,
+    testing::{TestSignature, UintAuthorityId},
+    traits::{IdentityLookup, Zero}, BuildStorage,
 };
 use sp_staking::{
-    offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
     EraIndex, OnStakingUpdate, SessionIndex,
 };
 use sp_std::vec;

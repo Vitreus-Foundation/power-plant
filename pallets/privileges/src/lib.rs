@@ -200,7 +200,7 @@ pub mod pallet {
     #[pallet::genesis_build]
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
-            match self.date.clone() {
+            match self.date {
                 Some(date) => {
                     let current_data_info =
                         CurrentDateInfo::new::<T>(date.0, date.1, date.2).unwrap();
@@ -326,7 +326,7 @@ impl<T: Config> Pallet<T> {
         let new_date =
             DateTime::from_timestamp(i64::try_from(now_as_millis_u64).unwrap(), 0).unwrap();
 
-        let mut current_date = Self::current_date();
+        let current_date = Self::current_date();
         let new_date =
             CurrentDateInfo::new::<T>(new_date.year(), new_date.month(), new_date.day()).unwrap();
 
