@@ -652,7 +652,6 @@ pub mod pallet {
 
                 let collaborative =
                     !self.disable_collaboration && Pallet::<T>::is_legit_for_collab(stash);
-                // println!("{:?}, {:?}", stash, controller);
                 frame_support::assert_ok!(match status {
                     crate::StakerStatus::Validator => <Pallet<T>>::validate(
                         T::RuntimeOrigin::from(Some(controller.clone()).into()),
