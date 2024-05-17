@@ -328,7 +328,7 @@ impl<T: Config> Pallet<T> {
 
         let mut current_date = Self::current_date();
         let new_date =
-            CurrentDateInfo::new::<T>(new_date.year(), new_date.month(), new_date.day())?;
+            CurrentDateInfo::new::<T>(new_date.year(), new_date.month(), new_date.day()).unwrap();
 
         if current_date.days_since_new_year != new_date.days_since_new_year {
             // Accrual of VIP points for users who have VIP status.
