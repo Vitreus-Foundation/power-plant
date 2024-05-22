@@ -62,7 +62,9 @@ pub(crate) const SPECULATIVE_NUM_SPANS: u32 = 32;
 #[allow(clippy::module_inception)]
 #[frame_support::pallet]
 pub mod pallet {
-    use crate::{slashing::StorageEssentials, BenchmarkingConfig, EnergyOf};
+    use crate::{
+        slashing::StorageEssentials, BenchmarkingConfig, EnergyOf, OnVipMembershipHandler,
+    };
 
     use super::*;
 
@@ -88,6 +90,7 @@ pub mod pallet {
     pub trait Config:
         frame_system::Config
         + pallet_assets::Config
+        + pallet_balances::Config
         + pallet_nac_managing::Config
         + pallet_reputation::Config
     {
@@ -105,6 +108,7 @@ pub mod pallet {
             + MaybeSerializeDeserialize
             + sp_std::fmt::Debug
             + From<u64>
+            + From<<Self as pallet_balances::Config>::Balance>
             + Into<<Self as pallet_assets::Config>::Balance>
             + StorageEssentials;
 
@@ -233,6 +237,9 @@ pub mod pallet {
 
         /// `ReputationTier` -> `Perbill` mapping, depicting additional energy reward ratio per tier.
         type ReputationTierEnergyRewardAdditionalPercentMapping: GetByKey<ReputationTier, Perbill>;
+
+        /// A handler called for every operation depends on VIP status.
+        type OnVipMembershipHandler: OnVipMembershipHandler<Self::AccountId, Weight>;
 
         /// Some parameters of the benchmarking.
         type BenchmarkingConfig: BenchmarkingConfig;
@@ -737,6 +744,8 @@ pub mod pallet {
         FundedTarget,
         /// Invalid era to reward.
         InvalidEraToReward,
+        /// Invalid era to slash.
+        InvalidEraToSlash,
         /// Invalid number of cooperations.
         InvalidNumberOfCooperations,
         /// Items are not sorted and unique.
@@ -923,6 +932,7 @@ pub mod pallet {
 
                 // NOTE: ledger must be updated prior to calling `Self::weight_of`.
                 Self::update_ledger(&controller, &ledger);
+                T::OnVipMembershipHandler::update_active_stake(&stash);
 
                 Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
             }
@@ -1103,7 +1113,12 @@ pub mod pallet {
 
             Self::do_remove_cooperator(stash);
             Self::do_add_validator(stash, prefs.clone());
-            Self::deposit_event(Event::<T>::ValidatorPrefsSet { stash: ledger.stash, prefs });
+
+            Self::deposit_event(Event::<T>::ValidatorPrefsSet {
+                stash: ledger.stash.clone(),
+                prefs,
+            });
+            T::OnVipMembershipHandler::update_active_stake(stash);
 
             Ok(())
         }
@@ -1193,6 +1208,7 @@ pub mod pallet {
 
             Self::do_remove_validator(stash);
             Self::do_add_cooperator(stash, cooperations)?;
+            T::OnVipMembershipHandler::update_active_stake(stash);
 
             Self::deposit_event(Event::<T>::Cooperated { controller, targets: cooperator_targets });
 

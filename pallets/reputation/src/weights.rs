@@ -39,6 +39,7 @@ pub trait WeightInfo {
     fn increase_points() -> Weight;
     fn slash() -> Weight;
     fn update_points() -> Weight;
+    fn force_reset_points() -> Weight;
 }
 
 impl WeightInfo for () {
@@ -57,5 +58,9 @@ impl WeightInfo for () {
 
     fn update_points() -> Weight {
         RuntimeDbWeight::default().reads_writes(1, 1)
+    }
+
+    fn force_reset_points() -> Weight {
+        RuntimeDbWeight::default().reads_writes(500, 500)
     }
 }

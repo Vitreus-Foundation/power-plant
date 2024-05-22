@@ -849,6 +849,17 @@ impl<Stake, Energy: Default> EnergyRateCalculator<Stake, Energy> for () {
     }
 }
 
+pub trait OnVipMembershipHandler<T, Res> {
+    /// Change quarter info.
+    fn change_quarter_info() -> Res;
+
+    /// Kick account from VIP members.
+    fn kick_account_from_vip(account: &T) -> Res;
+
+    /// Update active stake by VIP member.
+    fn update_active_stake(account: &T) -> Res;
+}
+
 /// Mode of era-forcing.
 #[derive(
     Copy,
