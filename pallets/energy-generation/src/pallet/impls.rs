@@ -2,6 +2,7 @@
 
 use core::cmp::Ordering;
 
+use frame_support::traits::Imbalance;
 use frame_support::{
     dispatch::WithPostDispatchInfo,
     pallet_prelude::*,
@@ -11,11 +12,13 @@ use frame_support::{
         Currency, DefensiveResult, Get, LockableCurrency, OnUnbalanced, WithdrawReasons,
     },
     weights::Weight,
+    BoundedBTreeMap,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
 use orml_traits::GetByKey;
 use scale_info::prelude::*;
 
+use crate::OnVipMembershipHandler;
 use pallet_reputation::{ReputationPoint, ReputationRecord};
 use pallet_session::historical;
 use sp_runtime::{
@@ -28,6 +31,7 @@ use sp_staking::{
 };
 use sp_std::prelude::*;
 
+use crate::slashing::NegativeImbalanceOf;
 use crate::{
     log, slashing, weights::WeightInfo, ActiveEraInfo, Cooperations, EnergyDebtOf, EnergyOf,
     EnergyRateCalculator, Exposure, ExposureOf, Forcing, IndividualExposure, RewardDestination,
@@ -41,6 +45,107 @@ impl<T: Config> Pallet<T> {
     pub fn slashable_balance_of(stash: &T::AccountId) -> StakeOf<T> {
         // Weight note: consider making the stake accessible through stash.
         Self::bonded(stash).and_then(Self::ledger).map(|l| l.active).unwrap_or_default()
+    }
+
+    /// Slash account stake (reason: exit VIP).
+    pub fn slash_vip_account(account: &T::AccountId, tax_percent: Perbill) -> DispatchResult {
+        let mut ledger_info = Self::ledger(account).ok_or(Error::<T>::NotController)?;
+        let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
+        let slash_era = Self::current_era().ok_or(Error::<T>::InvalidEraToSlash)?;
+
+        let tax = if Self::is_user_validator(account) {
+            let tax = tax_percent * ledger_info.active;
+            if ledger_info.active - tax < Self::min_bond_for_validator(account) {
+                Self::chill_stash(account);
+            }
+            tax
+        } else {
+            match Self::cooperators(account) {
+                Some(cooperations) => {
+                    let mut tax_value = T::StakeBalance::default();
+                    let min_cooperator_bond = MinCooperatorBond::<T>::get();
+                    let mut new_targets: Vec<(T::AccountId, StakeOf<T>)> = Default::default();
+                    for targets in cooperations.targets {
+                        if let Some(collaborations) = Self::collaborations(&targets.0) {
+                            if collaborations.contains(account) {
+                                let tax = tax_percent * targets.1;
+                                if targets.1 - tax >= min_cooperator_bond {
+                                    new_targets.push((targets.0, targets.1 - tax));
+                                }
+
+                                tax_value += tax;
+                            }
+                        }
+                    }
+
+                    let mut targets =
+                        BoundedBTreeMap::<T::AccountId, StakeOf<T>, T::MaxCooperations>::new();
+
+                    for (account_id, stake) in new_targets {
+                        targets
+                            .try_insert(account_id, stake)
+                            .map_err(|_| Error::<T>::TooManyCooperators)?;
+                    }
+
+                    let new_cooperations = Cooperations {
+                        targets,
+                        submitted_in: cooperations.submitted_in,
+                        suppressed: cooperations.suppressed,
+                    };
+
+                    Self::do_add_cooperator(account, new_cooperations)?;
+
+                    tax_value
+                },
+                None => tax_percent * ledger_info.active,
+            }
+        };
+
+        let stake_value =
+            ledger_info.slash_stake(tax, T::StakeCurrency::minimum_balance(), slash_era);
+
+        if !stake_value.is_zero() {
+            let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
+            slashed_imbalance.subsume(imbalance);
+
+            <Pallet<T>>::update_ledger(account, &ledger_info);
+        }
+
+        Ok(())
+    }
+
+    /// The total stake of VIP member.
+    pub fn get_active_stake(account: &T::AccountId) -> StakeOf<T> {
+        let ledger_info = Self::ledger(account);
+
+        if Self::is_user_validator(account) {
+            ledger_info.map_or_else(T::StakeBalance::default, |ledger| ledger.active)
+        } else {
+            match Self::cooperators(account) {
+                Some(cooperations) => {
+                    let mut active_stake = T::StakeBalance::default();
+                    for targets in cooperations.targets {
+                        let collaborations = Self::collaborations(targets.0);
+                        match collaborations {
+                            None => {},
+                            Some(collab) => {
+                                if collab.contains(account) {
+                                    active_stake += targets.1;
+                                }
+                            },
+                        }
+                    }
+
+                    active_stake
+                },
+                None => T::StakeBalance::default(),
+            }
+        }
+    }
+
+    /// The user is in Validators list.
+    pub fn is_user_validator(stash: &T::AccountId) -> bool {
+        Validators::<T>::contains_key(stash)
     }
 
     /// Checks if the account has enough reputation to be a validator.
@@ -311,6 +416,7 @@ impl<T: Config> Pallet<T> {
     pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
         T::StakeCurrency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
         <Ledger<T>>::insert(controller, ledger);
+        T::OnVipMembershipHandler::update_active_stake(controller);
     }
 
     /// Chill a stash account.
@@ -351,6 +457,9 @@ impl<T: Config> Pallet<T> {
                     return None;
                 },
             }
+
+            // Update quarter info for VIP / VIPP members.
+            T::OnVipMembershipHandler::change_quarter_info();
 
             // New era.
             let maybe_new_era_validators = Self::try_trigger_new_era(session_index);
@@ -813,6 +922,7 @@ impl<T: Config> Pallet<T> {
                         }
                     });
                 }
+                T::OnVipMembershipHandler::update_active_stake(who);
                 Cooperators::<T>::remove(who);
                 true
             },
@@ -842,7 +952,7 @@ impl<T: Config> Pallet<T> {
         if Validators::<T>::contains_key(who) {
             Validators::<T>::remove(who);
             Collaborations::<T>::remove(who);
-
+            T::OnVipMembershipHandler::update_active_stake(who);
             true
         } else {
             false

@@ -31,7 +31,7 @@ services:
       --validator
       --prometheus-external
       --rpc-cors all
-      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
+      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 9"
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
