@@ -6,6 +6,7 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
+
 use frame_support::{
     pallet_prelude::{BoundedVec, DispatchResult},
     traits::{
@@ -394,16 +395,20 @@ impl<T: Config> Pallet<T> {
     /// can mint VIPP NFT to account.
     pub fn can_mint_vipp(account: &T::AccountId) -> Option<(T::Balance, <T as Config>::ItemId)> {
         let collection_id = T::NftCollectionId::get();
-
         if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account).next() {
             let item_id = key;
             let vipp_status_exist =
                 T::Nfts::system_attribute(&collection_id, &item_id, &VIPP_STATUS_EXIST);
 
+
             return match vipp_status_exist {
                 Some(_) => { None },
                 None => {
-                    Self::mint_vipp_nft(account)
+                    if Self::get_claim_balance(account).is_some() {
+                        return Self::mint_vipp_nft(account);
+                    }
+
+                    None
                 },
             };
         }
@@ -425,7 +430,7 @@ impl<T: Config> Pallet<T> {
                 Some(bytes) => {
                     let balance = T::Balance::decode(&mut bytes.as_slice()).unwrap();
                     Some((balance, item_id)) },
-                None => Some((T::Balance::default(), item_id)),
+                None => None,
             };
         }
 

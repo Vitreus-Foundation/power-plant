@@ -409,6 +409,67 @@ fn test_upgrade_active_stake_throw_bond_extra() {
 }
 
 #[test]
+fn test_upgrade_active_stake_throw_unbond() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat,));
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
+        assert_eq!(
+            Privileges::vip_members(10).unwrap().active_stake,
+            EnergyGeneration::ledger(10).unwrap().active
+        );
+        let current_date = Privileges::current_date();
+
+        // Set next day.
+        assert_ok!(Privileges::update_time(
+            RuntimeOrigin::root(),
+            current_date.current_year,
+            current_date.current_month,
+            current_date.current_day + 1
+        ));
+
+        let mut vip_points = EnergyGeneration::ledger(10).unwrap().active / 50;
+        assert_eq!(Privileges::vip_members(10).unwrap().points, vip_points);
+        assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 1000);
+        assert_eq!(System::account(10).data.frozen, 1000);
+        assert_eq!(System::account(10).data.free, 1000);
+
+            assert_ok!(EnergyGeneration::unbond(RuntimeOrigin::signed(10), 100));
+        assert_eq!(
+            Privileges::vip_members(10).unwrap().active_stake,
+            EnergyGeneration::ledger(10).unwrap().active
+        );
+
+        assert_ok!(Privileges::update_time(
+            RuntimeOrigin::root(),
+            current_date.current_year,
+            current_date.current_month,
+            current_date.current_day + 2
+        ));
+        vip_points += EnergyGeneration::ledger(10).unwrap().active / (1 + 50);
+        assert_eq!(Privileges::vip_members(10).unwrap().points, vip_points);
+        assert_eq!(Privileges::vipp_members(10), None);
+
+        assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 900);
+        assert_eq!(System::account(10).data.frozen, 1000);
+        assert_eq!(System::account(10).data.free, 1000);
+
+        assert_ok!(Privileges::update_time(
+            RuntimeOrigin::root(),
+            current_date.current_year,
+            current_date.current_month,
+            current_date.current_day + 3
+        ));
+        vip_points += EnergyGeneration::ledger(10).unwrap().active / (2 + 50);
+        assert_eq!(Privileges::vip_members(10).unwrap().points, vip_points);
+        assert_eq!(Privileges::vipp_members(10), None);
+
+        assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 900);
+        assert_eq!(System::account(10).data.frozen, 1000);
+        assert_eq!(System::account(10).data.free, 1000);
+    })
+}
+
+#[test]
 fn test_minting_vipp_nft() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
@@ -428,7 +489,7 @@ fn test_minting_vipp_nft() {
 }
 
 #[test]
-fn test_calculating_vipp_points() {
+fn test_calculating_validator_vipp_points() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
 
@@ -465,21 +526,98 @@ fn test_calculating_vipp_points() {
     })
 }
 
-// #[test]
-// fn test_burning_vipp_nft() {
-//     ExtBuilder::default().build_and_execute(|| {
-//         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
-//
-//         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
-//         assert_ok!(Claiming::claim(
-//             RuntimeOrigin::signed(10),
-//             sig::<Test>(&bob(), &10u64.encode(), &[][..])
-//         ));
-//         assert_eq!(Privileges::vip_members(10), None);
-//         assert_eq!(Privileges::vipp_members(10), None);
-//         assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat,));
-//         assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
-//         assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
-//         assert_eq!(Privileges::vipp_members(10).unwrap().active_vipp_threshold[0].1, 190);
-//     })
-// }
+#[test]
+fn test_calculating_cooperator_vipp_points() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 100));
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::signed(100),
+            sig::<Test>(&bob(), &100u64.encode(), &[][..])
+        ));
+        assert_eq!(Privileges::vip_members(100), None);
+        assert_eq!(Privileges::vipp_members(100), None);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(100), PenaltyType::Flat,));
+        assert_eq!(Privileges::vip_members(100).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(100).unwrap().active_vipp_threshold[0].1, 95);
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 500);
+
+        let current_date = Privileges::current_date();
+        assert_ok!(Privileges::update_time(
+            RuntimeOrigin::root(),
+            current_date.current_year,
+            current_date.current_month,
+            current_date.current_day + 1
+        ));
+
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, 95);
+        assert_ok!(EnergyGeneration::cooperate(RuntimeOrigin::signed(100), vec![(10, 50)]));
+        assert_ok!(Privileges::update_time(
+            RuntimeOrigin::root(),
+            current_date.current_year,
+            current_date.current_month,
+            current_date.current_day + 2
+        ));
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, 145);
+
+        assert_ok!(EnergyGeneration::chill(RuntimeOrigin::signed(100)));
+
+        assert_ok!(Privileges::update_time(
+            RuntimeOrigin::root(),
+            current_date.current_year,
+            current_date.current_month,
+            current_date.current_day + 3
+        ));
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, 145);
+    })
+}
+
+#[test]
+fn test_burning_vipp_nft() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::signed(10),
+            sig::<Test>(&bob(), &10u64.encode(), &[][..])
+        ));
+        assert_eq!(Privileges::vip_members(10), None);
+        assert_eq!(Privileges::vipp_members(10), None);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat,));
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(10).unwrap().active_vipp_threshold[0].1, 190);
+
+        assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(10)));
+        assert_eq!(Privileges::vip_members(10), None);
+        assert_eq!(Privileges::vipp_members(10), None);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat,));
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(10), None);
+    })
+}
+
+#[test]
+fn test_from_validator_to_cooperator() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::signed(10),
+            sig::<Test>(&bob(), &10u64.encode(), &[][..])
+        ));
+        assert_eq!(Privileges::vip_members(10), None);
+        assert_eq!(Privileges::vipp_members(10), None);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat,));
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(10).unwrap().active_vipp_threshold[0].1, 190);
+
+        assert_ok!(EnergyGeneration::cooperate(RuntimeOrigin::signed(10), vec![(20, 100)]));
+        assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 100);
+    })
+}

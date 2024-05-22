@@ -619,7 +619,7 @@ impl ExtBuilder {
 
        let _ = pallet_nac_managing::GenesisConfig::<Test> {
             owners: vec![1],
-            accounts: vec![(10, 2)],
+            accounts: vec![(10, 2), (100, 2)],
         }.assimilate_storage(&mut storage);
 
         let _ = pallet_balances::GenesisConfig::<Test> {
