@@ -216,7 +216,6 @@ impl pallet_nac_managing::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
     type Nfts = Nfts;
-    type Balance = Balance;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type NftCollectionId = NftCollectionId;
