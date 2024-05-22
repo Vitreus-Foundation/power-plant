@@ -14,7 +14,7 @@ use frame_support::{
             nonfungibles_v2::{Create, Inspect, InspectEnumerable, Mutate},
             Balance,
         },
-        Get, Incrementable, OnNewAccount, Currency,
+        Currency, Get, Incrementable, OnNewAccount,
     },
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
@@ -22,7 +22,7 @@ pub use pallet::*;
 use pallet_claiming::OnClaimHandler;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
-use parity_scale_codec::{Encode, MaxEncodedLen, Codec, Decode};
+use parity_scale_codec::{Codec, Decode, Encode, MaxEncodedLen};
 use sp_arithmetic::{FixedPointOperand, Perbill};
 use sp_runtime::{
     traits::{BlakeTwo256, Hash, MaybeSerializeDeserialize},
@@ -162,7 +162,7 @@ pub mod pallet {
             owner: T::AccountId,
             /// The VIPP NFT unique ID.
             item_id: T::ItemId,
-        }
+        },
     }
 
     #[pallet::error]
@@ -400,9 +400,8 @@ impl<T: Config> Pallet<T> {
             let vipp_status_exist =
                 T::Nfts::system_attribute(&collection_id, &item_id, &VIPP_STATUS_EXIST);
 
-
             return match vipp_status_exist {
-                Some(_) => { None },
+                Some(_) => None,
                 None => {
                     if Self::get_claim_balance(account).is_some() {
                         return Self::mint_vipp_nft(account);
@@ -417,7 +416,9 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Get user claim balance.
-    pub fn get_claim_balance(account_id: &T::AccountId) -> Option<(T::Balance, <T as Config>::ItemId)> {
+    pub fn get_claim_balance(
+        account_id: &T::AccountId,
+    ) -> Option<(T::Balance, <T as Config>::ItemId)> {
         let collection_id = T::NftCollectionId::get();
 
         if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account_id).next() {
@@ -429,7 +430,8 @@ impl<T: Config> Pallet<T> {
             return match claim_balance {
                 Some(bytes) => {
                     let balance = T::Balance::decode(&mut bytes.as_slice()).unwrap();
-                    Some((balance, item_id)) },
+                    Some((balance, item_id))
+                },
                 None => None,
             };
         }
@@ -437,14 +439,16 @@ impl<T: Config> Pallet<T> {
         None
     }
 
-
     /// Check threshold of account.
-    pub fn threshold_meets_vipp_requirements(account: &T::AccountId, claim_balance: T::Balance) -> bool {
+    pub fn threshold_meets_vipp_requirements(
+        account: &T::AccountId,
+        claim_balance: T::Balance,
+    ) -> bool {
         let free_balance = T::Currency::free_balance(account);
         let perbill = Perbill::from_rational(95_u32, 100_u32);
 
         if free_balance > perbill * claim_balance {
-            return true
+            return true;
         }
 
         false
@@ -452,7 +456,7 @@ impl<T: Config> Pallet<T> {
 
     /// Check VIPP threshold every transaction.
     pub fn check_account_threshold(account: &T::AccountId) {
-        let claim_balance= Self::get_claim_balance(account);
+        let claim_balance = Self::get_claim_balance(account);
 
         match claim_balance {
             Some(bytes) => {
@@ -516,4 +520,3 @@ where
         )
     }
 }
-

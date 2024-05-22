@@ -19,8 +19,8 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use pallet_energy_generation::OnVipMembershipHandler;
 use parity_scale_codec::Encode;
-use sp_arithmetic::Perquintill;
 use sp_arithmetic::traits::Saturating;
+use sp_arithmetic::Perquintill;
 use sp_runtime::{Perbill, SaturatedConversion};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
@@ -48,7 +48,9 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_energy_generation::Config + pallet_nac_managing::Config {
+    pub trait Config:
+        frame_system::Config + pallet_energy_generation::Config + pallet_nac_managing::Config
+    {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -399,8 +401,7 @@ impl<T: Config> Pallet<T> {
         }
 
         VipMembers::<T>::translate(|_, mut old_info: VipMemberInfo<T>| {
-            let multiplier =
-                Self::calculate_multiplier(elapsed_day);
+            let multiplier = Self::calculate_multiplier(elapsed_day);
             let points = Self::calculate_points(old_info.active_stake, multiplier);
             let new_points = old_info.points.saturating_add(points);
             old_info.points = new_points;
@@ -415,18 +416,15 @@ impl<T: Config> Pallet<T> {
         }
 
         VippMembers::<T>::translate(|acc, mut old_info: VippMemberInfo<T>| {
-            let threshold = old_info.active_vipp_threshold.iter().fold(<T as pallet_energy_generation::Config>::StakeBalance::default(), |acc, (_, balance)| {
-                acc + *balance
-            });
+            let threshold = old_info.active_vipp_threshold.iter().fold(
+                <T as pallet_energy_generation::Config>::StakeBalance::default(),
+                |acc, (_, balance)| acc + *balance,
+            );
 
             let vip_member_info = VipMembers::<T>::get(acc);
             let active_stake = match vip_member_info {
-                None => {
-                    <T as pallet_energy_generation::Config>::StakeBalance::default()
-                }
-                Some(info) => {
-                    info.active_stake
-                }
+                None => <T as pallet_energy_generation::Config>::StakeBalance::default(),
+                Some(info) => info.active_stake,
             };
             if threshold >= active_stake {
                 let new_points = old_info.points.saturating_add(active_stake);
@@ -441,9 +439,7 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Calculate multiplier that differs depending on penalty type.
-    fn calculate_multiplier(
-        elapsed_day: u64,
-    ) -> Perquintill {
+    fn calculate_multiplier(elapsed_day: u64) -> Perquintill {
         Perquintill::from_rational(1, INCREASE_VIP_POINTS_CONSTANT + elapsed_day)
     }
 
@@ -512,4 +508,3 @@ impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight> for Pallet<T> {
         Weight::from_parts(1, 2)
     }
 }
-

@@ -426,7 +426,7 @@ fn test_upgrade_active_stake_throw_unbond() {
         assert_eq!(System::account(10).data.frozen, 1000);
         assert_eq!(System::account(10).data.free, 1000);
 
-            assert_ok!(EnergyGeneration::unbond(RuntimeOrigin::signed(10), 100));
+        assert_ok!(EnergyGeneration::unbond(RuntimeOrigin::signed(10), 100));
         assert_eq!(
             Privileges::vip_members(10).unwrap().active_stake,
             EnergyGeneration::ledger(10).unwrap().active
@@ -614,4 +614,3 @@ fn test_from_validator_to_cooperator() {
         assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 100);
     })
 }
-

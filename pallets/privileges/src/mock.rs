@@ -12,6 +12,7 @@ use frame_support::{
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use orml_traits::GetByKey;
+use pallet_claiming::{EcdsaSignature, EthereumAddress};
 use pallet_energy_generation::{
     CurrentEra, EnergyDebtOf, EnergyOf, ErasEnergyPerStakeCurrency, ErasStakers, ErasTotalStake,
     Ledger, RewardDestination, SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakerStatus,
@@ -25,12 +26,11 @@ use sp_runtime::traits::BlakeTwo256;
 use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{TestSignature, UintAuthorityId},
-    traits::{IdentityLookup, Zero, Identity},
+    traits::{Identity, IdentityLookup, Zero},
     BuildStorage,
 };
 use sp_staking::{EraIndex, OnStakingUpdate, SessionIndex};
 use sp_std::vec;
-use pallet_claiming::{EcdsaSignature, EthereumAddress};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -617,10 +617,11 @@ impl ExtBuilder {
         }
         .assimilate_storage(&mut storage);
 
-       let _ = pallet_nac_managing::GenesisConfig::<Test> {
+        let _ = pallet_nac_managing::GenesisConfig::<Test> {
             owners: vec![1],
             accounts: vec![(10, 2), (100, 2)],
-        }.assimilate_storage(&mut storage);
+        }
+        .assimilate_storage(&mut storage);
 
         let _ = pallet_balances::GenesisConfig::<Test> {
             balances: vec![
@@ -983,10 +984,7 @@ pub fn sig<T: pallet_claiming::Config>(
     what: &[u8],
     extra: &[u8],
 ) -> EcdsaSignature {
-    let msg = keccak_256(&ethereum_signable_message(
-        &to_ascii_hex(what)[..],
-        extra,
-    ));
+    let msg = keccak_256(&ethereum_signable_message(&to_ascii_hex(what)[..], extra));
     let (sig, recovery_id) = libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), secret);
     let mut r = [0u8; 65];
     r[0..64].copy_from_slice(&sig.serialize()[..]);
@@ -1009,7 +1007,6 @@ fn ethereum_signable_message(what: &[u8], extra: &[u8]) -> Vec<u8> {
     v.extend_from_slice(extra);
     v
 }
-
 
 fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
     let mut r = Vec::with_capacity(data.len() * 2);

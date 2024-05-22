@@ -1113,7 +1113,10 @@ pub mod pallet {
             Self::do_remove_cooperator(stash);
             Self::do_add_validator(stash, prefs.clone());
 
-            Self::deposit_event(Event::<T>::ValidatorPrefsSet { stash: ledger.stash.clone(), prefs });
+            Self::deposit_event(Event::<T>::ValidatorPrefsSet {
+                stash: ledger.stash.clone(),
+                prefs,
+            });
             T::OnVipMembershipHandler::update_active_stake(stash);
 
             Ok(())
