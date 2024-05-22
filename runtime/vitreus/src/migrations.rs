@@ -15,9 +15,10 @@ use pallet_energy_generation::ConfigOp;
 pub type V0101 = (FixRewards);
 pub type V0103 = (UpdateSlashStorages<Runtime>, TransferClaimFrom0x66C6To0xE621);
 pub type V0104 = (SetPoolAssetsStorageVersion, InitEnergyBroker);
+pub type V0105 = (FixMinCoopReputation, TransferClaimFrom0x48CfTo0x1206, TransferClaimFrom0x419fTo0x1920);
 
 pub type Unreleased =
-    (FixMinCoopReputation, TransferClaimFrom0x48CfTo0x1206, TransferClaimFrom0x419fTo0x1920);
+    ();
 
 pub struct FixRewards;
 
