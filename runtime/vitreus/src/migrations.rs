@@ -16,7 +16,7 @@ pub type V0101 = (FixRewards);
 pub type V0103 = (UpdateSlashStorages<Runtime>, TransferClaimFrom0x66C6To0xE621);
 pub type V0104 = (SetPoolAssetsStorageVersion, InitEnergyBroker);
 
-pub type Unreleased = ();
+pub type Unreleased = (FixMinCoopReputation);
 
 pub struct FixRewards;
 
@@ -247,5 +247,38 @@ impl OnRuntimeUpgrade for InitEnergyBroker {
         );
 
         weight
+    }
+}
+
+pub struct FixMinCoopReputation;
+
+impl OnRuntimeUpgrade for FixMinCoopReputation {
+    fn on_runtime_upgrade() -> Weight {
+        use pallet_energy_generation::ValidatorPrefs;
+
+        pallet_energy_generation::Validators::<Runtime>::translate(
+            |account, mut prefs: ValidatorPrefs| {
+                if let Some(tier) = prefs.min_coop_reputation.tier() {
+                    let points = ReputationPoint::from_rank(tier.rank());
+
+                    if points != prefs.min_coop_reputation.points() {
+                        let old_min_coop_reputation = prefs.min_coop_reputation.clone();
+
+                        prefs.min_coop_reputation.update(points);
+
+                        log::info!(
+                            "{:?}: fix min_coop_reputation from {:?} to {:?}",
+                            account,
+                            old_min_coop_reputation,
+                            prefs.min_coop_reputation,
+                        );
+                    }
+                }
+                Some(prefs)
+            },
+        );
+
+        let count = pallet_energy_generation::Validators::<Runtime>::count() as u64;
+        RocksDbWeight::get().reads_writes(count, count)
     }
 }
