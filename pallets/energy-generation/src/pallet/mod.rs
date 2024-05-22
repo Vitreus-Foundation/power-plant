@@ -90,6 +90,7 @@ pub mod pallet {
     pub trait Config:
         frame_system::Config
         + pallet_assets::Config
+        + pallet_balances::Config
         + pallet_nac_managing::Config
         + pallet_reputation::Config
     {
@@ -107,7 +108,7 @@ pub mod pallet {
             + MaybeSerializeDeserialize
             + sp_std::fmt::Debug
             + From<u64>
-            + From<<Self as pallet_nac_managing::Config>::Balance>
+            + From<<Self as pallet_balances::Config>::Balance>
             + Into<<Self as pallet_assets::Config>::Balance>
             + StorageEssentials;
 

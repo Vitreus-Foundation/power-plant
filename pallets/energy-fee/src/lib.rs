@@ -15,7 +15,6 @@ pub use pallet_transaction_payment::{
     Config as TransactionPaymentConfig, Multiplier, MultiplierUpdate, OnChargeTransaction,
 };
 
-use sp_arithmetic::traits::CheckedDiv;
 use sp_arithmetic::{traits::CheckedAdd, ArithmeticError::Overflow};
 use sp_core::{RuntimeDebug, H160, U256};
 use sp_runtime::{

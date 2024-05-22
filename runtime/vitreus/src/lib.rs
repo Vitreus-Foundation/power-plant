@@ -753,7 +753,6 @@ parameter_types! {
 impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Nfts = Nfts;
-    type Balance = Balance;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type KeyLimit = ConstU32<50>;

@@ -10,10 +10,7 @@
 use frame_support::{
     pallet_prelude::{BoundedVec, DispatchResult},
     traits::{
-        tokens::{
-            nonfungibles_v2::{Create, Inspect, InspectEnumerable, Mutate},
-            Balance,
-        },
+        tokens::nonfungibles_v2::{Create, Inspect, InspectEnumerable, Mutate},
         Currency, Get, Incrementable, OnNewAccount,
     },
 };
@@ -22,13 +19,12 @@ pub use pallet::*;
 use pallet_claiming::OnClaimHandler;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
-use parity_scale_codec::{Codec, Decode, Encode, MaxEncodedLen};
-use sp_arithmetic::{FixedPointOperand, Perbill};
+use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
+use sp_arithmetic::Perbill;
 use sp_runtime::{
     traits::{BlakeTwo256, Hash, MaybeSerializeDeserialize},
     SaturatedConversion,
 };
-use sp_std::fmt::Debug;
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -39,8 +35,11 @@ mod tests;
 
 pub mod weights;
 
-type CollectionConfigFor<T> =
-    CollectionConfig<<T as Config>::Balance, BlockNumberFor<T>, <T as Config>::CollectionId>;
+type CollectionConfigFor<T> = CollectionConfig<
+    <T as pallet_balances::Config>::Balance,
+    BlockNumberFor<T>,
+    <T as Config>::CollectionId,
+>;
 
 /// NAC level attribute key in NFT.
 const NAC_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
@@ -67,7 +66,9 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_reputation::Config {
+    pub trait Config:
+        frame_system::Config + pallet_reputation::Config + pallet_balances::Config
+    {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -76,14 +77,6 @@ pub mod pallet {
             + Mutate<Self::AccountId, ItemConfig>
             + Create<Self::AccountId, CollectionConfigFor<Self>>
             + InspectEnumerable<Self::AccountId>;
-
-        /// The balance type.
-        type Balance: Balance
-            + MaybeSerializeDeserialize
-            + Debug
-            + Codec
-            + MaxEncodedLen
-            + FixedPointOperand;
 
         /// The collection id type.
         type CollectionId: MaybeSerializeDeserialize
@@ -114,7 +107,7 @@ pub mod pallet {
         type Currency: LockableCurrency<
             Self::AccountId,
             Moment = BlockNumberFor<Self>,
-            Balance = Self::Balance,
+            Balance = <Self as pallet_balances::Config>::Balance,
         >;
 
         /// NFT Collection ID.
@@ -251,7 +244,6 @@ pub mod pallet {
         fn build(&self) {
             for owner in self.owners.iter() {
                 Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
-                Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
 
                 // Get collection Id.
                 let collection_id: T::CollectionId = T::CollectionId::initial_value();
@@ -369,6 +361,7 @@ impl<T: Config> Pallet<T> {
         None
     }
 
+    /// Mint VIPP nft to account.
     pub fn mint_vipp_nft(account: &T::AccountId) -> Option<(T::Balance, <T as Config>::ItemId)> {
         let claim_balance = Self::get_claim_balance(account);
         if let Some(claim_balance) = claim_balance {
@@ -423,13 +416,14 @@ impl<T: Config> Pallet<T> {
 
         if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account_id).next() {
             let item_id = key;
-            // Get NAC by NFT attribute key.
+            // Get claim amount by NFT attribute key.
             let claim_balance =
                 T::Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY);
 
             return match claim_balance {
                 Some(bytes) => {
                     let balance = T::Balance::decode(&mut bytes.as_slice()).unwrap();
+                    // match
                     Some((balance, item_id))
                 },
                 None => None,
@@ -442,9 +436,9 @@ impl<T: Config> Pallet<T> {
     /// Check threshold of account.
     pub fn threshold_meets_vipp_requirements(
         account: &T::AccountId,
-        claim_balance: T::Balance,
+        claim_balance: <T as pallet_balances::Config>::Balance,
     ) -> bool {
-        let free_balance = T::Currency::free_balance(account);
+        let free_balance = T::Currency::total_balance(account);
         let perbill = Perbill::from_rational(95_u32, 100_u32);
 
         if free_balance > perbill * claim_balance {
@@ -458,21 +452,15 @@ impl<T: Config> Pallet<T> {
     pub fn check_account_threshold(account: &T::AccountId) {
         let claim_balance = Self::get_claim_balance(account);
 
-        match claim_balance {
-            Some(bytes) => {
-                let balance = T::Balance::decode(&mut bytes.as_slice()).unwrap();
-                if !Self::threshold_meets_vipp_requirements(account, balance) {
-                    Self::burn_vipp_nfts(account)
-                }
-            },
-            None => return,
+        if let Some(bytes) = claim_balance {
+            if !Self::threshold_meets_vipp_requirements(account, bytes.0) {
+                Self::burn_vipp_nfts(account)
+            }
         }
     }
 
     /// Burn VIPP status.
-    pub fn burn_vipp_nfts(_account: &T::AccountId) {
-        // Make this function sense?
-    }
+    pub fn burn_vipp_nfts(_account: &T::AccountId) {}
 }
 
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {

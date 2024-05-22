@@ -172,10 +172,7 @@ pub mod pallet {
             while Self::check_correct_date(&current_date, &new_date) {
                 current_date.add_days::<T>(1)?;
                 // Accrual of VIP points for users who have VIP status.
-                Self::update_points_for_time(
-                    current_date.days_since_new_year,
-                    new_date.current_quarter,
-                );
+                Self::update_points_for_time(current_date.days_since_new_year);
 
                 // Accrual of VIPP points for users who have VIPP status.
                 Self::update_vipp_points_for_time(current_date.days_since_new_year);
@@ -266,13 +263,8 @@ impl<T: Config> Pallet<T> {
             active_stake,
         };
 
-        VipMembers::<T>::insert(&account, vip_member_info);
+        VipMembers::<T>::insert(account, vip_member_info);
         Self::do_set_vipp_status(account);
-    }
-
-    /// Check VIPP requirements.
-    fn can_user_become_vipp(account: &T::AccountId) -> bool {
-        true
     }
 
     /// Set VIP member VIPP status.
@@ -285,7 +277,7 @@ impl<T: Config> Pallet<T> {
                 active_vipp_threshold: vec![(vipp_nft.1, vipp_nft.0.into())],
             };
 
-            VippMembers::<T>::insert(&account, vipp_member_info);
+            VippMembers::<T>::insert(account, vipp_member_info);
         }
     }
 
@@ -309,7 +301,7 @@ impl<T: Config> Pallet<T> {
 
                 VipMembers::<T>::remove(account);
                 let vipp_status = VippMembers::<T>::get(account);
-                if let Some(vipp_status) = vipp_status {
+                if vipp_status.is_some() {
                     VippMembers::<T>::remove(account);
                     pallet_nac_managing::Pallet::<T>::burn_vipp_nfts(account);
                 }
@@ -381,7 +373,7 @@ impl<T: Config> Pallet<T> {
 
         if current_date.days_since_new_year != new_date.days_since_new_year {
             // Accrual of VIP points for users who have VIP status.
-            Self::update_points_for_time(new_date.days_since_new_year, new_date.current_quarter);
+            Self::update_points_for_time(new_date.days_since_new_year);
 
             // Accrual of VIPP points for users who have VIPP status.
             Self::update_vipp_points_for_time(new_date.days_since_new_year);
@@ -395,7 +387,7 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Updates the VIP points for the time since the last time the account was updated.
-    pub fn update_points_for_time(elapsed_day: u64, current_quarter: u8) {
+    pub fn update_points_for_time(elapsed_day: u64) {
         if elapsed_day == 0 {
             return;
         }
