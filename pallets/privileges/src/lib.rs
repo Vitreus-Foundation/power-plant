@@ -448,7 +448,6 @@ impl<T: Config> Pallet<T> {
 
         let mut vipp_results = Vec::new();
         VippMembers::<T>::translate(|account, mut vipp_info: VippMemberInfo<T>| {
-            log::error!("Save year VIPP info");
             vipp_results.push((account, vipp_info.points));
             vipp_info.points = <T as pallet_energy_generation::Config>::StakeBalance::default();
             Some(vipp_info)

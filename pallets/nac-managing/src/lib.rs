@@ -244,6 +244,7 @@ pub mod pallet {
         fn build(&self) {
             for owner in self.owners.iter() {
                 Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
+                Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
 
                 // Get collection Id.
                 let collection_id: T::CollectionId = T::CollectionId::initial_value();
@@ -373,6 +374,22 @@ impl<T: Config> Pallet<T> {
 
                 let result = T::Nfts::mint_into(&collection, &item_id, account, &item_config, true);
 
+                let collection = T::NftCollectionId::get();
+
+                let item_id = match Self::get_nac_level(account) {
+                    Some(value) => {
+                        value.1
+                    },
+                    None => return None,
+                };
+
+                let key = BoundedVec::<u8, T::KeyLimit>::try_from(Vec::from(VIPP_STATUS_EXIST))
+                    .unwrap_or_default();
+                let mut is_exist = BoundedVec::<u8, T::ValueLimit>::new();
+                let _ = is_exist.try_push(1).map_err(|_| Error::<T>::NacLevelIsIncorrect);
+
+                let _ = T::Nfts::set_attribute(&collection, &item_id, &key, &is_exist);
+
                 if result.is_ok() {
                     Self::deposit_event(Event::VippNftMinted { owner: account.clone(), item_id });
                     return Some((perbill * claim_balance.0, item_id));
@@ -422,9 +439,10 @@ impl<T: Config> Pallet<T> {
 
             return match claim_balance {
                 Some(bytes) => {
-                    let balance = T::Balance::decode(&mut bytes.as_slice()).unwrap();
-                    // match
-                    Some((balance, item_id))
+                    match T::Balance::decode(&mut bytes.as_slice()) {
+                        Ok(balance) => Some((balance, item_id)),
+                        _ => None
+                    }
                 },
                 None => None,
             };
@@ -460,7 +478,14 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Burn VIPP status.
-    pub fn burn_vipp_nfts(_account: &T::AccountId) {}
+    pub fn burn_vipp_nfts(account: &T::AccountId) {
+        let collection_id = T::VIPPCollectionId::get();
+
+        if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account).next() {
+            let item_id = key;
+            let _ = T::Nfts::burn(&collection_id, &item_id, Some(account));
+        }
+    }
 }
 
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
