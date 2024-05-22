@@ -20,6 +20,7 @@ pub use pallet::*;
 use pallet_energy_generation::OnVipMembershipHandler;
 use parity_scale_codec::Encode;
 use sp_arithmetic::traits::Saturating;
+use sp_arithmetic::Perquintill;
 use sp_runtime::{Perbill, SaturatedConversion};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
@@ -33,6 +34,8 @@ mod contribution_info;
 
 pub mod weights;
 
+const INCREASE_VIP_POINTS_CONSTANT: u64 = 50;
+
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -45,7 +48,9 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_energy_generation::Config {
+    pub trait Config:
+        frame_system::Config + pallet_energy_generation::Config + pallet_nac_managing::Config
+    {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -64,8 +69,21 @@ pub mod pallet {
     pub type VipMembers<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VipMemberInfo<T>>;
 
     #[pallet::storage]
+    #[pallet::getter(fn vipp_members)]
+    pub type VippMembers<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VippMemberInfo<T>>;
+
+    #[pallet::storage]
     #[pallet::getter(fn year_vip_results)]
     pub type YearVipResults<T: Config> = StorageMap<
+        _,
+        Twox64Concat,
+        i32,
+        Vec<(T::AccountId, <T as pallet_energy_generation::Config>::StakeBalance)>,
+    >;
+
+    #[pallet::storage]
+    #[pallet::getter(fn year_vipp_results)]
+    pub type YearVippResults<T: Config> = StorageMap<
         _,
         Twox64Concat,
         i32,
@@ -112,6 +130,8 @@ pub mod pallet {
         IsNotPenaltyFreePeriod,
         /// Not correct date to set.
         NotCorrectDate,
+        /// Account hasn't claim balance.
+        HasNotClaim,
     }
 
     #[pallet::call]
@@ -152,11 +172,10 @@ pub mod pallet {
             while Self::check_correct_date(&current_date, &new_date) {
                 current_date.add_days::<T>(1)?;
                 // Accrual of VIP points for users who have VIP status.
-                Self::update_points_for_time(
-                    current_date.days_since_new_year,
-                    new_date.current_quarter,
-                );
+                Self::update_points_for_time(current_date.days_since_new_year);
 
+                // Accrual of VIPP points for users who have VIPP status.
+                Self::update_vipp_points_for_time(current_date.days_since_new_year);
                 if current_date.current_month == 1 && current_date.current_day == 1 {
                     Self::save_year_info(current_date.current_year - 1);
                 }
@@ -245,6 +264,21 @@ impl<T: Config> Pallet<T> {
         };
 
         VipMembers::<T>::insert(account, vip_member_info);
+        Self::do_set_vipp_status(account);
+    }
+
+    /// Set VIP member VIPP status.
+    fn do_set_vipp_status(account: &T::AccountId) {
+        let vipp_nft = pallet_nac_managing::Pallet::<T>::can_mint_vipp(account);
+
+        if let Some(vipp_nft) = vipp_nft {
+            let vipp_member_info = VippMemberInfo::<T> {
+                points: <T as pallet_energy_generation::Config>::StakeBalance::default(),
+                active_vipp_threshold: vec![(vipp_nft.1, vipp_nft.0.into())],
+            };
+
+            VippMembers::<T>::insert(account, vipp_member_info);
+        }
     }
 
     /// Exit VIP.
@@ -266,6 +300,12 @@ impl<T: Config> Pallet<T> {
                 }
 
                 VipMembers::<T>::remove(account);
+                let vipp_status = VippMembers::<T>::get(account);
+                if vipp_status.is_some() {
+                    VippMembers::<T>::remove(account);
+                    pallet_nac_managing::Pallet::<T>::burn_vipp_nfts(account);
+                }
+
                 Self::deposit_event(Event::<T>::LeftVip {
                     account: account.clone(),
                     penalty: penalty_percent,
@@ -333,7 +373,10 @@ impl<T: Config> Pallet<T> {
 
         if current_date.days_since_new_year != new_date.days_since_new_year {
             // Accrual of VIP points for users who have VIP status.
-            Self::update_points_for_time(new_date.days_since_new_year, new_date.current_quarter);
+            Self::update_points_for_time(new_date.days_since_new_year);
+
+            // Accrual of VIPP points for users who have VIPP status.
+            Self::update_vipp_points_for_time(new_date.days_since_new_year);
 
             if new_date.current_month == 1 && new_date.current_day == 1 {
                 Self::save_year_info(new_date.current_year - 1);
@@ -343,15 +386,14 @@ impl<T: Config> Pallet<T> {
         }
     }
 
-    /// Updates the points for the time since the last time the account was updated.
-    pub fn update_points_for_time(elapsed_day: u64, current_quarter: u8) {
+    /// Updates the VIP points for the time since the last time the account was updated.
+    pub fn update_points_for_time(elapsed_day: u64) {
         if elapsed_day == 0 {
             return;
         }
 
         VipMembers::<T>::translate(|_, mut old_info: VipMemberInfo<T>| {
-            let multiplier =
-                Self::calculate_multiplier(old_info.tax_type, current_quarter, elapsed_day);
+            let multiplier = Self::calculate_multiplier(elapsed_day);
             let points = Self::calculate_points(old_info.active_stake, multiplier);
             let new_points = old_info.points.saturating_add(points);
             old_info.points = new_points;
@@ -359,18 +401,38 @@ impl<T: Config> Pallet<T> {
         });
     }
 
-    /// Calculate multiplier that differs depending on penalty type.
-    fn calculate_multiplier(
-        penalty_type: PenaltyType,
-        current_quarter: u8,
-        elapsed_day: u64,
-    ) -> Perbill {
-        match penalty_type {
-            PenaltyType::Flat => Perbill::from_rational(7, 40 * elapsed_day),
-            PenaltyType::Declining => {
-                Perbill::from_rational(30 - current_quarter as u64 * 5, 100 * elapsed_day)
-            },
+    /// Updates the VIPP points for the time since the last time the account was updated.
+    pub fn update_vipp_points_for_time(elapsed_day: u64) {
+        if elapsed_day == 0 {
+            return;
         }
+
+        VippMembers::<T>::translate(|acc, mut old_info: VippMemberInfo<T>| {
+            let threshold = old_info.active_vipp_threshold.iter().fold(
+                <T as pallet_energy_generation::Config>::StakeBalance::default(),
+                |acc, (_, balance)| acc + *balance,
+            );
+
+            let vip_member_info = VipMembers::<T>::get(acc);
+            let active_stake = match vip_member_info {
+                None => <T as pallet_energy_generation::Config>::StakeBalance::default(),
+                Some(info) => info.active_stake,
+            };
+            if threshold >= active_stake {
+                let new_points = old_info.points.saturating_add(active_stake);
+                old_info.points = new_points;
+            } else {
+                let new_points = old_info.points.saturating_add(threshold);
+                old_info.points = new_points;
+            }
+
+            Some(old_info)
+        });
+    }
+
+    /// Calculate multiplier that differs depending on penalty type.
+    fn calculate_multiplier(elapsed_day: u64) -> Perquintill {
+        Perquintill::from_rational(1, INCREASE_VIP_POINTS_CONSTANT + elapsed_day)
     }
 
     /// Save VIP year information to pay rewards.
@@ -383,12 +445,22 @@ impl<T: Config> Pallet<T> {
         });
 
         YearVipResults::<T>::insert(current_year, results);
+
+        let mut vipp_results = Vec::new();
+        VippMembers::<T>::translate(|account, mut vipp_info: VippMemberInfo<T>| {
+            log::error!("Save year VIPP info");
+            vipp_results.push((account, vipp_info.points));
+            vipp_info.points = <T as pallet_energy_generation::Config>::StakeBalance::default();
+            Some(vipp_info)
+        });
+
+        YearVippResults::<T>::insert(current_year, vipp_results);
     }
 
     /// Calculate VIP points for account.
     fn calculate_points(
         active_stake: T::StakeBalance,
-        multiplier: Perbill,
+        multiplier: Perquintill,
     ) -> <T as pallet_energy_generation::Config>::StakeBalance {
         multiplier * active_stake
     }

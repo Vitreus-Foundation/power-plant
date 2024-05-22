@@ -922,6 +922,7 @@ impl<T: Config> Pallet<T> {
                         }
                     });
                 }
+                T::OnVipMembershipHandler::update_active_stake(who);
                 Cooperators::<T>::remove(who);
                 true
             },
@@ -951,7 +952,7 @@ impl<T: Config> Pallet<T> {
         if Validators::<T>::contains_key(who) {
             Validators::<T>::remove(who);
             Collaborations::<T>::remove(who);
-
+            T::OnVipMembershipHandler::update_active_stake(who);
             true
         } else {
             false

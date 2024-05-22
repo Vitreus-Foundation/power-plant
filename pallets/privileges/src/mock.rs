@@ -6,12 +6,13 @@ use frame_support::{
     storage::StorageValue,
     traits::{
         AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Currency, EitherOfDiverse,
-        FindAuthor, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
+        FindAuthor, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler, WithdrawReasons,
     },
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use orml_traits::GetByKey;
+use pallet_claiming::{EcdsaSignature, EthereumAddress};
 use pallet_energy_generation::{
     CurrentEra, EnergyDebtOf, EnergyOf, ErasEnergyPerStakeCurrency, ErasStakers, ErasTotalStake,
     Ledger, RewardDestination, SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakerStatus,
@@ -20,11 +21,12 @@ use pallet_energy_generation::{
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER};
 use parity_scale_codec::Compact;
 use sp_core::H256;
+use sp_io::hashing::keccak_256;
 use sp_runtime::traits::BlakeTwo256;
 use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{TestSignature, UintAuthorityId},
-    traits::{IdentityLookup, Zero},
+    traits::{Identity, IdentityLookup, Zero},
     BuildStorage,
 };
 use sp_staking::{EraIndex, OnStakingUpdate, SessionIndex};
@@ -39,7 +41,7 @@ pub const BLOCK_TIME: u64 = 1000;
 pub(crate) type AccountId = u64;
 pub(crate) type Nonce = u64;
 pub(crate) type BlockNumber = u64;
-pub(crate) type Balance = u128;
+pub(crate) type Balance = u64;
 pub(crate) type Signature = TestSignature;
 pub(crate) type AccountPublic = UintAuthorityId;
 
@@ -79,6 +81,7 @@ frame_support::construct_runtime!(
         Timestamp: pallet_timestamp,
         Authorship: pallet_authorship,
         Balances: pallet_balances,
+        Claiming: pallet_claiming,
         EnergyGeneration: pallet_energy_generation,
         Session: pallet_session,
         Reputation: pallet_reputation,
@@ -86,6 +89,7 @@ frame_support::construct_runtime!(
         Historical: pallet_session::historical,
         NacManaging: pallet_nac_managing,
         Privileges: pallet_privileges,
+        Vesting: pallet_vesting,
     }
 );
 
@@ -126,7 +130,7 @@ impl frame_system::Config for Test {
     type Version = ();
     type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = ();
+    type OnNewAccount = NacManaging;
     type OnKilledAccount = ();
     type SystemWeightInfo = ();
     type SS58Prefix = ();
@@ -183,9 +187,9 @@ impl pallet_nfts::Config for Test {
     type OffchainPublic = AccountPublic;
     type OffchainSignature = Signature;
     type ItemDeposit = TestItemDeposit;
-    type MetadataDepositBase = ConstU128<1>;
-    type AttributeDepositBase = ConstU128<1>;
-    type DepositPerByte = ConstU128<1>;
+    type MetadataDepositBase = ConstU64<1>;
+    type AttributeDepositBase = ConstU64<1>;
+    type DepositPerByte = ConstU64<1>;
     type StringLimit = ConstU32<50>;
     type KeyLimit = ConstU32<50>;
     type ValueLimit = ConstU32<50>;
@@ -205,6 +209,7 @@ impl pallet_timestamp::Config for Test {
 
 parameter_types! {
     pub const NftCollectionId: CollectionId = 0;
+    pub const VIPPCollectionId: CollectionId = 1;
 }
 
 impl pallet_nac_managing::Config for Test {
@@ -218,6 +223,8 @@ impl pallet_nac_managing::Config for Test {
     type KeyLimit = ConstU32<50>;
     type ValueLimit = ConstU32<50>;
     type WeightInfo = ();
+    type Currency = Balances;
+    type VIPPCollectionId = VIPPCollectionId;
 }
 
 parameter_types! {
@@ -299,7 +306,7 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
     type Balance = Balance;
     type DustRemoval = ();
-    type ExistentialDeposit = ConstU128<1>;
+    type ExistentialDeposit = ConstU64<1>;
     type AccountStore = System;
     type ReserveIdentifier = [u8; 8];
     type RuntimeHoldReason = ();
@@ -308,6 +315,35 @@ impl pallet_balances::Config for Test {
     type MaxReserves = ();
     type MaxHolds = ();
     type MaxFreezes = ();
+}
+
+parameter_types! {
+    pub const MinVestedTransfer: u64 = 1;
+    pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
+        WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
+}
+
+impl pallet_vesting::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BlockNumberToBalance = Identity;
+    type MinVestedTransfer = MinVestedTransfer;
+    type WeightInfo = ();
+    type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
+    const MAX_VESTING_SCHEDULES: u32 = 28;
+}
+
+parameter_types! {
+    pub Prefix: &'static [u8] = b"Pay RUSTs to the TEST account:";
+}
+
+impl pallet_claiming::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type VestingSchedule = Vesting;
+    type OnClaim = NacManaging;
+    type Prefix = Prefix;
+    type WeightInfo = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -337,7 +373,7 @@ ord_parameter_types! {
 type EnsureOneOrRoot = EitherOfDiverse<EnsureRoot<AccountId>, EnsureSignedBy<One, AccountId>>;
 
 parameter_types! {
-    pub static RewardRemainderUnbalanced: u128 = 0;
+    pub static RewardRemainderUnbalanced: u64 = 0;
 }
 
 pub struct RewardRemainderMock;
@@ -371,7 +407,7 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 
 parameter_types! {
     pub const VNRG: AssetId = 1;
-    pub static BatterySlotCapacity: EnergyOf<Test> = EnergyOf::<Test>::from(100_000_000_000u128);
+    pub static BatterySlotCapacity: EnergyOf<Test> = EnergyOf::<Test>::from(100_000_000_000u64);
     pub static MaxCooperations: u32 = 16;
     pub static HistoryDepth: u32 = 80;
     pub static MaxUnlockingChunks: u32 = 32;
@@ -454,7 +490,7 @@ impl Default for ExtBuilder {
             status: Default::default(),
             stakes: Default::default(),
             stakers: Default::default(),
-            energy_per_stake_currency: 1_000_000u128,
+            energy_per_stake_currency: 1_000_000u64,
             block_authoring_reward: ReputationPoint(12),
         }
     }
@@ -581,6 +617,12 @@ impl ExtBuilder {
         }
         .assimilate_storage(&mut storage);
 
+        let _ = pallet_nac_managing::GenesisConfig::<Test> {
+            owners: vec![1],
+            accounts: vec![(10, 2), (100, 2)],
+        }
+        .assimilate_storage(&mut storage);
+
         let _ = pallet_balances::GenesisConfig::<Test> {
             balances: vec![
                 (1, 10 * self.balance_factor),
@@ -643,14 +685,6 @@ impl ExtBuilder {
                 )),
                 CooperateSelector::NoCooperate => (),
             }
-            // replace any of the status if needed.
-            self.status.into_iter().for_each(|(stash, status)| {
-                let (_, _, _, ref mut prev_status) = stakers
-                    .iter_mut()
-                    .find(|s| s.0 == stash)
-                    .expect("set_status staker should exist; qed");
-                *prev_status = status;
-            });
             // replaced any of the stakes if needed.
             self.stakes.into_iter().for_each(|(stash, stake)| {
                 let (_, _, ref mut prev_stake, _) = stakers
@@ -930,4 +964,56 @@ macro_rules! assert_session_era {
 
 pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
     (Balances::free_balance(who), Balances::reserved_balance(who))
+}
+
+pub(crate) fn bob() -> libsecp256k1::SecretKey {
+    libsecp256k1::SecretKey::parse(&keccak_256(b"Bob")).unwrap()
+}
+
+pub fn eth(secret: &libsecp256k1::SecretKey) -> EthereumAddress {
+    let mut res = EthereumAddress::default();
+    res.0.copy_from_slice(&keccak_256(&public(secret).serialize()[1..65])[12..]);
+    res
+}
+pub fn public(secret: &libsecp256k1::SecretKey) -> libsecp256k1::PublicKey {
+    libsecp256k1::PublicKey::from_secret_key(secret)
+}
+
+pub fn sig<T: pallet_claiming::Config>(
+    secret: &libsecp256k1::SecretKey,
+    what: &[u8],
+    extra: &[u8],
+) -> EcdsaSignature {
+    let msg = keccak_256(&ethereum_signable_message(&to_ascii_hex(what)[..], extra));
+    let (sig, recovery_id) = libsecp256k1::sign(&libsecp256k1::Message::parse(&msg), secret);
+    let mut r = [0u8; 65];
+    r[0..64].copy_from_slice(&sig.serialize()[..]);
+    r[64] = recovery_id.serialize();
+    EcdsaSignature(r)
+}
+
+fn ethereum_signable_message(what: &[u8], extra: &[u8]) -> Vec<u8> {
+    let prefix = <Test as pallet_claiming::Config>::Prefix::get();
+    let mut l = prefix.len() + what.len() + extra.len();
+    let mut rev = Vec::new();
+    while l > 0 {
+        rev.push(b'0' + (l % 10) as u8);
+        l /= 10;
+    }
+    let mut v = b"\x19Ethereum Signed Message:\n".to_vec();
+    v.extend(rev.into_iter().rev());
+    v.extend_from_slice(prefix);
+    v.extend_from_slice(what);
+    v.extend_from_slice(extra);
+    v
+}
+
+fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
+    let mut r = Vec::with_capacity(data.len() * 2);
+    let mut push_nibble = |n| r.push(if n < 10 { b'0' + n } else { b'a' - 10 + n });
+    for &b in data.iter() {
+        push_nibble(b / 16);
+        push_nibble(b % 16);
+    }
+    r
 }

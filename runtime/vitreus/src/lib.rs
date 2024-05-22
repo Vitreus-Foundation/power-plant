@@ -215,7 +215,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 106,
+    spec_version: 107,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -747,19 +747,21 @@ impl pallet_nfts::Config for Runtime {
 
 parameter_types! {
     pub const NftCollectionId: CollectionId = 0;
+    pub const VIPPCollectionId: CollectionId = 1;
 }
 
 impl pallet_nac_managing::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type AdminOrigin = EnsureRoot<Self::AccountId>;
     type Nfts = Nfts;
-    type Balance = Balance;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
-    type NftCollectionId = NftCollectionId;
     type KeyLimit = ConstU32<50>;
     type ValueLimit = ConstU32<50>;
+    type AdminOrigin = EnsureRoot<Self::AccountId>;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
+    type Currency = Balances;
+    type NftCollectionId = NftCollectionId;
+    type VIPPCollectionId = VIPPCollectionId;
 }
 
 impl pallet_privileges::Config for Runtime {

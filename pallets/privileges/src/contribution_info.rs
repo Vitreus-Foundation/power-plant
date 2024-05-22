@@ -121,3 +121,13 @@ pub struct VipMemberInfo<T: pallet_energy_generation::Config> {
     /// Current active stake.
     pub active_stake: T::StakeBalance,
 }
+
+/// Information about VIPP member.
+#[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct VippMemberInfo<T: pallet_energy_generation::Config> {
+    /// Current VIP points.
+    pub points: T::StakeBalance,
+    /// Current VIPP threshold.
+    pub active_vipp_threshold: Vec<(T::ItemId, T::StakeBalance)>,
+}
