@@ -16,7 +16,8 @@ pub type V0101 = (FixRewards);
 pub type V0103 = (UpdateSlashStorages<Runtime>, TransferClaimFrom0x66C6To0xE621);
 pub type V0104 = (SetPoolAssetsStorageVersion, InitEnergyBroker);
 
-pub type Unreleased = ();
+pub type Unreleased =
+    (FixMinCoopReputation, TransferClaimFrom0x48CfTo0x1206, TransferClaimFrom0x419fTo0x1920);
 
 pub struct FixRewards;
 
@@ -249,3 +250,50 @@ impl OnRuntimeUpgrade for InitEnergyBroker {
         weight
     }
 }
+
+pub struct FixMinCoopReputation;
+
+impl OnRuntimeUpgrade for FixMinCoopReputation {
+    fn on_runtime_upgrade() -> Weight {
+        use pallet_energy_generation::ValidatorPrefs;
+
+        pallet_energy_generation::Validators::<Runtime>::translate(
+            |account, mut prefs: ValidatorPrefs| {
+                if let Some(tier) = prefs.min_coop_reputation.tier() {
+                    let points = ReputationPoint::from_rank(tier.rank());
+
+                    if points != prefs.min_coop_reputation.points() {
+                        let old_min_coop_reputation = prefs.min_coop_reputation.clone();
+
+                        prefs.min_coop_reputation.update(points);
+
+                        log::info!(
+                            "{:?}: fix min_coop_reputation from {:?} to {:?}",
+                            account,
+                            old_min_coop_reputation,
+                            prefs.min_coop_reputation,
+                        );
+                    }
+                }
+                Some(prefs)
+            },
+        );
+
+        let count = pallet_energy_generation::Validators::<Runtime>::count() as u64;
+        RocksDbWeight::get().reads_writes(count, count)
+    }
+}
+
+parameter_types! {
+    pub const ClaimAddress0x48Cf: EthereumAddress = EthereumAddress(hex!("48Cf646cEbd1D6035cb148d4a639BFb1A5118ed9"));
+    pub const ClaimAddress0x1206: EthereumAddress = EthereumAddress(hex!("12066b03B34e4321B87626496577ba94bff6fC0C"));
+    pub const ClaimAddress0x419f: EthereumAddress = EthereumAddress(hex!("419ff94Fc4309Ce3E0Ccb40782F2B0e5Bd21b158"));
+    pub const ClaimAddress0x1920: EthereumAddress = EthereumAddress(hex!("1920503F35a4014ad197e1AD4e310A69BF01dB34"));
+
+}
+
+pub type TransferClaimFrom0x48CfTo0x1206 =
+    pallet_claiming::migrations::TransferClaim<Runtime, ClaimAddress0x48Cf, ClaimAddress0x1206>;
+
+pub type TransferClaimFrom0x419fTo0x1920 =
+    pallet_claiming::migrations::TransferClaim<Runtime, ClaimAddress0x419f, ClaimAddress0x1920>;

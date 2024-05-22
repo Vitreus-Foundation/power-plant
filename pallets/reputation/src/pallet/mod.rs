@@ -1,6 +1,6 @@
 //! Pallet implementation (dispatchables and storages).
 use crate::weights::*;
-use crate::{ReputationPoint, ReputationRecord};
+use crate::{ReputationPoint, ReputationRecord, ReputationTier};
 pub use impls::*;
 pub use pallet::*;
 
@@ -136,6 +136,23 @@ pub mod pallet {
             <AccountReputation<T>>::insert(&account, record);
 
             Self::deposit_event(Event::ReputationUpdated { account, points });
+
+            Ok(())
+        }
+
+        /// Force reset reputation points for all account. Should be called by root.
+        #[pallet::call_index(4)]
+        #[pallet::weight(T::WeightInfo::force_reset_points())]
+        pub fn force_reset_points(origin: OriginFor<T>) -> DispatchResult {
+            ensure_root(origin)?;
+            let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
+
+            let points = ReputationPoint::from(ReputationTier::Vanguard(1));
+
+            <AccountReputation<T>>::translate::<T::AccountId, _>(|account, _| {
+                Self::deposit_event(Event::ReputationSetForcibly { account, points });
+                Some(ReputationRecord { reputation: points.into(), updated })
+            });
 
             Ok(())
         }
