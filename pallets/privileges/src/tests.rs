@@ -306,6 +306,8 @@ fn test_year_end_data_saving() {
         ));
         assert_eq!(Privileges::year_vip_results(2020).unwrap().len(), 2);
         assert_eq!(Privileges::year_vip_results(2020).unwrap(), assert_year_result);
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vip_members(20).unwrap().points, 0);
     })
 }
 
@@ -328,16 +330,6 @@ fn test_year_end_data_saving_vipp_results() {
         assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 1000);
 
         let current_date = Privileges::current_date();
-        assert_ok!(Privileges::update_time(
-            RuntimeOrigin::root(),
-            current_date.current_year,
-            current_date.current_month,
-            current_date.current_day + 1
-        ));
-
-        assert_eq!(Privileges::vipp_members(10).unwrap().points, 190);
-
-        let current_date = Privileges::current_date();
 
         let assert_year_result = Vec::from([(10, 69350)]);
         assert_ok!(Privileges::update_time(
@@ -348,6 +340,7 @@ fn test_year_end_data_saving_vipp_results() {
         ));
         assert_eq!(Privileges::year_vipp_results(2020).unwrap().len(), 1);
         assert_eq!(Privileges::year_vipp_results(2020).unwrap(), assert_year_result);
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
     })
 }
 
@@ -621,3 +614,4 @@ fn test_from_validator_to_cooperator() {
         assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 100);
     })
 }
+

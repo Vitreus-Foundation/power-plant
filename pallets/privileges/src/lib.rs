@@ -177,7 +177,6 @@ pub mod pallet {
 
                 // Accrual of VIPP points for users who have VIPP status.
                 Self::update_vipp_points_for_time(current_date.days_since_new_year);
-
                 if current_date.current_month == 1 && current_date.current_day == 1 {
                     Self::save_year_info(current_date.current_year - 1);
                 }
@@ -461,6 +460,7 @@ impl<T: Config> Pallet<T> {
 
         let mut vipp_results = Vec::new();
         VippMembers::<T>::translate(|account, mut vipp_info: VippMemberInfo<T>| {
+            log::error!("Save year VIPP info");
             vipp_results.push((account, vipp_info.points));
             vipp_info.points = <T as pallet_energy_generation::Config>::StakeBalance::default();
             Some(vipp_info)
