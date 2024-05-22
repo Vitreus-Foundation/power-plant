@@ -17,9 +17,9 @@ use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
     BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
     EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig,
-    SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig,
-    SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint,
+    RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus,
+    SudoConfig, SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -43,8 +43,8 @@ pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig, Extensio
 pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt, Extensions>;
 
 const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
-/// 10^9 with 18 decimals
-const INITIAL_ENERGY_RATE: FixedU128 = FixedU128::from_inner(1_000_000_000_000_000_000_000_000_000);
+/// 1 VTRS = 0.9 gVolt => 1.11111... VTRS = 1 gVolt
+const INITIAL_ENERGY_RATE: FixedU128 = FixedU128::from_inner(1_111_111_111_111_111_111_111_111_111);
 
 /// Min validator stake for user who has NAC level = 1.
 const MIN_COMMON_VALIDATOR_BOND: Balance = 1_000_000 * vtrs::UNITS;
@@ -434,6 +434,7 @@ pub fn testnet_genesis(
                 .map(|account| (VNRG::get(), account, INITIAL_ENERGY_BALANCE))
                 .collect(),
         },
+        pool_assets: Default::default(),
         reputation: ReputationConfig {
             accounts: stakers
                 .iter()
@@ -449,6 +450,7 @@ pub fn testnet_genesis(
             accounts: endowed_accounts.iter().map(|x| (*x, 2)).collect(),
             owners: vec![root_key],
         },
+        privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
             keys: initial_validators
                 .iter()
@@ -579,6 +581,7 @@ fn mainnet_genesis(
             )],
             accounts: vec![],
         },
+        pool_assets: Default::default(),
         reputation: ReputationConfig {
             accounts: stakers
                 .iter()
@@ -599,6 +602,7 @@ fn mainnet_genesis(
                 .collect(),
             owners: vec![root_key],
         },
+        privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
             keys: initial_validators
                 .iter()
