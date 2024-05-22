@@ -1,7 +1,7 @@
 use super::*;
 use crate::mock::*;
 use crate::{Error, PenaltyType};
-use frame_support::{assert_err, assert_ok};
+use frame_support::{assert_err, assert_noop, assert_ok};
 
 #[test]
 fn test_data_building() {
@@ -346,9 +346,29 @@ fn test_upgrade_active_stake_throw_bond_extra() {
         ));
         vip_points += (EnergyGeneration::ledger(30).unwrap().active * 7 / 40) / 2;
         assert_eq!(Privileges::vip_members(30).unwrap().points, vip_points);
+        assert_eq!(Privileges::vipp_members(30), None);
 
         assert_eq!(EnergyGeneration::ledger(30).unwrap().active, 1500);
         assert_eq!(System::account(30).data.frozen, 1500);
         assert_eq!(System::account(30).data.free, 2000);
+    })
+}
+
+#[test]
+fn test_minting_vipp_nft() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::signed(10),
+            sig::<Test>(&bob(), &10u64.encode(), &[][..])
+        ));
+        assert_eq!(Privileges::vip_members(10), None);
+        assert_eq!(Privileges::vipp_members(10), None);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat,));
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(10).unwrap().active_vipp_threshold[0].1, 190);
     })
 }

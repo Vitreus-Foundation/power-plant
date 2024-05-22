@@ -16,8 +16,10 @@ frame-support = { workspace = true }
 frame-system = { workspace = true }
 pallet-claiming = { workspace = true }
 pallet-energy-generation = { workspace = true }
+pallet-nac-managing = { workspace = true }
 pallet-nfts = { workspace = true }
 pallet-timestamp = { workspace = true }
+pallet-vesting = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
 sp-arithmetic = { workspace = true }
@@ -34,16 +36,18 @@ frame-benchmarking = { workspace = true, optional = true }
 [dev-dependencies]
 pallet-assets = { workspace = true }
 pallet-authorship = { workspace = true }
+pallet-claiming = { workspace = true }
 pallet-session = { workspace = true }
 orml-traits = { workspace = true }
 parity-scale-codec = { workspace = true }
-pallet-nac-managing = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-staking-reward-curve = { workspace = true }
+pallet-vesting = { workspace = true }
 pallet-timestamp = { workspace = true }
 rand_chacha = { workspace = true }
 sp-tracing = { workspace = true }
+libsecp256k1 = "0.7.0"
 substrate-test-utils = { workspace = true }
 
 [features]
@@ -56,6 +60,7 @@ std = [
     "frame-system/std",
     "pallet-assets/std",
     "pallet-claiming/std",
+    "pallet-vesting/std",
     "pallet-reputation/std",
     "pallet-balances/std",
     "pallet-nac-managing/std",

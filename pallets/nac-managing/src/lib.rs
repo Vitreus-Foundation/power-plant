@@ -13,7 +13,7 @@ use frame_support::{
             nonfungibles_v2::{Create, Inspect, InspectEnumerable, Mutate},
             Balance,
         },
-        Get, Incrementable, OnNewAccount,
+        Get, Incrementable, OnNewAccount, Currency,
     },
 };
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
@@ -21,8 +21,8 @@ pub use pallet::*;
 use pallet_claiming::OnClaimHandler;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
-use parity_scale_codec::{Encode, MaxEncodedLen};
-use sp_arithmetic::FixedPointOperand;
+use parity_scale_codec::{Encode, MaxEncodedLen, Codec, Decode};
+use sp_arithmetic::{FixedPointOperand, Perbill};
 use sp_runtime::{
     traits::{BlakeTwo256, Hash, MaybeSerializeDeserialize},
     SaturatedConversion,
@@ -47,6 +47,9 @@ const NAC_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
 /// Claimed amount attribute key in NFT.
 const CLAIM_AMOUNT_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 2];
 
+/// Did the account have VIPP status.
+const VIPP_STATUS_EXIST: [u8; 3] = [0, 0, 3];
+
 /// Default NAC level for account.
 const DEFAULT_NAC_LEVEL: u8 = 1;
 
@@ -57,6 +60,7 @@ const EXTRINSIC_INDEX: u32 = 135;
 pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
+    use frame_support::traits::LockableCurrency;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
@@ -76,6 +80,7 @@ pub mod pallet {
         type Balance: Balance
             + MaybeSerializeDeserialize
             + Debug
+            + Codec
             + MaxEncodedLen
             + FixedPointOperand;
 
@@ -104,8 +109,18 @@ pub mod pallet {
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
 
+        /// The currency.
+        type Currency: LockableCurrency<
+            Self::AccountId,
+            Moment = BlockNumberFor<Self>,
+            Balance = Self::Balance,
+        >;
+
         /// NFT Collection ID.
         type NftCollectionId: Get<Self::CollectionId>;
+
+        /// VIPP NFT Collection ID.
+        type VIPPCollectionId: Get<Self::CollectionId>;
     }
 
     /// Temp storage: the information about user NFTs and NAC levels.
@@ -139,6 +154,14 @@ pub mod pallet {
             /// NAC level value.
             nac_level: u8,
         },
+
+        /// VIPP NFT was minted.
+        VippNftMinted {
+            /// Who gets the VIPP NFT.
+            owner: T::AccountId,
+            /// The VIPP NFT unique ID.
+            item_id: T::ItemId,
+        }
     }
 
     #[pallet::error]
@@ -226,6 +249,7 @@ pub mod pallet {
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             for owner in self.owners.iter() {
+                Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
                 Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
 
                 // Get collection Id.
@@ -343,6 +367,83 @@ impl<T: Config> Pallet<T> {
 
         None
     }
+
+    pub fn mint_vipp_nft(account: &T::AccountId) -> Option<(T::Balance, <T as Config>::ItemId)> {
+        let claim_balance = Self::get_claim_balance(account);
+        if let Some(claim_balance) = claim_balance {
+            if Self::threshold_meets_vipp_requirements(account, claim_balance.0) {
+                let item_id = Self::create_unique_item_id(account);
+                let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
+                let collection = T::VIPPCollectionId::get();
+                let perbill = Perbill::from_rational(95_u32, 100_u32);
+
+                let result = T::Nfts::mint_into(&collection, &item_id, account, &item_config, true);
+
+                if result.is_ok() {
+                    Self::deposit_event(Event::VippNftMinted { owner: account.clone(), item_id });
+                    return Some((perbill * claim_balance.0, item_id));
+                }
+
+                return None;
+            }
+        }
+
+        None
+    }
+
+    /// can mint VIPP NFT to account.
+    pub fn can_mint_vipp(account: &T::AccountId) -> Option<(T::Balance, <T as Config>::ItemId)> {
+        let collection_id = T::NftCollectionId::get();
+
+        if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account).next() {
+            let item_id = key;
+            let vipp_status_exist =
+                T::Nfts::system_attribute(&collection_id, &item_id, &VIPP_STATUS_EXIST);
+
+            return match vipp_status_exist {
+                Some(_) => { None },
+                None => {
+                    Self::mint_vipp_nft(account)
+                },
+            };
+        }
+
+        None
+    }
+
+    /// Get user claim balance.
+    pub fn get_claim_balance(account_id: &T::AccountId) -> Option<(T::Balance, <T as Config>::ItemId)> {
+        let collection_id = T::NftCollectionId::get();
+
+        if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account_id).next() {
+            let item_id = key;
+            // Get NAC by NFT attribute key.
+            let claim_balance =
+                T::Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY);
+
+            return match claim_balance {
+                Some(bytes) => {
+                    let balance = T::Balance::decode(&mut bytes.as_slice()).unwrap();
+                    Some((balance, item_id)) },
+                None => Some((T::Balance::default(), item_id)),
+            };
+        }
+
+        None
+    }
+
+
+    /// Check threshold of account.
+    pub fn threshold_meets_vipp_requirements(account: &T::AccountId, claim_balance: T::Balance) -> bool {
+        let free_balance = T::Currency::free_balance(account);
+        let perbill = Perbill::from_rational(95_u32, 100_u32);
+
+        if free_balance > perbill * claim_balance {
+            return true
+        }
+
+        false
+    }
 }
 
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
@@ -350,7 +451,6 @@ impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
         if AccountReputation::<T>::contains_key(who) {
             return;
         }
-
         // Add reputation points to account.
         let now = <frame_system::Pallet<T>>::block_number().saturated_into();
         let new_rep = ReputationRecord::with_blocknumber(now);
@@ -391,3 +491,4 @@ where
         )
     }
 }
+

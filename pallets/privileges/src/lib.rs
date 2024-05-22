@@ -45,7 +45,7 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_energy_generation::Config {
+    pub trait Config: frame_system::Config + pallet_energy_generation::Config + pallet_nac_managing::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
@@ -62,6 +62,10 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn vip_members)]
     pub type VipMembers<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VipMemberInfo<T>>;
+
+    #[pallet::storage]
+    #[pallet::getter(fn vipp_members)]
+    pub type VippMembers<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VippMemberInfo<T>>;
 
     #[pallet::storage]
     #[pallet::getter(fn year_vip_results)]
@@ -112,6 +116,8 @@ pub mod pallet {
         IsNotPenaltyFreePeriod,
         /// Not correct date to set.
         NotCorrectDate,
+        /// Account hasn't claim balance.
+        HasNotClaim,
     }
 
     #[pallet::call]
@@ -244,7 +250,27 @@ impl<T: Config> Pallet<T> {
             active_stake,
         };
 
-        VipMembers::<T>::insert(account, vip_member_info);
+        VipMembers::<T>::insert(&account, vip_member_info);
+        Self::do_set_vipp_status(account);
+    }
+
+    /// Check VIPP requirements.
+    fn can_user_become_vipp(account: &T::AccountId) -> bool {
+        true
+    }
+
+    /// Set VIP member VIPP status.
+    fn do_set_vipp_status(account: &T::AccountId) {
+        let vipp_nft = pallet_nac_managing::Pallet::<T>::can_mint_vipp(account);
+
+        if let Some(vipp_nft) = vipp_nft {
+            let vipp_member_info = VippMemberInfo::<T> {
+                points: <T as pallet_nac_managing::Config>::Balance::default(),
+                active_vipp_threshold: vec![(vipp_nft.1, vipp_nft.0)],
+            };
+
+            VippMembers::<T>::insert(&account, vipp_member_info);
+        }
     }
 
     /// Exit VIP.
@@ -428,3 +454,4 @@ impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight> for Pallet<T> {
         Weight::from_parts(1, 2)
     }
 }
+
