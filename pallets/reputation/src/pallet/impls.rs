@@ -60,14 +60,11 @@ impl<T: Config> Pallet<T> {
 
     /// Acturally increase points.
     pub fn do_increase_points(account: &T::AccountId, points: ReputationPoint) -> DispatchResult {
-        let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
-
         <AccountReputation<T>>::try_mutate_exists(account, |value| {
             value
                 .as_mut()
                 .map(|old| {
                     old.reputation.increase(points);
-                    old.updated = updated;
                 })
                 .ok_or(Error::<T>::AccountNotFound)
         })?;

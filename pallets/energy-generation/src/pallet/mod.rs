@@ -107,6 +107,7 @@ pub mod pallet {
             + MaybeSerializeDeserialize
             + sp_std::fmt::Debug
             + From<u64>
+            + From<<Self as pallet_nac_managing::Config>::Balance>
             + Into<<Self as pallet_assets::Config>::Balance>
             + StorageEssentials;
 
@@ -1111,7 +1112,9 @@ pub mod pallet {
 
             Self::do_remove_cooperator(stash);
             Self::do_add_validator(stash, prefs.clone());
-            Self::deposit_event(Event::<T>::ValidatorPrefsSet { stash: ledger.stash, prefs });
+
+            Self::deposit_event(Event::<T>::ValidatorPrefsSet { stash: ledger.stash.clone(), prefs });
+            T::OnVipMembershipHandler::update_active_stake(stash);
 
             Ok(())
         }

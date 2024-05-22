@@ -16,6 +16,7 @@ pub use pallet_transaction_payment::{
 };
 
 use sp_arithmetic::{traits::CheckedAdd, ArithmeticError::Overflow};
+use sp_arithmetic::traits::CheckedDiv;
 use sp_core::{RuntimeDebug, H160, U256};
 use sp_runtime::{
     traits::{Convert, DispatchInfoOf, Get, PostDispatchInfoOf, Saturating, Zero},
@@ -85,6 +86,7 @@ pub mod pallet {
         + pallet_transaction_payment::Config
         + pallet_asset_rate::Config
         + pallet_evm::Config
+        + pallet_nac_managing::Config
     {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -409,7 +411,7 @@ impl<T: Config> Pallet<T> {
     }
 
     fn check_account_threshold(who: &T::AccountId) {
-        //todo!(Dzmitry Rybakou)
+        pallet_nac_managing::Pallet::<T>::check_account_threshold(who);
     }
 
     fn validate_call_fee(fee_amount: BalanceOf<T>) -> Result<(), DispatchError> {
