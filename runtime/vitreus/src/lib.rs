@@ -997,6 +997,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Claiming(..)
             | RuntimeCall::Vesting(..)
             | RuntimeCall::NacManaging(..)
+            | RuntimeCall::Privileges(..)
             | RuntimeCall::Council(..)
             | RuntimeCall::TechnicalCommittee(..)
             | RuntimeCall::TechnicalMembership(..)
