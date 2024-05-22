@@ -385,10 +385,10 @@ impl<T: Config> Pallet<T> {
 
                 let key = BoundedVec::<u8, T::KeyLimit>::try_from(Vec::from(VIPP_STATUS_EXIST))
                     .unwrap_or_default();
-                let mut isExist = BoundedVec::<u8, T::ValueLimit>::new();
-                let _ = isExist.try_push(1).map_err(|_| Error::<T>::NacLevelIsIncorrect);
+                let mut is_exist = BoundedVec::<u8, T::ValueLimit>::new();
+                let _ = is_exist.try_push(1).map_err(|_| Error::<T>::NacLevelIsIncorrect);
 
-                let _ = T::Nfts::set_attribute(&collection, &item_id, &key, &isExist);
+                let _ = T::Nfts::set_attribute(&collection, &item_id, &key, &is_exist);
 
                 if result.is_ok() {
                     Self::deposit_event(Event::VippNftMinted { owner: account.clone(), item_id });
@@ -439,10 +439,10 @@ impl<T: Config> Pallet<T> {
 
             return match claim_balance {
                 Some(bytes) => {
-                    let balance = T::Balance::decode(&mut bytes.as_slice()).unwrap();
-                    // match
-                    log::error!("Claim balance: {:?}", (balance, item_id.clone()));
-                    Some((balance, item_id))
+                    match T::Balance::decode(&mut bytes.as_slice()) {
+                        Ok(balance) => Some((balance, item_id)),
+                        _ => None
+                    }
                 },
                 None => None,
             };
