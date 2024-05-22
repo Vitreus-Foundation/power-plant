@@ -54,6 +54,8 @@ pub mod pallet {
             error: DispatchError,
             points: ReputationPoint,
         },
+        /// Reputation of all account is forcibly reset to the new value. [points]
+        ReputationResetForcibly { points: ReputationPoint },
     }
 
     /// Pallet error type.
@@ -149,10 +151,11 @@ pub mod pallet {
 
             let points = ReputationPoint::from(ReputationTier::Vanguard(1));
 
-            <AccountReputation<T>>::translate::<T::AccountId, _>(|account, _| {
-                Self::deposit_event(Event::ReputationSetForcibly { account, points });
+            <AccountReputation<T>>::translate_values::<ReputationRecord, _>(|_| {
                 Some(ReputationRecord { reputation: points.into(), updated })
             });
+
+            Self::deposit_event(Event::ReputationResetForcibly { points });
 
             Ok(())
         }
