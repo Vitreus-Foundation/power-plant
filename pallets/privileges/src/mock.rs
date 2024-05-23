@@ -224,6 +224,7 @@ impl pallet_nac_managing::Config for Test {
     type WeightInfo = ();
     type Currency = Balances;
     type VIPPCollectionId = VIPPCollectionId;
+    type OnVIPPChanged = Privileges;
 }
 
 parameter_types! {

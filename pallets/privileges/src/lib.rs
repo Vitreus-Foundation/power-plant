@@ -303,7 +303,7 @@ impl<T: Config> Pallet<T> {
                 let vipp_status = VippMembers::<T>::get(account);
                 if vipp_status.is_some() {
                     VippMembers::<T>::remove(account);
-                    pallet_nac_managing::Pallet::<T>::burn_vipp_nfts(account);
+                    while pallet_nac_managing::Pallet::<T>::burn_vipp_nft(account) {}
                 }
 
                 Self::deposit_event(Event::<T>::LeftVip {
@@ -358,6 +358,36 @@ impl<T: Config> Pallet<T> {
         let current_date = Self::current_date();
 
         current_date.current_month == 1
+    }
+
+    /// Mint new VIPP.
+    fn mint_new_vipp_nft(who: &T::AccountId, amount: T::StakeBalance, item_id: T::ItemId) {
+        let member_info = VippMembers::<T>::get(who);
+
+        if let Some(mut info) = member_info {
+            info.active_vipp_threshold.push((item_id, amount));
+            VippMembers::<T>::insert(who, info);
+        } else {
+            let vipp_member_info = VippMemberInfo::<T> {
+                points: <T as pallet_energy_generation::Config>::StakeBalance::default(),
+                active_vipp_threshold: vec![(item_id, amount)],
+            };
+
+            VippMembers::<T>::insert(who, vipp_member_info);
+        }
+    }
+
+    /// Burn VIPP NFT.
+    fn burn_vipp_nft(who: &T::AccountId, current_item_id: T::ItemId) {
+        VippMembers::<T>::mutate_exists(who, |info_opt| {
+            if let Some(info) = info_opt {
+                info.active_vipp_threshold.retain(|(item_id, _)| *item_id != current_item_id);
+
+                if info.active_vipp_threshold.is_empty() {
+                    *info_opt = None;
+                }
+            }
+        });
     }
 
     /// Update current quarter info.

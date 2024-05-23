@@ -215,7 +215,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 109,
+    spec_version: 110,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -760,6 +760,7 @@ impl pallet_nac_managing::Config for Runtime {
     type AdminOrigin = EnsureRoot<Self::AccountId>;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
     type Currency = Balances;
+    type OnVIPPChanged = Privileges;
     type NftCollectionId = NftCollectionId;
     type VIPPCollectionId = VIPPCollectionId;
 }
