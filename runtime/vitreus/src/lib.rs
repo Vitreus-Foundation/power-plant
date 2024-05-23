@@ -760,6 +760,7 @@ impl pallet_nac_managing::Config for Runtime {
     type AdminOrigin = EnsureRoot<Self::AccountId>;
     type WeightInfo = pallet_nac_managing::weights::SubstrateWeight<Runtime>;
     type Currency = Balances;
+    type OnVIPPChanged = Privileges;
     type NftCollectionId = NftCollectionId;
     type VIPPCollectionId = VIPPCollectionId;
 }
