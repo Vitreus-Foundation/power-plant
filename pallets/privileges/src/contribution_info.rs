@@ -1,5 +1,6 @@
 use super::*;
 use core::default::Default;
+use pallet_nac_managing::OnVippStatusHandler;
 use sp_runtime::DispatchError;
 
 /// Current date info.
@@ -114,7 +115,7 @@ impl PenaltyType {
 pub struct VipMemberInfo<T: pallet_energy_generation::Config> {
     /// Where member started VIP program.
     pub start: u64,
-    /// Choosed penalty type.
+    /// Chose penalty type.
     pub tax_type: PenaltyType,
     /// Current VIP points.
     pub points: T::StakeBalance,
@@ -130,4 +131,14 @@ pub struct VippMemberInfo<T: pallet_energy_generation::Config> {
     pub points: T::StakeBalance,
     /// Current VIPP threshold.
     pub active_vipp_threshold: Vec<(T::ItemId, T::StakeBalance)>,
+}
+
+impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> for Pallet<T> {
+    fn mint_vipp(who: &T::AccountId, amount: T::StakeBalance, item_id: T::ItemId) {
+        Self::mint_new_vipp_nft(who, amount, item_id);
+    }
+
+    fn burn_vipp_nft(who: &T::AccountId, item_id: T::ItemId) {
+        Self::burn_vipp_nft(who, item_id);
+    }
 }
