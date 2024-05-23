@@ -303,7 +303,7 @@ impl<T: Config> Pallet<T> {
                 let vipp_status = VippMembers::<T>::get(account);
                 if vipp_status.is_some() {
                     VippMembers::<T>::remove(account);
-                    pallet_nac_managing::Pallet::<T>::burn_vipp_nfts(account);
+                    pallet_nac_managing::Pallet::<T>::burn_vipp_nft(account);
                 }
 
                 Self::deposit_event(Event::<T>::LeftVip {

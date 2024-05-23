@@ -1,7 +1,7 @@
 use super::*;
 use core::default::Default;
-use sp_runtime::DispatchError;
 use pallet_nac_managing::OnVippStatusHandler;
+use sp_runtime::DispatchError;
 
 /// Current date info.
 #[derive(Clone, Encode, Decode, Default, RuntimeDebug, PartialEq, TypeInfo)]
