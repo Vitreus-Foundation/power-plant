@@ -110,6 +110,9 @@ pub mod pallet {
             Balance = <Self as pallet_balances::Config>::Balance,
         >;
 
+        /// Handler for VIPP members.
+        type OnVIPPChanged: OnVippStatusHandler<Self::AccountId, <Self as pallet_balances::Config>::Balance, Self::ItemId>;
+
         /// NFT Collection ID.
         type NftCollectionId: Get<Self::CollectionId>;
 
@@ -532,4 +535,13 @@ where
             &updated_claimed.encode(),
         )
     }
+}
+
+/// Handler for updating, burning VIPP status.
+pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
+    /// Handle a minting new VIPP NFT.
+    fn mint_vipp(who: &AccountId, amount: Balance, item_id: ItemId);
+
+    /// Burning VIPP NFT.
+    fn burn_vipp_nft(who: &AccountId, item_id: ItemId);
 }
