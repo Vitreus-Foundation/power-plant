@@ -473,13 +473,9 @@ impl<T: Config> Pallet<T> {
 
     /// Check VIPP threshold every transaction.
     pub fn check_account_threshold(account: &T::AccountId) {
-        loop {
-            if let Some(bytes) = Self::get_claim_balance(account) {
-                if !Self::threshold_meets_vipp_requirements(account, bytes.0) {
-                    if !Self::burn_vipp_nft(account) {
-                        break;
-                    }
-                } else {
+        while let Some(bytes) = Self::get_claim_balance(account) {
+            if !Self::threshold_meets_vipp_requirements(account, bytes.0) {
+                if !Self::burn_vipp_nft(account) {
                     break;
                 }
             } else {
