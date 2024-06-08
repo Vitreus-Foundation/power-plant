@@ -494,6 +494,7 @@ pub fn testnet_genesis(
         hrmp: Default::default(),
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
+        beefy: Default::default(),
     }
 }
 
@@ -645,6 +646,7 @@ fn mainnet_genesis(
         hrmp: Default::default(),
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
+        beefy: Default::default(),
     }
 }
 
