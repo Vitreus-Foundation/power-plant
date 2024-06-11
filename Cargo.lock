@@ -14893,6 +14893,7 @@ dependencies = [
  "pallet-hotfix-sufficients",
  "pallet-im-online",
  "pallet-membership",
+ "pallet-message-queue",
  "pallet-mmr",
  "pallet-nac-managing",
  "pallet-nfts",
@@ -14914,6 +14915,7 @@ dependencies = [
  "pallet-uniques",
  "pallet-utility",
  "pallet-vesting",
+ "pallet-xcm",
  "parity-scale-codec",
  "polkadot-primitives",
  "polkadot-runtime-common",
@@ -14940,6 +14942,9 @@ dependencies = [
  "sp-version",
  "substrate-wasm-builder",
  "vitreus-utility-runtime-api",
+ "xcm 1.0.0",
+ "xcm-builder",
+ "xcm-executor",
 ]
 
 [[package]]

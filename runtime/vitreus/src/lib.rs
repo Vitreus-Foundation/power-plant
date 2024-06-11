@@ -22,12 +22,14 @@ use runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use runtime_parachains::{
     configuration as parachains_configuration, disputes as parachains_disputes,
-    disputes::slashing as parachains_slashing, dmp as parachains_dmp, hrmp as parachains_hrmp,
-    inclusion as parachains_inclusion, initializer as parachains_initializer,
-    origin as parachains_origin, paras as parachains_paras,
+    disputes::slashing as parachains_slashing,
+    dmp as parachains_dmp, hrmp as parachains_hrmp, inclusion as parachains_inclusion,
+    inclusion::{AggregateMessageOrigin, UmpQueueId},
+    initializer as parachains_initializer, origin as parachains_origin, paras as parachains_paras,
     paras_inherent as parachains_paras_inherent,
-    runtime_api_impl::v5 as parachains_runtime_api_impl, scheduler as parachains_scheduler,
-    session_info as parachains_session_info, shared as parachains_shared,
+    runtime_api_impl::v5 as parachains_runtime_api_impl,
+    scheduler as parachains_scheduler, session_info as parachains_session_info,
+    shared as parachains_shared,
 };
 
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
@@ -37,7 +39,8 @@ use frame_support::traits::tokens::{
     DepositConsequence, Fortitude, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, SignedImbalance, WithdrawReasons,
+    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, ProcessMessage,
+    ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
@@ -78,7 +81,7 @@ use frame_support::{
         fungible::ItemOf, AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8,
         ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
+    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter},
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
@@ -131,6 +134,7 @@ pub mod migrations;
 #[cfg(test)]
 mod tests;
 mod weights;
+mod xcm_config;
 
 use precompiles::VitreusPrecompiles;
 
@@ -220,6 +224,8 @@ pub mod opaque {
 
     // remove this when removing `OldSessionKeys`
     pub fn transform_session_keys(v: AccountId, old: OldSessionKeys) -> SessionKeys {
+        log::info!("Update session keys for {:?}", v);
+
         SessionKeys {
             grandpa: old.grandpa,
             babe: old.babe,
@@ -231,7 +237,7 @@ pub mod opaque {
                 let mut id: BeefyId =
                     sp_application_crypto::ecdsa::Public::from_raw([0u8; 33]).into();
                 let id_raw: &mut [u8] = id.as_mut();
-                id_raw[1..33].copy_from_slice(&v.0);
+                id_raw[13..33].copy_from_slice(&v.0);
                 id_raw[0..4].copy_from_slice(b"beef");
                 id
             },
@@ -251,7 +257,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 111,
+    spec_version: 112,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -1110,6 +1116,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Treasury(..)
             | RuntimeCall::Democracy(..)
             | RuntimeCall::Session(..)
+            | RuntimeCall::XcmPallet(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
@@ -1398,7 +1405,7 @@ impl parachains_inclusion::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type DisputesHandler = ParasDisputes;
     type RewardValidators = RewardValidators;
-    type MessageQueue = ();
+    type MessageQueue = MessageQueue;
     type WeightInfo = weights::runtime_parachains_inclusion::WeightInfo<Runtime>;
 }
 
@@ -1412,6 +1419,57 @@ impl parachains_paras::Config for Runtime {
     type UnsignedPriority = ParasUnsignedPriority;
     type QueueFootprinter = ParaInclusion;
     type NextSessionRotation = Babe;
+}
+
+parameter_types! {
+    /// Amount of weight that can be spent per block to service messages.
+    ///
+    /// # WARNING
+    ///
+    /// This is not a good value for para-chains since the `Scheduler` already uses up to 80% block weight.
+    pub MessageQueueServiceWeight: Weight = Perbill::from_percent(20) * BlockWeights::get().max_block;
+    pub const MessageQueueHeapSize: u32 = 65_536;
+    pub const MessageQueueMaxStale: u32 = 8;
+}
+
+/// Message processor to handle any messages that were enqueued into the `MessageQueue` pallet.
+pub struct MessageProcessor;
+impl ProcessMessage for MessageProcessor {
+    type Origin = AggregateMessageOrigin;
+
+    fn process_message(
+        message: &[u8],
+        origin: Self::Origin,
+        meter: &mut WeightMeter,
+        id: &mut [u8; 32],
+    ) -> Result<bool, ProcessMessageError> {
+        use xcm::latest::Junction;
+
+        let para = match origin {
+            AggregateMessageOrigin::Ump(UmpQueueId::Para(para)) => para,
+        };
+        xcm_builder::ProcessXcmMessage::<
+            Junction,
+            xcm_executor::XcmExecutor<xcm_config::XcmConfig>,
+            RuntimeCall,
+        >::process_message(message, Junction::Parachain(para.into()), meter, id)
+    }
+}
+
+impl pallet_message_queue::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Size = u32;
+    type HeapSize = MessageQueueHeapSize;
+    type MaxStale = MessageQueueMaxStale;
+    type ServiceWeight = MessageQueueServiceWeight;
+    #[cfg(not(feature = "runtime-benchmarks"))]
+    type MessageProcessor = MessageProcessor;
+    #[cfg(feature = "runtime-benchmarks")]
+    type MessageProcessor =
+        pallet_message_queue::mock_helpers::NoopMessageProcessor<AggregateMessageOrigin>;
+    type QueueChangeHandler = ParaInclusion;
+    type QueuePausedQuery = ();
+    type WeightInfo = pallet_message_queue::weights::SubstrateWeight<Runtime>;
 }
 
 impl parachains_dmp::Config for Runtime {}
@@ -1561,6 +1619,12 @@ construct_runtime!(
         Slots: slots::{Pallet, Call, Storage, Event<T>} = 81,
         ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 82,
 
+        // Pallet for sending XCM.
+        XcmPallet: pallet_xcm::{Pallet, Call, Storage, Event<T>, Origin, Config<T>} = 99,
+
+        // Generalized message queue
+        MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>} = 100,
+
         // BEEFY Bridges support.
         Beefy: pallet_beefy::{Pallet, Call, Storage, Config<T>, ValidateUnsigned} = 200,
         // MMR leaf construction must be after session in order to have a leaf's next_auth_set
@@ -1635,6 +1699,7 @@ pub type Migrations = (
     migrations::V0103,
     migrations::V0104,
     migrations::V0108,
+    migrations::V0112,
     migrations::Unreleased,
 );
 
