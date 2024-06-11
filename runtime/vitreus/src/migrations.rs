@@ -18,7 +18,7 @@ pub type V0104 = (SetPoolAssetsStorageVersion, InitEnergyBroker);
 pub type V0108 =
     (FixMinCoopReputation, TransferClaimFrom0x48CfTo0x1206, TransferClaimFrom0x419fTo0x1920);
 
-pub type Unreleased = ();
+pub type Unreleased = (UpgradeSessionKeys);
 
 pub struct FixRewards;
 
@@ -298,3 +298,13 @@ pub type TransferClaimFrom0x48CfTo0x1206 =
 
 pub type TransferClaimFrom0x419fTo0x1920 =
     pallet_claiming::migrations::TransferClaim<Runtime, ClaimAddress0x419f, ClaimAddress0x1920>;
+
+/// Upgrade Session keys to include BEEFY key.
+/// When this is removed, should also remove `OldSessionKeys`.
+pub struct UpgradeSessionKeys;
+impl OnRuntimeUpgrade for UpgradeSessionKeys {
+    fn on_runtime_upgrade() -> Weight {
+        Session::upgrade_keys::<opaque::OldSessionKeys, _>(opaque::transform_session_keys);
+        Perbill::from_percent(50) * BlockWeights::get().max_block
+    }
+}

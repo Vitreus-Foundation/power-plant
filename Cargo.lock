@@ -988,6 +988,7 @@ dependencies = [
  "sc-sync-state-rpc",
  "serde",
  "sp-consensus-babe",
+ "sp-consensus-beefy",
  "sp-consensus-grandpa",
  "sp-core",
  "sp-runtime",
@@ -14842,6 +14843,7 @@ dependencies = [
 name = "vitreus-power-plant-runtime"
 version = "0.0.0"
 dependencies = [
+ "binary-merkle-tree",
  "chain-spec",
  "energy-fee-runtime-api",
  "energy-generation-runtime-api",
@@ -14870,6 +14872,8 @@ dependencies = [
  "pallet-babe",
  "pallet-balances",
  "pallet-base-fee",
+ "pallet-beefy",
+ "pallet-beefy-mmr",
  "pallet-bounties",
  "pallet-claiming",
  "pallet-collective",
@@ -14889,6 +14893,7 @@ dependencies = [
  "pallet-hotfix-sufficients",
  "pallet-im-online",
  "pallet-membership",
+ "pallet-mmr",
  "pallet-nac-managing",
  "pallet-nfts",
  "pallet-nfts-runtime-api",
@@ -14916,6 +14921,7 @@ dependencies = [
  "primitive-types",
  "scale-info",
  "sp-api",
+ "sp-application-crypto",
  "sp-authority-discovery",
  "sp-block-builder",
  "sp-consensus-babe",

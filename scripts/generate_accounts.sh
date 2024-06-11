@@ -50,6 +50,9 @@ generate_session_keys() {
         echo "# AUDI (Authority Discovery)"
         generate_session_key audi sr25519
         printf "\n"
+        echo "# BEEFY"
+        generate_session_key beef ecdsa
+        printf "\n"
     done
 }
 

@@ -30,10 +30,12 @@ sp-authority-discovery = { workspace = true }
 sp-block-builder = { workspace = true }
 sp-consensus-babe = { workspace = true }
 sp-consensus-beefy = { workspace = true }
+binary-merkle-tree = { workspace = true }
 sp-consensus-grandpa = { workspace = true }
 sp-core = { workspace = true }
 sp-inherents = { workspace = true }
 sp-io = { workspace = true }
+sp-application-crypto = { workspace = true }
 sp-mmr-primitives = { workspace = true }
 sp-offchain = { workspace = true }
 sp-runtime = { workspace = true }
@@ -88,6 +90,9 @@ pallet-treasury-extension = { workspace = true }
 pallet-uniques = { workspace = true }
 pallet-utility = { workspace = true }
 pallet-vesting = { workspace = true }
+pallet-beefy = { workspace = true }
+pallet-beefy-mmr = { workspace = true }
+pallet-mmr = { workspace = true }
 
 # Runtime API
 energy-fee-runtime-api = { workspace = true }
@@ -175,6 +180,9 @@ try-runtime = [
     "pallet-simple-vesting/try-runtime",
     "pallet-treasury-extension/try-runtime",
     "pallet-energy-generation/try-runtime",
+    "pallet-beefy/try-runtime",
+    "pallet-beefy-mmr/try-runtime",
+    "pallet-mmr/try-runtime",
 ]
 fast-runtime = []
 std = [
@@ -192,6 +200,7 @@ std = [
     "runtime-common/std",
     # Substrate
     "sp-api/std",
+    "sp-application-crypto/std",
     "sp-authority-discovery/std",
     "sp-block-builder/std",
     "sp-consensus-babe/std",
@@ -271,7 +280,10 @@ std = [
     "pallet-energy-fee/std",
     "energy-fee-runtime-api/std",
     "energy-generation-runtime-api/std",
-    "vitreus-utility-runtime-api/std"
+    "vitreus-utility-runtime-api/std",
+    "pallet-beefy/std",
+    "pallet-beefy-mmr/std",
+    "pallet-mmr/std"
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
