@@ -1561,11 +1561,12 @@ construct_runtime!(
         Slots: slots::{Pallet, Call, Storage, Event<T>} = 81,
         ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 82,
 
-        // MMR leaf construction must be before session in order to have leaf contents
-        Mmr: pallet_mmr::{Pallet, Storage} = 83,
         // BEEFY Bridges support.
-        Beefy: pallet_beefy::{Pallet, Call, Storage, Config<T>, ValidateUnsigned} = 84,
-        MmrLeaf: pallet_beefy_mmr::{Pallet, Storage} = 85
+        Beefy: pallet_beefy::{Pallet, Call, Storage, Config<T>, ValidateUnsigned} = 200,
+        // MMR leaf construction must be after session in order to have a leaf's next_auth_set
+        // refer to block<N>. See https://github.com/polkadot-fellows/runtimes/issues/160 for details.
+        Mmr: pallet_mmr = 201,
+        MmrLeaf: pallet_beefy_mmr = 202,
     }
 );
 
