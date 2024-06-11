@@ -85,6 +85,7 @@ pub mod pallet {
         + pallet_transaction_payment::Config
         + pallet_asset_rate::Config
         + pallet_evm::Config
+        + pallet_nac_managing::Config
     {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -282,6 +283,7 @@ pub mod pallet {
                 imbalance
             })
             .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+
             Self::update_burned_energy(imbalance.peek())
                 .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
             Ok(Some(imbalance))
@@ -332,7 +334,7 @@ pub mod pallet {
             )
             .map(|imbalance| {
                 Self::deposit_event(Event::<T>::EnergyFeePaid {
-                    who: account_id,
+                    who: account_id.clone(),
                     amount: const_energy_fee,
                 });
                 imbalance
@@ -340,6 +342,7 @@ pub mod pallet {
             .map_err(|_| pallet_evm::Error::<T>::BalanceLow)?;
             Self::update_burned_energy(imbalance.peek())
                 .map_err(|_| pallet_evm::Error::<T>::FeeOverflow)?;
+            Self::check_account_threshold(&account_id);
             Ok(Some(imbalance))
         }
 
@@ -404,6 +407,10 @@ impl<T: Config> Pallet<T> {
                 current_burned.checked_add(&amount).ok_or(DispatchError::Arithmetic(Overflow))?;
             Ok(())
         })
+    }
+
+    fn check_account_threshold(who: &T::AccountId) {
+        pallet_nac_managing::Pallet::<T>::check_account_threshold(who);
     }
 
     fn validate_call_fee(fee_amount: BalanceOf<T>) -> Result<(), DispatchError> {

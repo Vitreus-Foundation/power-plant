@@ -568,21 +568,31 @@ pub mod pallet {
             origin: OriginFor<T>,
             path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
             amount_in: T::AssetBalance,
-            amount_out_min: T::AssetBalance,
+            amount_out_min: Option<T::AssetBalance>,
             send_to: T::AccountId,
             keep_alive: bool,
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
 
-            ensure!(
-                amount_in > Zero::zero() && amount_out_min > Zero::zero(),
-                Error::<T>::ZeroAmount
-            );
+            ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
+
+            if let Some(amount_out_min) = amount_out_min {
+                ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
+            }
+
             Self::validate_swap_path(&path)?;
 
             let amounts = Self::get_amounts_out(&amount_in, &path)?;
             let amount_out = *amounts.last().expect("Has always more than 1 element");
-            ensure!(amount_out >= amount_out_min, Error::<T>::ProvidedMinimumNotSufficientForSwap);
+
+            ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
+
+            if let Some(amount_out_min) = amount_out_min {
+                ensure!(
+                    amount_out >= amount_out_min,
+                    Error::<T>::ProvidedMinimumNotSufficientForSwap
+                );
+            }
 
             Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
             Ok(())
@@ -600,21 +610,31 @@ pub mod pallet {
             origin: OriginFor<T>,
             path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
             amount_out: T::AssetBalance,
-            amount_in_max: T::AssetBalance,
+            amount_in_max: Option<T::AssetBalance>,
             send_to: T::AccountId,
             keep_alive: bool,
         ) -> DispatchResult {
             let sender = ensure_signed(origin)?;
 
-            ensure!(
-                amount_out > Zero::zero() && amount_in_max > Zero::zero(),
-                Error::<T>::ZeroAmount
-            );
+            ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
+
+            if let Some(amount_in_max) = amount_in_max {
+                ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
+            }
+
             Self::validate_swap_path(&path)?;
 
             let amounts = Self::get_amounts_in(&amount_out, &path)?;
             let amount_in = *amounts.first().expect("Always has more than one element");
-            ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
+
+            ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
+
+            if let Some(amount_in_max) = amount_in_max {
+                ensure!(
+                    amount_in <= amount_in_max,
+                    Error::<T>::ProvidedMaximumNotSufficientForSwap
+                );
+            }
 
             Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
             Ok(())

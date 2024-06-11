@@ -12,6 +12,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 frame-support = { workspace = true }
 frame-system = { workspace = true }
+pallet-balances = { workspace = true }
 pallet-claiming = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-nfts = { workspace = true }
@@ -23,6 +24,7 @@ sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 sp-staking = { workspace = true }
 sp-std = { workspace = true }
+log = { workspace = true }
 
 [dev-dependencies]
 frame-benchmarking = { workspace = true }

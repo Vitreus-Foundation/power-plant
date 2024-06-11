@@ -311,6 +311,7 @@ sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "pol
 sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-consensus-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-consensus-beefy = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+binary-merkle-tree = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-consensus-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 sp-database = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
@@ -374,6 +375,9 @@ pallet-uniques = { git = "https://github.com/paritytech/substrate", branch = "po
 pallet-utility = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-vesting = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 pallet-staking-reward-curve = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-beefy = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-beefy-mmr = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
+pallet-mmr =  { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0", default-features = false }
 
 # Substrate Utility
 frame-benchmarking-cli = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
