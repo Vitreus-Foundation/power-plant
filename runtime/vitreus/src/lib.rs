@@ -207,16 +207,16 @@ pub mod opaque {
     }
 
     impl_opaque_keys! {
-    pub struct SessionKeys {
-        pub grandpa: Grandpa,
-        pub babe: Babe,
-        pub im_online: ImOnline,
-        pub para_validator: Initializer,
-        pub para_assignment: ParaSessionInfo,
-        pub authority_discovery: AuthorityDiscovery,
-        pub beefy: Beefy,
-    }
+        pub struct SessionKeys {
+            pub grandpa: Grandpa,
+            pub babe: Babe,
+            pub im_online: ImOnline,
+            pub para_validator: Initializer,
+            pub para_assignment: ParaSessionInfo,
+            pub authority_discovery: AuthorityDiscovery,
+            pub beefy: Beefy,
         }
+    }
 
     // remove this when removing `OldSessionKeys`
     pub fn transform_session_keys(v: AccountId, old: OldSessionKeys) -> SessionKeys {
