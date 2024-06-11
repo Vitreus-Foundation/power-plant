@@ -224,6 +224,8 @@ pub mod opaque {
 
     // remove this when removing `OldSessionKeys`
     pub fn transform_session_keys(v: AccountId, old: OldSessionKeys) -> SessionKeys {
+        log::info!("Update session keys for {:?}", v);
+
         SessionKeys {
             grandpa: old.grandpa,
             babe: old.babe,
@@ -235,7 +237,7 @@ pub mod opaque {
                 let mut id: BeefyId =
                     sp_application_crypto::ecdsa::Public::from_raw([0u8; 33]).into();
                 let id_raw: &mut [u8] = id.as_mut();
-                id_raw[1..33].copy_from_slice(&v.0);
+                id_raw[13..33].copy_from_slice(&v.0);
                 id_raw[0..4].copy_from_slice(b"beef");
                 id
             },
@@ -255,7 +257,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 111,
+    spec_version: 112,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -1697,6 +1699,7 @@ pub type Migrations = (
     migrations::V0103,
     migrations::V0104,
     migrations::V0108,
+    migrations::V0112,
     migrations::Unreleased,
 );
 
