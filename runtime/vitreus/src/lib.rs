@@ -196,13 +196,45 @@ pub mod opaque {
     pub type BlockId = generic::BlockId<Block>;
 
     impl_opaque_keys! {
-        pub struct SessionKeys {
+        pub struct OldSessionKeys {
             pub grandpa: Grandpa,
             pub babe: Babe,
             pub im_online: ImOnline,
             pub para_validator: Initializer,
             pub para_assignment: ParaSessionInfo,
             pub authority_discovery: AuthorityDiscovery,
+        }
+    }
+
+    impl_opaque_keys! {
+    pub struct SessionKeys {
+        pub grandpa: Grandpa,
+        pub babe: Babe,
+        pub im_online: ImOnline,
+        pub para_validator: Initializer,
+        pub para_assignment: ParaSessionInfo,
+        pub authority_discovery: AuthorityDiscovery,
+        pub beefy: Beefy,
+    }
+        }
+
+    // remove this when removing `OldSessionKeys`
+    pub fn transform_session_keys(v: AccountId, old: OldSessionKeys) -> SessionKeys {
+        SessionKeys {
+            grandpa: old.grandpa,
+            babe: old.babe,
+            im_online: old.im_online,
+            para_validator: old.para_validator,
+            para_assignment: old.para_assignment,
+            authority_discovery: old.authority_discovery,
+            beefy: {
+                let mut id: BeefyId =
+                    sp_application_crypto::ecdsa::Public::from_raw([0u8; 33]).into();
+                let id_raw: &mut [u8] = id.as_mut();
+                id_raw[1..33].copy_from_slice(&v.0);
+                id_raw[0..4].copy_from_slice(b"beef");
+                id
+            },
         }
     }
 }
@@ -1531,7 +1563,6 @@ construct_runtime!(
 
         // MMR leaf construction must be before session in order to have leaf contents
         Mmr: pallet_mmr::{Pallet, Storage} = 83,
-
         // BEEFY Bridges support.
         Beefy: pallet_beefy::{Pallet, Call, Storage, Config<T>, ValidateUnsigned} = 84,
         MmrLeaf: pallet_beefy_mmr::{Pallet, Storage} = 85
