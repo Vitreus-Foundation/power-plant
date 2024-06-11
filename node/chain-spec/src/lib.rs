@@ -798,7 +798,10 @@ pub mod testnet_keys {
                 "7297d91787b2ec39853efaf1a553b4a5b58f834161a11f03575116e0340ada62"
             ))
             .into(),
-            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
+            sp_core::ecdsa::Public(hex!(
+                "023a9999783ffc163ade9e2ac21a33c546b5bc7a4622641860f0f869a97f1e78d0"
+            ))
+            .into(),
         )
     }
 
@@ -840,7 +843,10 @@ pub mod testnet_keys {
                 "d2d0a556d5526c8114e7312a9d7220869894db1ae01f3ef7696f9f784fc58a4f"
             ))
             .into(),
-            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
+            sp_core::ecdsa::Public(hex!(
+                "0247fc249f19a0a751d379c56e5f92be6f16942312f0b9fa8ecd09636e68c5d5e7"
+            ))
+            .into(),
         )
     }
 
@@ -882,7 +888,10 @@ pub mod testnet_keys {
                 "5425357e3002c6d2972e803362fe8648156837e70f3951929f13c0b9ba75c93b"
             ))
             .into(),
-            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
+            sp_core::ecdsa::Public(hex!(
+                "03117d68a11002855b405c67d164e41a7244bb5fb5eced2d081f8a04458e1ee11d"
+            ))
+            .into(),
         )
     }
 }
