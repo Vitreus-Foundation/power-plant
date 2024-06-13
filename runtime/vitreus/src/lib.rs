@@ -1135,6 +1135,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
                 Self::dispatch_info_to_fee(call, None, calculated_fee)
             },
+            RuntimeCall::Sudo(..) => CallFee::Regular(0),
             _ => CallFee::Regular(Self::weight_fee(runtime_call, dispatch_info, calculated_fee)),
         }
     }
