@@ -22,12 +22,14 @@ use runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use runtime_parachains::{
     configuration as parachains_configuration, disputes as parachains_disputes,
-    disputes::slashing as parachains_slashing, dmp as parachains_dmp, hrmp as parachains_hrmp,
-    inclusion as parachains_inclusion, initializer as parachains_initializer,
-    origin as parachains_origin, paras as parachains_paras,
+    disputes::slashing as parachains_slashing,
+    dmp as parachains_dmp, hrmp as parachains_hrmp, inclusion as parachains_inclusion,
+    inclusion::{AggregateMessageOrigin, UmpQueueId},
+    initializer as parachains_initializer, origin as parachains_origin, paras as parachains_paras,
     paras_inherent as parachains_paras_inherent,
-    runtime_api_impl::v5 as parachains_runtime_api_impl, scheduler as parachains_scheduler,
-    session_info as parachains_session_info, shared as parachains_shared,
+    runtime_api_impl::v5 as parachains_runtime_api_impl,
+    scheduler as parachains_scheduler, session_info as parachains_session_info,
+    shared as parachains_shared,
 };
 
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
@@ -37,7 +39,8 @@ use frame_support::traits::tokens::{
     DepositConsequence, Fortitude, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, SignedImbalance, WithdrawReasons,
+    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, ProcessMessage,
+    ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
 use orml_traits::GetByKey;
 use parity_scale_codec::{Compact, Decode, Encode};
@@ -46,7 +49,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use sp_runtime::traits::{AccountIdConversion, ConvertInto, Zero};
+use sp_runtime::traits::{AccountIdConversion, ConvertInto, Keccak256, Zero};
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -78,7 +81,7 @@ use frame_support::{
         fungible::ItemOf, AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8,
         ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight},
+    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter},
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
@@ -98,6 +101,10 @@ use pallet_evm::{
     IdentityAddressMapping, Runner,
 };
 use pallet_nfts::PalletFeatures;
+use sp_consensus_beefy::{
+    crypto::AuthorityId as BeefyId,
+    mmr::{BeefyDataProvider, MmrLeafVersion},
+};
 use sp_runtime::transaction_validity::InvalidTransaction;
 
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
@@ -127,6 +134,7 @@ pub mod migrations;
 #[cfg(test)]
 mod tests;
 mod weights;
+mod xcm_config;
 
 use precompiles::VitreusPrecompiles;
 
@@ -192,6 +200,17 @@ pub mod opaque {
     pub type BlockId = generic::BlockId<Block>;
 
     impl_opaque_keys! {
+        pub struct OldSessionKeys {
+            pub grandpa: Grandpa,
+            pub babe: Babe,
+            pub im_online: ImOnline,
+            pub para_validator: Initializer,
+            pub para_assignment: ParaSessionInfo,
+            pub authority_discovery: AuthorityDiscovery,
+        }
+    }
+
+    impl_opaque_keys! {
         pub struct SessionKeys {
             pub grandpa: Grandpa,
             pub babe: Babe,
@@ -199,6 +218,29 @@ pub mod opaque {
             pub para_validator: Initializer,
             pub para_assignment: ParaSessionInfo,
             pub authority_discovery: AuthorityDiscovery,
+            pub beefy: Beefy,
+        }
+    }
+
+    // remove this when removing `OldSessionKeys`
+    pub fn transform_session_keys(v: AccountId, old: OldSessionKeys) -> SessionKeys {
+        log::info!("Update session keys for {:?}", v);
+
+        SessionKeys {
+            grandpa: old.grandpa,
+            babe: old.babe,
+            im_online: old.im_online,
+            para_validator: old.para_validator,
+            para_assignment: old.para_assignment,
+            authority_discovery: old.authority_discovery,
+            beefy: {
+                let mut id: BeefyId =
+                    sp_application_crypto::ecdsa::Public::from_raw([0u8; 33]).into();
+                let id_raw: &mut [u8] = id.as_mut();
+                id_raw[13..33].copy_from_slice(&v.0);
+                id_raw[0..4].copy_from_slice(b"beef");
+                id
+            },
         }
     }
 }
@@ -215,7 +257,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 110,
+    spec_version: 112,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -571,6 +613,75 @@ impl pallet_im_online::Config for Runtime {
     type WeightInfo = pallet_im_online::weights::SubstrateWeight<Runtime>;
     type MaxKeys = MaxKeys;
     type MaxPeerInHeartbeats = MaxPeerInHeartbeats;
+}
+
+parameter_types! {
+    pub const BeefySetIdSessionEntries: u32 = BondingDuration::get() * SessionsPerEra::get();
+}
+
+impl pallet_beefy::Config for Runtime {
+    type BeefyId = BeefyId;
+    type MaxAuthorities = MaxAuthorities;
+    type MaxSetIdSessionEntries = BeefySetIdSessionEntries;
+    type OnNewValidatorSet = MmrLeaf;
+    type WeightInfo = ();
+    type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, BeefyId)>>::Proof;
+    type EquivocationReportSystem =
+        pallet_beefy::EquivocationReportSystem<Self, Offences, Historical, ReportLongevity>;
+}
+
+mod mmr {
+    use super::Runtime;
+    pub use pallet_mmr::primitives::*;
+
+    pub type Leaf = <<Runtime as pallet_mmr::Config>::LeafData as LeafDataProvider>::LeafData;
+    pub type Hashing = <Runtime as pallet_mmr::Config>::Hashing;
+}
+
+impl pallet_mmr::Config for Runtime {
+    const INDEXING_PREFIX: &'static [u8] = mmr::INDEXING_PREFIX;
+    type Hashing = Keccak256;
+    type OnNewRoot = pallet_beefy_mmr::DepositBeefyDigest<Runtime>;
+    type WeightInfo = ();
+    type LeafData = pallet_beefy_mmr::Pallet<Runtime>;
+}
+
+pub struct ParasProvider;
+impl BeefyDataProvider<H256> for ParasProvider {
+    fn extra_data() -> H256 {
+        let mut para_heads: Vec<(u32, Vec<u8>)> = Paras::parachains()
+            .into_iter()
+            .filter_map(|id| Paras::para_head(id).map(|head| (id.into(), head.0)))
+            .collect();
+        para_heads.sort();
+        binary_merkle_tree::merkle_root::<mmr::Hashing, _>(
+            para_heads.into_iter().map(|pair| pair.encode()),
+        )
+    }
+}
+
+impl pallet_beefy_mmr::Config for Runtime {
+    type LeafVersion = LeafVersion;
+    type BeefyAuthorityToMerkleLeaf = pallet_beefy_mmr::BeefyEcdsaToEthereum;
+    type LeafExtra = H256;
+    type BeefyDataProvider = ParasProvider;
+}
+
+parameter_types! {
+    /// Version of the produced MMR leaf.
+    ///
+    /// The version consists of two parts;
+    /// - `major` (3 bits)
+    /// - `minor` (5 bits)
+    ///
+    /// `major` should be updated only if decoding the previous MMR Leaf format from the payload
+    /// is not possible (i.e. backward incompatible change).
+    /// `minor` should be updated if fields are added to the previous MMR Leaf, which given SCALE
+    /// encoding does not prevent old leafs from being decoded.
+    ///
+    /// Hence we expect `major` to be changed really rarely (think never).
+    /// See [`MmrLeafVersion`] type documentation for more details.
+    pub LeafVersion: MmrLeafVersion = MmrLeafVersion::new(0, 0);
 }
 
 // it takes a month to become a validator from 0
@@ -1005,6 +1116,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Treasury(..)
             | RuntimeCall::Democracy(..)
             | RuntimeCall::Session(..)
+            | RuntimeCall::XcmPallet(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
@@ -1293,7 +1405,7 @@ impl parachains_inclusion::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type DisputesHandler = ParasDisputes;
     type RewardValidators = RewardValidators;
-    type MessageQueue = ();
+    type MessageQueue = MessageQueue;
     type WeightInfo = weights::runtime_parachains_inclusion::WeightInfo<Runtime>;
 }
 
@@ -1307,6 +1419,57 @@ impl parachains_paras::Config for Runtime {
     type UnsignedPriority = ParasUnsignedPriority;
     type QueueFootprinter = ParaInclusion;
     type NextSessionRotation = Babe;
+}
+
+parameter_types! {
+    /// Amount of weight that can be spent per block to service messages.
+    ///
+    /// # WARNING
+    ///
+    /// This is not a good value for para-chains since the `Scheduler` already uses up to 80% block weight.
+    pub MessageQueueServiceWeight: Weight = Perbill::from_percent(20) * BlockWeights::get().max_block;
+    pub const MessageQueueHeapSize: u32 = 65_536;
+    pub const MessageQueueMaxStale: u32 = 8;
+}
+
+/// Message processor to handle any messages that were enqueued into the `MessageQueue` pallet.
+pub struct MessageProcessor;
+impl ProcessMessage for MessageProcessor {
+    type Origin = AggregateMessageOrigin;
+
+    fn process_message(
+        message: &[u8],
+        origin: Self::Origin,
+        meter: &mut WeightMeter,
+        id: &mut [u8; 32],
+    ) -> Result<bool, ProcessMessageError> {
+        use xcm::latest::Junction;
+
+        let para = match origin {
+            AggregateMessageOrigin::Ump(UmpQueueId::Para(para)) => para,
+        };
+        xcm_builder::ProcessXcmMessage::<
+            Junction,
+            xcm_executor::XcmExecutor<xcm_config::XcmConfig>,
+            RuntimeCall,
+        >::process_message(message, Junction::Parachain(para.into()), meter, id)
+    }
+}
+
+impl pallet_message_queue::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Size = u32;
+    type HeapSize = MessageQueueHeapSize;
+    type MaxStale = MessageQueueMaxStale;
+    type ServiceWeight = MessageQueueServiceWeight;
+    #[cfg(not(feature = "runtime-benchmarks"))]
+    type MessageProcessor = MessageProcessor;
+    #[cfg(feature = "runtime-benchmarks")]
+    type MessageProcessor =
+        pallet_message_queue::mock_helpers::NoopMessageProcessor<AggregateMessageOrigin>;
+    type QueueChangeHandler = ParaInclusion;
+    type QueuePausedQuery = ();
+    type WeightInfo = pallet_message_queue::weights::SubstrateWeight<Runtime>;
 }
 
 impl parachains_dmp::Config for Runtime {}
@@ -1455,6 +1618,19 @@ construct_runtime!(
         Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 80,
         Slots: slots::{Pallet, Call, Storage, Event<T>} = 81,
         ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 82,
+
+        // Pallet for sending XCM.
+        XcmPallet: pallet_xcm::{Pallet, Call, Storage, Event<T>, Origin, Config<T>} = 99,
+
+        // Generalized message queue
+        MessageQueue: pallet_message_queue::{Pallet, Call, Storage, Event<T>} = 100,
+
+        // BEEFY Bridges support.
+        Beefy: pallet_beefy::{Pallet, Call, Storage, Config<T>, ValidateUnsigned} = 200,
+        // MMR leaf construction must be after session in order to have a leaf's next_auth_set
+        // refer to block<N>. See https://github.com/polkadot-fellows/runtimes/issues/160 for details.
+        Mmr: pallet_mmr = 201,
+        MmrLeaf: pallet_beefy_mmr = 202,
     }
 );
 
@@ -1523,6 +1699,7 @@ pub type Migrations = (
     migrations::V0103,
     migrations::V0104,
     migrations::V0108,
+    migrations::V0112,
     migrations::Unreleased,
 );
 
@@ -2035,6 +2212,16 @@ impl_runtime_apis! {
         }
     }
 
+    impl pallet_beefy_mmr::BeefyMmrApi<Block, Hash> for RuntimeApi {
+        fn authority_set_proof() -> sp_consensus_beefy::mmr::BeefyAuthoritySet<Hash> {
+            MmrLeaf::authority_set_proof()
+        }
+
+        fn next_authority_set_proof() -> sp_consensus_beefy::mmr::BeefyNextAuthoritySet<Hash> {
+            MmrLeaf::next_authority_set_proof()
+        }
+    }
+
     impl pallet_nfts_runtime_api::NftsApi<Block, AccountId, u32, u32> for Runtime {
         fn owner(collection: u32, item: u32) -> Option<AccountId> {
             <Nfts as Inspect<AccountId>>::owner(&collection, &item)
@@ -2469,60 +2656,84 @@ impl_runtime_apis! {
 
     impl sp_consensus_beefy::BeefyApi<Block> for Runtime {
         fn beefy_genesis() -> Option<BlockNumber> {
-            None
+             Beefy::genesis_block()
         }
 
         fn validator_set() -> Option<sp_consensus_beefy::ValidatorSet<sp_consensus_beefy::crypto::AuthorityId>> {
-            None
+            Beefy::validator_set()
         }
 
         fn submit_report_equivocation_unsigned_extrinsic(
-            _equivocation_proof: sp_consensus_beefy::EquivocationProof<
+            equivocation_proof: sp_consensus_beefy::EquivocationProof<
                 BlockNumber,
                 sp_consensus_beefy::crypto::AuthorityId,
                 sp_consensus_beefy::crypto::Signature,
             >,
-            _key_owner_proof: sp_consensus_beefy::OpaqueKeyOwnershipProof,
+            key_owner_proof: sp_consensus_beefy::OpaqueKeyOwnershipProof,
         ) -> Option<()> {
-            None
+            let key_owner_proof = key_owner_proof.decode()?;
+
+            Beefy::submit_unsigned_equivocation_report(
+                equivocation_proof,
+                key_owner_proof,
+            )
         }
 
         fn generate_key_ownership_proof(
             _set_id: sp_consensus_beefy::ValidatorSetId,
-            _authority_id: sp_consensus_beefy::crypto::AuthorityId,
+            authority_id: sp_consensus_beefy::crypto::AuthorityId,
         ) -> Option<sp_consensus_beefy::OpaqueKeyOwnershipProof> {
-            None
+             use parity_scale_codec::Encode;
+
+            Historical::prove((sp_consensus_beefy::KEY_TYPE, authority_id))
+                .map(|p| p.encode())
+                .map(sp_consensus_beefy::OpaqueKeyOwnershipProof::new)
         }
     }
 
     impl sp_mmr_primitives::MmrApi<Block, Hash, BlockNumber> for Runtime {
         fn mmr_root() -> Result<Hash, sp_mmr_primitives::Error> {
-            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+            Ok(Mmr::mmr_root())
         }
 
         fn mmr_leaf_count() -> Result<sp_mmr_primitives::LeafIndex, sp_mmr_primitives::Error> {
-            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+            Ok(Mmr::mmr_leaves())
         }
 
         fn generate_proof(
-            _block_numbers: Vec<BlockNumber>,
-            _best_known_block_number: Option<BlockNumber>,
+            block_numbers: Vec<BlockNumber>,
+            best_known_block_number: Option<BlockNumber>,
         ) -> Result<(Vec<sp_mmr_primitives::EncodableOpaqueLeaf>, sp_mmr_primitives::Proof<Hash>), sp_mmr_primitives::Error> {
-            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+             Mmr::generate_proof(block_numbers, best_known_block_number).map(
+                |(leaves, proof)| {
+                    (
+                        leaves
+                            .into_iter()
+                            .map(|leaf| mmr::EncodableOpaqueLeaf::from_leaf(&leaf))
+                            .collect(),
+                        proof,
+                    )
+                },
+            )
         }
 
-        fn verify_proof(_leaves: Vec<sp_mmr_primitives::EncodableOpaqueLeaf>, _proof: sp_mmr_primitives::Proof<Hash>)
+        fn verify_proof(leaves: Vec<sp_mmr_primitives::EncodableOpaqueLeaf>, proof: sp_mmr_primitives::Proof<Hash>)
             -> Result<(), sp_mmr_primitives::Error>
         {
-            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+             let leaves = leaves.into_iter().map(|leaf|
+                leaf.into_opaque_leaf()
+                .try_decode()
+                .ok_or(mmr::Error::Verify)).collect::<Result<Vec<mmr::Leaf>, mmr::Error>>()?;
+            Mmr::verify_leaves(leaves, proof)
         }
 
         fn verify_proof_stateless(
-            _root: Hash,
-            _leaves: Vec<sp_mmr_primitives::EncodableOpaqueLeaf>,
-            _proof: sp_mmr_primitives::Proof<Hash>
+            root: Hash,
+            leaves: Vec<sp_mmr_primitives::EncodableOpaqueLeaf>,
+            proof: sp_mmr_primitives::Proof<Hash>
         ) -> Result<(), sp_mmr_primitives::Error> {
-            Err(sp_mmr_primitives::Error::PalletNotIncluded)
+            let nodes = leaves.into_iter().map(|leaf|mmr::DataOrHash::Data(leaf.into_opaque_leaf())).collect();
+            pallet_mmr::verify_leaves_proof::<mmr::Hashing, _>(root, nodes, proof)
         }
     }
 

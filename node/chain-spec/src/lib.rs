@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use polkadot_primitives::{AssignmentId, AuthorityDiscoveryId, ValidatorId};
 use sc_chain_spec::{ChainSpecExtension, ChainType, Properties};
 use sp_consensus_babe::AuthorityId as BabeId;
+use sp_consensus_beefy::crypto::AuthorityId as BeefyId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
 use sp_core::{storage::Storage, Pair, Public};
@@ -346,6 +347,7 @@ pub fn testnet_genesis(
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     )>,
     initial_cooperators: Vec<AccountId>,
     chain_id: u64,
@@ -465,6 +467,7 @@ pub fn testnet_genesis(
                             x.5.clone(),
                             x.6.clone(),
                             x.7.clone(),
+                            x.8.clone(),
                         ),
                     )
                 })
@@ -494,6 +497,8 @@ pub fn testnet_genesis(
         hrmp: Default::default(),
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
+        xcm_pallet: Default::default(),
+        beefy: Default::default(),
     }
 }
 
@@ -509,6 +514,7 @@ fn mainnet_genesis(
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     )>,
 ) -> RuntimeGenesisConfig {
     use mainnet_keys::*;
@@ -617,6 +623,7 @@ fn mainnet_genesis(
                             x.5.clone(),
                             x.6.clone(),
                             x.7.clone(),
+                            x.8.clone(),
                         ),
                     )
                 })
@@ -645,6 +652,8 @@ fn mainnet_genesis(
         hrmp: Default::default(),
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
+        xcm_pallet: Default::default(),
+        beefy: Default::default(),
     }
 }
 
@@ -690,6 +699,7 @@ pub mod devnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             get_account_id_from_seed::<ecdsa::Public>(&format!("{}//stash", s)),
@@ -700,6 +710,7 @@ pub mod devnet_keys {
             derive_dev::<ValidatorId>(s),
             derive_dev::<AssignmentId>(s),
             derive_dev::<AuthorityDiscoveryId>(s),
+            derive_dev::<BeefyId>(s),
         )
     }
     /// Generate a crypto pair.
@@ -760,6 +771,7 @@ pub mod testnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             AccountId::from(hex!("784e69Feba8a2FCCc938A722D5a66E9EbfA3A14A")), // Stash
@@ -788,6 +800,10 @@ pub mod testnet_keys {
                 "7297d91787b2ec39853efaf1a553b4a5b58f834161a11f03575116e0340ada62"
             ))
             .into(),
+            sp_core::ecdsa::Public(hex!(
+                "023a9999783ffc163ade9e2ac21a33c546b5bc7a4622641860f0f869a97f1e78d0"
+            ))
+            .into(),
         )
     }
 
@@ -800,6 +816,7 @@ pub mod testnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             AccountId::from(hex!("309753d1BAc45489B9C4BdDEf28963d862AdCb13")), // Stash
@@ -828,6 +845,10 @@ pub mod testnet_keys {
                 "d2d0a556d5526c8114e7312a9d7220869894db1ae01f3ef7696f9f784fc58a4f"
             ))
             .into(),
+            sp_core::ecdsa::Public(hex!(
+                "0247fc249f19a0a751d379c56e5f92be6f16942312f0b9fa8ecd09636e68c5d5e7"
+            ))
+            .into(),
         )
     }
 
@@ -840,6 +861,7 @@ pub mod testnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             AccountId::from(hex!("A6543B65DD9cFA7e324AF616A339D3c1a13fa685")), // Stash
@@ -868,6 +890,10 @@ pub mod testnet_keys {
                 "5425357e3002c6d2972e803362fe8648156837e70f3951929f13c0b9ba75c93b"
             ))
             .into(),
+            sp_core::ecdsa::Public(hex!(
+                "03117d68a11002855b405c67d164e41a7244bb5fb5eced2d081f8a04458e1ee11d"
+            ))
+            .into(),
         )
     }
 }
@@ -888,6 +914,7 @@ pub mod mainnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             AccountId::from(hex!("f3612fF49FE440e46faAc08C71d141249D71ff12")), // Stash
@@ -916,6 +943,7 @@ pub mod mainnet_keys {
                 "864507801e50051b2bb691c7839b2eb66d288f4f6f5d070681f79f7aac8c613f"
             ))
             .into(),
+            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
         )
     }
 
@@ -928,6 +956,7 @@ pub mod mainnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             AccountId::from(hex!("e9De3598e78Ac90d45de4f6B19666B280ec4886b")), // Stash
@@ -956,6 +985,7 @@ pub mod mainnet_keys {
                 "c47aea1cf8270930ef66afd4a04f14c7baf003bc1993c76a2c17807c019c303d"
             ))
             .into(),
+            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
         )
     }
 
@@ -968,6 +998,7 @@ pub mod mainnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             AccountId::from(hex!("66c93481CbF5F1951C0D5E0685540D4e59C3C454")), // Stash
@@ -996,6 +1027,7 @@ pub mod mainnet_keys {
                 "e49adf172ddb764215d7ba5a4633dec04991fb3bd9d876f34740f10f439ebf0a"
             ))
             .into(),
+            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
         )
     }
 
@@ -1008,6 +1040,7 @@ pub mod mainnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             AccountId::from(hex!("29f8AE257C8Ab3607AB7F37215606b52a54849D1")), // Stash
@@ -1036,6 +1069,7 @@ pub mod mainnet_keys {
                 "341a2e2fd269d9d56c8b1f5b4bf0de3bf05c3f1b7dab48a40f06e66818dd067e"
             ))
             .into(),
+            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
         )
     }
 
@@ -1048,6 +1082,7 @@ pub mod mainnet_keys {
         ValidatorId,
         AssignmentId,
         AuthorityDiscoveryId,
+        BeefyId,
     ) {
         (
             AccountId::from(hex!("8136A3A57a52bA0b8370E46D8c5e3B99f20b4c0a")), // Stash
@@ -1076,6 +1111,7 @@ pub mod mainnet_keys {
                 "60c50d14148a65996718014822b528ca2ad0e75a66cddd07e8b80ea78f223955"
             ))
             .into(),
+            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
         )
     }
 }
@@ -1251,6 +1287,7 @@ fn session_keys(
     para_validator: ValidatorId,
     para_assignment: AssignmentId,
     authority_discovery: AuthorityDiscoveryId,
+    beefy: BeefyId,
 ) -> opaque::SessionKeys {
     opaque::SessionKeys {
         grandpa,
@@ -1259,6 +1296,7 @@ fn session_keys(
         para_validator,
         para_assignment,
         authority_discovery,
+        beefy,
     }
 }
 
