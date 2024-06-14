@@ -289,6 +289,7 @@ pub const EPOCH_DURATION_IN_SLOTS: u64 = {
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
+pub const WEEKS: BlockNumber = DAYS * 7;
 
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
@@ -1534,7 +1535,7 @@ impl paras_registrar::Config for Runtime {
 }
 
 parameter_types! {
-    pub LeasePeriod: BlockNumber = prod_or_fast!(1 * DAYS, 1 * DAYS, "VITREUS_LEASE_PERIOD");
+    pub LeasePeriod: BlockNumber = prod_or_fast!(1 * DAYS, 4 * WEEKS, "VITREUS_LEASE_PERIOD");
 }
 
 impl slots::Config for Runtime {
