@@ -1152,7 +1152,15 @@ pub mod pallet {
                 Error::<T>::InsufficientBond
             );
             let stash = &ledger.stash;
-            let cooperator_targets = targets.clone();
+
+            let mut new_targets: Vec<(AccountIdLookupOf<T>, StakeOf<T>)> = Default::default();
+            for target in targets {
+                if target.1 > T::StakeBalance::zero() {
+                    new_targets.push((target.0, target.1));
+                }
+            }
+
+            let cooperator_targets = new_targets.clone();
 
             // Only check limits if they are not already a cooperator.
             if !Cooperators::<T>::contains_key(stash) {
@@ -1167,9 +1175,9 @@ pub mod pallet {
                 }
             }
 
-            ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
+            ensure!(!new_targets.is_empty(), Error::<T>::EmptyTargets);
             ensure!(
-                targets.len() <= T::MaxCooperations::get() as usize,
+                new_targets.len() <= T::MaxCooperations::get() as usize,
                 Error::<T>::TooManyTargets
             );
 
@@ -1178,7 +1186,7 @@ pub mod pallet {
             let record = pallet_reputation::Pallet::<T>::reputation(stash)
                 .unwrap_or_else(ReputationRecord::with_now::<T>);
 
-            let targets: BoundedBTreeMap<_, _, _> = targets
+            let new_targets: BoundedBTreeMap<_, _, _> = new_targets
                 .into_iter()
                 .map(|(t, s)| (T::Lookup::lookup(t).map_err(DispatchError::from), s))
                 .map(|(n, s)| {
@@ -1200,7 +1208,7 @@ pub mod pallet {
                 .map_err(|_| Error::<T>::TooManyCooperators)?;
 
             let cooperations = Cooperations {
-                targets,
+                targets: new_targets,
                 // Initial cooperations are considered submitted at era 0. See `Cooperations` doc.
                 submitted_in: Self::current_era().unwrap_or(0),
                 suppressed: false,
