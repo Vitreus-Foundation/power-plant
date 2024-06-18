@@ -33,6 +33,7 @@ services:
       --rpc-cors all
       --state-pruning archive
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
+      --beefy
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
