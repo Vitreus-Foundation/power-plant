@@ -1153,14 +1153,12 @@ pub mod pallet {
             );
             let stash = &ledger.stash;
 
-            let mut new_targets: Vec<(AccountIdLookupOf<T>, StakeOf<T>)> = Default::default();
-            for target in targets {
-                if target.1 > T::StakeBalance::zero() {
-                    new_targets.push((target.0, target.1));
-                }
-            }
+            let targets: Vec<(AccountIdLookupOf<T>, StakeOf<T>)> = targets
+                .into_iter()
+                .filter(|(_, stake)| stake > &T::StakeBalance::zero())
+                .collect();
 
-            let cooperator_targets = new_targets.clone();
+            let cooperator_targets = targets.clone();
 
             // Only check limits if they are not already a cooperator.
             if !Cooperators::<T>::contains_key(stash) {
@@ -1175,9 +1173,9 @@ pub mod pallet {
                 }
             }
 
-            ensure!(!new_targets.is_empty(), Error::<T>::EmptyTargets);
+            ensure!(!targets.is_empty(), Error::<T>::EmptyTargets);
             ensure!(
-                new_targets.len() <= T::MaxCooperations::get() as usize,
+                targets.len() <= T::MaxCooperations::get() as usize,
                 Error::<T>::TooManyTargets
             );
 
@@ -1186,7 +1184,7 @@ pub mod pallet {
             let record = pallet_reputation::Pallet::<T>::reputation(stash)
                 .unwrap_or_else(ReputationRecord::with_now::<T>);
 
-            let new_targets: BoundedBTreeMap<_, _, _> = new_targets
+            let targets: BoundedBTreeMap<_, _, _> = targets
                 .into_iter()
                 .map(|(t, s)| (T::Lookup::lookup(t).map_err(DispatchError::from), s))
                 .map(|(n, s)| {
@@ -1208,7 +1206,7 @@ pub mod pallet {
                 .map_err(|_| Error::<T>::TooManyCooperators)?;
 
             let cooperations = Cooperations {
-                targets: new_targets,
+                targets,
                 // Initial cooperations are considered submitted at era 0. See `Cooperations` doc.
                 submitted_in: Self::current_era().unwrap_or(0),
                 suppressed: false,
