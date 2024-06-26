@@ -1150,6 +1150,12 @@ pub mod pallet {
             ensure!(ledger.active >= total_stake, Error::<T>::InsufficientBond);
 
             let stash = &ledger.stash;
+
+            let targets: Vec<(AccountIdLookupOf<T>, StakeOf<T>)> = targets
+                .into_iter()
+                .filter(|(_, stake)| stake > &T::StakeBalance::zero())
+                .collect();
+
             let cooperator_targets = targets.clone();
 
             // Only check limits if they are not already a cooperator.
