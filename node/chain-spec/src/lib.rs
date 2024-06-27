@@ -16,12 +16,12 @@ use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
-    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint,
-    RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus,
-    SudoConfig, SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    BalancesConfig, BeefyConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig,
+    EVMChainIdConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
+    ImOnlineId, MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig,
+    ReputationPoint, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
+    SimpleVestingConfig, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 /// Node `ChainSpec` extensions.
@@ -498,7 +498,10 @@ pub fn testnet_genesis(
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
         xcm_pallet: Default::default(),
-        beefy: Default::default(),
+        beefy: BeefyConfig {
+            authorities: initial_validators.iter().map(|x| x.8.clone()).collect(),
+            ..Default::default()
+        },
     }
 }
 
@@ -653,7 +656,10 @@ fn mainnet_genesis(
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
         xcm_pallet: Default::default(),
-        beefy: Default::default(),
+        beefy: BeefyConfig {
+            authorities: initial_validators.iter().map(|x| x.8.clone()).collect(),
+            ..Default::default()
+        },
     }
 }
 
