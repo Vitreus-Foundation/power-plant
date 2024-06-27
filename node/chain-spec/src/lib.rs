@@ -16,12 +16,12 @@ use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
-    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint,
-    RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus,
-    SudoConfig, SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    BalancesConfig, BeefyConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig,
+    EVMChainIdConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
+    ImOnlineId, MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig,
+    ReputationPoint, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
+    SimpleVestingConfig, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 /// Node `ChainSpec` extensions.
@@ -498,7 +498,10 @@ pub fn testnet_genesis(
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
         xcm_pallet: Default::default(),
-        beefy: Default::default(),
+        beefy: BeefyConfig {
+            authorities: initial_validators.iter().map(|x| x.8.clone()).collect(),
+            ..Default::default()
+        },
     }
 }
 
@@ -653,7 +656,10 @@ fn mainnet_genesis(
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
         xcm_pallet: Default::default(),
-        beefy: Default::default(),
+        beefy: BeefyConfig {
+            authorities: initial_validators.iter().map(|x| x.8.clone()).collect(),
+            ..Default::default()
+        },
     }
 }
 
@@ -943,7 +949,10 @@ pub mod mainnet_keys {
                 "864507801e50051b2bb691c7839b2eb66d288f4f6f5d070681f79f7aac8c613f"
             ))
             .into(),
-            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
+            sp_core::ecdsa::Public(hex!(
+                "03978bb6768a1f5c3d8e8d32f3922b103fc015b37703c3316d95dab985853809a8"
+            ))
+            .into(),
         )
     }
 
@@ -985,7 +994,10 @@ pub mod mainnet_keys {
                 "c47aea1cf8270930ef66afd4a04f14c7baf003bc1993c76a2c17807c019c303d"
             ))
             .into(),
-            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
+            sp_core::ecdsa::Public(hex!(
+                "02937d3a749345420dd7465d0991b27a75b3be42317be211cd57a38da7d16dcb75"
+            ))
+            .into(),
         )
     }
 
@@ -1027,7 +1039,10 @@ pub mod mainnet_keys {
                 "e49adf172ddb764215d7ba5a4633dec04991fb3bd9d876f34740f10f439ebf0a"
             ))
             .into(),
-            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
+            sp_core::ecdsa::Public(hex!(
+                "03ac73cc8989b932ffab5f220d5733c63dfc241b75175581d4b31b231386c47412"
+            ))
+            .into(),
         )
     }
 
@@ -1069,7 +1084,10 @@ pub mod mainnet_keys {
                 "341a2e2fd269d9d56c8b1f5b4bf0de3bf05c3f1b7dab48a40f06e66818dd067e"
             ))
             .into(),
-            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
+            sp_core::ecdsa::Public(hex!(
+                "0272616c3ca4d1ddc05b091cb2b9086855674768e6798aae79ab35b4291e6f10a4"
+            ))
+            .into(),
         )
     }
 
@@ -1111,7 +1129,10 @@ pub mod mainnet_keys {
                 "60c50d14148a65996718014822b528ca2ad0e75a66cddd07e8b80ea78f223955"
             ))
             .into(),
-            sp_core::ecdsa::Public([u8::MAX; 33]).into(),
+            sp_core::ecdsa::Public(hex!(
+                "036e09b9279fd790a9a9611cc28fbe5786813b6b818d3a3c7453b7c587104e64a6"
+            ))
+            .into(),
         )
     }
 }
