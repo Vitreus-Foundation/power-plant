@@ -15,6 +15,7 @@ sc-chain-spec = { workspace = true }
 sc-service = { workspace = true }
 sp-consensus-babe = { workspace = true, features = ["default"] }
 sp-consensus-grandpa = { workspace = true, features = ["default"] }
+sp-consensus-beefy = { workspace = true, features = ["default"] }
 sp-core = { workspace = true, features = ["default"] }
 sp-runtime = { workspace = true, features = ["default"] }
 sp-state-machine = { workspace = true, features = ["default"] }

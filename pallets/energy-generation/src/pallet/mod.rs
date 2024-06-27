@@ -34,7 +34,7 @@ use orml_traits::GetByKey;
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, CheckedSub, SaturatedConversion, StaticLookup, Zero},
-    ArithmeticError, Perbill, Percent,
+    ArithmeticError, Perbill, Percent, Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::collections::btree_map::BTreeMap;
@@ -1142,16 +1142,20 @@ pub mod pallet {
             let controller = ensure_signed(origin)?;
 
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
-            ensure!(
-                ledger.active >= MinCooperatorBond::<T>::get()
-                    && ledger.active
-                        >= targets.iter().fold(Zero::zero(), |mut acc, (_, n)| {
-                            acc += *n;
-                            acc
-                        }),
-                Error::<T>::InsufficientBond
-            );
+            ensure!(ledger.active >= MinCooperatorBond::<T>::get(), Error::<T>::InsufficientBond);
+
+            let total_stake = targets
+                .iter()
+                .fold(T::StakeBalance::zero(), |acc, (_, n)| acc.saturating_add(*n));
+            ensure!(ledger.active >= total_stake, Error::<T>::InsufficientBond);
+
             let stash = &ledger.stash;
+
+            let targets: Vec<(AccountIdLookupOf<T>, StakeOf<T>)> = targets
+                .into_iter()
+                .filter(|(_, stake)| stake > &T::StakeBalance::zero())
+                .collect();
+
             let cooperator_targets = targets.clone();
 
             // Only check limits if they are not already a cooperator.

@@ -30,6 +30,7 @@ services:
       --bootnodes /ip4/45.32.187.143/tcp/30333/p2p/12D3KooWBFQSrDskroYuP9CxKDizTomeSc3sC1K9EgmdpeeJzEnS
       --rpc-cors all
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 1"
+      --beefy
 
     ports:
       - "0.0.0.0:30333:30333/tcp"

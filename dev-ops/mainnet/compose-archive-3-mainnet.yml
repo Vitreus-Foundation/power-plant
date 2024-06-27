@@ -31,6 +31,7 @@ services:
       --rpc-max-connections 5000
       --state-pruning archive
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
+      --enable-offchain-indexing true
       -lwarn
 
     ports:

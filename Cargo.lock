@@ -988,6 +988,7 @@ dependencies = [
  "sc-sync-state-rpc",
  "serde",
  "sp-consensus-babe",
+ "sp-consensus-beefy",
  "sp-consensus-grandpa",
  "sp-core",
  "sp-runtime",
@@ -14842,6 +14843,7 @@ dependencies = [
 name = "vitreus-power-plant-runtime"
 version = "0.0.0"
 dependencies = [
+ "binary-merkle-tree",
  "chain-spec",
  "energy-fee-runtime-api",
  "energy-generation-runtime-api",
@@ -14870,6 +14872,8 @@ dependencies = [
  "pallet-babe",
  "pallet-balances",
  "pallet-base-fee",
+ "pallet-beefy",
+ "pallet-beefy-mmr",
  "pallet-bounties",
  "pallet-claiming",
  "pallet-collective",
@@ -14889,6 +14893,8 @@ dependencies = [
  "pallet-hotfix-sufficients",
  "pallet-im-online",
  "pallet-membership",
+ "pallet-message-queue",
+ "pallet-mmr",
  "pallet-nac-managing",
  "pallet-nfts",
  "pallet-nfts-runtime-api",
@@ -14909,6 +14915,7 @@ dependencies = [
  "pallet-uniques",
  "pallet-utility",
  "pallet-vesting",
+ "pallet-xcm",
  "parity-scale-codec",
  "polkadot-primitives",
  "polkadot-runtime-common",
@@ -14916,6 +14923,7 @@ dependencies = [
  "primitive-types",
  "scale-info",
  "sp-api",
+ "sp-application-crypto",
  "sp-authority-discovery",
  "sp-block-builder",
  "sp-consensus-babe",
@@ -14934,6 +14942,9 @@ dependencies = [
  "sp-version",
  "substrate-wasm-builder",
  "vitreus-utility-runtime-api",
+ "xcm 1.0.0",
+ "xcm-builder",
+ "xcm-executor",
 ]
 
 [[package]]
