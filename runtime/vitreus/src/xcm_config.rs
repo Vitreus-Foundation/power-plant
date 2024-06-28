@@ -78,7 +78,7 @@ parameter_types! {
     );
 
     pub const WrappedTokenLocation: MultiLocation = MultiLocation {
-        parents: 2,
+        parents: 1,
         interior: X2(
             GlobalConsensus(EthereumNetwork::get()),
             AccountKey20 { network: None, key: EthereumWrappedTokenAddress::get() },
