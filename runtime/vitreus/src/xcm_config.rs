@@ -58,32 +58,26 @@ const RELAY_NETWORK: NetworkId = prod_or_fast!(
         "c28caa6bf827d357af8ca58ddcefc2aba6d08b2fd29de8acb67becd4ea6c3673"
     ))
 );
+pub const ETHEREUM_NETWORK: NetworkId =
+    prod_or_fast!(NetworkId::Ethereum { chain_id: 1 }, NetworkId::Ethereum { chain_id: 11155111 });
+pub const ETHEREUM_VTRS_ADDRESS: [u8; 20] = prod_or_fast!(
+    hex_literal::hex!("74950FC112473caba58193c6bF6412a6f1e4d7d2"),
+    hex_literal::hex!("27C2E2131DF1310C9bdfAc779316685dB8B1E8bb")
+);
 
 parameter_types! {
     pub const TokenLocation: MultiLocation = Here.into_location();
+    pub const WrappedTokenLocation: MultiLocation = MultiLocation {
+        parents: 1,
+        interior: X2(
+            GlobalConsensus(ETHEREUM_NETWORK),
+            AccountKey20 { network: None, key: ETHEREUM_VTRS_ADDRESS },
+        ),
+    };
     pub const ThisNetwork: NetworkId = RELAY_NETWORK;
     pub UniversalLocation: InteriorMultiLocation = ThisNetwork::get().into();
     pub CheckAccount: AccountId = XcmPallet::check_account();
     pub LocalCheckAccount: (AccountId, MintLocation) = (CheckAccount::get(), MintLocation::Local);
-}
-
-parameter_types! {
-    pub const EthereumNetwork: NetworkId = prod_or_fast!(
-        NetworkId::Ethereum { chain_id: 1 },
-        NetworkId::Ethereum { chain_id: 11155111 }
-    );
-    pub const EthereumWrappedTokenAddress: [u8; 20] = prod_or_fast!(
-        hex_literal::hex!("74950FC112473caba58193c6bF6412a6f1e4d7d2"),
-        hex_literal::hex!("27C2E2131DF1310C9bdfAc779316685dB8B1E8bb")
-    );
-
-    pub const WrappedTokenLocation: MultiLocation = MultiLocation {
-        parents: 1,
-        interior: X2(
-            GlobalConsensus(EthereumNetwork::get()),
-            AccountKey20 { network: None, key: EthereumWrappedTokenAddress::get() },
-        ),
-    };
 }
 
 pub type LocationConverter = (
