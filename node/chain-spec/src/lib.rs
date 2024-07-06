@@ -31,6 +31,10 @@ use vitreus_power_plant_runtime::{
 #[derive(Default, Clone, Serialize, Deserialize, ChainSpecExtension)]
 #[serde(rename_all = "camelCase")]
 pub struct Extensions {
+    /// Block numbers with known hashes.
+    pub fork_blocks: sc_client_api::ForkBlocks<polkadot_primitives::Block>,
+    /// Known bad block hashes.
+    pub bad_blocks: sc_client_api::BadBlocks<polkadot_primitives::Block>,
     /// The light sync state.
     ///
     /// This value will be set by the `sync-state rpc` implementation.

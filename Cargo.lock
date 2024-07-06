@@ -984,6 +984,7 @@ dependencies = [
  "polkadot-runtime-parachains",
  "rand 0.8.5",
  "sc-chain-spec",
+ "sc-client-api",
  "sc-service",
  "sc-sync-state-rpc",
  "serde",
