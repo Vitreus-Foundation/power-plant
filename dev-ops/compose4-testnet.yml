@@ -17,9 +17,9 @@ services:
     restart: always
     depends_on:
       - vitreus_power_plant
-      - ../chain-specs/vitreus-power-plant-testnet.json:/chain-spec.json
     volumes:
       - node_data:/tmp/node
+      - ../chain-specs/vitreus-power-plant-testnet.json:/chain-spec.json
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
