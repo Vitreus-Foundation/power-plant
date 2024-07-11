@@ -1535,7 +1535,7 @@ impl paras_registrar::Config for Runtime {
 }
 
 parameter_types! {
-    pub LeasePeriod: BlockNumber = prod_or_fast!(1 * DAYS, 4 * WEEKS, "VITREUS_LEASE_PERIOD");
+    pub LeasePeriod: BlockNumber = prod_or_fast!(4 * WEEKS, 1 * DAYS, "VITREUS_LEASE_PERIOD");
 }
 
 impl slots::Config for Runtime {
