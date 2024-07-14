@@ -1082,7 +1082,7 @@ pub mod pallet {
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
             ensure!(
-                ledger.active >= Self::min_bond_for_validator(&controller),
+                ledger.active >= Self::min_bond_for_validator(&ledger.stash),
                 Error::<T>::InsufficientBond
             );
             let stash = &ledger.stash;
