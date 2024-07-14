@@ -263,9 +263,7 @@ pub mod pallet {
     #[pallet::getter(fn minimum_validator_count)]
     pub type MinimumValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
 
-    /// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
-    /// easy to initialize and the performance hit is minimal (we expect no more than four
-    /// invulnerables) and restricted to testnets.
+    /// Any validators that may never be slashed or forcibly kicked
     #[pallet::storage]
     #[pallet::getter(fn invulnerables)]
     #[pallet::unbounded]
