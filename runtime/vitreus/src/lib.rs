@@ -430,7 +430,7 @@ impl pallet_timestamp::Config for Runtime {
     type WeightInfo = ();
 }
 
-const EXISTENTIAL_DEPOSIT: u128 = 1;
+const EXISTENTIAL_DEPOSIT: u128 = 100 * MICRO_VTRS;
 
 parameter_types! {
     pub const ExistentialDeposit: u128 = EXISTENTIAL_DEPOSIT;
