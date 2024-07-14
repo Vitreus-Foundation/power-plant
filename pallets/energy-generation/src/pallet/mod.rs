@@ -775,6 +775,8 @@ pub mod pallet {
         BoundNotMet,
         /// The reputation is too low for the operation.
         ReputationTooLow,
+        /// New validator count exceeds maximum allowed validators.
+        IncorrectValidatorCount,
     }
 
     #[pallet::hooks]
@@ -1309,6 +1311,11 @@ pub mod pallet {
             #[pallet::compact] new: u32,
         ) -> DispatchResult {
             ensure_root(origin)?;
+
+            if let Some(max) = MaxValidatorsCount::<T>::get() {
+                ensure!(new <= max, Error::<T>::IncorrectValidatorCount);
+            }
+
             ValidatorCount::<T>::put(new);
             Ok(())
         }
@@ -1330,6 +1337,10 @@ pub mod pallet {
             let old = ValidatorCount::<T>::get();
             let new = old.checked_add(additional).ok_or(ArithmeticError::Overflow)?;
 
+            if let Some(max) = MaxValidatorsCount::<T>::get() {
+                ensure!(new <= max, Error::<T>::IncorrectValidatorCount);
+            }
+
             ValidatorCount::<T>::put(new);
             Ok(())
         }
@@ -1347,6 +1358,10 @@ pub mod pallet {
             let old = ValidatorCount::<T>::get();
             let new = old.checked_add(factor.mul_floor(old)).ok_or(ArithmeticError::Overflow)?;
 
+            if let Some(max) = MaxValidatorsCount::<T>::get() {
+                ensure!(new <= max, Error::<T>::IncorrectValidatorCount);
+            }
+
             ValidatorCount::<T>::put(new);
             Ok(())
         }
@@ -1361,6 +1376,7 @@ pub mod pallet {
         #[pallet::weight(T::ThisWeightInfo::set_validator_count())]
         pub fn set_core_nodes_count(origin: OriginFor<T>, num: u32) -> DispatchResult {
             ensure_root(origin)?;
+
             CoreNodesCount::<T>::put(num);
             Ok(())
         }
