@@ -117,7 +117,7 @@ impl ReputationRecord {
 
     /// Calculate reputation points for the range between `start` and `end` blocks.
     pub fn calculate(start: u64, end: u64) -> u64 {
-        if end < start || end == start {
+        if end <= start {
             return 0;
         }
 
