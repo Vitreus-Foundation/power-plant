@@ -263,9 +263,7 @@ pub mod pallet {
     #[pallet::getter(fn minimum_validator_count)]
     pub type MinimumValidatorCount<T> = StorageValue<_, u32, ValueQuery>;
 
-    /// Any validators that may never be slashed or forcibly kicked. It's a Vec since they're
-    /// easy to initialize and the performance hit is minimal (we expect no more than four
-    /// invulnerables) and restricted to testnets.
+    /// Any validators that may never be slashed or forcibly kicked
     #[pallet::storage]
     #[pallet::getter(fn invulnerables)]
     #[pallet::unbounded]
@@ -777,6 +775,8 @@ pub mod pallet {
         BoundNotMet,
         /// The reputation is too low for the operation.
         ReputationTooLow,
+        /// New validator count exceeds maximum allowed validators.
+        IncorrectValidatorCount,
     }
 
     #[pallet::hooks]
@@ -1084,7 +1084,7 @@ pub mod pallet {
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
             ensure!(
-                ledger.active >= Self::min_bond_for_validator(&controller),
+                ledger.active >= Self::min_bond_for_validator(&ledger.stash),
                 Error::<T>::InsufficientBond
             );
             let stash = &ledger.stash;
@@ -1311,6 +1311,11 @@ pub mod pallet {
             #[pallet::compact] new: u32,
         ) -> DispatchResult {
             ensure_root(origin)?;
+
+            if let Some(max) = MaxValidatorsCount::<T>::get() {
+                ensure!(new <= max, Error::<T>::IncorrectValidatorCount);
+            }
+
             ValidatorCount::<T>::put(new);
             Ok(())
         }
@@ -1332,6 +1337,10 @@ pub mod pallet {
             let old = ValidatorCount::<T>::get();
             let new = old.checked_add(additional).ok_or(ArithmeticError::Overflow)?;
 
+            if let Some(max) = MaxValidatorsCount::<T>::get() {
+                ensure!(new <= max, Error::<T>::IncorrectValidatorCount);
+            }
+
             ValidatorCount::<T>::put(new);
             Ok(())
         }
@@ -1349,6 +1358,10 @@ pub mod pallet {
             let old = ValidatorCount::<T>::get();
             let new = old.checked_add(factor.mul_floor(old)).ok_or(ArithmeticError::Overflow)?;
 
+            if let Some(max) = MaxValidatorsCount::<T>::get() {
+                ensure!(new <= max, Error::<T>::IncorrectValidatorCount);
+            }
+
             ValidatorCount::<T>::put(new);
             Ok(())
         }
@@ -1363,6 +1376,7 @@ pub mod pallet {
         #[pallet::weight(T::ThisWeightInfo::set_validator_count())]
         pub fn set_core_nodes_count(origin: OriginFor<T>, num: u32) -> DispatchResult {
             ensure_root(origin)?;
+
             CoreNodesCount::<T>::put(num);
             Ok(())
         }
@@ -1612,6 +1626,12 @@ pub mod pallet {
                 .collect::<Result<Vec<T::AccountId>, _>>()?
                 .into_iter()
             {
+                Collaborations::<T>::mutate(stash, |cooperators| {
+                    if let Some(cooperators) = cooperators {
+                        cooperators.remove(&nom_stash);
+                    }
+                });
+
                 Cooperators::<T>::mutate(&nom_stash, |maybe_nom| {
                     if let Some(ref mut nom) = maybe_nom {
                         if nom.targets.remove(stash).is_some() {
@@ -1622,7 +1642,11 @@ pub mod pallet {
                         }
                     }
                 });
+
+                T::OnVipMembershipHandler::update_active_stake(&nom_stash);
             }
+
+            T::OnVipMembershipHandler::update_active_stake(stash);
 
             Ok(())
         }

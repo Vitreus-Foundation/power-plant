@@ -642,7 +642,7 @@ fn mainnet_genesis(
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32 - 1,
-            invulnerables: initial_validators.iter().map(|x| x.0).collect(),
+            invulnerables: vec![],
             slash_reward_fraction: Perbill::from_percent(10),
             min_commission: Perbill::from_percent(20),
             min_cooperator_bond: MIN_COOPERATOR_BOND,
