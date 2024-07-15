@@ -470,7 +470,7 @@ impl<T: Config> Pallet<T> {
         });
     }
 
-    /// Calculate multiplier that differs depending on penalty type.
+    /// Calculate multiplier based on the number of elapsed days in VIP.
     fn calculate_multiplier(elapsed_day: u64) -> Perquintill {
         Perquintill::from_rational(1, INCREASE_VIP_POINTS_CONSTANT + elapsed_day)
     }
