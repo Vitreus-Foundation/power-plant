@@ -835,17 +835,6 @@ pub trait EnergyRateCalculator<Stake, Energy> {
     ) -> Energy;
 }
 
-impl<Stake, Energy: Default> EnergyRateCalculator<Stake, Energy> for () {
-    fn calculate_energy_rate(
-        _total_staked: Stake,
-        _total_issuance: Energy,
-        _core_nodes_num: u32,
-        _battery_slot_cap: Energy,
-    ) -> Energy {
-        Default::default()
-    }
-}
-
 pub trait OnVipMembershipHandler<T, Res> {
     /// Change quarter info.
     fn change_quarter_info() -> Res;

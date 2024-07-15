@@ -36,6 +36,8 @@ pub mod weights;
 
 const INCREASE_VIP_POINTS_CONSTANT: u64 = 50;
 
+const MAX_UPDATE_DAYS: u32 = 30;
+
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -132,6 +134,8 @@ pub mod pallet {
         NotCorrectDate,
         /// Account hasn't claim balance.
         HasNotClaim,
+        /// Too many days to update time.
+        TooManyDaysToUpdate,
     }
 
     #[pallet::call]
@@ -169,7 +173,11 @@ pub mod pallet {
                 return Err(Error::<T>::NotCorrectDate.into());
             }
 
-            while Self::check_correct_date(&current_date, &new_date) {
+            let mut updated_days = 0;
+
+            while Self::check_correct_date(&current_date, &new_date)
+                && updated_days < MAX_UPDATE_DAYS
+            {
                 current_date.add_days::<T>(1)?;
                 // Accrual of VIP points for users who have VIP status.
                 Self::update_points_for_time(current_date.days_since_new_year);
@@ -179,6 +187,8 @@ pub mod pallet {
                 if current_date.current_month == 1 && current_date.current_day == 1 {
                     Self::save_year_info(current_date.current_year - 1);
                 }
+
+                updated_days += 1;
             }
 
             CurrentDate::<T>::put(new_date);
