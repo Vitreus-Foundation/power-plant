@@ -257,7 +257,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 112,
+    spec_version: 117,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -289,6 +289,7 @@ pub const EPOCH_DURATION_IN_SLOTS: u64 = {
 pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
+pub const WEEKS: BlockNumber = DAYS * 7;
 
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
@@ -429,7 +430,7 @@ impl pallet_timestamp::Config for Runtime {
     type WeightInfo = ();
 }
 
-const EXISTENTIAL_DEPOSIT: u128 = 1;
+const EXISTENTIAL_DEPOSIT: u128 = 100 * MICRO_VTRS;
 
 parameter_types! {
     pub const ExistentialDeposit: u128 = EXISTENTIAL_DEPOSIT;
@@ -687,7 +688,7 @@ parameter_types! {
 // it takes a month to become a validator from 0
 pub const VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
     ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 30);
-// it takes 2 months to become a collaborative validator from 0
+// it takes a month to become a collaborative validator from 0
 pub const COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD: ReputationPoint =
     ReputationPoint::new(REPUTATION_POINTS_PER_DAY.0 * 30);
 
@@ -708,7 +709,7 @@ parameter_types! {
     pub const MaxWinners: u32 = 100;
     // it takes a month to become a validator from 0
     pub const ValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
-    // it takes 2 months to become a collaborative validator from 0
+    // it takes a month to become a collaborative validator from 0
     pub const CollaborativeValidatorReputationTier: ReputationTier = ReputationTier::Vanguard(1);
     pub const RewardRemainderUnbalanced: u128 = 0;
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
@@ -1135,6 +1136,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
                 Self::dispatch_info_to_fee(call, None, calculated_fee)
             },
+            RuntimeCall::Sudo(..) => CallFee::Regular(0),
             _ => CallFee::Regular(Self::weight_fee(runtime_call, dispatch_info, calculated_fee)),
         }
     }
@@ -1533,7 +1535,7 @@ impl paras_registrar::Config for Runtime {
 }
 
 parameter_types! {
-    pub LeasePeriod: BlockNumber = prod_or_fast!(1 * DAYS, 1 * DAYS, "VITREUS_LEASE_PERIOD");
+    pub LeasePeriod: BlockNumber = prod_or_fast!(4 * WEEKS, 1 * DAYS, "VITREUS_LEASE_PERIOD");
 }
 
 impl slots::Config for Runtime {

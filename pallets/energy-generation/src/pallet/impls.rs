@@ -70,7 +70,7 @@ impl<T: Config> Pallet<T> {
                             if collaborations.contains(account) {
                                 let tax = tax_percent * targets.1;
                                 if targets.1 - tax >= min_cooperator_bond {
-                                    new_targets.push((targets.0, targets.1 - tax));
+                                    new_targets.push((targets.0, targets.1.saturating_sub(tax)));
                                 }
 
                                 tax_value += tax;
@@ -453,7 +453,7 @@ impl<T: Config> Pallet<T> {
                 Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
                 _ => {
                     // Either `Forcing::ForceNone`,
-                    // or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
+                    // or `Forcing::NotForcing if era_length < T::SessionsPerEra::get()`.
                     return None;
                 },
             }

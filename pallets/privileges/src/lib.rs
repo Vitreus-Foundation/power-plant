@@ -36,6 +36,13 @@ pub mod weights;
 
 const INCREASE_VIP_POINTS_CONSTANT: u64 = 50;
 
+const MAX_UPDATE_DAYS: u32 = 30;
+
+const FREE_PENALTY_PERIOD_MONTH_NUMBER: u32 = 1;
+
+const YEAR_FIRST_MONTH: u32 = 1;
+const YEAR_FIRST_DAY: u32 = 1;
+
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -169,16 +176,24 @@ pub mod pallet {
                 return Err(Error::<T>::NotCorrectDate.into());
             }
 
-            while Self::check_correct_date(&current_date, &new_date) {
+            let mut updated_days = 0;
+
+            while Self::check_correct_date(&current_date, &new_date)
+                && updated_days < MAX_UPDATE_DAYS
+            {
                 current_date.add_days::<T>(1)?;
                 // Accrual of VIP points for users who have VIP status.
                 Self::update_points_for_time(current_date.days_since_new_year);
 
                 // Accrual of VIPP points for users who have VIPP status.
                 Self::update_vipp_points_for_time(current_date.days_since_new_year);
-                if current_date.current_month == 1 && current_date.current_day == 1 {
+                if current_date.current_month == YEAR_FIRST_MONTH
+                    && current_date.current_day == YEAR_FIRST_DAY
+                {
                     Self::save_year_info(current_date.current_year - 1);
                 }
+
+                updated_days += 1;
             }
 
             CurrentDate::<T>::put(new_date);
@@ -357,7 +372,7 @@ impl<T: Config> Pallet<T> {
     fn is_penalty_free_period() -> bool {
         let current_date = Self::current_date();
 
-        current_date.current_month == 1
+        current_date.current_month == FREE_PENALTY_PERIOD_MONTH_NUMBER
     }
 
     /// Mint new VIPP.
@@ -408,7 +423,8 @@ impl<T: Config> Pallet<T> {
             // Accrual of VIPP points for users who have VIPP status.
             Self::update_vipp_points_for_time(new_date.days_since_new_year);
 
-            if new_date.current_month == 1 && new_date.current_day == 1 {
+            if new_date.current_month == YEAR_FIRST_MONTH && new_date.current_day == YEAR_FIRST_DAY
+            {
                 Self::save_year_info(new_date.current_year - 1);
             }
 
@@ -460,7 +476,7 @@ impl<T: Config> Pallet<T> {
         });
     }
 
-    /// Calculate multiplier that differs depending on penalty type.
+    /// Calculate multiplier based on the number of elapsed days in VIP.
     fn calculate_multiplier(elapsed_day: u64) -> Perquintill {
         Perquintill::from_rational(1, INCREASE_VIP_POINTS_CONSTANT + elapsed_day)
     }

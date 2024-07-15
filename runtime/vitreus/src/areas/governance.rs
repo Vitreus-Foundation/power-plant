@@ -188,11 +188,11 @@ impl pallet_bounties::Config for Runtime {
 }
 
 parameter_types! {
-    pub LaunchPeriod: BlockNumber = prod_or_fast!(28 * DAYS, 3 * MINUTES, "VITREUS_LAUNCH_PERIOD");
-    pub VotingPeriod: BlockNumber = prod_or_fast!(28 * DAYS, 3 * MINUTES, "VITREUS_VOTING_PERIOD");
+    pub LaunchPeriod: BlockNumber = prod_or_fast!(3 * DAYS, 3 * MINUTES, "VITREUS_LAUNCH_PERIOD");
+    pub VotingPeriod: BlockNumber = prod_or_fast!(3 * DAYS, 3 * MINUTES, "VITREUS_VOTING_PERIOD");
     pub FastTrackVotingPeriod: BlockNumber = prod_or_fast!(3 * HOURS, MINUTES, "VITREUS_FAST_TRACK_VOTING_PERIOD");
     pub const MinimumDeposit: Balance = UNITS;
-    pub EnactmentPeriod: BlockNumber = prod_or_fast!(28 * DAYS, MINUTES, "VITREUS_ENACTMENT_PERIOD");
+    pub EnactmentPeriod: BlockNumber = prod_or_fast!(3 * DAYS, MINUTES, "VITREUS_ENACTMENT_PERIOD");
     pub CooloffPeriod: BlockNumber = prod_or_fast!(7 * DAYS, MINUTES, "VITREUS_COOLOFF_PERIOD");
     pub const InstantAllowed: bool = true;
     pub const MaxVotes: u32 = 100;

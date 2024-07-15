@@ -32,7 +32,7 @@ use frame_support::{
 use frame_system::EnsureRoot;
 use origin_conversion::SignedToAccountKey20;
 use runtime_common::{
-    paras_registrar,
+    paras_registrar, prod_or_fast,
     xcm_sender::{ChildParachainRouter, ExponentialPrice},
 };
 use sp_core::ConstU32;
@@ -50,7 +50,7 @@ use xcm_executor::{traits::WithOriginFilter, XcmExecutor};
 // TODO: use constants from `vitreus-runtime-constants` crate
 const ASSET_HUB_ID: u32 = 1000;
 const BRIDGE_HUB_ID: u32 = 1013;
-const RELAY_NETWORK: NetworkId = runtime_common::prod_or_fast!(
+const RELAY_NETWORK: NetworkId = prod_or_fast!(
     NetworkId::ByGenesis(hex_literal::hex!(
         "4f27ff2e1c714c78b718d11a999774b2f639da713b9481337942997140185cfc"
     )),
@@ -58,9 +58,22 @@ const RELAY_NETWORK: NetworkId = runtime_common::prod_or_fast!(
         "c28caa6bf827d357af8ca58ddcefc2aba6d08b2fd29de8acb67becd4ea6c3673"
     ))
 );
+pub const ETHEREUM_NETWORK: NetworkId =
+    prod_or_fast!(NetworkId::Ethereum { chain_id: 1 }, NetworkId::Ethereum { chain_id: 11155111 });
+pub const ETHEREUM_VTRS_ADDRESS: [u8; 20] = prod_or_fast!(
+    hex_literal::hex!("74950FC112473caba58193c6bF6412a6f1e4d7d2"),
+    hex_literal::hex!("27C2E2131DF1310C9bdfAc779316685dB8B1E8bb")
+);
 
 parameter_types! {
     pub const TokenLocation: MultiLocation = Here.into_location();
+    pub const WrappedTokenLocation: MultiLocation = MultiLocation {
+        parents: 1,
+        interior: X2(
+            GlobalConsensus(ETHEREUM_NETWORK),
+            AccountKey20 { network: None, key: ETHEREUM_VTRS_ADDRESS },
+        ),
+    };
     pub const ThisNetwork: NetworkId = RELAY_NETWORK;
     pub UniversalLocation: InteriorMultiLocation = ThisNetwork::get().into();
     pub CheckAccount: AccountId = XcmPallet::check_account();
@@ -83,6 +96,20 @@ pub type LocalAssetTransactor = XcmCurrencyAdapter<
     Balances,
     // Use this currency when it is a fungible asset matching the given location or name:
     IsConcrete<TokenLocation>,
+    // We can convert the MultiLocations with our converter above:
+    LocationConverter,
+    // Our chain's account ID type (we can't get away without mentioning it explicitly):
+    AccountId,
+    // We track our teleports in/out to keep total issuance correct.
+    LocalCheckAccount,
+>;
+
+/// Means for transacting the wrapped VTRS.
+pub type WrappedTokenTransactor = XcmCurrencyAdapter<
+    // Use this currency:
+    Balances,
+    // Use this currency when it is a fungible asset matching the given location or name:
+    IsConcrete<WrappedTokenLocation>,
     // We can convert the MultiLocations with our converter above:
     LocationConverter,
     // Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -128,14 +155,19 @@ pub type XcmRouter = WithUniqueTopic<
 
 parameter_types! {
     pub const Vtrs: MultiAssetFilter = Wild(AllOf { fun: WildFungible, id: Concrete(TokenLocation::get()) });
+    pub const WrappedVtrs: MultiAssetFilter = Wild(AllOf { fun: WildFungible, id: Concrete(WrappedTokenLocation::get()) });
     pub AssetHub: MultiLocation = Parachain(ASSET_HUB_ID).into_location();
     pub BridgeHub: MultiLocation = Parachain(BRIDGE_HUB_ID).into_location();
     pub VtrsForAssetHub: (MultiAssetFilter, MultiLocation) = (Vtrs::get(), AssetHub::get());
     pub VtrsForBridgeHub: (MultiAssetFilter, MultiLocation) = (Vtrs::get(), BridgeHub::get());
+    pub WrappedVtrsForAssetHub: (MultiAssetFilter, MultiLocation) = (WrappedVtrs::get(), AssetHub::get());
     pub const MaxAssetsIntoHolding: u32 = 64;
 }
-pub type TrustedTeleporters =
-    (xcm_builder::Case<VtrsForAssetHub>, xcm_builder::Case<VtrsForBridgeHub>);
+pub type TrustedTeleporters = (
+    xcm_builder::Case<VtrsForAssetHub>,
+    xcm_builder::Case<VtrsForBridgeHub>,
+    xcm_builder::Case<WrappedVtrsForAssetHub>,
+);
 
 match_types! {
     pub type OnlyParachains: impl Contains<MultiLocation> = {
@@ -257,7 +289,7 @@ pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
-    type AssetTransactor = LocalAssetTransactor;
+    type AssetTransactor = (LocalAssetTransactor, WrappedTokenTransactor);
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
     type IsTeleporter = TrustedTeleporters;
