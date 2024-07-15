@@ -453,7 +453,7 @@ impl<T: Config> Pallet<T> {
                 Forcing::NotForcing if era_length >= T::SessionsPerEra::get() => (),
                 _ => {
                     // Either `Forcing::ForceNone`,
-                    // or `Forcing::NotForcing if era_length >= T::SessionsPerEra::get()`.
+                    // or `Forcing::NotForcing if era_length < T::SessionsPerEra::get()`.
                     return None;
                 },
             }

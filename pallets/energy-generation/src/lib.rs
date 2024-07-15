@@ -566,9 +566,6 @@ impl<T: Config> StakingLedger<T> {
     /// slashed.
     ///
     /// `slash_era` is the era in which the slash (which is being enacted now) actually happened.
-    ///
-    /// This calls `Config::OnStakerSlash::on_slash` with information as to how the slash was
-    /// applied.
     pub fn slash_stake(
         &mut self,
         slash_amount: StakeOf<T>,
@@ -836,17 +833,6 @@ pub trait EnergyRateCalculator<Stake, Energy> {
         core_nodes_num: u32,
         battery_slot_cap: Energy,
     ) -> Energy;
-}
-
-impl<Stake, Energy: Default> EnergyRateCalculator<Stake, Energy> for () {
-    fn calculate_energy_rate(
-        _total_staked: Stake,
-        _total_issuance: Energy,
-        _core_nodes_num: u32,
-        _battery_slot_cap: Energy,
-    ) -> Energy {
-        Default::default()
-    }
 }
 
 pub trait OnVipMembershipHandler<T, Res> {
