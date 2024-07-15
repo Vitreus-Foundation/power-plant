@@ -257,7 +257,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 116,
+    spec_version: 117,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -1535,7 +1535,7 @@ impl paras_registrar::Config for Runtime {
 }
 
 parameter_types! {
-    pub LeasePeriod: BlockNumber = prod_or_fast!(1 * DAYS, 4 * WEEKS, "VITREUS_LEASE_PERIOD");
+    pub LeasePeriod: BlockNumber = prod_or_fast!(4 * WEEKS, 1 * DAYS, "VITREUS_LEASE_PERIOD");
 }
 
 impl slots::Config for Runtime {
