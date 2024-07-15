@@ -139,8 +139,6 @@ pub mod pallet {
         NotCorrectDate,
         /// Account hasn't claim balance.
         HasNotClaim,
-        /// Too many days to update time.
-        TooManyDaysToUpdate,
     }
 
     #[pallet::call]
