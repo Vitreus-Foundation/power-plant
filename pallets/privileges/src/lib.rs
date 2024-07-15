@@ -38,6 +38,11 @@ const INCREASE_VIP_POINTS_CONSTANT: u64 = 50;
 
 const MAX_UPDATE_DAYS: u32 = 30;
 
+const FREE_PENALTY_PERIOD_MONTH_NUMBER: u32 = 1;
+
+const YEAR_FIRST_MONTH: u32 = 1;
+const YEAR_FIRST_DAY: u32 = 1;
+
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -184,7 +189,7 @@ pub mod pallet {
 
                 // Accrual of VIPP points for users who have VIPP status.
                 Self::update_vipp_points_for_time(current_date.days_since_new_year);
-                if current_date.current_month == 1 && current_date.current_day == 1 {
+                if current_date.current_month == YEAR_FIRST_MONTH && current_date.current_day == YEAR_FIRST_DAY {
                     Self::save_year_info(current_date.current_year - 1);
                 }
 
@@ -367,7 +372,7 @@ impl<T: Config> Pallet<T> {
     fn is_penalty_free_period() -> bool {
         let current_date = Self::current_date();
 
-        current_date.current_month == 1
+        current_date.current_month == FREE_PENALTY_PERIOD_MONTH_NUMBER
     }
 
     /// Mint new VIPP.
@@ -418,7 +423,7 @@ impl<T: Config> Pallet<T> {
             // Accrual of VIPP points for users who have VIPP status.
             Self::update_vipp_points_for_time(new_date.days_since_new_year);
 
-            if new_date.current_month == 1 && new_date.current_day == 1 {
+            if new_date.current_month == YEAR_FIRST_MONTH && new_date.current_day == YEAR_FIRST_DAY {
                 Self::save_year_info(new_date.current_year - 1);
             }
 
