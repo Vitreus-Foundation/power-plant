@@ -1626,6 +1626,12 @@ pub mod pallet {
                 .collect::<Result<Vec<T::AccountId>, _>>()?
                 .into_iter()
             {
+                Collaborations::<T>::mutate(stash, |cooperators| {
+                    if let Some(cooperators) = cooperators {
+                        cooperators.remove(&nom_stash);
+                    }
+                });
+
                 Cooperators::<T>::mutate(&nom_stash, |maybe_nom| {
                     if let Some(ref mut nom) = maybe_nom {
                         if nom.targets.remove(stash).is_some() {
@@ -1636,7 +1642,11 @@ pub mod pallet {
                         }
                     }
                 });
+
+                T::OnVipMembershipHandler::update_active_stake(&nom_stash);
             }
+
+            T::OnVipMembershipHandler::update_active_stake(stash);
 
             Ok(())
         }
