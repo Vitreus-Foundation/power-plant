@@ -187,7 +187,9 @@ pub mod pallet {
 
                 // Accrual of VIPP points for users who have VIPP status.
                 Self::update_vipp_points_for_time(current_date.days_since_new_year);
-                if current_date.current_month == YEAR_FIRST_MONTH && current_date.current_day == YEAR_FIRST_DAY {
+                if current_date.current_month == YEAR_FIRST_MONTH
+                    && current_date.current_day == YEAR_FIRST_DAY
+                {
                     Self::save_year_info(current_date.current_year - 1);
                 }
 
@@ -421,7 +423,8 @@ impl<T: Config> Pallet<T> {
             // Accrual of VIPP points for users who have VIPP status.
             Self::update_vipp_points_for_time(new_date.days_since_new_year);
 
-            if new_date.current_month == YEAR_FIRST_MONTH && new_date.current_day == YEAR_FIRST_DAY {
+            if new_date.current_month == YEAR_FIRST_MONTH && new_date.current_day == YEAR_FIRST_DAY
+            {
                 Self::save_year_info(new_date.current_year - 1);
             }
 
