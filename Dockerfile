@@ -37,4 +37,9 @@ FROM ubuntu:20.04
 WORKDIR /app
 
 # Copy the built binary from the builder stage
-COPY --from=builder /app/target/release/lib* /app/target/release/vitreus-power-plant-node /app/target/release/
+COPY --from=builder \
+    /app/chain-specs/* \
+    /app/scripts/purge_chain.sh \
+    /app/target/release/lib* \
+    /app/target/release/vitreus-power-plant-node \
+    /app/target/release/
