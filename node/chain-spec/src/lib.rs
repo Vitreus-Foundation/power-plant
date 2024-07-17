@@ -16,12 +16,12 @@ use sp_state_machine::BasicExternalities;
 // Frontier
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, BeefyConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig,
-    EVMChainIdConfig, EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig,
-    ImOnlineId, MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig,
-    ReputationPoint, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
-    SimpleVestingConfig, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
-    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
+    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
+    MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint,
+    RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus,
+    SudoConfig, SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 /// Node `ChainSpec` extensions.
@@ -31,6 +31,10 @@ use vitreus_power_plant_runtime::{
 #[derive(Default, Clone, Serialize, Deserialize, ChainSpecExtension)]
 #[serde(rename_all = "camelCase")]
 pub struct Extensions {
+    /// Block numbers with known hashes.
+    pub fork_blocks: sc_client_api::ForkBlocks<polkadot_primitives::Block>,
+    /// Known bad block hashes.
+    pub bad_blocks: sc_client_api::BadBlocks<polkadot_primitives::Block>,
     /// The light sync state.
     ///
     /// This value will be set by the `sync-state rpc` implementation.
@@ -498,10 +502,7 @@ pub fn testnet_genesis(
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
         xcm_pallet: Default::default(),
-        beefy: BeefyConfig {
-            authorities: initial_validators.iter().map(|x| x.8.clone()).collect(),
-            ..Default::default()
-        },
+        beefy: Default::default(),
     }
 }
 
@@ -638,7 +639,7 @@ fn mainnet_genesis(
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32 - 1,
-            invulnerables: initial_validators.iter().map(|x| x.0).collect(),
+            invulnerables: vec![],
             slash_reward_fraction: Perbill::from_percent(10),
             min_commission: Perbill::from_percent(20),
             min_cooperator_bond: MIN_COOPERATOR_BOND,
@@ -656,10 +657,7 @@ fn mainnet_genesis(
         configuration: ConfigurationConfig { config: default_parachains_host_configuration() },
         paras: Default::default(),
         xcm_pallet: Default::default(),
-        beefy: BeefyConfig {
-            authorities: initial_validators.iter().map(|x| x.8.clone()).collect(),
-            ..Default::default()
-        },
+        beefy: Default::default(),
     }
 }
 

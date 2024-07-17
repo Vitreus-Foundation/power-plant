@@ -25,6 +25,7 @@ pallet-claiming = { workspace = true, features = ["default"] }
 polkadot-primitives = { path = "../../primitives" }
 polkadot-runtime-parachains = { path = "../../runtime/parachains" }
 
+sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-sync-state-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 
 [build-dependencies]

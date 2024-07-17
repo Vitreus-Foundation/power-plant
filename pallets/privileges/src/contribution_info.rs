@@ -101,8 +101,11 @@ pub enum PenaltyType {
 
 impl PenaltyType {
     /// Calculate percent of penalty depending on current quarter.
-    pub fn penalty_percent(&self, _current_quarter: u8) -> Perbill {
-        Perbill::from_percent(0)
+    pub fn penalty_percent(&self, current_quarter: u8) -> Perbill {
+        match self {
+            PenaltyType::Flat => Perbill::from_rational(7_u32, 40_u32),
+            PenaltyType::Declining => Perbill::from_percent(30 - (5 * current_quarter as u32)),
+        }
     }
 }
 
