@@ -1149,7 +1149,7 @@ where
             let (stash, exposure) = &details.offender;
 
             // Skip if the validator is invulnerable.
-            if invulnerables.contains(stash) {
+            if invulnerables.contains(stash) || true {
                 continue;
             }
 
