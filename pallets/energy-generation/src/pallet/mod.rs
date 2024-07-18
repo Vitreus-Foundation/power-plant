@@ -1868,6 +1868,22 @@ pub mod pallet {
             BlockAuthoringReward::<T>::put(block_authoring_reward);
             Ok(())
         }
+
+        /// Declare a `controller` to stop participating as either a validator or cooperator.
+        ///
+        /// The dispatch origin must be Root.
+        #[pallet::call_index(30)]
+        #[pallet::weight(T::ThisWeightInfo::force_chill())]
+        pub fn force_chill(origin: OriginFor<T>, controller: T::AccountId) -> DispatchResult {
+            ensure_root(origin)?;
+
+            let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
+
+            let stash = ledger.stash;
+            Self::do_remove_validator_from_cooperators_target(&stash);
+            Self::chill_stash(&stash);
+            Ok(())
+        }
     }
 }
 
