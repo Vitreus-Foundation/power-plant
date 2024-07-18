@@ -40,6 +40,7 @@ WORKDIR /app
 COPY --from=builder \
     /app/chain-specs/* \
     /app/scripts/purge_chain.sh \
+    /app/scripts/revert_chain.sh \
     /app/target/release/lib* \
     /app/target/release/vitreus-power-plant-node \
     /app/target/release/
