@@ -79,6 +79,7 @@ pub trait WeightInfo {
     fn force_apply_min_commission() -> Weight;
     fn set_min_commission() -> Weight;
     fn make_collaborative() -> Weight;
+    fn force_chill() -> Weight;
 }
 
 /// Weights for pallet_staking using the Substrate node and recommended hardware.
@@ -804,6 +805,10 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
     fn make_collaborative() -> Weight {
         RocksDbWeight::get().reads_writes(1, 1)
     }
+
+    fn force_chill() -> Weight {
+        Self::chill()
+    }
 }
 
 // For backwards compatibility and tests
@@ -1527,5 +1532,9 @@ impl WeightInfo for () {
 
     fn make_collaborative() -> Weight {
         RocksDbWeight::get().reads_writes(1, 1)
+    }
+
+    fn force_chill() -> Weight {
+        Self::chill()
     }
 }
