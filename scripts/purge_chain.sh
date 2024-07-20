@@ -3,7 +3,7 @@
 LOG_TIMESTAMP=$(date +"%Y%m%d_%H%M%S")
 LOG_FILE="log_$LOG_TIMESTAMP.txt"
 
-FLAG_FILE="/tmp/node/purge-chain-19.txt"
+FLAG_FILE="/tmp/node/purge-chain-20.txt"
 
 if [ -e "$FLAG_FILE" ]; then
     echo "Flag file already exists, operation will be skipped." | tee -a "$LOG_FILE"
