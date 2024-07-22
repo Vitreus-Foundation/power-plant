@@ -41,10 +41,10 @@ pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(24);
 
 /// The number of reputation points per 24 hours.
 ///
-/// Given that a slot duration is 3000 ms per block (for BABE), we have 60_000 / 3000 blocks per
+/// Given that a slot duration is 6000 ms per block (for BABE), we have 60_000 / 6000 blocks per
 /// minute, so:
 ///
-/// REPUTATION_POINTS_PER_BLOCK * 20 blocks/minute * 60 minutes * 24 hours
+/// REPUTATION_POINTS_PER_BLOCK * 10 blocks/minute * 60 minutes * 24 hours
 pub const REPUTATION_POINTS_PER_DAY: ReputationPoint =
     ReputationPoint(REPUTATION_POINTS_PER_BLOCK.0 * 10 * 60 * 24);
 
