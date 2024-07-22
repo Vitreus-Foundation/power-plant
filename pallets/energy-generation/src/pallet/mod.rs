@@ -298,6 +298,12 @@ pub mod pallet {
     #[pallet::storage]
     pub type MinCommission<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
+    /// The minimum amount of commission that validators can set.
+    ///
+    /// If set to `0`, no limit exists.
+    #[pallet::storage]
+    pub type MinCommission<T: crate::pallet::pallet::Config> = StorageValue<_, Perbill, ValueQuery>;
+
     /// Map from all (unlocked) "controller" accounts to the info regarding the staking.
     #[pallet::storage]
     #[pallet::getter(fn ledger)]
@@ -1620,7 +1626,7 @@ pub mod pallet {
             let ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
             let stash = &ledger.stash;
 
-            for nom_stash in who
+            for coop_stash in who
                 .into_iter()
                 .map(T::Lookup::lookup)
                 .collect::<Result<Vec<T::AccountId>, _>>()?
@@ -1628,22 +1634,22 @@ pub mod pallet {
             {
                 Collaborations::<T>::mutate(stash, |cooperators| {
                     if let Some(cooperators) = cooperators {
-                        cooperators.remove(&nom_stash);
+                        cooperators.remove(&coop_stash);
                     }
                 });
 
-                Cooperators::<T>::mutate(&nom_stash, |maybe_nom| {
+                Cooperators::<T>::mutate(&coop_stash, |maybe_nom| {
                     if let Some(ref mut nom) = maybe_nom {
                         if nom.targets.remove(stash).is_some() {
                             Self::deposit_event(Event::<T>::Kicked {
-                                cooperator: nom_stash.clone(),
+                                cooperator: coop_stash.clone(),
                                 stash: stash.clone(),
                             });
                         }
                     }
                 });
 
-                T::OnVipMembershipHandler::update_active_stake(&nom_stash);
+                T::OnVipMembershipHandler::update_active_stake(&coop_stash);
             }
 
             T::OnVipMembershipHandler::update_active_stake(stash);
