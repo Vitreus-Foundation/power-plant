@@ -298,12 +298,6 @@ pub mod pallet {
     #[pallet::storage]
     pub type MinCommission<T: Config> = StorageValue<_, Perbill, ValueQuery>;
 
-    /// The minimum amount of commission that validators can set.
-    ///
-    /// If set to `0`, no limit exists.
-    #[pallet::storage]
-    pub type MinCommission<T: crate::pallet::pallet::Config> = StorageValue<_, Perbill, ValueQuery>;
-
     /// Map from all (unlocked) "controller" accounts to the info regarding the staking.
     #[pallet::storage]
     #[pallet::getter(fn ledger)]
