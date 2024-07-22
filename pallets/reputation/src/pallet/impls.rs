@@ -69,8 +69,6 @@ impl<T: Config> Pallet<T> {
                 .ok_or(Error::<T>::AccountNotFound)
         })?;
 
-        Self::deposit_event(Event::ReputationIncreased { account: account.clone(), points });
-
         Ok(())
     }
 }
