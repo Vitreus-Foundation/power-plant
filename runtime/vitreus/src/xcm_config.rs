@@ -16,7 +16,7 @@
 
 //! XCM configuration for Vitreus.
 
-#![allow(clippy::match_like_matches_macro)]
+#![allow(clippy::match_like_matches_macro, clippy::type_complexity)]
 
 use super::{
     parachains_origin, AccountId, AllPalletsWithSystem, Balance, Balances, CouncilCollective, Dmp,
@@ -77,6 +77,7 @@ parameter_types! {
     pub const ThisNetwork: NetworkId = RELAY_NETWORK;
     pub UniversalLocation: InteriorMultiLocation = ThisNetwork::get().into();
     pub CheckAccount: AccountId = XcmPallet::check_account();
+    pub TreasuryAccount: AccountId = Treasury::account_id();
     pub LocalCheckAccount: (AccountId, MintLocation) = (CheckAccount::get(), MintLocation::Local);
 }
 
@@ -104,8 +105,16 @@ pub type LocalAssetTransactor = XcmCurrencyAdapter<
     LocalCheckAccount,
 >;
 
+parameter_types! {
+    pub const DefaultDepositFeePercent: u8 = 1;
+    pub storage DepositFeePercent: u8 = DefaultDepositFeePercent::get();
+
+    pub const DefaultWithdrawalFeePercent: u8 = 9;
+    pub storage WithdrawalFeePercent: u8 = DefaultWithdrawalFeePercent::get();
+}
+
 /// Means for transacting the wrapped VTRS.
-pub type WrappedTokenTransactor = XcmCurrencyAdapter<
+pub type WrappedTokenTransactor = currency_adapter::CurrencyAdapterWithFee<
     // Use this currency:
     Balances,
     // Use this currency when it is a fungible asset matching the given location or name:
@@ -116,6 +125,12 @@ pub type WrappedTokenTransactor = XcmCurrencyAdapter<
     AccountId,
     // We track our teleports in/out to keep total issuance correct.
     LocalCheckAccount,
+    // Fee for wVTRS -> VTRS conversion
+    DepositFeePercent,
+    // Fee for VTRS -> wVTRS conversion
+    WithdrawalFeePercent,
+    // Send fee to the treasury
+    TreasuryAccount,
 >;
 
 /// The means that we convert an the XCM message origin location into a local dispatch origin.
@@ -403,6 +418,190 @@ mod origin_conversion {
                 Ok(other) => Err(other.into()),
                 Err(other) => Err(other),
             })
+        }
+    }
+}
+
+mod currency_adapter {
+    use frame_support::traits::ExistenceRequirement::KeepAlive;
+    use frame_support::traits::{Get, WithdrawReasons};
+    use sp_runtime::traits::CheckedSub;
+    use sp_runtime::{Percent, Saturating};
+    use sp_std::marker::PhantomData;
+    use xcm::latest::{Error as XcmError, MultiAsset, MultiLocation, Result, XcmContext};
+    use xcm_builder::{CurrencyAdapter, MintLocation};
+    use xcm_executor::traits::{ConvertLocation, MatchesFungible, TransactAsset};
+    use xcm_executor::Assets;
+
+    /// Asset transaction errors.
+    enum Error {
+        /// The given asset is not handled. (According to [`XcmError::AssetNotFound`])
+        AssetNotHandled,
+        /// `MultiLocation` to `AccountId` conversion failed.
+        AccountIdConversionFailed,
+    }
+
+    impl From<Error> for XcmError {
+        fn from(e: Error) -> Self {
+            use XcmError::FailedToTransactAsset;
+            match e {
+                Error::AssetNotHandled => XcmError::AssetNotFound,
+                Error::AccountIdConversionFailed => {
+                    FailedToTransactAsset("AccountIdConversionFailed")
+                },
+            }
+        }
+    }
+
+    pub struct CurrencyAdapterWithFee<
+        Currency,
+        Matcher,
+        AccountIdConverter,
+        AccountId,
+        CheckedAccount,
+        DepositFeePercent,
+        WithdrawalFeePercent,
+        FeeReceiverAccount,
+    >(
+        PhantomData<(
+            Currency,
+            Matcher,
+            AccountIdConverter,
+            AccountId,
+            CheckedAccount,
+            DepositFeePercent,
+            WithdrawalFeePercent,
+            FeeReceiverAccount,
+        )>,
+    );
+
+    impl<
+            Currency: frame_support::traits::Currency<AccountId>,
+            Matcher: MatchesFungible<Currency::Balance>,
+            AccountIdConverter: ConvertLocation<AccountId>,
+            AccountId: Clone, // can't get away without it since Currency is generic over it.
+            CheckedAccount: Get<Option<(AccountId, MintLocation)>>,
+            DepositFeePercent: Get<u8>,
+            WithdrawalFeePercent: Get<u8>,
+            FeeReceiverAccount: Get<AccountId>,
+        > TransactAsset
+        for CurrencyAdapterWithFee<
+            Currency,
+            Matcher,
+            AccountIdConverter,
+            AccountId,
+            CheckedAccount,
+            DepositFeePercent,
+            WithdrawalFeePercent,
+            FeeReceiverAccount,
+        >
+    {
+        fn can_check_in(origin: &MultiLocation, what: &MultiAsset, context: &XcmContext) -> Result {
+            CurrencyAdapter::<
+                Currency,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckedAccount,
+            >::can_check_in(origin, what, context)
+        }
+
+        fn check_in(origin: &MultiLocation, what: &MultiAsset, context: &XcmContext) {
+            CurrencyAdapter::<
+                Currency,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckedAccount,
+            >::check_in(origin, what, context)
+        }
+
+        fn can_check_out(dest: &MultiLocation, what: &MultiAsset, context: &XcmContext) -> Result {
+            CurrencyAdapter::<
+                Currency,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckedAccount,
+            >::can_check_out(dest, what, context)
+        }
+
+        fn check_out(dest: &MultiLocation, what: &MultiAsset, context: &XcmContext) {
+            CurrencyAdapter::<
+                Currency,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckedAccount,
+            >::check_out(dest, what, context)
+        }
+
+        fn deposit_asset(what: &MultiAsset, who: &MultiLocation, _context: &XcmContext) -> Result {
+            log::trace!(target: "currency_adapter_with_fee", "deposit_asset what: {:?}, who: {:?}", what, who);
+            // Check we handle this asset.
+            let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
+
+            let who = AccountIdConverter::convert_location(who)
+                .ok_or(Error::AccountIdConversionFailed)?;
+
+            let fee_percent = Percent::from_percent(DepositFeePercent::get());
+            let fee_amount = fee_percent.mul_floor(amount);
+            log::trace!(target: "currency_adapter_with_fee", "deposit_asset fee: {:?}", fee_amount);
+
+            let _imbalance = Currency::deposit_creating(&who, amount.saturating_sub(fee_amount));
+            let _imbalance = Currency::deposit_creating(&FeeReceiverAccount::get(), fee_amount);
+            Ok(())
+        }
+
+        fn withdraw_asset(
+            what: &MultiAsset,
+            who: &MultiLocation,
+            _maybe_context: Option<&XcmContext>,
+        ) -> sp_std::result::Result<Assets, XcmError> {
+            log::trace!(target: "currency_adapter_with_fee", "withdraw_asset what: {:?}, who: {:?}", what, who);
+            // Check we handle this asset.
+            let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
+            let who = AccountIdConverter::convert_location(who)
+                .ok_or(Error::AccountIdConversionFailed)?;
+
+            let fee_percent = Percent::from_percent(WithdrawalFeePercent::get());
+            let fee_amount = fee_percent.mul_floor(amount);
+            log::trace!(target: "currency_adapter_with_fee", "withdraw_asset fee: {:?}", fee_amount);
+
+            let amount_with_fee = amount.saturating_add(fee_amount);
+            let new_balance = Currency::free_balance(&who)
+                .checked_sub(&amount_with_fee)
+                .ok_or(XcmError::NotWithdrawable)?;
+            Currency::ensure_can_withdraw(
+                &who,
+                amount_with_fee,
+                WithdrawReasons::TRANSFER,
+                new_balance,
+            )
+            .map_err(|_| XcmError::NotWithdrawable)?;
+
+            Currency::withdraw(&who, amount, WithdrawReasons::TRANSFER, KeepAlive)
+                .map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
+
+            Currency::transfer(&who, &FeeReceiverAccount::get(), fee_amount, KeepAlive)
+                .map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
+
+            Ok(what.clone().into())
+        }
+
+        fn internal_transfer_asset(
+            asset: &MultiAsset,
+            from: &MultiLocation,
+            to: &MultiLocation,
+            context: &XcmContext,
+        ) -> sp_std::result::Result<Assets, XcmError> {
+            CurrencyAdapter::<
+                Currency,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckedAccount,
+            >::internal_transfer_asset(asset, from, to, context)
         }
     }
 }
