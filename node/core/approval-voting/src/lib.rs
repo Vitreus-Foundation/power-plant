@@ -799,6 +799,7 @@ where
                     woken_block,
                     woken_candidate,
                     &subsystem.metrics,
+                    &wakeups,
                 ).await?
             }
             next_msg = ctx.recv().fuse() => {
@@ -939,6 +940,7 @@ async fn handle_actions<Context>(
                     metrics,
                     candidate_hash,
                     approval_request,
+                    &wakeups,
                 )
                 .await?
                 .into_iter()
@@ -1280,6 +1282,7 @@ async fn handle_from_overseer<Context>(
                     |r| {
                         let _ = res.send(r);
                     },
+                    &wakeups,
                 )
                 .await?
                 .0
@@ -1943,6 +1946,7 @@ async fn check_and_import_approval<T, Sender>(
     metrics: &Metrics,
     approval: IndirectSignedApprovalVote,
     with_response: impl FnOnce(ApprovalCheckResult) -> T,
+    wakeups: &Wakeups,
 ) -> SubsystemResult<(Vec<Action>, T)>
 where
     Sender: SubsystemSender<RuntimeApiMessage>,
@@ -2069,6 +2073,7 @@ where
         approved_candidate_hash,
         candidate_entry,
         ApprovalStateTransition::RemoteApproval(approval.validator),
+        wakeups,
     )
     .await;
 
@@ -2098,6 +2103,10 @@ impl ApprovalStateTransition {
             ApprovalStateTransition::WakeupProcessed => false,
         }
     }
+
+    fn is_remote_approval(&self) -> bool {
+        matches!(*self, ApprovalStateTransition::RemoteApproval(_))
+    }
 }
 
 // Advance the approval state, either by importing an approval vote which is already checked to be valid and corresponding to an assigned
@@ -2113,6 +2122,7 @@ async fn advance_approval_state<Sender>(
     candidate_hash: CandidateHash,
     mut candidate_entry: CandidateEntry,
     transition: ApprovalStateTransition,
+    wakeups: &Wakeups,
 ) -> Vec<Action>
 where
     Sender: SubsystemSender<RuntimeApiMessage>,
@@ -2228,6 +2238,44 @@ where
             status.required_tranches,
         ));
 
+        if is_approved && transition.is_remote_approval() {
+            // Make sure we wake other blocks in case they have
+            // a no-show that might be covered by this approval.
+            for (fork_block_hash, fork_approval_entry) in candidate_entry
+                .block_assignments
+                .iter()
+                .filter(|(hash, _)| **hash != block_hash)
+            {
+                let assigned_on_fork_block = validator_index
+                    .as_ref()
+                    .map(|validator_index| fork_approval_entry.is_assigned(*validator_index))
+                    .unwrap_or_default();
+                if wakeups.wakeup_for(*fork_block_hash, candidate_hash).is_none()
+                    && !fork_approval_entry.is_approved()
+                    && assigned_on_fork_block
+                {
+                    let fork_block_entry = db.load_block_entry(fork_block_hash);
+                    if let Ok(Some(fork_block_entry)) = fork_block_entry {
+                        actions.push(Action::ScheduleWakeup {
+                            block_hash: *fork_block_hash,
+                            block_number: fork_block_entry.block_number(),
+                            candidate_hash,
+                            // Schedule the wakeup next tick, since the assignment must be a
+                            // no-show, because there is no-wakeup scheduled.
+                            tick: tick_now + 1,
+                        })
+                    } else {
+                        gum::debug!(
+                            target: LOG_TARGET,
+                            ?fork_block_entry,
+                            ?fork_block_hash,
+                            "Failed to load block entry"
+                        )
+                    }
+                }
+            }
+        }
+
         // We have no need to write the candidate entry if all of the following
         // is true:
         //
@@ -2287,6 +2335,7 @@ async fn process_wakeup<Context>(
     relay_block: Hash,
     candidate_hash: CandidateHash,
     metrics: &Metrics,
+    wakeups: &Wakeups,
 ) -> SubsystemResult<Vec<Action>> {
     let mut span = state
         .spans
@@ -2426,6 +2475,7 @@ async fn process_wakeup<Context>(
             candidate_hash,
             candidate_entry,
             ApprovalStateTransition::WakeupProcessed,
+            wakeups,
         )
         .await,
     );
@@ -2653,6 +2703,7 @@ async fn issue_approval<Context>(
     metrics: &Metrics,
     candidate_hash: CandidateHash,
     ApprovalVoteRequest { validator_index, block_hash }: ApprovalVoteRequest,
+    wakeups: &Wakeups,
 ) -> SubsystemResult<Vec<Action>> {
     let mut issue_approval_span = state
         .spans
@@ -2785,6 +2836,7 @@ async fn issue_approval<Context>(
         candidate_hash,
         candidate_entry,
         ApprovalStateTransition::LocalApproval(validator_index as _, sig.clone()),
+        wakeups,
     )
     .await;
 

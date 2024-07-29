@@ -41,15 +41,6 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
-    /// Add the account if it's not in the storage.
-    pub fn add_not_exists(account: &T::AccountId) {
-        AccountReputation::<T>::mutate(account, |old| {
-            if old.is_none() {
-                *old = Some(ReputationRecord::with_now::<T>());
-            }
-        });
-    }
-
     /// Increase the points for an account by the given amount, creating it if it doesn't exist.
     pub fn increase_creating(account: &T::AccountId, points: ReputationPoint) {
         AccountReputation::<T>::mutate(account, |old| match old {
@@ -68,8 +59,6 @@ impl<T: Config> Pallet<T> {
                 })
                 .ok_or(Error::<T>::AccountNotFound)
         })?;
-
-        Self::deposit_event(Event::ReputationIncreased { account: account.clone(), points });
 
         Ok(())
     }
