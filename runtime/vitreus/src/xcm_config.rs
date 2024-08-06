@@ -577,7 +577,7 @@ mod currency_adapter {
         }
 
         fn deposit_asset(what: &MultiAsset, who: &MultiLocation, _context: &XcmContext) -> Result {
-            log::trace!(target: "currency_adapter_with_fee", "deposit_asset what: {:?}, who: {:?}", what, who);
+            log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset what: {:?}, who: {:?}", what, who);
             // Check we handle this asset.
             let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
 
@@ -586,7 +586,7 @@ mod currency_adapter {
 
             let fee_percent = Percent::from_percent(DepositFeePercent::get());
             let fee_amount = fee_percent.mul_floor(amount);
-            log::trace!(target: "currency_adapter_with_fee", "deposit_asset fee: {:?}", fee_amount);
+            log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset fee: {:?}", fee_amount);
 
             let _imbalance = Currency::deposit_creating(&who, amount.saturating_sub(fee_amount));
             let _imbalance = Currency::deposit_creating(&FeeReceiverAccount::get(), fee_amount);
@@ -598,7 +598,7 @@ mod currency_adapter {
             who: &MultiLocation,
             _maybe_context: Option<&XcmContext>,
         ) -> sp_std::result::Result<Assets, XcmError> {
-            log::trace!(target: "currency_adapter_with_fee", "withdraw_asset what: {:?}, who: {:?}", what, who);
+            log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset what: {:?}, who: {:?}", what, who);
             // Check we handle this asset.
             let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
             let who = AccountIdConverter::convert_location(who)
@@ -606,7 +606,7 @@ mod currency_adapter {
 
             let fee_percent = Percent::from_percent(WithdrawalFeePercent::get());
             let fee_amount = fee_percent.mul_floor(amount);
-            log::trace!(target: "currency_adapter_with_fee", "withdraw_asset fee: {:?}", fee_amount);
+            log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset fee: {:?}", fee_amount);
 
             let amount_with_fee = amount.saturating_add(fee_amount);
             let new_balance = Currency::free_balance(&who)
