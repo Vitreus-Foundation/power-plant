@@ -19,14 +19,14 @@
 #![allow(clippy::match_like_matches_macro, clippy::type_complexity)]
 
 use super::{
-    parachains_origin, AccountId, AllPalletsWithSystem, Balance, Balances, CouncilCollective, Dmp,
-    ParaId, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin, TransactionByteFee,
-    TransactionPicosecondFee, Treasury, XcmPallet,
+    parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
+    CouncilCollective, Dmp, ParaId, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
+    TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet,
 };
 use frame_support::weights::ConstantMultiplier;
 use frame_support::{
     match_types, parameter_types,
-    traits::{Contains, Everything, Nothing},
+    traits::{Contains, Everything, IsInVec, Nothing},
     weights::Weight,
 };
 use frame_system::EnsureRoot;
@@ -36,12 +36,14 @@ use runtime_common::{
     xcm_sender::{ChildParachainRouter, ExponentialPrice},
 };
 use sp_core::ConstU32;
+use sp_runtime::traits::TryConvertInto;
 use xcm::latest::prelude::*;
 use xcm_builder::{
     AccountKey20Aliases, AllowExplicitUnpaidExecutionFrom, AllowKnownQueryResponses,
-    AllowSubscriptionsFrom, AllowTopLevelPaidExecutionFrom, BackingToPlurality,
-    ChildParachainAsNative, ChildParachainConvertsVia, CurrencyAdapter as XcmCurrencyAdapter,
-    FixedWeightBounds, IsChildSystemParachain, IsConcrete, MintLocation,
+    AllowSubscriptionsFrom, AllowTopLevelPaidExecutionFrom, AsPrefixedGeneralIndex,
+    BackingToPlurality, ChildParachainAsNative, ChildParachainConvertsVia,
+    CurrencyAdapter as XcmCurrencyAdapter, FixedWeightBounds, FungiblesAdapter,
+    IsChildSystemParachain, IsConcrete, MatchedConvertedConcreteId, MintLocation, NoChecking,
     SignedAccountKey20AsNative, SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId,
     UsingComponents, WithComputedOrigin, WithUniqueTopic,
 };
@@ -64,6 +66,8 @@ pub const ETHEREUM_VTRS_ADDRESS: [u8; 20] = prod_or_fast!(
     hex_literal::hex!("74950FC112473caba58193c6bF6412a6f1e4d7d2"),
     hex_literal::hex!("27C2E2131DF1310C9bdfAc779316685dB8B1E8bb")
 );
+pub const ASSETS_PALLET_ID: u8 = 5;
+pub const VNRG_ASSET_ID: u128 = 1;
 
 parameter_types! {
     pub const TokenLocation: MultiLocation = Here.into_location();
@@ -72,6 +76,13 @@ parameter_types! {
         interior: X2(
             GlobalConsensus(ETHEREUM_NETWORK),
             AccountKey20 { network: None, key: ETHEREUM_VTRS_ADDRESS },
+        ),
+    };
+    pub const EnergyTokenLocation: MultiLocation = MultiLocation {
+        parents: 0,
+        interior: X2(
+            PalletInstance(ASSETS_PALLET_ID),
+            GeneralIndex(VNRG_ASSET_ID),
         ),
     };
     pub const ThisNetwork: NetworkId = RELAY_NETWORK;
@@ -131,6 +142,35 @@ pub type WrappedTokenTransactor = currency_adapter::CurrencyAdapterWithFee<
     WithdrawalFeePercent,
     // Send fee to the treasury
     TreasuryAccount,
+>;
+
+parameter_types! {
+    pub AssetsPalletLocation: MultiLocation = PalletInstance(ASSETS_PALLET_ID).into();
+    pub EnergyTokenLocationVec: sp_std::vec::Vec<MultiLocation> = [EnergyTokenLocation::get()].into();
+}
+
+pub type EnergyTokenConcreteId = MatchedConvertedConcreteId<
+    super::AssetId,
+    Balance,
+    IsInVec<EnergyTokenLocationVec>,
+    AsPrefixedGeneralIndex<AssetsPalletLocation, super::AssetId, TryConvertInto>,
+    TryConvertInto,
+>;
+
+/// Means for transacting VNRG.
+pub type EnergyTransactor = FungiblesAdapter<
+    // Use this fungibles implementation:
+    Assets,
+    // Use this currency when it is a fungible asset matching the given location or name:
+    EnergyTokenConcreteId,
+    // Convert an XCM Location into a local account id:
+    LocationConverter,
+    // Our chain's account ID type (we can't get away without mentioning it explicitly):
+    AccountId,
+    // Does not check teleports.
+    NoChecking,
+    // The account to use for tracking teleports.
+    CheckAccount,
 >;
 
 /// The means that we convert an the XCM message origin location into a local dispatch origin.
@@ -304,7 +344,7 @@ pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
-    type AssetTransactor = (LocalAssetTransactor, WrappedTokenTransactor);
+    type AssetTransactor = (LocalAssetTransactor, WrappedTokenTransactor, EnergyTransactor);
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
     type IsTeleporter = TrustedTeleporters;
@@ -537,7 +577,7 @@ mod currency_adapter {
         }
 
         fn deposit_asset(what: &MultiAsset, who: &MultiLocation, _context: &XcmContext) -> Result {
-            log::trace!(target: "currency_adapter_with_fee", "deposit_asset what: {:?}, who: {:?}", what, who);
+            log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset what: {:?}, who: {:?}", what, who);
             // Check we handle this asset.
             let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
 
@@ -546,7 +586,7 @@ mod currency_adapter {
 
             let fee_percent = Percent::from_percent(DepositFeePercent::get());
             let fee_amount = fee_percent.mul_floor(amount);
-            log::trace!(target: "currency_adapter_with_fee", "deposit_asset fee: {:?}", fee_amount);
+            log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset fee: {:?}", fee_amount);
 
             let _imbalance = Currency::deposit_creating(&who, amount.saturating_sub(fee_amount));
             let _imbalance = Currency::deposit_creating(&FeeReceiverAccount::get(), fee_amount);
@@ -558,7 +598,7 @@ mod currency_adapter {
             who: &MultiLocation,
             _maybe_context: Option<&XcmContext>,
         ) -> sp_std::result::Result<Assets, XcmError> {
-            log::trace!(target: "currency_adapter_with_fee", "withdraw_asset what: {:?}, who: {:?}", what, who);
+            log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset what: {:?}, who: {:?}", what, who);
             // Check we handle this asset.
             let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
             let who = AccountIdConverter::convert_location(who)
@@ -566,7 +606,7 @@ mod currency_adapter {
 
             let fee_percent = Percent::from_percent(WithdrawalFeePercent::get());
             let fee_amount = fee_percent.mul_floor(amount);
-            log::trace!(target: "currency_adapter_with_fee", "withdraw_asset fee: {:?}", fee_amount);
+            log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset fee: {:?}", fee_amount);
 
             let amount_with_fee = amount.saturating_add(fee_amount);
             let new_balance = Currency::free_balance(&who)
