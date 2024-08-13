@@ -395,7 +395,7 @@ impl<T: Config> Pallet<T> {
         if current_balance < amount {
             let missing_amount =
                 T::EnergyExchange::convert_from_output(amount.saturating_sub(current_balance))?;
-            Ok((amount, missing_amount))
+            Ok((current_balance, missing_amount))
         } else {
             Ok((amount, BalanceOf::<T>::zero()))
         }
