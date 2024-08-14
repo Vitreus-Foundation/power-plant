@@ -9603,35 +9603,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "polkadot-test-malus"
-version = "1.0.0"
-dependencies = [
- "assert_matches",
- "async-trait",
- "clap 4.4.2",
- "color-eyre",
- "futures",
- "futures-timer",
- "polkadot-cli",
- "polkadot-erasure-coding",
- "polkadot-node-core-backing",
- "polkadot-node-core-candidate-validation",
- "polkadot-node-core-dispute-coordinator",
- "polkadot-node-core-pvf-execute-worker",
- "polkadot-node-core-pvf-prepare-worker",
- "polkadot-node-primitives",
- "polkadot-node-subsystem",
- "polkadot-node-subsystem-test-helpers",
- "polkadot-node-subsystem-types",
- "polkadot-node-subsystem-util",
- "polkadot-primitives",
- "rand 0.8.5",
- "sp-core",
- "sp-keystore",
- "tracing-gum",
-]
-
-[[package]]
 name = "polkadot-test-runtime"
 version = "1.0.0"
 dependencies = [

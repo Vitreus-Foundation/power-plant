@@ -114,7 +114,6 @@ members = [
     "node/network/gossip-support",
     "node/network/dispute-distribution",
     "node/overseer",
-    "node/malus",
     "node/primitives",
     "node/service",
     "node/subsystem",
