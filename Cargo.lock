@@ -8267,7 +8267,6 @@ dependencies = [
  "polkadot-node-core-pvf-execute-worker",
  "polkadot-node-core-pvf-prepare-worker",
  "polkadot-node-metrics",
- "polkadot-performance-test",
  "polkadot-service",
  "pyroscope",
  "pyroscope_pprofrs",
@@ -9052,23 +9051,6 @@ dependencies = [
  "sp-core",
  "sp-runtime",
  "sp-std",
-]
-
-[[package]]
-name = "polkadot-performance-test"
-version = "1.0.0"
-dependencies = [
- "env_logger 0.9.3",
- "kusama-runtime",
- "log",
- "polkadot-erasure-coding",
- "polkadot-node-core-pvf-prepare-worker",
- "polkadot-node-primitives",
- "polkadot-primitives",
- "quote",
- "sc-executor-common",
- "sp-maybe-compressed-blob",
- "thiserror",
 ]
 
 [[package]]

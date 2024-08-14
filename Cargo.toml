@@ -125,7 +125,6 @@ members = [
     "node/gum/proc-macro",
     "node/metrics",
     "node/test/client",
-    "node/test/performance-test",
     "node/test/service",
     "node/zombienet-backchannel",
     "rpc",
