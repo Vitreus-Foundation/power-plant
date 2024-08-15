@@ -22,8 +22,8 @@ pyro = { package = "pyroscope", version = "0.5.3", optional = true }
 pyroscope_pprofrs = { version = "0.2", optional = true }
 
 service = { package = "polkadot-service", path = "../node/service", default-features = false, features = ["sql", "txpool", "with-rocksdb-weights"], optional = true }
-polkadot-node-core-pvf-execute-worker = { path = "../node/core/pvf/execute-worker", optional = true }
-polkadot-node-core-pvf-prepare-worker = { path = "../node/core/pvf/prepare-worker", optional = true }
+polkadot-node-core-pvf-execute-worker = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", optional = true }
+polkadot-node-core-pvf-prepare-worker = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", optional = true }
 #polkadot-performance-test = { path = "../node/test/performance-test", optional = true }
 
 chain-spec = { workspace = true }
@@ -35,7 +35,7 @@ frame-benchmarking-cli = { git = "https://github.com/paritytech/substrate", opti
 try-runtime-cli = { git = "https://github.com/paritytech/substrate", optional = true , branch = "polkadot-v1.0.0" }
 sc-cli = { git = "https://github.com/paritytech/substrate", optional = true , branch = "polkadot-v1.0.0" }
 sc-service = { git = "https://github.com/paritytech/substrate", optional = true , branch = "polkadot-v1.0.0" }
-polkadot-node-metrics = { path = "../node/metrics" }
+polkadot-node-metrics = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
 sc-tracing = { git = "https://github.com/paritytech/substrate", optional = true , branch = "polkadot-v1.0.0" }
 sc-sysinfo = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sc-executor = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }

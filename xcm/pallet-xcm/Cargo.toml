@@ -22,14 +22,14 @@ sp-io = { git = "https://github.com/paritytech/substrate", default-features = fa
 sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v1.0.0" }
 sp-std = { git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v1.0.0" }
 
-xcm = { path = "..", default-features = false }
-xcm-executor = { path = "../xcm-executor", default-features = false }
+xcm = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", default-features = false }
+xcm-executor = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", default-features = false }
 
 [dev-dependencies]
 pallet-balances = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-polkadot-runtime-parachains = { path = "../../runtime/parachains" }
-polkadot-parachain = { path = "../../parachain" }
-xcm-builder = { path = "../xcm-builder" }
+polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
+polkadot-parachain = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
+xcm-builder = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
 
 [features]
 default = ["std"]

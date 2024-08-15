@@ -11,7 +11,7 @@ workspace = true
 futures = "0.3.21"
 futures-timer = "3.0.2"
 parity-scale-codec = { version = "3.6.1", default-features = false, features = ["bit-vec", "derive"] }
-gum = { package = "tracing-gum", path = "../../gum" }
+gum = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", package = "tracing-gum" }
 bitvec = { version = "1.0.0", default-features = false, features = ["alloc"] }
 lru = "0.9"
 merlin = "2.0"
@@ -20,12 +20,12 @@ kvdb = "0.13.0"
 derive_more = "0.99.17"
 thiserror = "1.0.31"
 
-polkadot-node-subsystem = { path = "../../subsystem" }
-polkadot-node-subsystem-util = { path = "../../subsystem-util" }
-polkadot-overseer = { path = "../../overseer" }
-polkadot-primitives = { path = "../../../primitives" }
-polkadot-node-primitives = { path = "../../primitives" }
-polkadot-node-jaeger = { path = "../../jaeger" }
+polkadot-node-subsystem = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
+polkadot-node-subsystem-util = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
+polkadot-overseer = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
+polkadot-primitives = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
+polkadot-node-primitives = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
+polkadot-node-jaeger = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
 
 sc-keystore = { git = "https://github.com/paritytech/substrate", default-features = false , branch = "polkadot-v1.0.0" }
 sp-consensus = { git = "https://github.com/paritytech/substrate", default-features = false , branch = "polkadot-v1.0.0" }
@@ -41,7 +41,7 @@ sp-keyring = { git = "https://github.com/paritytech/substrate", branch = "polkad
 sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-core = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
 sp-consensus-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-polkadot-node-subsystem-test-helpers = { path = "../../subsystem-test-helpers" }
+polkadot-node-subsystem-test-helpers = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
 assert_matches = "1.4.0"
 kvdb-memorydb = "0.13.0"
-test-helpers = { package = "polkadot-primitives-test-helpers", path = "../../../primitives/test-helpers" }
+test-helpers = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", package = "polkadot-primitives-test-helpers" }

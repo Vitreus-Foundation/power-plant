@@ -126,8 +126,8 @@ pallet-hotfix-sufficients = { workspace = true }
 # precompile-utils = { workspace = true }
 # pallet-evm-precompile-balances-erc20 = { workspace = true }
 
-runtime-common = { package = "polkadot-runtime-common", path = "../common", default-features = false }
-runtime-parachains = { package = "polkadot-runtime-parachains", path = "../parachains", default-features = false }
+runtime-common = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", package = "polkadot-runtime-common", default-features = false }
+runtime-parachains = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", package = "polkadot-runtime-parachains", default-features = false }
 
 [dev-dependencies]
 chain-spec = { workspace = true }

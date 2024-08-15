@@ -19,9 +19,6 @@ tikv-jemallocator = "0.5.0"
 # Crates in our workspace, defined as dependencies so we can pass them feature flags.
 polkadot-cli = { path = "cli" }
 polkadot-service = { path = "node/service" }
-polkadot-node-core-pvf = { path = "node/core/pvf" }
-polkadot-node-core-pvf-prepare-worker = { path = "node/core/pvf/prepare-worker" }
-polkadot-overseer = { path = "node/overseer" }
 
 [dev-dependencies]
 assert_cmd = "2.0.4"
@@ -29,7 +26,7 @@ nix = { version = "0.26.1", features = ["signal"] }
 tempfile = "3.2.0"
 tokio = "1.24.2"
 substrate-rpc-client = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-polkadot-core-primitives = { path = "core-primitives" }
+polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
 
 [features]
 default = ["with-rocksdb-weights", "rocksdb", "sql", "txpool"]
@@ -55,80 +52,13 @@ fast-runtime = [
 [workspace]
 members = [
     "cli",
-    "core-primitives",
-    "erasure-coding",
-    "erasure-coding/fuzzer",
-    "primitives",
-    "primitives/test-helpers",
-    "runtime/common",
-    "runtime/common/slot_range_helper",
-    "runtime/metrics",
-    "runtime/parachains",
-    "runtime/test-runtime",
-    "runtime/test-runtime/constants",
-    "statement-table",
-    "xcm",
-    "xcm/xcm-builder",
-    "xcm/xcm-executor",
-    #    "xcm/xcm-executor/integration-tests",
-    "xcm/xcm-simulator",
-    "xcm/xcm-simulator/example",
-    "xcm/xcm-simulator/fuzzer",
     "xcm/pallet-xcm",
-    "xcm/pallet-xcm-benchmarks",
-    "xcm/procedural",
     "node/chain-spec",
-    "node/collation-generation",
     "node/core/approval-voting",
-    "node/core/av-store",
-    "node/core/backing",
-    "node/core/bitfield-signing",
-    "node/core/candidate-validation",
-    "node/core/chain-api",
-    "node/core/chain-selection",
-    "node/core/dispute-coordinator",
-    "node/core/parachains-inherent",
-    "node/core/provisioner",
-    "node/core/pvf",
-    "node/core/pvf/common",
-    "node/core/pvf/execute-worker",
-    "node/core/pvf/prepare-worker",
-    "node/core/pvf-checker",
-    "node/core/runtime-api",
-    "node/network/approval-distribution",
-    "node/network/bridge",
-    "node/network/protocol",
-    "node/network/statement-distribution",
-    "node/network/bitfield-distribution",
-    "node/network/availability-distribution",
-    "node/network/availability-recovery",
-    "node/network/collator-protocol",
-    "node/network/gossip-support",
-    "node/network/dispute-distribution",
-    "node/overseer",
-    "node/primitives",
     "node/service",
-    "node/subsystem",
-    "node/subsystem-types",
-    "node/subsystem-test-helpers",
-    "node/subsystem-util",
-    "node/jaeger",
-    "node/gum",
-    "node/gum/proc-macro",
-    "node/metrics",
-    "node/test/client",
-    "node/test/service",
-    "node/zombienet-backchannel",
     "rpc",
     "rpc/eth-rpc-server",
     "rpc/node-rpc-server",
-    "parachain",
-    #    "parachain/test-parachains",
-    #    "parachain/test-parachains/adder",
-    #    "parachain/test-parachains/adder/collator",
-    #    "parachain/test-parachains/halt",
-    #    "parachain/test-parachains/undying",
-    #    "parachain/test-parachains/undying/collator",
     "pallets/claiming",
     "pallets/energy-fee",
     "pallets/energy-fee/runtime-api",
@@ -410,12 +340,12 @@ pallet-hotfix-sufficients = { git = "https://github.com/paritytech/frontier", br
 # pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
 
 # Polkadot
-polkadot-primitives = { path = "primitives", default-features = false }
+polkadot-primitives = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", default-features = false }
 
 # XCM
-xcm = { path = "xcm", default-features = false }
-xcm-executor = { path = "xcm/xcm-executor", default-features = false }
-xcm-builder = { path = "xcm/xcm-builder", default-features = false }
+xcm = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", default-features = false }
+xcm-executor = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", default-features = false }
+xcm-builder = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", default-features = false }
 
 # Runtime
 vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
