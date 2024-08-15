@@ -6,21 +6,24 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-ethereum = { workspace = true, features = ["with-codec", "with-serde"] }
-ethereum-types = { workspace = true }
-fc-db = { workspace = true }
-fc-rpc = { workspace = true }
-fc-rpc-core = { workspace = true }
-fp-rpc = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server", "macros"] }
-rustc-hex = "2.1.0"
-serde = { workspace = true }
-serde_json = { workspace = true }
-sp-runtime = { workspace = true }
-sp-blockchain = { workspace = true }
-sp-api = { workspace = true }
-sp-block-builder = { workspace = true }
-sc-client-api = { workspace = true }
-sc-transaction-pool-api = { workspace = true }
-sc-transaction-pool = { workspace = true }
-vitreus-utility-runtime-api = { workspace = true }
+serde_json = { workspace = true, default-features = true }
+rustc-hex = { workspace = true, default-features = true }
+
+sc-client-api = { workspace = true, default-features = true }
+sc-transaction-pool = { workspace = true, default-features = true }
+sc-transaction-pool-api = { workspace = true, default-features = true }
+serde = { workspace = true, default-features = true }
+sp-api = { workspace = true, default-features = true }
+sp-block-builder = { workspace = true, default-features = true }
+sp-blockchain = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+
+ethereum = { workspace = true, features = ["with-codec", "with-serde"] }
+ethereum-types = { workspace = true, default-features = true }
+fc-db = { workspace = true, default-features = true }
+fc-rpc = { workspace = true, default-features = true }
+fc-rpc-core = { workspace = true, default-features = true }
+fp-rpc = { workspace = true, default-features = true }
+
+vitreus-utility-runtime-api = { workspace = true, default-features = true }

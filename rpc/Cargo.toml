@@ -5,52 +5,53 @@ authors.workspace = true
 edition.workspace = true
 
 [dependencies]
-futures = "0.3.25"
-jsonrpsee = { version = "0.16.2", features = ["server"] }
-polkadot-primitives = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
-sc-client-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sp-blockchain = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sp-keystore = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sp-api = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sp-consensus = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sp-consensus-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-consensus-manual-seal = { workspace = true }
-sp-core = { workspace = true }
-sc-chain-spec = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-consensus-babe = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-consensus-babe-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-consensus-beefy = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-consensus-beefy-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-consensus-epochs = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-consensus-grandpa = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-consensus-grandpa-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-network = { workspace = true }
-sc-network-sync = { workspace = true }
-sc-rpc-api = { workspace = true }
-sc-service = { workspace = true }
-sc-sync-state-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sc-transaction-pool = { workspace = true }
-sc-transaction-pool-api = { workspace = true }
-mmr-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-sp-block-builder = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-substrate-frame-rpc-system = { workspace = true }
-substrate-state-trie-migration-rpc = { git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+futures = { workspace = true, default-features = true }
+jsonrpsee = { workspace = true, features = ["server"] }
 
-fc-db = { workspace = true }
-fc-mapping-sync = { workspace = true }
-fc-rpc = { workspace = true }
-fc-rpc-core = { workspace = true }
-fc-storage = { workspace = true }
-fp-rpc = { workspace = true }
+mmr-rpc = { workspace = true, default-features = true }
+sc-chain-spec = { workspace = true, default-features = true }
+sc-client-api = { workspace = true, default-features = true }
+sc-consensus-babe = { workspace = true, default-features = true }
+sc-consensus-babe-rpc = { workspace = true, default-features = true }
+sc-consensus-beefy = { workspace = true, default-features = true }
+sc-consensus-beefy-rpc = { workspace = true, default-features = true }
+sc-consensus-epochs = { workspace = true, default-features = true }
+sc-consensus-grandpa = { workspace = true, default-features = true }
+sc-consensus-grandpa-rpc = { workspace = true, default-features = true }
+sc-consensus-manual-seal = { workspace = true, default-features = true }
+sc-network = { workspace = true, default-features = true }
+sc-network-sync = { workspace = true, default-features = true }
+sc-rpc = { workspace = true, default-features = true }
+sc-rpc-api = { workspace = true, default-features = true }
+sc-service = { workspace = true, default-features = true }
+sc-sync-state-rpc = { workspace = true, default-features = true }
+sc-transaction-pool = { workspace = true, default-features = true }
+sc-transaction-pool-api = { workspace = true, default-features = true }
+sp-api = { workspace = true, default-features = true }
+sp-block-builder = { workspace = true, default-features = true }
+sp-blockchain = { workspace = true, default-features = true }
+sp-consensus = { workspace = true, default-features = true }
+sp-consensus-babe = { workspace = true, default-features = true }
+sp-core = { workspace = true, default-features = true }
+sp-keystore = { workspace = true, default-features = true }
+sp-runtime = { workspace = true, default-features = true }
+substrate-frame-rpc-system = { workspace = true, default-features = true }
+substrate-state-trie-migration-rpc = { workspace = true, default-features = true }
+
+pallet-transaction-payment-rpc = { workspace = true, default-features = true }
+
+fc-db = { workspace = true, default-features = true }
+fc-mapping-sync = { workspace = true, default-features = true }
+fc-rpc = { workspace = true, default-features = true }
+fc-rpc-core = { workspace = true, default-features = true }
+fc-storage = { workspace = true, default-features = true }
+fp-rpc = { workspace = true, default-features = true }
 
 # RPC modules
-eth-rpc-server = { workspace = true }
-energy-fee-rpc = { workspace = true }
-energy-generation-rpc = { workspace = true }
-node-rpc-server = { workspace = true }
+eth-rpc-server = { workspace = true, default-features = true }
+energy-fee-rpc = { workspace = true, default-features = true }
+energy-generation-rpc = { workspace = true, default-features = true }
+node-rpc-server = { workspace = true, default-features = true }
 
-vitreus-power-plant-runtime = { workspace = true }
-vitreus-utility-runtime-api = { workspace = true }
+vitreus-power-plant-runtime = { workspace = true, default-features = true }
+vitreus-utility-runtime-api = { workspace = true, default-features = true }
