@@ -17,6 +17,7 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use pallet_claiming::OnClaimHandler;
+use pallet_energy_fee::OnWithdrawFeeHandler;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -640,6 +641,12 @@ where
         }
 
         Ok(())
+    }
+}
+
+impl<T: Config> OnWithdrawFeeHandler<T::AccountId> for Pallet<T> {
+    fn on_withdraw_fee(who: &T::AccountId) {
+        Pallet::<T>::check_account_threshold(who);
     }
 }
 

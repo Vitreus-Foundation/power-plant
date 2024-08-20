@@ -1043,6 +1043,7 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyAssetId = VNRG;
     type MainRecycleDestination = EnergyBrokerSink;
     type FeeRecycleDestination = ();
+    type OnWithdrawFee = NacManaging;
 }
 
 parameter_types! {
