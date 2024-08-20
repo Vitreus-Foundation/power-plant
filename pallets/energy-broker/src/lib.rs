@@ -364,6 +364,8 @@ pub mod pallet {
         /// with another. For example, an array of assets constituting a `path` should have a
         /// corresponding array of `amounts` along the path.
         CorrespondenceError,
+        /// It was not possible to get or increment the Id of the pool.
+        IncorrectPoolAssetId,
     }
 
     #[pallet::hooks]
@@ -418,21 +420,23 @@ pub mod pallet {
 
             if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset1) {
                 if !T::Assets::contains(&asset, &pool_account) {
-                    T::Assets::touch(asset, pool_account.clone(), depositor.clone())?;
+                    T::Assets::touch(asset, &pool_account, &depositor)?;
                 }
             }
             if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset2) {
                 if !T::Assets::contains(&asset, &pool_account) {
-                    T::Assets::touch(asset, pool_account.clone(), depositor.clone())?;
+                    T::Assets::touch(asset, &pool_account, &depositor)?;
                 }
             }
 
-            let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
-            let next_lp_token_id = lp_token.increment();
+            let lp_token = NextPoolAssetId::<T>::get()
+                .or(T::PoolAssetId::initial_value())
+                .ok_or(Error::<T>::IncorrectPoolAssetId)?;
+            let next_lp_token_id = lp_token.increment().ok_or(Error::<T>::IncorrectPoolAssetId)?;
             NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
             T::PoolAssets::create(lp_token.clone(), pool_account.clone(), false, 1u32.into())?;
-            T::PoolAssets::touch(lp_token.clone(), pool_account.clone(), depositor.clone())?;
+            T::PoolAssets::touch(lp_token.clone(), &pool_account, &depositor)?;
 
             let pool_info = PoolInfo { lp_token: lp_token.clone() };
             Pools::<T>::insert(pool_id.clone(), pool_info);
@@ -537,7 +541,14 @@ pub mod pallet {
                 .map_err(|_| Error::<T>::ReserveLeftLessThanMinimal)?;
 
             // burn the provided lp token amount that includes the fee
-            T::PoolAssets::burn_from(pool.lp_token.clone(), &sender, lp_token_burn, Exact, Polite)?;
+            T::PoolAssets::burn_from(
+                pool.lp_token.clone(),
+                &sender,
+                lp_token_burn,
+                Expendable,
+                Exact,
+                Polite,
+            )?;
 
             Self::transfer(&asset1, &pool_account, &withdraw_to, amount1, false)?;
             Self::transfer(&asset2, &pool_account, &withdraw_to, amount2, false)?;
@@ -1115,69 +1126,20 @@ pub mod pallet {
         /// Returns the next pool asset id for benchmark purposes only.
         #[cfg(any(test, feature = "runtime-benchmarks"))]
         pub fn get_next_pool_asset_id() -> T::PoolAssetId {
-            NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
+            NextPoolAssetId::<T>::get()
+                .or(T::PoolAssetId::initial_value())
+                .expect("Next pool asset ID can not be None")
         }
     }
 }
 
-impl<T: Config>
-    frame_support::traits::tokens::fungibles::SwapNative<
-        T::RuntimeOrigin,
-        T::AccountId,
-        T::Balance,
-        T::AssetBalance,
-        T::AssetId,
-    > for Pallet<T>
-where
-    <T as pallet::Config>::Currency:
-        frame_support::traits::tokens::fungible::Inspect<<T as frame_system::Config>::AccountId>,
-{
-    /// Take an `asset_id` and swap some amount for `amount_out` of the chain's native asset. If an
-    /// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
-    /// too costly.
-    ///
-    /// If successful returns the amount of the `asset_id` taken to provide `amount_out`.
-    fn swap_tokens_for_exact_native(
-        sender: T::AccountId,
-        asset_id: T::AssetId,
-        amount_out: T::Balance,
-        amount_in_max: Option<T::AssetBalance>,
-        send_to: T::AccountId,
-        keep_alive: bool,
-    ) -> Result<T::AssetBalance, DispatchError> {
-        ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
-        if let Some(amount_in_max) = amount_in_max {
-            ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
-        }
-
-        let path = vec![
-            T::MultiAssetIdConverter::into_multiasset_id(&asset_id),
-            T::MultiAssetIdConverter::get_native(),
-        ]
-        .try_into()
-        .unwrap();
-
-        // convert `amount_out` from native balance type, to asset balance type
-        let amount_out = Self::convert_native_balance_to_asset_balance(amount_out)?;
-
-        // calculate the amount we need to provide
-        let amounts = Self::get_amounts_in(&amount_out, &path)?;
-        let amount_in =
-            *amounts.first().defensive_ok_or("get_amounts_in() returned an empty result")?;
-        if let Some(amount_in_max) = amount_in_max {
-            ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
-        }
-
-        Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
-        Ok(amount_in)
-    }
-
+impl<T: Config> Pallet<T> {
     /// Take an `asset_id` and swap `amount_in` of the chain's native asset for it. If an
     /// `amount_out_min` is specified, it will return an error if it is unable to acquire the amount
     /// desired.
     ///
     /// If successful, returns the amount of `asset_id` acquired for the `amount_in`.
-    fn swap_exact_native_for_tokens(
+    pub fn swap_exact_native_for_tokens(
         sender: T::AccountId,
         asset_id: T::AssetId,
         amount_in: T::Balance,
@@ -1211,9 +1173,6 @@ where
         Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
         Ok(amount_out)
     }
-}
-
-impl<T: Config> Pallet<T> {
     /// Take an `asset_id` and swap some amount of the chain's native asset for `amount_out` of it.
     /// If an `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
     /// too costly.
