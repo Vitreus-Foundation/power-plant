@@ -21,7 +21,7 @@ serde_json = { workspace = true, default-features = true }
 thiserror = { workspace = true, default-features = true }
 
 # TODO: use workspace dependency
-gum = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", package = "tracing-gum" }
+gum = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "tracing-gum" }
 codec = { package = "parity-scale-codec", version = "3.6.1" }
 
 # Polkadot
@@ -48,6 +48,7 @@ polkadot-dispute-distribution = { workspace = true, default-features = true, opt
 polkadot-gossip-support = { workspace = true, default-features = true, optional = true }
 polkadot-network-bridge = { workspace = true, default-features = true, optional = true }
 polkadot-node-collation-generation = { workspace = true, default-features = true, optional = true }
+polkadot-node-core-approval-voting = { workspace = true, default-features = true, optional = true }
 polkadot-node-core-av-store = { workspace = true, default-features = true, optional = true }
 polkadot-node-core-backing = { workspace = true, default-features = true, optional = true }
 polkadot-node-core-bitfield-signing = { workspace = true, default-features = true, optional = true }
@@ -85,11 +86,11 @@ sc-transaction-pool-api = { workspace = true, default-features = true }
 sp-mmr-primitives = { workspace = true, default-features = true }
 
 # TODO: use workspace dependency
-babe = { package = "sc-consensus-babe", git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-beefy = { package = "sc-consensus-beefy", git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-grandpa = { package = "sc-consensus-grandpa", git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-service = { package = "sc-service", git = "https://github.com/paritytech/substrate", default-features = false, branch = "polkadot-v1.0.0" }
-telemetry = { package = "sc-telemetry", git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+babe = { package = "sc-consensus-babe", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
+beefy = { package = "sc-consensus-beefy", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
+grandpa = { package = "sc-consensus-grandpa", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
+service = { package = "sc-service", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+telemetry = { package = "sc-telemetry", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
 
 # Substrate Primitives
 sp-api = { workspace = true, default-features = true }
@@ -115,9 +116,9 @@ sp-version = { workspace = true, default-features = true }
 sp-weights = { workspace = true, default-features = true }
 
 # TODO: use workspace dependency
-consensus_common = { package = "sp-consensus", git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-beefy-primitives = { package = "sp-consensus-beefy", git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
-grandpa_primitives = { package = "sp-consensus-grandpa", git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+consensus_common = { package = "sp-consensus", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
+beefy-primitives = { package = "sp-consensus-beefy", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
+grandpa_primitives = { package = "sp-consensus-grandpa", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
 
 # Substrate Pallets
 pallet-energy-fee = { workspace = true, default-features = true }
@@ -132,7 +133,7 @@ frame-benchmarking-cli = { workspace = true, default-features = true }
 frame-benchmarking = { workspace = true, default-features = true }
 
 # TODO: use workspace dependency
-prometheus-endpoint = { package = "substrate-prometheus-endpoint", git = "https://github.com/paritytech/substrate", branch = "polkadot-v1.0.0" }
+prometheus-endpoint = { package = "substrate-prometheus-endpoint", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
 
 # Frontier
 fc-cli = { workspace = true, default-features = true }
@@ -149,7 +150,6 @@ fp-rpc = { workspace = true, default-features = true }
 vitreus-power-plant-runtime = { workspace = true, default-features = true }
 
 polkadot-rpc = { path = "../../rpc" }
-polkadot-node-core-approval-voting = { path = "../core/approval-voting", optional = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true, default-features = true }

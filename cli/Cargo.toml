@@ -37,7 +37,6 @@ sc-tracing = { workspace = true, default-features = true, optional = true }
 sp-core = { workspace = true, default-features = true }
 sp-io = { workspace = true, default-features = true }
 sp-keyring = { workspace = true, default-features = true }
-try-runtime-cli = { workspace = true, default-features = true, optional = true }
 
 fc-cli = { workspace = true, default-features = true }
 fc-db = { workspace = true, default-features = true }
@@ -59,7 +58,6 @@ cli = [
 	"sc-service",
 	"sc-tracing",
 	"frame-benchmarking-cli",
-	"try-runtime-cli",
 	"polkadot-node-core-pvf-execute-worker",
 	"polkadot-node-core-pvf-prepare-worker",
 	"service",
@@ -71,7 +69,7 @@ runtime-benchmarks = [
 	"vitreus-power-plant-runtime/runtime-benchmarks",
 ]
 full-node = ["service/full-node"]
-try-runtime = ["service/try-runtime", "try-runtime-cli/try-runtime"]
+try-runtime = ["service/try-runtime"]
 fast-runtime = ["service/fast-runtime"]
 pyroscope = ["pyro", "pyroscope_pprofrs"]
 #hostperfcheck = ["polkadot-performance-test"]
