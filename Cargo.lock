@@ -6840,8 +6840,6 @@ dependencies = [
  "pallet-assets",
  "pallet-authorship",
  "pallet-balances",
- "pallet-nac-managing",
- "pallet-nfts",
  "pallet-reputation",
  "pallet-session",
  "pallet-staking-reward-curve",

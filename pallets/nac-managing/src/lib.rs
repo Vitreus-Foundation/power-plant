@@ -23,7 +23,7 @@ use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, Re
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use sp_arithmetic::traits::Saturating;
 use sp_arithmetic::Perbill;
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{Convert, Zero};
 use sp_runtime::{
     traits::{BlakeTwo256, Hash, MaybeSerializeDeserialize},
     SaturatedConversion,
@@ -586,6 +586,12 @@ impl<T: Config> Pallet<T> {
         }
 
         total_sum
+    }
+}
+
+impl<T: Config> Convert<&T::AccountId, Option<u8>> for Pallet<T> {
+    fn convert(who: &T::AccountId) -> Option<u8> {
+        Pallet::<T>::get_nac_level(who).map(|(level, _)| level)
     }
 }
 

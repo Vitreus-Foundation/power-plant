@@ -445,6 +445,7 @@ impl pallet_energy_generation::Config for Test {
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type ReputationTierEnergyRewardAdditionalPercentMapping =
         ReputationTierEnergyRewardAdditionalPercentMapping;
+    type ValidatorNacLevel = ();
     type OnVipMembershipHandler = Privileges;
     type BenchmarkingConfig = TestBenchmarkingConfig;
     type ThisWeightInfo = ();

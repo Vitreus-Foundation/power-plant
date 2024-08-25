@@ -804,6 +804,7 @@ impl pallet_energy_generation::Config for Runtime {
     type SlashDeferDuration = SlashDeferDuration;
     type StakeBalance = Balance;
     type StakeCurrency = Balances;
+    type ValidatorNacLevel = NacManaging;
     type OnVipMembershipHandler = Privileges;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;

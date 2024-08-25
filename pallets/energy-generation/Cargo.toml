@@ -15,7 +15,6 @@ log = { workspace = true }
 orml-traits = { workspace = true }
 pallet-assets = { workspace = true }
 pallet-authorship = { workspace = true }
-pallet-nac-managing = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-session = { workspace = true }
@@ -37,7 +36,6 @@ sp-tracing = { workspace = true }
 sp-core = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-timestamp = { workspace = true }
-pallet-nfts = { workspace = true }
 pallet-staking-reward-curve = { workspace = true }
 substrate-test-utils = { workspace = true }
 frame-benchmarking = { workspace = true }
@@ -54,7 +52,6 @@ std = [
     "pallet-balances/std",
     "pallet-assets/std",
     "pallet-authorship/std",
-    "pallet-nac-managing/std",
     "pallet-reputation/std",
     "pallet-session/std",
     "parity-scale-codec/std",
