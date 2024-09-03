@@ -6,7 +6,9 @@
 #![allow(clippy::type_complexity)]
 
 use frame_support::dispatch::DispatchResult;
-use frame_support::traits::{Currency, NamedReservableCurrency};
+use frame_support::traits::{
+    Currency, ExistenceRequirement, NamedReservableCurrency, OnUnbalanced,
+};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -25,6 +27,9 @@ mod tests;
 
 type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
+    <T as frame_system::Config>::AccountId,
+>>::NegativeImbalance;
 
 const VESTING_ID: [u8; 8] = *b"vesting ";
 
@@ -71,11 +76,14 @@ pub mod pallet {
 
     #[pallet::config]
     pub trait Config: frame_system::Config {
+        /// The overarching event type.
+        type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
         /// The currency trait.
         type Currency: NamedReservableCurrency<Self::AccountId, ReserveIdentifier = [u8; 8]>;
-
         /// Convert the block number into a balance.
         type BlockNumberToBalance: Convert<BlockNumberFor<Self>, BalanceOf<Self>>;
+        /// Handler for the unbalanced reduction when removing vesting.
+        type Slash: OnUnbalanced<NegativeImbalanceOf<Self>>;
     }
 
     /// Information regarding the vesting of a given account.
@@ -119,8 +127,96 @@ pub mod pallet {
         }
     }
 
+    #[pallet::event]
+    #[pallet::generate_deposit(pub(super) fn deposit_event)]
+    pub enum Event<T: Config> {
+        /// A new vesting was created.
+        VestingCreated {
+            /// The account.
+            account: T::AccountId,
+            /// Amount locked.
+            amount: BalanceOf<T>,
+        },
+        /// A vesting was removed.
+        VestingRemoved {
+            /// The account.
+            account: T::AccountId,
+            /// Amount slashed.
+            amount: BalanceOf<T>,
+        },
+    }
+
+    /// Error for the vesting pallet.
+    #[pallet::error]
+    pub enum Error<T> {
+        /// The account given is not vesting.
+        NotVesting,
+        /// The account is already vesting.
+        AlreadyVesting,
+        /// Failed to create a new schedule because some parameter was invalid.
+        InvalidScheduleParams,
+    }
+
     #[pallet::call]
-    impl<T: Config> Pallet<T> {}
+    impl<T: Config> Pallet<T> {
+        /// Force a vested transfer.
+        ///
+        /// The dispatch origin for this call must be _Root_.
+        #[pallet::call_index(0)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(4, 4))]
+        pub fn force_vested_transfer(
+            origin: OriginFor<T>,
+            source: T::AccountId,
+            dest: T::AccountId,
+            schedule: VestingInfo<BalanceOf<T>, BlockNumberFor<T>>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            ensure!(schedule.is_valid(), Error::<T>::InvalidScheduleParams);
+            ensure!(!Vesting::<T>::contains_key(&dest), Error::<T>::AlreadyVesting);
+
+            T::Currency::transfer(
+                &source,
+                &dest,
+                schedule.locked,
+                ExistenceRequirement::KeepAlive,
+            )?;
+
+            Vesting::<T>::insert(&dest, schedule);
+            frame_system::Pallet::<T>::inc_providers(&dest);
+
+            T::Currency::reserve_named(&VESTING_ID, &dest, schedule.locked)?;
+
+            Self::deposit_event(Event::<T>::VestingCreated {
+                account: dest,
+                amount: schedule.locked,
+            });
+
+            Ok(())
+        }
+
+        /// Force remove a vesting schedule and slash locked balance.
+        ///
+        /// The dispatch origin for this call must be _Root_.
+        #[pallet::call_index(1)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(4, 4))]
+        pub fn force_remove_vesting(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
+            ensure_root(origin)?;
+
+            let schedule = Vesting::<T>::take(&who).ok_or(Error::<T>::NotVesting)?;
+
+            let (imbalance, unslashed) =
+                T::Currency::slash_reserved_named(&VESTING_ID, &who, schedule.locked);
+            let slashed = schedule.locked.saturating_sub(unslashed);
+
+            T::Slash::on_unbalanced(imbalance);
+            frame_system::Pallet::<T>::dec_providers(&who)?;
+
+            Self::deposit_event(Event::<T>::VestingRemoved { account: who, amount: slashed });
+
+            Ok(())
+        }
+    }
 }
 
 #[allow(dead_code)]

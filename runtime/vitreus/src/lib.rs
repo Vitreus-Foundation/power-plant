@@ -1085,8 +1085,10 @@ impl pallet_vesting::Config for Runtime {
 }
 
 impl pallet_simple_vesting::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type BlockNumberToBalance = ConvertInto;
+    type Slash = Treasury;
 }
 
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
