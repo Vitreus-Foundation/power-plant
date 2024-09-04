@@ -19,6 +19,8 @@ use sp_std::vec::Vec;
 
 pub use pallet::*;
 
+mod migration;
+
 #[cfg(test)]
 mod mock;
 
@@ -71,7 +73,10 @@ pub mod pallet {
 
     use super::*;
 
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
     #[pallet::pallet]
+    #[pallet::storage_version(STORAGE_VERSION)]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
@@ -121,6 +126,8 @@ pub mod pallet {
 
                 Vesting::<T>::insert(who, vesting_info);
 
+                frame_system::Pallet::<T>::inc_providers(who);
+
                 T::Currency::reserve_named(&VESTING_ID, who, locked)
                     .expect("Unable to reserve balance");
             }
@@ -155,6 +162,15 @@ pub mod pallet {
         AlreadyVesting,
         /// Failed to create a new schedule because some parameter was invalid.
         InvalidScheduleParams,
+    }
+
+    #[pallet::hooks]
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn on_runtime_upgrade() -> Weight {
+            let mut weight = Weight::zero();
+            weight += migration::migrate_to_v1::<T>();
+            weight
+        }
     }
 
     #[pallet::call]
