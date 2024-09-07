@@ -79,7 +79,7 @@ impl pallet_simple_vesting::Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
-    pallet_balances::GenesisConfig::<Test> { balances: vec![(ALICE, 10 * ED)] }
+    pallet_balances::GenesisConfig::<Test> { balances: vec![(ALICE, 100 * ED)] }
         .assimilate_storage(&mut t)
         .unwrap();
     pallet_simple_vesting::GenesisConfig::<Test> { vesting: vec![] }

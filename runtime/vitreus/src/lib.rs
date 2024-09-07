@@ -1120,6 +1120,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Democracy(..)
             | RuntimeCall::Session(..)
             | RuntimeCall::XcmPallet(..)
+            | RuntimeCall::SimpleVesting(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
