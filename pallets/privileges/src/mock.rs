@@ -95,7 +95,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
     pub static SessionsPerEra: SessionIndex = 3;
-    pub static ExistentialDeposit: Balance = 1;
+    pub static ExistentialDeposit: Balance = 10;
     pub static SlashDeferDuration: EraIndex = 0;
     pub static Period: BlockNumber = 5;
     pub static Offset: BlockNumber = 0;
@@ -705,7 +705,7 @@ impl ExtBuilder {
             invulnerables: self.invulnerables,
             slash_reward_fraction: Perbill::from_percent(10),
             min_cooperator_bond: self.min_cooperator_bond,
-            min_common_validator_bond: 500,
+            min_common_validator_bond: self.min_common_validator_bond,
             min_trust_validator_bond: self.min_trust_validator_bond,
             energy_per_stake_currency: self.energy_per_stake_currency,
             block_authoring_reward: self.block_authoring_reward,

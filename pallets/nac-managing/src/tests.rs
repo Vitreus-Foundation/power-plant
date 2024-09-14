@@ -23,13 +23,9 @@ use frame_support::{assert_err, assert_ok};
 use parity_scale_codec::Decode;
 
 type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
-type BalanceOf<Test> = <Test as Config>::Balance;
+type BalanceOf<Test> = <Test as pallet_balances::Config>::Balance;
 
 const VANGUARD_1_REPUTATION_POINT: u64 = 7398066;
-
-fn account(id: u8) -> AccountIdOf<Test> {
-    [id; 32].into()
-}
 
 fn get_claimed(collection_id: CollectionId, item_id: ItemId) -> BalanceOf<Test> {
     let claimed_raw = Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
@@ -43,15 +39,16 @@ fn basic_minting_should_work() {
         let nac_level = 5_u8;
         let item_id = 123_u32;
         let collection_id = 0_u32;
+        let account = 1_u64;
 
-        assert_ok!(NacManaging::create_collection(&account(1)));
+        assert_ok!(NacManaging::create_collection(&account));
 
-        assert_ok!(NacManaging::do_mint(item_id, account(1)));
-        assert_ok!(NacManaging::update_nft_info(&collection_id, &item_id, nac_level, account(1)));
+        assert_ok!(NacManaging::do_mint(item_id, account));
+        assert_ok!(NacManaging::update_nft_info(&collection_id, &item_id, nac_level, account));
 
-        assert_eq!(NacManaging::get_nac_level(&account(1)), Some((nac_level, 123)));
+        assert_eq!(NacManaging::get_nac_level(&account), Some((nac_level, 123)));
         assert_eq!(
-            Reputation::reputation(account(1)).unwrap().reputation.points().0,
+            Reputation::reputation(1).unwrap().reputation.points().0,
             VANGUARD_1_REPUTATION_POINT
         );
     });
@@ -63,26 +60,27 @@ fn update_nac_level_test() {
         let nac_level = 5_u8;
         let item_id = 123_u32;
         let collection_id = 0_u32;
+        let account = 1_u64;
 
-        assert_ok!(NacManaging::create_collection(&account(1)));
+        assert_ok!(NacManaging::create_collection(&account));
 
-        assert_ok!(NacManaging::do_mint(item_id, account(1)));
+        assert_ok!(NacManaging::do_mint(item_id, account));
         assert_eq!(
-            Reputation::reputation(account(1)).unwrap().reputation.points().0,
+            Reputation::reputation(account).unwrap().reputation.points().0,
             VANGUARD_1_REPUTATION_POINT
         );
-        assert_ok!(NacManaging::update_nft_info(&collection_id, &item_id, nac_level, account(1)));
+        assert_ok!(NacManaging::update_nft_info(&collection_id, &item_id, nac_level, account));
 
-        assert_eq!(NacManaging::get_nac_level(&account(1)), Some((nac_level, 123)));
+        assert_eq!(NacManaging::get_nac_level(&account), Some((nac_level, 123)));
 
         let new_nac_level = 10_u8;
-        assert_ok!(NacManaging::update_nft(RuntimeOrigin::root(), Some(new_nac_level), account(1)));
-        assert_eq!(NacManaging::get_nac_level(&account(1)), Some((new_nac_level, 123)));
+        assert_ok!(NacManaging::update_nft(RuntimeOrigin::root(), Some(new_nac_level), account));
+        assert_eq!(NacManaging::get_nac_level(&account), Some((new_nac_level, 123)));
 
-        assert_ok!(NacManaging::update_nft(RuntimeOrigin::root(), None, account(1)));
-        assert_eq!(NacManaging::get_nac_level(&account(1)), Some((new_nac_level, 123)));
+        assert_ok!(NacManaging::update_nft(RuntimeOrigin::root(), None, account));
+        assert_eq!(NacManaging::get_nac_level(&account), Some((new_nac_level, 123)));
         assert_eq!(
-            Reputation::reputation(account(1)).unwrap().reputation.points().0,
+            Reputation::reputation(account).unwrap().reputation.points().0,
             VANGUARD_1_REPUTATION_POINT
         );
     });
@@ -94,15 +92,17 @@ fn check_nac_level_test() {
         let nac_level = 5_u8;
         let item_id = 123_u32;
         let collection_id = 0_u32;
+        let account = 1_u64;
+        let second_account = 2_u64;
 
-        assert_ok!(NacManaging::create_collection(&account(1)));
+        assert_ok!(NacManaging::create_collection(&account));
 
-        assert_ok!(NacManaging::do_mint(item_id, account(1)));
-        assert_ok!(NacManaging::update_nft_info(&collection_id, &item_id, nac_level, account(1)));
+        assert_ok!(NacManaging::do_mint(item_id, account));
+        assert_ok!(NacManaging::update_nft_info(&collection_id, &item_id, nac_level, account));
 
-        assert_ok!(NacManaging::check_nac_level(RuntimeOrigin::root(), account(1)));
+        assert_ok!(NacManaging::check_nac_level(RuntimeOrigin::root(), account));
         assert_err!(
-            NacManaging::check_nac_level(RuntimeOrigin::root(), account(2)),
+            NacManaging::check_nac_level(RuntimeOrigin::root(), second_account),
             Error::<Test>::NftNotFound
         );
     });
@@ -114,15 +114,16 @@ fn user_has_access_test() {
         let nac_level = 5_u8;
         let item_id = 123_u32;
         let collection_id = 0_u32;
+        let account = 1_u64;
 
-        assert_ok!(NacManaging::create_collection(&account(1)));
+        assert_ok!(NacManaging::create_collection(&account));
 
-        assert_ok!(NacManaging::do_mint(item_id, account(1)));
-        assert_ok!(NacManaging::update_nft_info(&collection_id, &item_id, nac_level, account(1)));
+        assert_ok!(NacManaging::do_mint(item_id, account));
+        assert_ok!(NacManaging::update_nft_info(&collection_id, &item_id, nac_level, account));
 
-        assert!(NacManaging::user_has_access(account(1), 2));
-        assert!(NacManaging::user_has_access(account(1), 5));
-        assert!(!NacManaging::user_has_access(account(1), 6));
+        assert!(NacManaging::user_has_access(account, 2));
+        assert!(NacManaging::user_has_access(account, 5));
+        assert!(!NacManaging::user_has_access(account, 6));
     });
 }
 
@@ -130,11 +131,11 @@ fn user_has_access_test() {
 fn on_claim_should_work() {
     new_test_ext().execute_with(|| {
         let nac_level = 0_u8;
-        let owner = account(1);
+        let owner = 1_u64;
         let item_id = 123_u32;
         let collection_id = NftCollectionId::get();
 
-        NacManaging::create_collection(&account(1));
+        NacManaging::create_collection(&owner);
 
         NacManaging::do_mint(item_id, owner.clone()).expect("Minting failed");
         NacManaging::update_nft_info(&collection_id, &item_id, nac_level, owner.clone())

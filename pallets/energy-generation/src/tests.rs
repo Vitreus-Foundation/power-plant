@@ -4622,19 +4622,18 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
     });
 }
 
-#[ignore]
 #[test]
 fn payout_creates_controller() {
     ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-        let balance = 1000;
+        let balance = 10000000;
         // Create a validator:
         make_validator(10, 11, balance);
 
         // Create a stash/controller pair
-        bond_cooperator(1234, 1337, 100, vec![(11, 100)]);
+        bond_cooperator(1234, 1337, 1000000, vec![(11, 1000000)]);
 
         // kill controller
-        assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 100));
+        assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 1000000));
         assert_eq!(Balances::free_balance(1337), 0);
 
         mock::start_active_era(1);
@@ -4648,16 +4647,15 @@ fn payout_creates_controller() {
     })
 }
 
-#[ignore]
 #[test]
 fn payout_to_any_account_works() {
     ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-        let balance = 1000;
+        let balance = 10000000;
         // Create a validator:
         make_validator(10, 11, balance); // Default(64)
 
         // Create a stash/controller pair
-        bond_cooperator(1234, 1337, 100, vec![(11, 100)]);
+        bond_cooperator(1234, 1337, 1000000, vec![(11, 1000000)]);
 
         // Update payout location
         assert_ok!(PowerPlant::set_payee(

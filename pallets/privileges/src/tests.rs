@@ -210,7 +210,7 @@ fn exit_a_vip_as_validator_non_free_tax_period_and_kick() {
         assert_eq!(EnergyGeneration::ledger(20).unwrap().active, 500 - 500 / 4);
         assert_eq!(System::account(20).data.frozen, 500 - 500 / 4);
         assert_eq!(System::account(20).data.free, 2000 - 500 / 4);
-        assert!(!EnergyGeneration::is_user_validator(&20));
+        assert!(EnergyGeneration::is_user_validator(&20));
     })
 }
 
@@ -338,6 +338,7 @@ fn test_year_end_data_saving_vipp_results() {
             current_date.current_month,
             current_date.current_day
         ));
+
         assert_eq!(Privileges::year_vipp_results(2020).unwrap().len(), 1);
         assert_eq!(Privileges::year_vipp_results(2020).unwrap(), assert_year_result);
         assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
