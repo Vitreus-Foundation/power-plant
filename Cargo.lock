@@ -2326,12 +2326,14 @@ dependencies = [
 name = "energy-fee-rpc"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "energy-fee-runtime-api",
  "ethereum-types",
  "jsonrpsee",
  "parity-scale-codec",
  "sp-api",
  "sp-blockchain",
+ "sp-core",
  "sp-runtime",
  "sp-std",
 ]

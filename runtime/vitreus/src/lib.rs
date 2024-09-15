@@ -257,7 +257,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 122,
+    spec_version: 123,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -2369,7 +2369,7 @@ impl_runtime_apis! {
         }
     }
 
-    impl energy_fee_runtime_api::EnergyFeeApi<Block> for Runtime {
+    impl energy_fee_runtime_api::EnergyFeeApi<Block, AccountId, Balance, RuntimeCall> for Runtime {
         fn estimate_gas(request: CallRequest) -> U256 {
             let CallRequest {
                 from,
@@ -2423,6 +2423,14 @@ impl_runtime_apis! {
             };
 
             EnergyFee::dispatch_info_to_fee(&call, None, None).into_inner().into()
+        }
+
+        fn estimate_call_fee(account: AccountId, call: RuntimeCall) -> Option<energy_fee_runtime_api::FeeDetails<Balance>> {
+            let fee = EnergyFee::dispatch_info_to_fee(&call, None, None).into_inner();
+            EnergyFee::calculate_fee_parts(&account, fee).map(|fees| energy_fee_runtime_api::FeeDetails {
+                vtrs: fees.1,
+                vnrg: fees.0,
+            }).ok()
         }
 
         fn vtrs_to_vnrg_swap_rate() -> Option<u128> {

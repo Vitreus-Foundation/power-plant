@@ -107,6 +107,7 @@ impl<T: Config> Pallet<T> {
         if !stake_value.is_zero() {
             let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
             slashed_imbalance.subsume(imbalance);
+            T::Slash::on_unbalanced(slashed_imbalance);
 
             <Pallet<T>>::update_ledger(account, &ledger_info);
         }
