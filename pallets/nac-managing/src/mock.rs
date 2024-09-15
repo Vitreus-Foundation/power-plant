@@ -18,38 +18,21 @@
 //! Test environment for 'pallet-nac-managing'.
 
 use crate::{self as pallet_nac_managing, *};
-use std::collections::BTreeMap;
 
 use frame_support::{
-    assert_ok, ord_parameter_types, parameter_types,
-    storage::StorageValue,
-    traits::{
-        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Currency, EitherOfDiverse,
-        FindAuthor, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler, WithdrawReasons,
-    },
+    parameter_types,
+    traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
     weights::constants::RocksDbWeight,
 };
-use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use orml_traits::GetByKey;
-use pallet_claiming::{EcdsaSignature, EthereumAddress};
-use pallet_energy_generation::{
-    CurrentEra, EnergyDebtOf, EnergyOf, ErasEnergyPerStakeCurrency, ErasStakers, ErasTotalStake,
-    Ledger, RewardDestination, SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakerStatus,
-    TestBenchmarkingConfig, ValidatorPrefs,
-};
-use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER};
+use frame_system::{EnsureRoot, EnsureSigned};
 use parity_scale_codec::Compact;
 use sp_core::H256;
-use sp_io::hashing::keccak_256;
-use sp_runtime::traits::{BlakeTwo256, IdentifyAccount};
+use sp_runtime::traits::BlakeTwo256;
 use sp_runtime::{
-    curve::PiecewiseLinear,
     testing::{TestSignature, UintAuthorityId},
-    traits::{Identity, IdentityLookup, Zero},
+    traits::IdentityLookup,
     BuildStorage,
 };
-use sp_staking::{EraIndex, OnStakingUpdate, SessionIndex};
-use sp_std::vec;
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -59,76 +42,22 @@ pub const BLOCK_TIME: u64 = 1000;
 /// The AccountId alias in this test module.
 pub(crate) type AccountId = u64;
 pub(crate) type Nonce = u64;
-pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u64;
 pub(crate) type Signature = TestSignature;
 pub(crate) type AccountPublic = UintAuthorityId;
-
-/// Another session handler struct to test on_disabled.
-pub struct OtherSessionHandler;
-
-impl sp_runtime::BoundToRuntimeAppPublic for OtherSessionHandler {
-    type Public = UintAuthorityId;
-}
-
-impl OneSessionHandler<AccountId> for OtherSessionHandler {
-    type Key = UintAuthorityId;
-
-    fn on_genesis_session<'a, I: 'a>(_: I)
-    where
-        I: Iterator<Item = (&'a AccountId, Self::Key)>,
-        AccountId: 'a,
-    {
-    }
-
-    fn on_new_session<'a, I: 'a>(_: bool, _: I, _: I)
-    where
-        I: Iterator<Item = (&'a AccountId, Self::Key)>,
-        AccountId: 'a,
-    {
-    }
-
-    fn on_disabled(_validator_index: u32) {}
-}
 
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
     pub enum Test
     {
         System: frame_system,
-        Timestamp: pallet_timestamp,
         Balances: pallet_balances,
         Assets: pallet_assets,
         Nfts: pallet_nfts,
         Reputation: pallet_reputation,
-        Claiming: pallet_claiming,
-        Vesting: pallet_vesting,
-        // Authorship: pallet_authorship,
         NacManaging: pallet_nac_managing,
-        Session: pallet_session,
-        Historical: pallet_session::historical,
-        // EnergyGeneration: pallet_energy_generation,
     }
 );
-
-parameter_types! {
-    pub static SessionsPerEra: SessionIndex = 3;
-    pub static ExistentialDeposit: Balance = 1;
-    pub static SlashDeferDuration: EraIndex = 0;
-    pub static Period: BlockNumber = 5;
-    pub static Offset: BlockNumber = 0;
-}
-
-/// Author of block is always 11
-pub struct Author11;
-impl FindAuthor<AccountId> for Author11 {
-    fn find_author<'a, I>(_digests: I) -> Option<AccountId>
-    where
-        I: 'a + IntoIterator<Item = (frame_support::ConsensusEngineId, &'a [u8])>,
-    {
-        Some(11)
-    }
-}
 
 impl frame_system::Config for Test {
     type RuntimeEvent = RuntimeEvent;
@@ -193,13 +122,6 @@ impl pallet_nfts::Config for Test {
     type Locker = ();
 }
 
-impl pallet_timestamp::Config for Test {
-    type MinimumPeriod = ConstU64<1000>;
-    type Moment = u64;
-    type OnTimestampSet = ();
-    type WeightInfo = ();
-}
-
 parameter_types! {
     pub const NftCollectionId: CollectionId = 0;
     pub const VIPPCollectionId: CollectionId = 1;
@@ -254,29 +176,6 @@ impl pallet_assets::Config for Test {
     type BenchmarkHelper = ();
 }
 
-sp_runtime::impl_opaque_keys! {
-    pub struct SessionKeys {
-        pub other: OtherSessionHandler,
-    }
-}
-
-impl pallet_session::Config for Test {
-    type SessionManager = ();
-    type Keys = SessionKeys;
-    type ShouldEndSession = pallet_session::PeriodicSessions<Period, Offset>;
-    type SessionHandler = (OtherSessionHandler,);
-    type RuntimeEvent = RuntimeEvent;
-    type ValidatorId = AccountId;
-    type ValidatorIdOf = ();
-    type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
-    type WeightInfo = ();
-}
-
-impl pallet_session::historical::Config for Test {
-    type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
-    type FullIdentificationOf = ();
-}
-
 impl pallet_reputation::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -296,35 +195,6 @@ impl pallet_balances::Config for Test {
     type MaxReserves = ();
     type MaxHolds = ();
     type MaxFreezes = ();
-}
-
-parameter_types! {
-    pub const MinVestedTransfer: u64 = 1;
-    pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
-        WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
-}
-
-impl pallet_vesting::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
-    type BlockNumberToBalance = Identity;
-    type MinVestedTransfer = MinVestedTransfer;
-    type WeightInfo = ();
-    type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
-    const MAX_VESTING_SCHEDULES: u32 = 28;
-}
-
-parameter_types! {
-    pub Prefix: &'static [u8] = b"Pay RUSTs to the TEST account:";
-}
-
-impl pallet_claiming::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
-    type VestingSchedule = Vesting;
-    type OnClaim = NacManaging;
-    type Prefix = Prefix;
-    type WeightInfo = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {

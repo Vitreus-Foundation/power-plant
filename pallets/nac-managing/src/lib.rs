@@ -659,10 +659,13 @@ impl<T: Config> OnWithdrawFeeHandler<T::AccountId> for Pallet<T> {
 /// Handler for updating, burning VIPP status.
 pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
     /// Handle a minting new VIPP NFT.
-    fn mint_vipp(_who: &AccountId, _amount: Balance, _item_id: ItemId) {}
+    fn mint_vipp(who: &AccountId, _amount: Balance, item_id: ItemId);
 
     /// Burning VIPP NFT.
-    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) {}
+    fn burn_vipp_nft(who: &AccountId, item_id: ItemId);
 }
 
-impl<AccountId, Balance, ItemId> OnVippStatusHandler<AccountId, Balance, ItemId> for () {}
+impl<AccountId, Balance, ItemId> OnVippStatusHandler<AccountId, Balance, ItemId> for () {
+    fn mint_vipp(_who: &AccountId, _amount: Balance, _item_id: ItemId) {}
+    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) {}
+}

@@ -22,7 +22,6 @@ use crate::{mock::*, *};
 use frame_support::{assert_err, assert_ok};
 use parity_scale_codec::Decode;
 
-type AccountIdOf<Test> = <Test as frame_system::Config>::AccountId;
 type BalanceOf<Test> = <Test as pallet_balances::Config>::Balance;
 
 const VANGUARD_1_REPUTATION_POINT: u64 = 7398066;
@@ -135,7 +134,7 @@ fn on_claim_should_work() {
         let item_id = 123_u32;
         let collection_id = NftCollectionId::get();
 
-        NacManaging::create_collection(&owner);
+        assert_ok!(NacManaging::create_collection(&owner));
 
         NacManaging::do_mint(item_id, owner.clone()).expect("Minting failed");
         NacManaging::update_nft_info(&collection_id, &item_id, nac_level, owner.clone())

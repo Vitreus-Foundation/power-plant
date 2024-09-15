@@ -29,17 +29,9 @@ sp-std = { workspace = true }
 
 [dev-dependencies]
 frame-benchmarking = { workspace = true }
-orml-traits = { workspace = true }
 pallet-assets = { workspace = true }
-pallet-authorship = { workspace = true }
 pallet-balances = { workspace = true }
-pallet-claiming = { workspace = true }
-pallet-energy-generation = { workspace = true }
 pallet-privileges = { workspace = true }
-pallet-session = { workspace = true }
-pallet-staking-reward-curve = { workspace = true }
-pallet-timestamp = { workspace = true }
-pallet-vesting = { workspace = true }
 rand_chacha = { workspace = true }
 sp-tracing = { workspace = true }
 substrate-test-utils = { workspace = true }
@@ -55,17 +47,12 @@ std = [
     "frame-support/std",
     "frame-system/std",
     "pallet-assets/std",
-    "pallet-authorship/std",
     "pallet-balances/std",
     "pallet-claiming/std",
-    "pallet-energy-generation/std",
     "pallet-privileges/std",
     "pallet-energy-fee/std",
     "pallet-reputation/std",
-    "pallet-timestamp/std",
-    "pallet-vesting/std",
     "pallet-nfts/std",
-    "pallet-session/std",
     "parity-scale-codec/std",
     "scale-info/std",
     "sp-arithmetic/std",
