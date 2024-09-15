@@ -776,10 +776,6 @@ fn cooperators_also_get_slashed_pro_rata() {
     ExtBuilder::default()
         .cooperate(CooperateSelector::CooperateWith(vec![(11, 500)]))
         .build_and_execute(|| {
-            for n in [100, 101] {
-                // TODO: fix it
-                // ReputationPallet::add_not_exists(&n);
-            }
             mock::start_active_era(1);
             let slash_percent = Perbill::from_percent(5);
             let initial_exposure = PowerPlant::eras_stakers(active_era(), 11);
