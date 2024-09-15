@@ -19,7 +19,7 @@ pub type V0108 =
     (FixMinCoopReputation, TransferClaimFrom0x48CfTo0x1206, TransferClaimFrom0x419fTo0x1920);
 pub type V0112 = (UpgradeSessionKeysUsingXcmPalletStorageVersionHack);
 
-pub type Unreleased = ();
+pub type Unreleased = (pallet_energy_generation::migrations::v15::MigrateV14ToV15<Runtime>);
 
 pub struct FixRewards;
 

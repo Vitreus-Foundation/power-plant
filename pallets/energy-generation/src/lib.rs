@@ -303,6 +303,7 @@ pub mod weights;
 mod pallet;
 
 use frame_support::{
+    defensive,
     traits::{tokens::fungibles::Debt, Currency, Defensive, Get},
     BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -681,8 +682,14 @@ impl<T: Config> StakingLedger<T> {
         // clean unlocking chunks that are set to zero.
         self.unlocking.retain(|c| !c.value.is_zero());
 
-        T::EventListeners::on_slash(&self.stash, self.active, &slashed_unlocking);
-        pre_slash_total.saturating_sub(self.total)
+        let final_slashed_amount = pre_slash_total.saturating_sub(self.total);
+        T::EventListeners::on_slash(
+            &self.stash,
+            self.active,
+            &slashed_unlocking,
+            final_slashed_amount,
+        );
+        final_slashed_amount
     }
 }
 
@@ -951,4 +958,80 @@ pub struct TestBenchmarkingConfig;
 impl BenchmarkingConfig for TestBenchmarkingConfig {
     type MaxValidators = frame_support::traits::ConstU32<100>;
     type MaxCooperators = frame_support::traits::ConstU32<100>;
+}
+
+/// Controls validator disabling
+pub trait DisablingStrategy<T: Config> {
+    /// Make a disabling decision. Returns the index of the validator to disable or `None` if no new
+    /// validator should be disabled.
+    fn decision(
+        offender_stash: &T::AccountId,
+        slash_era: EraIndex,
+        currently_disabled: &Vec<u32>,
+    ) -> Option<u32>;
+}
+
+/// Implementation of [`DisablingStrategy`] which disables validators from the active set up to a
+/// threshold. `DISABLING_LIMIT_FACTOR` is the factor of the maximum disabled validators in the
+/// active set. E.g. setting this value to `3` means no more than 1/3 of the validators in the
+/// active set can be disabled in an era.
+/// By default a factor of 3 is used which is the byzantine threshold.
+pub struct UpToLimitDisablingStrategy<const DISABLING_LIMIT_FACTOR: usize = 3>;
+
+impl<const DISABLING_LIMIT_FACTOR: usize> UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR> {
+    /// Disabling limit calculated from the total number of validators in the active set. When
+    /// reached no more validators will be disabled.
+    pub fn disable_limit(validators_len: usize) -> usize {
+        validators_len
+            .saturating_sub(1)
+            .checked_div(DISABLING_LIMIT_FACTOR)
+            .unwrap_or_else(|| {
+                defensive!("DISABLING_LIMIT_FACTOR should not be 0");
+                0
+            })
+    }
+}
+
+impl<T: Config, const DISABLING_LIMIT_FACTOR: usize> DisablingStrategy<T>
+    for UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR>
+{
+    fn decision(
+        offender_stash: &T::AccountId,
+        slash_era: EraIndex,
+        currently_disabled: &Vec<u32>,
+    ) -> Option<u32> {
+        let active_set = T::SessionInterface::validators();
+
+        // We don't disable more than the limit
+        if currently_disabled.len() >= Self::disable_limit(active_set.len()) {
+            log!(
+                debug,
+                "Won't disable: reached disabling limit {:?}",
+                Self::disable_limit(active_set.len())
+            );
+            return None;
+        }
+
+        // We don't disable for offences in previous eras
+        if ActiveEra::<T>::get().map(|e| e.index).unwrap_or_default() > slash_era {
+            log!(
+                debug,
+                "Won't disable: current_era {:?} > slash_era {:?}",
+                Pallet::<T>::current_era().unwrap_or_default(),
+                slash_era
+            );
+            return None;
+        }
+
+        let offender_idx = if let Some(idx) = active_set.iter().position(|i| i == offender_stash) {
+            idx as u32
+        } else {
+            log!(debug, "Won't disable: offender not in active set",);
+            return None;
+        };
+
+        log!(debug, "Will disable {:?}", offender_idx);
+
+        Some(offender_idx)
+    }
 }

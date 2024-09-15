@@ -18,7 +18,6 @@
 //! Staking FRAME Pallet.
 
 use frame_support::{
-    dispatch::Codec,
     pallet_prelude::*,
     storage::bounded_btree_map::BoundedBTreeMap,
     storage::bounded_btree_set::BoundedBTreeSet,
@@ -28,10 +27,9 @@ use frame_support::{
     },
     weights::Weight,
 };
-
 use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
-use orml_traits::GetByKey;
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
+use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, CheckedSub, Convert, SaturatedConversion, StaticLookup, Zero},
     ArithmeticError, Perbill, Percent, Saturating,
@@ -45,9 +43,10 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-    slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, Cooperations, EnergyDebtOf,
-    EnergyRateCalculator, Exposure, Forcing, RewardDestination, SessionInterface,
-    StakeNegativeImbalanceOf, StakeOf, StakingLedger, UnappliedSlash, UnlockChunk, ValidatorPrefs,
+    slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, Cooperations,
+    DisablingStrategy, EnergyDebtOf, EnergyRateCalculator, Exposure, Forcing, RewardDestination,
+    SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakingLedger, UnappliedSlash,
+    UnlockChunk, ValidatorPrefs,
 };
 
 #[cfg(feature = "try-runtime")]
@@ -202,10 +201,6 @@ pub mod pallet {
         #[pallet::constant]
         type MaxCooperatorRewardedPerValidator: Get<u32>;
 
-        /// The fraction of the validator set that is safe to be offending.
-        /// After the threshold is reached a new era will be forced.
-        type OffendingValidatorsThreshold: Get<Perbill>;
-
         /// The maximum number of `unlocking` chunks a [`StakingLedger`] can
         /// have. Effectively determines how many unique eras a staker may be
         /// unbonding in.
@@ -225,6 +220,9 @@ pub mod pallet {
         /// WARNING: this only reports slashing events for the time being.
         type EventListeners: sp_staking::OnStakingUpdate<Self::AccountId, StakeOf<Self>>;
 
+        /// `DisablingStragegy` controls how validators are disabled
+        type DisablingStrategy: DisablingStrategy<Self>;
+
         /// The minimum reputation to be a validator.
         #[pallet::constant]
         type ValidatorReputationTier: Get<ReputationTier>;
@@ -235,7 +233,10 @@ pub mod pallet {
         type CollaborativeValidatorReputationTier: Get<ReputationTier>;
 
         /// `ReputationTier` -> `Perbill` mapping, depicting additional energy reward ratio per tier.
-        type ReputationTierEnergyRewardAdditionalPercentMapping: GetByKey<ReputationTier, Perbill>;
+        type ReputationTierEnergyRewardAdditionalPercentMapping: for<'a> Convert<
+            &'a ReputationTier,
+            Perbill,
+        >;
 
         /// A conversion from account ID to NAC level.
         type ValidatorNacLevel: for<'a> Convert<&'a Self::AccountId, Option<u8>>;
@@ -553,19 +554,16 @@ pub mod pallet {
     #[pallet::getter(fn current_planned_session)]
     pub type CurrentPlannedSession<T> = StorageValue<_, SessionIndex, ValueQuery>;
 
-    /// Indices of validators that have offended in the active era and whether they are currently
-    /// disabled.
+    /// Indices of validators that have offended in the active era. The offenders are disabled for a
+    /// whole era. For this reason they are kept here - only staking pallet knows about eras. The
+    /// implementor of [`DisablingStrategy`] defines if a validator should be disabled which
+    /// implicitly means that the implementor also controls the max number of disabled validators.
     ///
-    /// This value should be a superset of disabled validators since not all offences lead to the
-    /// validator being disabled (if there was no slash). This is needed to track the percentage of
-    /// validators that have offended in the current era, ensuring a new era is forced if
-    /// `OffendingValidatorsThreshold` is reached. The vec is always kept sorted so that we can find
-    /// whether a given validator has previously offended using binary search. It gets cleared when
-    /// the era ends.
+    /// The vec is always kept sorted so that we can find whether a given validator has previously
+    /// offended using binary search.
     #[pallet::storage]
     #[pallet::unbounded]
-    #[pallet::getter(fn offending_validators)]
-    pub type OffendingValidators<T: Config> = StorageValue<_, Vec<(u32, bool)>, ValueQuery>;
+    pub type DisabledValidators<T: Config> = StorageValue<_, Vec<u32>, ValueQuery>;
 
     /// The threshold for when users can start calling `chill_other` for other validators /
     /// cooperators. The threshold is compared to the actual number of validators / cooperators

@@ -5,7 +5,7 @@
 use crate::{self as pallet_energy_generation, *};
 use frame_support::weights::Weight;
 use frame_support::{
-    assert_ok, ord_parameter_types, parameter_types,
+    assert_ok, derive_impl, ord_parameter_types, parameter_types,
     storage::StorageValue,
     traits::{
         AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Currency, EitherOfDiverse,
@@ -14,7 +14,6 @@ use frame_support::{
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use orml_traits::GetByKey;
 use pallet_reputation::{
     ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_BLOCK,
 };
@@ -23,10 +22,10 @@ use sp_core::H256;
 use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{Header, TestSignature, UintAuthorityId},
-    traits::{IdentifyAccount, IdentityLookup, Verify, Zero},
+    traits::{Dispatchable, IdentifyAccount, IdentityLookup, Verify, Zero},
     BuildStorage, MultiSignature, Percent,
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
@@ -109,6 +108,7 @@ parameter_types! {
     pub static Offset: BlockNumber = 0;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type BaseCallFilter = frame_support::traits::Everything;
     type BlockWeights = ();
@@ -135,6 +135,7 @@ impl frame_system::Config for Test {
     type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type MaxLocks = frame_support::traits::ConstU32<1024>;
     type MaxReserves = ();
@@ -147,7 +148,6 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ();
-    type MaxHolds = ();
     type RuntimeHoldReason = ();
 }
 
@@ -283,6 +283,7 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
         _pool_account: &AccountId,
         slashed_bonded: Balance,
         slashed_chunks: &BTreeMap<EraIndex, Balance>,
+        _slashed_total: Balance,
     ) {
         LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
     }
@@ -290,8 +291,8 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 
 pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
 
-impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
-    fn get(k: &ReputationTier) -> Perbill {
+impl Convert<&ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
+    fn convert(k: &ReputationTier) -> Perbill {
         match k {
             ReputationTier::Vanguard(2) => Perbill::from_percent(2),
             ReputationTier::Vanguard(3) => Perbill::from_percent(4),
@@ -313,6 +314,8 @@ impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalP
     }
 }
 
+pub(crate) const DISABLING_LIMIT_FACTOR: usize = 3;
+
 impl pallet_energy_generation::Config for Test {
     type AdminOrigin = EnsureOneOrRoot;
     type BatterySlotCapacity = BatterySlotCapacity;
@@ -326,8 +329,9 @@ impl pallet_energy_generation::Config for Test {
     type MaxCooperatorRewardedPerValidator = ConstU32<64>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
-    type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = EventListenerMock;
+    type DisablingStrategy =
+        pallet_energy_generation::UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR>;
     type ReputationTierEnergyRewardAdditionalPercentMapping =
         ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = MockReward;
@@ -841,13 +845,11 @@ pub(crate) fn on_offence_in_era(
     >],
     slash_fraction: &[Perbill],
     era: EraIndex,
-    disable_strategy: DisableStrategy,
 ) {
     let bonded_eras = crate::BondedEras::<Test>::get();
     for &(bonded_era, start_session) in bonded_eras.iter() {
         if bonded_era == era {
-            let _ =
-                PowerPlant::on_offence(offenders, slash_fraction, start_session, disable_strategy);
+            let _ = PowerPlant::on_offence(offenders, slash_fraction, start_session);
             return;
         } else if bonded_era > era {
             break;
@@ -859,7 +861,6 @@ pub(crate) fn on_offence_in_era(
             offenders,
             slash_fraction,
             PowerPlant::eras_start_session_index(era).unwrap(),
-            disable_strategy,
         );
     } else {
         panic!("cannot slash in era {}", era);
@@ -874,7 +875,7 @@ pub(crate) fn on_offence_now(
     slash_fraction: &[Perbill],
 ) {
     let now = PowerPlant::active_era().unwrap().index;
-    on_offence_in_era(offenders, slash_fraction, now, DisableStrategy::WhenSlashed)
+    on_offence_in_era(offenders, slash_fraction, now)
 }
 
 pub(crate) fn add_slash(who: &AccountId) {

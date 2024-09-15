@@ -6,21 +6,21 @@ use crate::{
     testing_utils::perbill_signed_sub_abs,
 };
 use frame_support::{
-    assert_noop, assert_ok, assert_storage_noop, bounded_vec,
-    dispatch::{extract_actual_weight, Dispatchable, GetDispatchInfo, WithPostDispatchInfo},
+    assert_noop, assert_ok, assert_storage_noop,
+    dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
     pallet_prelude::*,
     traits::{Currency, Get, ReservableCurrency},
     weights::Weight,
 };
 use mock::*;
 use pallet_balances::Error as BalancesError;
-
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
-    assert_eq_error_rate, traits::BadOrigin, FixedPointNumber, FixedU128, Perbill, Percent,
-    TokenError,
+    assert_eq_error_rate, bounded_vec,
+    traits::{BadOrigin, Dispatchable},
+    FixedPointNumber, FixedU128, Perbill, Percent, TokenError,
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails};
+use sp_staking::offence::OffenceDetails;
 use sp_std::prelude::*;
 use std::ops::Deref;
 use substrate_test_utils::assert_eq_uvec;
@@ -2497,7 +2497,6 @@ fn slash_in_old_span_does_not_deselect() {
             }],
             &[Perbill::from_percent(0)],
             1,
-            DisableStrategy::WhenSlashed,
         );
         on_offence_in_era(
             &[OffenceDetails {
@@ -2506,7 +2505,6 @@ fn slash_in_old_span_does_not_deselect() {
             }],
             &[Perbill::from_percent(0)],
             1,
-            DisableStrategy::WhenSlashed,
         );
 
         // the validator doesn't get chilled again
@@ -2524,7 +2522,6 @@ fn slash_in_old_span_does_not_deselect() {
             // NOTE: A 100% slash here would clean up the account, causing de-registration.
             &[Perbill::from_percent(95)],
             1,
-            DisableStrategy::WhenSlashed,
         );
         on_offence_in_era(
             &[OffenceDetails {
@@ -2534,7 +2531,6 @@ fn slash_in_old_span_does_not_deselect() {
             // NOTE: A 100% slash here would clean up the account, causing de-registration.
             &[Perbill::from_percent(95)],
             1,
-            DisableStrategy::WhenSlashed,
         );
 
         // the validator doesn't get chilled again
@@ -3281,7 +3277,6 @@ fn retroactive_deferred_slashes_two_eras_before() {
                 &[OffenceDetails { offender: (11, exposure_11_at_era_1), reporters: vec![] }],
                 &[Perbill::from_percent(10)],
                 1, // should be deferred for two full eras, and applied at the beginning of era 4.
-                DisableStrategy::Never,
             );
 
             mock::start_active_era(4);
@@ -3327,7 +3322,6 @@ fn retroactive_deferred_slashes_one_before() {
             &[OffenceDetails { offender: (11, exposure_11_at_era_1), reporters: vec![] }],
             &[Perbill::from_percent(10)],
             2, // should be deferred for two full eras, and applied at the beginning of era 5.
-            DisableStrategy::Never,
         );
 
         mock::start_active_era(4);
@@ -3544,7 +3538,6 @@ fn remove_deferred() {
             &[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
             &[Perbill::from_percent(15)],
             1,
-            DisableStrategy::WhenSlashed,
         );
 
         // fails if empty
@@ -3854,7 +3847,6 @@ fn slashing_independent_of_disabling_validator() {
             &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
             &[Perbill::zero()],
             now,
-            DisableStrategy::Always,
         );
 
         // cooperation remains untouched.
@@ -3868,7 +3860,6 @@ fn slashing_independent_of_disabling_validator() {
             &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
             &[Perbill::from_percent(25)],
             now,
-            DisableStrategy::Never,
         );
 
         // cooperation remains untouched.
@@ -3913,10 +3904,10 @@ fn offence_threshold_triggers_new_era() {
             mock::start_active_era(1);
             assert_eq_uvec!(Session::validators(), [41, 31, 21, 11]);
 
-            assert_eq!(
-                <Test as Config>::OffendingValidatorsThreshold::get(),
-                Perbill::from_percent(75),
-            );
+            // assert_eq!(
+            //     <Test as Config>::OffendingValidatorsThreshold::get(),
+            //     Perbill::from_percent(75),
+            // );
 
             // we have 4 validators and an offending validator threshold of 75%,
             // once the third validator commits an offence a new era should be forced

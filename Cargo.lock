@@ -7041,7 +7041,6 @@ dependencies = [
  "frame-support 37.0.0",
  "frame-system",
  "log",
- "orml-traits",
  "pallet-assets",
  "pallet-authorship",
  "pallet-balances",
