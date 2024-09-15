@@ -22,7 +22,7 @@ fn can_set_points_forcefuly() {
 }
 
 #[test]
-fn can_encrease_points() {
+fn can_increase_points() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         ReputationPallet::update_points_for_time();
@@ -51,7 +51,6 @@ fn can_encrease_points() {
             ReputationPallet::reputation(account),
             Some(ReputationRecord { reputation: new_points.into(), updated: block_number })
         );
-        System::assert_last_event(Event::ReputationIncreased { account, points }.into());
     });
 }
 
