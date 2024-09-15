@@ -1087,8 +1087,10 @@ impl pallet_vesting::Config for Runtime {
 }
 
 impl pallet_simple_vesting::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type BlockNumberToBalance = ConvertInto;
+    type Slash = Treasury;
 }
 
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
@@ -1120,6 +1122,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Democracy(..)
             | RuntimeCall::Session(..)
             | RuntimeCall::XcmPallet(..)
+            | RuntimeCall::SimpleVesting(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })

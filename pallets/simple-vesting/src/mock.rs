@@ -12,6 +12,10 @@ type AccountId = u32;
 type Balance = u64;
 type Nonce = u32;
 
+pub(crate) const ED: Balance = 100;
+pub(crate) const ALICE: AccountId = 1;
+pub(crate) const BOB: AccountId = 2;
+
 // Configure a mock runtime to test the pallet.
 frame_support::construct_runtime!(
     pub enum Test
@@ -53,7 +57,7 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
     type Balance = Balance;
     type DustRemoval = ();
-    type ExistentialDeposit = ConstU64<1>;
+    type ExistentialDeposit = ConstU64<ED>;
     type AccountStore = System;
     type ReserveIdentifier = [u8; 8];
     type RuntimeHoldReason = ();
@@ -65,30 +69,22 @@ impl pallet_balances::Config for Test {
 }
 
 impl pallet_simple_vesting::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type BlockNumberToBalance = Identity;
+    type Slash = ();
 }
 
 // Build genesis storage according to the mock runtime.
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
-    pallet_balances::GenesisConfig::<Test> { balances: vec![(alice(), 12), (bob(), 21)] }
+    pallet_balances::GenesisConfig::<Test> { balances: vec![(ALICE, 100 * ED)] }
         .assimilate_storage(&mut t)
         .unwrap();
-    pallet_simple_vesting::GenesisConfig::<Test> {
-        vesting: vec![(alice(), 5, 10, 2), (bob(), 2, 5, 1)],
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
+    pallet_simple_vesting::GenesisConfig::<Test> { vesting: vec![] }
+        .assimilate_storage(&mut t)
+        .unwrap();
 
     t.into()
-}
-
-pub(crate) fn alice() -> AccountId {
-    1
-}
-
-pub(crate) fn bob() -> AccountId {
-    2
 }
