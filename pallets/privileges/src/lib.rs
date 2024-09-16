@@ -36,7 +36,7 @@ pub mod weights;
 
 const INCREASE_VIP_POINTS_CONSTANT: u64 = 50;
 
-const MAX_UPDATE_DAYS: u32 = 30;
+const MAX_UPDATE_DAYS: u32 = 366;
 
 const FREE_PENALTY_PERIOD_MONTH_NUMBER: u32 = 1;
 

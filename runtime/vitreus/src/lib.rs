@@ -257,7 +257,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 119,
+    spec_version: 123,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 1,
@@ -408,7 +408,7 @@ impl pallet_grandpa::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
 
     type WeightInfo = ();
-    type MaxAuthorities = ConstU32<32>;
+    type MaxAuthorities = MaxAuthorities;
     type MaxSetIdSessionEntries = ConstU64<168>;
 
     type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
@@ -804,6 +804,7 @@ impl pallet_energy_generation::Config for Runtime {
     type SlashDeferDuration = SlashDeferDuration;
     type StakeBalance = Balance;
     type StakeCurrency = Balances;
+    type ValidatorNacLevel = NacManaging;
     type OnVipMembershipHandler = Privileges;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
@@ -1043,6 +1044,7 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyAssetId = VNRG;
     type MainRecycleDestination = EnergyBrokerSink;
     type FeeRecycleDestination = ();
+    type OnWithdrawFee = NacManaging;
 }
 
 parameter_types! {
@@ -1085,8 +1087,10 @@ impl pallet_vesting::Config for Runtime {
 }
 
 impl pallet_simple_vesting::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type BlockNumberToBalance = ConvertInto;
+    type Slash = Treasury;
 }
 
 // We implement CusomFee here since the RuntimeCall defined in construct_runtime! macro
@@ -1118,6 +1122,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Democracy(..)
             | RuntimeCall::Session(..)
             | RuntimeCall::XcmPallet(..)
+            | RuntimeCall::SimpleVesting(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
@@ -2364,7 +2369,7 @@ impl_runtime_apis! {
         }
     }
 
-    impl energy_fee_runtime_api::EnergyFeeApi<Block> for Runtime {
+    impl energy_fee_runtime_api::EnergyFeeApi<Block, AccountId, Balance, RuntimeCall> for Runtime {
         fn estimate_gas(request: CallRequest) -> U256 {
             let CallRequest {
                 from,
@@ -2418,6 +2423,14 @@ impl_runtime_apis! {
             };
 
             EnergyFee::dispatch_info_to_fee(&call, None, None).into_inner().into()
+        }
+
+        fn estimate_call_fee(account: AccountId, call: RuntimeCall) -> Option<energy_fee_runtime_api::FeeDetails<Balance>> {
+            let fee = EnergyFee::dispatch_info_to_fee(&call, None, None).into_inner();
+            EnergyFee::calculate_fee_parts(&account, fee).map(|fees| energy_fee_runtime_api::FeeDetails {
+                vtrs: fees.1,
+                vnrg: fees.0,
+            }).ok()
         }
 
         fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
