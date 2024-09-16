@@ -2,7 +2,7 @@
 
 use ethereum::AccessListItem;
 use ethereum_types::{H160, U256};
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Codec, Decode, Encode};
 use scale_info::TypeInfo;
 #[cfg(feature = "std")]
 use serde::{Deserialize, Serialize};
@@ -40,10 +40,23 @@ pub struct CallRequest {
     pub transaction_type: Option<U256>,
 }
 
+#[derive(Encode, Decode, TypeInfo)]
+#[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
+pub struct FeeDetails<Balance> {
+    pub vtrs: Balance,
+    pub vnrg: Balance,
+}
+
 sp_api::decl_runtime_apis! {
-    pub trait EnergyFeeApi
+    pub trait EnergyFeeApi<AccountId, Balance, Call>
+    where
+        AccountId: Codec,
+        Balance: Codec,
+        Call: Codec,
     {
         fn estimate_gas(request: CallRequest) -> U256;
+
+        fn estimate_call_fee(account: AccountId, call: Call) -> Option<FeeDetails<Balance>>;
 
         fn vtrs_to_vnrg_swap_rate() -> Option<u128>;
     }

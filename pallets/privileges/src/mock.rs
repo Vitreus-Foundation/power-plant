@@ -2,11 +2,10 @@ use crate::{self as pallet_privileges, *};
 use std::collections::BTreeMap;
 
 use frame_support::{
-    assert_ok, ord_parameter_types, parameter_types,
-    storage::StorageValue,
+    ord_parameter_types, parameter_types,
     traits::{
-        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Currency, EitherOfDiverse,
-        FindAuthor, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler, WithdrawReasons,
+        AsEnsureOriginWithArg, ConstU32, ConstU64, EitherOfDiverse, FindAuthor, Hooks, Imbalance,
+        OnUnbalanced, OneSessionHandler, WithdrawReasons,
     },
     weights::constants::RocksDbWeight,
 };
@@ -14,9 +13,7 @@ use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use orml_traits::GetByKey;
 use pallet_claiming::{EcdsaSignature, EthereumAddress};
 use pallet_energy_generation::{
-    CurrentEra, EnergyDebtOf, EnergyOf, ErasEnergyPerStakeCurrency, ErasStakers, ErasTotalStake,
-    Ledger, RewardDestination, SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakerStatus,
-    TestBenchmarkingConfig, ValidatorPrefs,
+    EnergyDebtOf, EnergyOf, StakeNegativeImbalanceOf, StakeOf, StakerStatus, TestBenchmarkingConfig,
 };
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER};
 use parity_scale_codec::Compact;
@@ -95,7 +92,7 @@ frame_support::construct_runtime!(
 
 parameter_types! {
     pub static SessionsPerEra: SessionIndex = 3;
-    pub static ExistentialDeposit: Balance = 1;
+    pub static ExistentialDeposit: Balance = 10;
     pub static SlashDeferDuration: EraIndex = 0;
     pub static Period: BlockNumber = 5;
     pub static Offset: BlockNumber = 0;
@@ -445,6 +442,7 @@ impl pallet_energy_generation::Config for Test {
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type ReputationTierEnergyRewardAdditionalPercentMapping =
         ReputationTierEnergyRewardAdditionalPercentMapping;
+    type ValidatorNacLevel = ();
     type OnVipMembershipHandler = Privileges;
     type BenchmarkingConfig = TestBenchmarkingConfig;
     type ThisWeightInfo = ();
@@ -704,7 +702,7 @@ impl ExtBuilder {
             invulnerables: self.invulnerables,
             slash_reward_fraction: Perbill::from_percent(10),
             min_cooperator_bond: self.min_cooperator_bond,
-            min_common_validator_bond: 500,
+            min_common_validator_bond: self.min_common_validator_bond,
             min_trust_validator_bond: self.min_trust_validator_bond,
             energy_per_stake_currency: self.energy_per_stake_currency,
             block_authoring_reward: self.block_authoring_reward,
@@ -760,188 +758,6 @@ impl ExtBuilder {
     }
 }
 
-pub(crate) fn active_era() -> EraIndex {
-    EnergyGeneration::active_era().unwrap().index
-}
-
-pub(crate) fn current_era() -> EraIndex {
-    EnergyGeneration::current_era().unwrap()
-}
-
-pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
-    let _ = Balances::make_free_balance_be(&stash, val);
-    let _ = Balances::make_free_balance_be(&ctrl, val);
-    assert_ok!(EnergyGeneration::bond(
-        RuntimeOrigin::signed(stash),
-        ctrl,
-        val,
-        RewardDestination::Controller
-    ));
-}
-
-pub(crate) fn bond_cooperator(
-    stash: AccountId,
-    ctrl: AccountId,
-    val: Balance,
-    target: Vec<(AccountId, Balance)>,
-) {
-    bond(stash, ctrl, val);
-    assert_ok!(EnergyGeneration::cooperate(RuntimeOrigin::signed(ctrl), target));
-}
-
-/// Progress to the given block, triggering session and era changes as we progress.
-///
-/// This will finalize the previous block, initialize up to the given block, essentially simulating
-/// a block import/propose process where we first initialize the block, then execute some stuff (not
-/// in the function), and then finalize the block.
-pub(crate) fn run_to_block(n: BlockNumber) {
-    EnergyGeneration::on_finalize(System::block_number());
-    for b in (System::block_number() + 1)..=n {
-        System::set_block_number(b);
-        Session::on_initialize(b);
-        <EnergyGeneration as Hooks<u64>>::on_initialize(b);
-        Timestamp::set_timestamp(System::block_number() * BLOCK_TIME + INIT_TIMESTAMP);
-        if b != n {
-            EnergyGeneration::on_finalize(System::block_number());
-        }
-    }
-}
-
-/// Progresses from the current block number (whatever that may be) to the `P * session_index + 1`.
-pub(crate) fn start_session(session_index: SessionIndex) {
-    let end: u64 = if Offset::get().is_zero() {
-        (session_index as u64) * Period::get()
-    } else {
-        Offset::get() + (session_index.saturating_sub(1) as u64) * Period::get()
-    };
-    run_to_block(end);
-    // session must have progressed properly.
-    assert_eq!(
-        Session::current_index(),
-        session_index,
-        "current session index = {}, expected = {}",
-        Session::current_index(),
-        session_index,
-    );
-}
-
-/// Go one session forward.
-pub(crate) fn advance_session() {
-    let current_index = Session::current_index();
-    start_session(current_index + 1);
-}
-
-/// Progress until the given era.
-pub(crate) fn start_active_era(era_index: EraIndex) {
-    start_session(era_index * <SessionsPerEra as Get<u32>>::get());
-    assert_eq!(active_era(), era_index);
-    // One way or another, current_era must have changed before the active era, so they must match
-    // at this point.
-    assert_eq!(current_era(), active_era());
-}
-
-pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
-    let num_blocks = duration / BLOCK_TIME;
-    let era_index = CurrentEra::<Test>::get().unwrap_or_default();
-    let rate = ErasEnergyPerStakeCurrency::<Test>::get(era_index).unwrap_or_default();
-    let total_stake = ErasTotalStake::<Test>::get(era_index);
-    let era_blocks = Period::get() * SessionsPerEra::get() as u64 - 1;
-    let ratio = Perbill::from_rational(num_blocks, era_blocks);
-    let payout = ratio * rate * total_stake;
-
-    assert!(payout > 0);
-    payout
-}
-
-pub(crate) fn make_validator(controller: AccountId, stash: AccountId, balance: Balance) {
-    assert_ok!(Reputation::force_set_points(
-        RuntimeOrigin::root(),
-        controller,
-        CollaborativeValidatorReputationTier::get().into()
-    ));
-
-    assert_ok!(Reputation::force_set_points(
-        RuntimeOrigin::root(),
-        stash,
-        CollaborativeValidatorReputationTier::get().into()
-    ));
-
-    bond(stash, controller, balance);
-
-    assert_ok!(EnergyGeneration::validate(
-        RuntimeOrigin::signed(controller),
-        ValidatorPrefs::default_collaborative()
-    ));
-
-    assert_ok!(Session::set_keys(
-        RuntimeOrigin::signed(controller),
-        SessionKeys { other: controller.into() },
-        vec![]
-    ));
-}
-
-/// Time it takes to finish a session.
-///
-/// Note, if you see `time_per_session() - BLOCK_TIME`, it is fine. This is because we set the
-/// timestamp after on_initialize, so the timestamp is always one block old.
-pub(crate) fn time_per_session() -> u64 {
-    Period::get() * BLOCK_TIME
-}
-
-// reputation reward points each account receive per session
-pub(crate) fn reputation_per_sessions(num: u64) -> u64 {
-    Period::get() * num * *pallet_reputation::REPUTATION_POINTS_PER_BLOCK
-}
-
-pub(crate) fn reputation_per_era() -> u64 {
-    reputation_per_sessions(SessionsPerEra::get() as u64)
-}
-
-/// Time it takes to finish an era.
-///
-/// Note, if you see `time_per_era() - BLOCK_TIME`, it is fine. This is because we set the
-/// timestamp after on_initialize, so the timestamp is always one block old.
-pub(crate) fn time_per_era() -> u64 {
-    time_per_session() * SessionsPerEra::get() as u64
-}
-
-/// Time that will be calculated for the reward per era.
-pub(crate) fn reward_time_per_era() -> u64 {
-    time_per_era() - BLOCK_TIME
-}
-
-pub(crate) fn reward_all_elected() {
-    let rewards = <Test as pallet_energy_generation::Config>::SessionInterface::validators()
-        .into_iter()
-        .map(|v| (v, 1.into()));
-
-    <pallet_energy_generation::Pallet<Test>>::reward_by_ids(rewards)
-}
-
-pub(crate) fn validator_controllers() -> Vec<AccountId> {
-    Session::validators()
-        .into_iter()
-        .map(|s| EnergyGeneration::bonded(s).expect("no controller for validator"))
-        .collect()
-}
-
-/// Make all validator and cooperator request their payment
-pub(crate) fn make_all_reward_payment(era: EraIndex) {
-    let validators: Vec<_> = ErasStakers::<Test>::iter()
-        .filter_map(|(e, validator, _)| if e == era { Some(validator) } else { None })
-        .collect();
-
-    // reward validators
-    for validator_controller in validators.iter().filter_map(EnergyGeneration::bonded) {
-        let ledger = <Ledger<Test>>::get(validator_controller).unwrap();
-        assert_ok!(EnergyGeneration::payout_stakers(
-            RuntimeOrigin::signed(1337),
-            ledger.stash,
-            era
-        ));
-    }
-}
-
 #[macro_export]
 macro_rules! assert_session_era {
     ($session:expr, $era:expr) => {
@@ -960,10 +776,6 @@ macro_rules! assert_session_era {
             $era,
         );
     };
-}
-
-pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
-    (Balances::free_balance(who), Balances::reserved_balance(who))
 }
 
 pub(crate) fn bob() -> libsecp256k1::SecretKey {

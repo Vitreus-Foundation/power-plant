@@ -598,7 +598,8 @@ fn cooperating_and_rewards_should_work() {
             let initial_balance = 1000;
             for i in [1, 2, 3, 4, 5, 10, 11, 20, 21].iter() {
                 let _ = Balances::make_free_balance_be(i, initial_balance);
-                ReputationPallet::add_not_exists(i);
+                // TODO: fix it
+                // ReputationPallet::add_not_exists(i);
             }
 
             // bond two account pairs and state interest in cooperation.
@@ -775,9 +776,6 @@ fn cooperators_also_get_slashed_pro_rata() {
     ExtBuilder::default()
         .cooperate(CooperateSelector::CooperateWith(vec![(11, 500)]))
         .build_and_execute(|| {
-            for n in [100, 101] {
-                ReputationPallet::add_not_exists(&n);
-            }
             mock::start_active_era(1);
             let slash_percent = Perbill::from_percent(5);
             let initial_exposure = PowerPlant::eras_stakers(active_era(), 11);
@@ -4620,19 +4618,18 @@ fn bond_during_era_correctly_populates_claimed_rewards() {
     });
 }
 
-#[ignore]
 #[test]
 fn payout_creates_controller() {
     ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-        let balance = 1000;
+        let balance = 10000000;
         // Create a validator:
         make_validator(10, 11, balance);
 
         // Create a stash/controller pair
-        bond_cooperator(1234, 1337, 100, vec![(11, 100)]);
+        bond_cooperator(1234, 1337, 1000000, vec![(11, 1000000)]);
 
         // kill controller
-        assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 100));
+        assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 1000000));
         assert_eq!(Balances::free_balance(1337), 0);
 
         mock::start_active_era(1);
@@ -4646,16 +4643,15 @@ fn payout_creates_controller() {
     })
 }
 
-#[ignore]
 #[test]
 fn payout_to_any_account_works() {
     ExtBuilder::default().has_stakers(false).build_and_execute(|| {
-        let balance = 1000;
+        let balance = 10000000;
         // Create a validator:
         make_validator(10, 11, balance); // Default(64)
 
         // Create a stash/controller pair
-        bond_cooperator(1234, 1337, 100, vec![(11, 100)]);
+        bond_cooperator(1234, 1337, 1000000, vec![(11, 1000000)]);
 
         // Update payout location
         assert_ok!(PowerPlant::set_payee(

@@ -15,7 +15,6 @@ log = { workspace = true }
 pallet-asset-rate = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-evm = { workspace = true }
-pallet-nac-managing = {workspace = true }
 pallet-transaction-payment = { workspace = true }
 pallet-sudo = { workspace = true }
 parity-scale-codec = { workspace = true }
@@ -65,7 +64,6 @@ std = [
     "pallet-ethereum/std",
     "pallet-evm/std",
     "pallet-base-fee/std",
-    "pallet-nac-managing/std",
     "pallet-evm-chain-id/std",
     "pallet-reputation/std",
     "parity-scale-codec/std",

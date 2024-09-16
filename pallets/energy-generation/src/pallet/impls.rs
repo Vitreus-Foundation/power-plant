@@ -107,6 +107,7 @@ impl<T: Config> Pallet<T> {
         if !stake_value.is_zero() {
             let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
             slashed_imbalance.subsume(imbalance);
+            T::Slash::on_unbalanced(slashed_imbalance);
 
             <Pallet<T>>::update_ledger(account, &ledger_info);
         }
@@ -162,8 +163,8 @@ impl<T: Config> Pallet<T> {
 
     /// Minimum stake to be a validator depends on NAC level.
     pub fn min_bond_for_validator(stash: &T::AccountId) -> StakeOf<T> {
-        match pallet_nac_managing::Pallet::<T>::get_nac_level(stash) {
-            Some((level, _)) => {
+        match T::ValidatorNacLevel::convert(stash) {
+            Some(level) => {
                 if level > 1 {
                     MinTrustValidatorBond::<T>::get()
                 } else {
