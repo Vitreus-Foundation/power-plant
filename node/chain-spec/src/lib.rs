@@ -268,7 +268,6 @@ pub fn testnet_config() -> ChainSpec {
 }
 
 pub fn stagenet_config() -> ChainSpec {
-    use devnet_keys::*;
     use testnet_keys::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
@@ -280,8 +279,7 @@ pub fn stagenet_config() -> ChainSpec {
         "stagenet",
         ChainType::Custom("Stagenet".to_string()),
         move || {
-            let validators =
-                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")];
+            let validators = vec![validator_1_keys(), validator_2_keys(), validator_3_keys()];
             let invulnerables = validators.iter().map(|x| x.0).collect();
 
             mainnet_genesis(
