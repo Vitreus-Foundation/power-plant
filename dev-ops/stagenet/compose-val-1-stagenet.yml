@@ -1,0 +1,40 @@
+version: "3.3"
+
+services:
+  power_plant:
+    image: cdivtrs/power-plant:latest
+    container_name: power-plant
+    restart: always
+    volumes:
+      - node_data:/tmp/node
+    command: >
+      ./target/release/vitreus-power-plant-node
+      --base-path /tmp/node
+      --chain ./target/release/vitreus-power-plant-stagenet.json
+      --name stagenet-val1
+      --port 30333
+      --rpc-port 9944
+      --rpc-methods=unsafe
+      --validator
+      --prometheus-external
+      --node-key 2040ef4dad1b02db1ec61cf60fd18a50bcdabb3ad3279ca8095d8bf3aecfadb8
+      --bootnodes /ip4/45.77.147.229/tcp/30333/p2p/12D3KooWKXt45GhWobDEzM9hP62JaYgNiZUvFTJ2HARBE2o5fV13
+      --rpc-cors all
+      --blocks-pruning 2048
+      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 1"
+      --beefy
+
+    ports:
+      - "0.0.0.0:30333:30333/tcp"
+      - "127.0.0.1:9944:9944/tcp"
+      - "127.0.0.1:9615:9615/tcp"
+    networks:
+      - vitreus_power_plant_network
+
+volumes:
+  node_data:
+    driver: local
+
+networks:
+  vitreus_power_plant_network:
+    name: vitreus_power_plant

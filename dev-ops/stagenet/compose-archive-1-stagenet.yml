@@ -1,41 +1,38 @@
 version: "3.3"
 
 services:
-  vitreus_power_plant:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-    image: vitreus_power_plant
-    networks:
-      - vitreus_power_plant-network
-
-  archive_node:
-    image: vitreus_power_plant
-    container_name: power-plant-archive-node
+  power_plant:
+    image: cdivtrs/power-plant:latest
+    container_name: power-plant
     restart: always
-    depends_on:
-      - vitreus_power_plant
     volumes:
       - node_data:/tmp/node
     command: >
       ./target/release/vitreus-power-plant-node
-      --chain stagenet
-      --name stage-archive
+      --base-path /tmp/node
+      --chain ./target/release/vitreus-power-plant-stagenet.json
+      --name stagenet-archive1
       --port 30333
       --rpc-port 9944
-      --unsafe-rpc-external
+      --rpc-external
       --prometheus-external
-      --bootnodes /ip4/45.77.147.229/tcp/30333/p2p/12D3KooWEyoppNCUx8Yx66oV9fJnriXwCcXwDDUA2kj6vnc6iDEp
+      --node-key 3ab373e99b2ac7e5ed1e1ca3abd58f51a0e48040066472bdb919bc9dc5e3e123
+      --bootnodes /ip4/45.77.147.229/tcp/30333/p2p/12D3KooWKXt45GhWobDEzM9hP62JaYgNiZUvFTJ2HARBE2o5fV13
       --rpc-cors all
+      --rpc-max-connections 5000
       --state-pruning archive
       --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
+      --enable-offchain-indexing true
+      --beefy
+      -lwarn
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
       - "0.0.0.0:9944:9944/tcp"
-      - "127.0.0.1:9615:9615/tcp"
+      - "0.0.0.0:9615:9615/tcp"
     networks:
       - vitreus_power_plant-network
+
 volumes:
   node_data:
     driver: local
