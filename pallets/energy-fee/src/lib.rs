@@ -287,7 +287,7 @@ pub mod pallet {
 
             Self::update_burned_energy(imbalance.peek())
                 .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
-            T::OnWithdrawFee::on_withdraw_fee(&who);
+            T::OnWithdrawFee::on_withdraw_fee(who);
 
             Ok(Some(imbalance))
         }
