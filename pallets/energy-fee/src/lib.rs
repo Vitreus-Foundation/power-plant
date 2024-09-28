@@ -85,7 +85,6 @@ pub mod pallet {
         + pallet_transaction_payment::Config
         + pallet_asset_rate::Config
         + pallet_evm::Config
-        + pallet_nac_managing::Config
     {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
@@ -116,6 +115,8 @@ pub mod pallet {
         >;
         /// Used for initializing the pallet
         type EnergyAssetId: Get<Self::AssetId>;
+        /// Handler for when a fee has been withdrawn
+        type OnWithdrawFee: OnWithdrawFeeHandler<Self::AccountId>;
 
         type MainRecycleDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
         type FeeRecycleDestination: OnUnbalanced<FeeCreditOf<Self>>;
@@ -342,7 +343,8 @@ pub mod pallet {
             .map_err(|_| pallet_evm::Error::<T>::BalanceLow)?;
             Self::update_burned_energy(imbalance.peek())
                 .map_err(|_| pallet_evm::Error::<T>::FeeOverflow)?;
-            Self::check_account_threshold(&account_id);
+            T::OnWithdrawFee::on_withdraw_fee(&account_id);
+
             Ok(Some(imbalance))
         }
 
@@ -395,7 +397,7 @@ impl<T: Config> Pallet<T> {
         if current_balance < amount {
             let missing_amount =
                 T::EnergyExchange::convert_from_output(amount.saturating_sub(current_balance))?;
-            Ok((amount, missing_amount))
+            Ok((current_balance, missing_amount))
         } else {
             Ok((amount, BalanceOf::<T>::zero()))
         }
@@ -407,10 +409,6 @@ impl<T: Config> Pallet<T> {
                 current_burned.checked_add(&amount).ok_or(DispatchError::Arithmetic(Overflow))?;
             Ok(())
         })
-    }
-
-    fn check_account_threshold(who: &T::AccountId) {
-        pallet_nac_managing::Pallet::<T>::check_account_threshold(who);
     }
 
     fn validate_call_fee(fee_amount: BalanceOf<T>) -> Result<(), DispatchError> {
@@ -501,4 +499,13 @@ impl<T: Config> MultiplierUpdate for Pallet<T> {
         // high multiplier.
         Default::default()
     }
+}
+
+/// Handler for when a fee has been withdrawn.
+pub trait OnWithdrawFeeHandler<AccountId> {
+    fn on_withdraw_fee(who: &AccountId);
+}
+
+impl<AccountId> OnWithdrawFeeHandler<AccountId> for () {
+    fn on_withdraw_fee(_who: &AccountId) {}
 }

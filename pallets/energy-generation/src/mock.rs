@@ -37,8 +37,6 @@ pub(crate) type AccountId = u64;
 pub(crate) type Nonce = u64;
 pub(crate) type BlockNumber = u64;
 pub(crate) type Balance = u128;
-pub(crate) type Signature = TestSignature;
-pub(crate) type AccountPublic = UintAuthorityId;
 
 /// Another session handler struct to test on_disabled.
 pub struct OtherSessionHandler;
@@ -84,8 +82,6 @@ frame_support::construct_runtime!(
         Authorship: pallet_authorship,
         Balances: pallet_balances,
         Historical: pallet_session::historical,
-        NacManaging: pallet_nac_managing,
-        Nfts: pallet_nfts,
         ReputationPallet: pallet_reputation,
         Session: pallet_session,
         PowerPlant: pallet_energy_generation,
@@ -317,60 +313,6 @@ impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalP
     }
 }
 
-parameter_types! {
-    pub TestCollectionDeposit:  u64 = 0;
-    pub TestItemDeposit:  u64 = 0;
-}
-
-type CollectionId = u32;
-type ItemId = u32;
-
-impl pallet_nfts::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type CollectionId = CollectionId;
-    type ItemId = ItemId;
-    type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type CollectionDeposit = TestCollectionDeposit;
-    type ApprovalsLimit = ();
-    type ItemAttributesApprovalsLimit = ();
-    type MaxTips = ();
-    type MaxDeadlineDuration = ();
-    type MaxAttributesPerCall = ();
-    type Features = ();
-    type OffchainPublic = AccountPublic;
-    type OffchainSignature = Signature;
-    type ItemDeposit = TestItemDeposit;
-    type MetadataDepositBase = ConstU128<1>;
-    type AttributeDepositBase = ConstU128<1>;
-    type DepositPerByte = ConstU128<1>;
-    type StringLimit = ConstU32<50>;
-    type KeyLimit = ConstU32<50>;
-    type ValueLimit = ConstU32<50>;
-    type WeightInfo = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
-    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
-    type Locker = ();
-}
-
-parameter_types! {
-    pub const NftCollectionId: CollectionId = 0;
-}
-
-impl pallet_nac_managing::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type Nfts = Nfts;
-    type Balance = Balance;
-    type CollectionId = CollectionId;
-    type ItemId = ItemId;
-    type NftCollectionId = NftCollectionId;
-    type KeyLimit = ConstU32<50>;
-    type ValueLimit = ConstU32<50>;
-    type WeightInfo = ();
-}
-
 impl pallet_energy_generation::Config for Test {
     type AdminOrigin = EnsureOneOrRoot;
     type BatterySlotCapacity = BatterySlotCapacity;
@@ -400,6 +342,7 @@ impl pallet_energy_generation::Config for Test {
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
     type ValidatorReputationTier = ValidatorReputationTier;
+    type ValidatorNacLevel = ();
     type OnVipMembershipHandler = TestVipMembershipHandler;
 }
 

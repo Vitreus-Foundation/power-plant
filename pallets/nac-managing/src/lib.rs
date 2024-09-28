@@ -17,12 +17,13 @@ use frame_support::{
 use frame_system::pallet_prelude::{BlockNumberFor, OriginFor};
 pub use pallet::*;
 use pallet_claiming::OnClaimHandler;
+use pallet_energy_fee::OnWithdrawFeeHandler;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use sp_arithmetic::traits::Saturating;
 use sp_arithmetic::Perbill;
-use sp_runtime::traits::Zero;
+use sp_runtime::traits::{Convert, Zero};
 use sp_runtime::{
     traits::{BlakeTwo256, Hash, MaybeSerializeDeserialize},
     SaturatedConversion,
@@ -588,6 +589,12 @@ impl<T: Config> Pallet<T> {
     }
 }
 
+impl<T: Config> Convert<&T::AccountId, Option<u8>> for Pallet<T> {
+    fn convert(who: &T::AccountId) -> Option<u8> {
+        Pallet::<T>::get_nac_level(who).map(|(level, _)| level)
+    }
+}
+
 impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
     fn on_new_account(who: &T::AccountId) {
         if AccountReputation::<T>::contains_key(who) {
@@ -643,11 +650,22 @@ where
     }
 }
 
+impl<T: Config> OnWithdrawFeeHandler<T::AccountId> for Pallet<T> {
+    fn on_withdraw_fee(who: &T::AccountId) {
+        Pallet::<T>::check_account_threshold(who);
+    }
+}
+
 /// Handler for updating, burning VIPP status.
 pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
     /// Handle a minting new VIPP NFT.
-    fn mint_vipp(who: &AccountId, amount: Balance, item_id: ItemId);
+    fn mint_vipp(who: &AccountId, _amount: Balance, item_id: ItemId);
 
     /// Burning VIPP NFT.
     fn burn_vipp_nft(who: &AccountId, item_id: ItemId);
+}
+
+impl<AccountId, Balance, ItemId> OnVippStatusHandler<AccountId, Balance, ItemId> for () {
+    fn mint_vipp(_who: &AccountId, _amount: Balance, _item_id: ItemId) {}
+    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) {}
 }

@@ -27,7 +27,9 @@ use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
 use sp_keystore::KeystorePtr;
 use sp_runtime::traits::Block as BlockT;
 // Runtime
-use vitreus_power_plant_runtime::{opaque::Block, AccountId, Balance, BlockNumber, Hash, Nonce};
+use vitreus_power_plant_runtime::{
+    opaque::Block, AccountId, Balance, BlockNumber, Hash, Nonce, RuntimeCall,
+};
 
 mod eth;
 pub use self::eth::{create_eth, overrides_handle, EthDeps};
@@ -129,7 +131,7 @@ where
     C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
     C::Api: sc_consensus_babe::BabeApi<Block>,
-    C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block>,
+    C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block, AccountId, Balance, RuntimeCall>,
     C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
     C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block>,
     C: AuxStore,

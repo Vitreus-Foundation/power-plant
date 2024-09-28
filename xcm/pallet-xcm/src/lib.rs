@@ -1307,8 +1307,9 @@ impl<T: Config> Pallet<T> {
         let hash = message.using_encoded(sp_io::hashing::blake2_256);
         let outcome =
             T::XcmExecutor::execute_xcm_in_credit(origin_location, message, hash, weight, weight);
-        Self::deposit_event(Event::Attempted { outcome });
-        Ok(())
+        Self::deposit_event(Event::Attempted { outcome: outcome.clone() });
+
+        outcome.ensure_complete().map_err(|_| Error::<T>::LowBalance.into())
     }
 
     /// Will always make progress, and will do its best not to use much more than `weight_cutoff`
