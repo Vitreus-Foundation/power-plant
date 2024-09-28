@@ -77,15 +77,15 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
     pub enum Test {
-        Assets: pallet_assets,
-        Authorship: pallet_authorship,
-        Balances: pallet_balances,
-        Historical: pallet_session::historical,
-        ReputationPallet: pallet_reputation,
-        Session: pallet_session,
-        PowerPlant: pallet_energy_generation,
         System: frame_system,
+        Authorship: pallet_authorship,
         Timestamp: pallet_timestamp,
+        Balances: pallet_balances,
+        Assets: pallet_assets,
+        ReputationPallet: pallet_reputation,
+        PowerPlant: pallet_energy_generation,
+        Session: pallet_session,
+        Historical: pallet_session::historical,
     }
 );
 
@@ -529,7 +529,10 @@ impl ExtBuilder {
                 (21, collab_validator_rep),
                 // simple validators
                 (31, validator_reputation.clone()),
-                (41, validator_reputation),
+                (41, validator_reputation.clone()),
+                (51, validator_reputation.clone()),
+                (201, validator_reputation.clone()),
+                (202, validator_reputation),
             ],
         }
         .assimilate_storage(&mut storage);
@@ -552,6 +555,8 @@ impl ExtBuilder {
                 (31, self.balance_factor * 2000),
                 (41, self.balance_factor * 2000),
                 (51, self.balance_factor * 2000),
+                (201, self.balance_factor * 2000),
+                (202, self.balance_factor * 2000),
                 // optional cooperator
                 (100, self.balance_factor * 2000),
                 (101, self.balance_factor * 2000),
@@ -579,6 +584,9 @@ impl ExtBuilder {
                 (31, 30, self.balance_factor * 500, StakerStatus::Validator),
                 // an idle validator
                 (41, 40, self.balance_factor * 1000, StakerStatus::Idle),
+                (51, 50, self.balance_factor * 1000, StakerStatus::Idle),
+                (201, 201, self.balance_factor * 1000, StakerStatus::Idle),
+                (202, 202, self.balance_factor * 1000, StakerStatus::Idle),
             ];
             // optionally add a cooperator
             match self.cooperate {
