@@ -22,6 +22,7 @@ use sp_runtime::{
     transaction_validity::{InvalidTransaction, TransactionValidityError},
     DispatchError, Perbill, Perquintill,
 };
+use sp_std::boxed::Box;
 
 #[cfg(test)]
 pub(crate) mod mock;

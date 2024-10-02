@@ -151,10 +151,13 @@ affix = "0.1"
 assert_matches = { version = "1.5.0" }
 async-trait = { version = "0.1.57" }
 bn = { package = "substrate-bn", version = "0.6", default-features = false }
+bitvec = "1.0.0"
 clap = { version = "4.1", default-features = false }
 csv = { version = "1.3.0", default-features = false }
 derive_more = "0.99"
 futures = { version = "0.3.21", default-features = false }
+futures-timer = "3.0.2"
+gum =  { git = "https://github.com/paritytech/polkadot-sdk", package = "tracing-gum", branch = "stable2407" }
 env_logger = { version = "0.9.0" }
 environmental = { version = "1.1", default-features = false }
 ethereum = { version = "0.15.0", default-features = false }
@@ -171,8 +174,8 @@ libm = { version = "0.2.8" }
 libsecp256k1 = { version = "0.7", default-features = false }
 log = { version = "0.4", default-features = false }
 lru = { version = "0.9" }
+merlin = { version = "2.0" }
 num_enum = { version = "0.6", default-features = false }
-orml-traits = { git = "https://github.com/open-web3-stack//open-runtime-module-library.git", branch = "polkadot-v1.0.0", default-features = false }
 parity-db = "0.4.13"
 rand_chacha = { version = "0.2", default-features = false }
 rlp = { version = "0.5", default-features = false }
@@ -187,6 +190,7 @@ scale-info = { version = "2.3", default-features = false, features = [
     "derive",
     "serde",
 ] }
+schnorrkel = { version = "0.9.1" }
 serde = { version = "1.0", default-features = false, features = [
     "derive",
     "alloc",
@@ -296,6 +300,7 @@ sp-consensus = { git = "https://github.com/paritytech/polkadot-sdk", branch = "s
 sp-consensus-babe = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-consensus-beefy = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-consensus-grandpa = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+sp-consensus-slots = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-core = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-database = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-inherents = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }

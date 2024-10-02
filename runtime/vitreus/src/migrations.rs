@@ -153,101 +153,101 @@ impl OnRuntimeUpgrade for InitEnergyBroker {
             EnergyBroker::get_pool_id(NativeOrAssetId::Native, NativeOrAssetId::Asset(VNRG::get()));
 
         let mut weight = RocksDbWeight::get().reads(1);
-        if pallet_energy_broker::Pools::<Runtime>::contains_key(pool_id) {
-            log::info!("Liquidity pool VTRS/VNRG already exists, skip migration");
-            return weight;
-        }
+        // if pallet_energy_broker::Pools::<Runtime>::contains_key(pool_id) {
+        //     log::info!("Liquidity pool VTRS/VNRG already exists, skip migration");
+        //     return weight;
+        // }
 
-        weight += RocksDbWeight::get().reads(1);
-        let sudo_address = match Sudo::key() {
-            Some(account) => account,
-            None => {
-                log::warn!("Failed to get sudo account, abort migration");
-                return weight;
-            },
-        };
-        let energy_broker_address = EnergyBrokerPalletId::get().into_account_truncating();
-        let treasury_address = areas::TreasuryPalletId::get().into_account_truncating();
+        // weight += RocksDbWeight::get().reads(1);
+        // let sudo_address = match pallet_sudo::Key::get() {
+        //     Some(account) => account,
+        //     None => {
+        //         log::warn!("Failed to get sudo account, abort migration");
+        //         return weight;
+        //     },
+        // };
+        // let energy_broker_address = EnergyBrokerPalletId::get().into_account_truncating();
+        // let treasury_address = areas::TreasuryPalletId::get().into_account_truncating();
 
-        let rate = sp_runtime::FixedU128::from_inner(1_111_111_111_111_111_111_111_111_111);
+        // let rate = sp_runtime::FixedU128::from_inner(1_111_111_111_111_111_111_111_111_111);
 
-        weight += <Runtime as pallet_asset_rate::Config>::WeightInfo::update();
-        if AssetRate::update(RuntimeOrigin::root(), VNRG::get(), rate).is_err() {
-            log::warn!("AssetRate::update call failed");
-            return weight;
-        }
-        log::info!("Set gVolt rate to {}", rate);
+        // weight += <Runtime as pallet_asset_rate::Config>::WeightInfo::update();
+        // if AssetRate::update(RuntimeOrigin::root(), Box::new(VNRG::get()), rate).is_err() {
+        //     log::warn!("AssetRate::update call failed");
+        //     return weight;
+        // }
+        // log::info!("Set gVolt rate to {}", rate);
 
-        weight += <Runtime as pallet_energy_broker::Config>::WeightInfo::create_pool();
-        if EnergyBroker::create_pool(
-            RuntimeOrigin::root(),
-            sudo_address,
-            NativeOrAssetId::Native,
-            NativeOrAssetId::Asset(VNRG::get()),
-        )
-        .is_err()
-        {
-            log::warn!("EnergyBroker::create_pool call failed");
-            return weight;
-        }
-        log::info!("Create liquidity pool VTRS/VNRG");
+        // weight += <Runtime as pallet_energy_broker::Config>::WeightInfo::create_pool();
+        // if EnergyBroker::create_pool(
+        //     RuntimeOrigin::root(),
+        //     sudo_address,
+        //     NativeOrAssetId::Native,
+        //     NativeOrAssetId::Asset(VNRG::get()),
+        // )
+        // .is_err()
+        // {
+        //     log::warn!("EnergyBroker::create_pool call failed");
+        //     return weight;
+        // }
+        // log::info!("Create liquidity pool VTRS/VNRG");
 
-        weight += <Runtime as pallet_balances::Config>::WeightInfo::transfer_keep_alive();
-        if Balances::transfer_keep_alive(
-            RuntimeOrigin::signed(sudo_address),
-            treasury_address,
-            100 * UNITS,
-        )
-        .is_err()
-        {
-            log::warn!("Balances::transfer_keep_alive call failed");
-            return weight;
-        }
-        log::info!("Transfer 100 VTRS from sudo to treasury");
+        // weight += <Runtime as pallet_balances::Config>::WeightInfo::transfer_keep_alive();
+        // if Balances::transfer_keep_alive(
+        //     RuntimeOrigin::signed(sudo_address),
+        //     treasury_address,
+        //     100 * UNITS,
+        // )
+        // .is_err()
+        // {
+        //     log::warn!("Balances::transfer_keep_alive call failed");
+        //     return weight;
+        // }
+        // log::info!("Transfer 100 VTRS from sudo to treasury");
 
-        weight += RocksDbWeight::get().reads_writes(2, 2);
-        if Assets::mint_into(VNRG::get(), &sudo_address, 100_000_000_000).is_err() {
-            log::warn!("Assets::mint_into call failed");
-            return weight;
-        };
-        log::info!("Mint 100 VNRG to sudo account");
+        // weight += RocksDbWeight::get().reads_writes(2, 2);
+        // if Assets::mint_into(VNRG::get(), &sudo_address, 100_000_000_000).is_err() {
+        //     log::warn!("Assets::mint_into call failed");
+        //     return weight;
+        // };
+        // log::info!("Mint 100 VNRG to sudo account");
 
-        weight += RocksDbWeight::get().reads(1);
-        let vtrs_amount = Balances::free_balance(energy_broker_address);
-        let vnrg_amount = 1;
+        // weight += RocksDbWeight::get().reads(1);
+        // let vtrs_amount = Balances::free_balance(energy_broker_address);
+        // let vnrg_amount = 1;
 
-        weight += <Runtime as pallet_balances::Config>::WeightInfo::transfer_allow_death();
-        if Balances::transfer_allow_death(
-            RuntimeOrigin::signed(energy_broker_address),
-            sudo_address,
-            vtrs_amount,
-        )
-        .is_err()
-        {
-            log::warn!("Balances::transfer_allow_death call failed");
-            return weight;
-        }
-        log::info!("Transfer {vtrs_amount} VTRS units from energy broker to sudo address");
+        // weight += <Runtime as pallet_balances::Config>::WeightInfo::transfer_allow_death();
+        // if Balances::transfer_allow_death(
+        //     RuntimeOrigin::signed(energy_broker_address),
+        //     sudo_address,
+        //     vtrs_amount,
+        // )
+        // .is_err()
+        // {
+        //     log::warn!("Balances::transfer_allow_death call failed");
+        //     return weight;
+        // }
+        // log::info!("Transfer {vtrs_amount} VTRS units from energy broker to sudo address");
 
-        weight += <Runtime as pallet_energy_broker::Config>::WeightInfo::add_liquidity();
-        if EnergyBroker::add_liquidity(
-            RuntimeOrigin::signed(sudo_address),
-            NativeOrAssetId::Native,
-            NativeOrAssetId::Asset(VNRG::get()),
-            vtrs_amount,
-            vnrg_amount,
-            0,
-            0,
-            treasury_address,
-        )
-        .is_err()
-        {
-            log::warn!("EnergyBroker::add_liquidity call failed");
-            return weight;
-        }
-        log::info!(
-            "Add {vtrs_amount} VTRS units and {vnrg_amount} VNRG units from sudo to the pool"
-        );
+        // weight += <Runtime as pallet_energy_broker::Config>::WeightInfo::add_liquidity();
+        // if EnergyBroker::add_liquidity(
+        //     RuntimeOrigin::signed(sudo_address),
+        //     NativeOrAssetId::Native,
+        //     NativeOrAssetId::Asset(VNRG::get()),
+        //     vtrs_amount,
+        //     vnrg_amount,
+        //     0,
+        //     0,
+        //     treasury_address,
+        // )
+        // .is_err()
+        // {
+        //     log::warn!("EnergyBroker::add_liquidity call failed");
+        //     return weight;
+        // }
+        // log::info!(
+        //     "Add {vtrs_amount} VTRS units and {vnrg_amount} VNRG units from sudo to the pool"
+        // );
 
         weight
     }

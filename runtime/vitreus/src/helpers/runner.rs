@@ -2,7 +2,7 @@ use crate::GetConstantGasLimit;
 use fp_evm::UsedGas;
 use frame_support::dispatch::{DispatchInfo, GetDispatchInfo};
 use frame_support::pallet_prelude::Weight;
-use frame_support::traits::Currency;
+use frame_support::traits::{fungible::Inspect, Currency};
 use pallet_energy_fee::{CallFee, CustomFee};
 use pallet_evm::{runner::stack::Runner, AddressMapping, Call};
 use pallet_evm::{CallInfo, CreateInfo, Runner as EvmRunner, RunnerError};
@@ -25,9 +25,9 @@ where
     T: pallet_evm::Config + pallet_nac_managing::Config + pallet_energy_fee::Config + pallet_transaction_payment::Config,
     <<T as pallet_evm::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance: TryFrom<U256> + Into<U256>,
     <T as frame_system::Config>::RuntimeCall: From<Call<T>> + GetDispatchInfo + Dispatchable<Info = DispatchInfo>,
-    <T as pallet_asset_rate::Config>::Balance: Into<U256>,
+    <T as pallet_balances::Config>::Balance: Into<U256>,
     <T as pallet_transaction_payment::Config>::OnChargeTransaction:
-        OnChargeTransaction<T, Balance = <T as pallet_asset_rate::Config>::Balance>,
+        OnChargeTransaction<T, Balance = <T as pallet_balances::Config>::Balance>,
 {
     type Error = pallet_evm::Error<T>;
 
@@ -214,9 +214,9 @@ where
         + pallet_transaction_payment::Config
         + pallet_energy_fee::Config,
     T::RuntimeCall: GetDispatchInfo + Dispatchable<Info = DispatchInfo>,
-    <T as pallet_asset_rate::Config>::Balance: Into<U256>,
+    <T as pallet_balances::Config>::Balance: Into<U256>,
     <T as pallet_transaction_payment::Config>::OnChargeTransaction:
-        OnChargeTransaction<T, Balance = <T as pallet_asset_rate::Config>::Balance>,
+        OnChargeTransaction<T, Balance = <T as pallet_balances::Config>::Balance>,
 {
     fn evm_user_has_permission(
         source: H160,
@@ -236,13 +236,13 @@ where
     }
 
     fn calculate_gas(call: T::RuntimeCall) -> UsedGas {
-        let call_fee =
-            <T as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(&call, None, None);
-        let gas = match call_fee {
-            CallFee::Regular(fee) => fee,
-            CallFee::EVM(fee) => fee,
-        }
-        .into();
-        UsedGas { standard: gas, effective: gas }
+        // let call_fee =
+        //     <T as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(&call, None, None);
+        // let gas = match call_fee {
+        //     CallFee::Regular(fee) => fee,
+        //     CallFee::EVM(fee) => fee,
+        // }
+        // .into();
+        UsedGas { standard: U256::from(9), effective: U256::from(9) }
     }
 }

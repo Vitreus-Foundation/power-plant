@@ -23,7 +23,7 @@ frame-system = { workspace = true }
 log = { workspace = true }
 serde = { workspace = true, default-features = false, features = ["alloc"] }
 serde_derive = { workspace = true }
-rustc-hex = { version = "2.1.0", default-features = false }
+rustc-hex = { workspace = true, default-features = false }
 
 [dev-dependencies]
 pallet-balances = { workspace = true }

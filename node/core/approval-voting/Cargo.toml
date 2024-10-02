@@ -8,30 +8,30 @@ edition.workspace = true
 workspace = true
 
 [dependencies]
-futures = "0.3.21"
-futures-timer = "3.0.2"
-parity-scale-codec = { version = "3.6.1", default-features = false, features = ["bit-vec", "derive"] }
-gum = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0", package = "tracing-gum" }
-bitvec = { version = "1.0.0", default-features = false, features = ["alloc"] }
-lru = "0.9"
-merlin = "2.0"
-schnorrkel = "0.9.1"
-kvdb = "0.13.0"
-derive_more = "0.99.17"
-thiserror = "1.0.31"
+futures = { workspace = true }
+futures-timer = { workspace = true }
+parity-scale-codec = { workspace = true, default-features = false, features = ["bit-vec", "derive"] }
+gum = { workspace = true }
+bitvec = { workspace = true, default-features = false, features = ["alloc"] }
+lru = { workspace = true }
+merlin = { workspace = true }
+schnorrkel = { workspace = true }
+kvdb = { workspace = true }
+derive_more = { workspace = true }
+thiserror = { workspace = true }
 
-polkadot-node-subsystem = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
-polkadot-node-subsystem-util = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
-polkadot-overseer = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
-polkadot-primitives = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
-polkadot-node-primitives = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
-polkadot-node-jaeger = { git = "https://github.com/paritytech/polkadot.git", branch = "release-v1.0.0" }
+polkadot-node-subsystem = { workspace = true }
+polkadot-node-subsystem-util = { workspace = true }
+polkadot-overseer = { workspace = true }
+polkadot-primitives = { workspace = true }
+polkadot-node-primitives = { workspace = true }
+polkadot-node-jaeger = { workspace = true }
 
-sc-keystore = { git = "https://github.com/paritytech/substrate", default-features = false , branch = "polkadot-v1.0.0" }
-sp-consensus = { git = "https://github.com/paritytech/substrate", default-features = false , branch = "polkadot-v1.0.0" }
-sp-consensus-slots = { git = "https://github.com/paritytech/substrate", default-features = false , branch = "polkadot-v1.0.0" }
-sp-application-crypto = { git = "https://github.com/paritytech/substrate", default-features = false, features = ["full_crypto"] , branch = "polkadot-v1.0.0" }
-sp-runtime = { git = "https://github.com/paritytech/substrate", default-features = false , branch = "polkadot-v1.0.0" }
+sc-keystore = { workspace = true, default-features = false }
+sp-consensus = { workspace = true, default-features = false }
+sp-consensus-slots = { workspace = true, default-features = false }
+sp-application-crypto = { workspace = true, default-features = false, features = ["full_crypto"] }
+sp-runtime = { workspace = true, default-features = false }
 
 [dev-dependencies]
 async-trait = "0.1.57"

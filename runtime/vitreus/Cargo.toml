@@ -17,7 +17,6 @@ scale-info = { workspace = true }
 num_enum = { workspace = true }
 log = { workspace = true }
 libsecp256k1 = { workspace = true }
-orml-traits = { workspace = true }
 hex-literal = { workspace = true }
 primitive-types = { workspace = true, features = ["codec", "scale-info", "num-traits"] }
 
@@ -203,7 +202,6 @@ std = [
     "parity-scale-codec/std",
     "primitive-types/std",
     "scale-info/std",
-    "orml-traits/std",
     # Polkadot
     "polkadot-primitives/std",
     "runtime-common/std",
