@@ -125,12 +125,10 @@ pub use parachains_paras::Call as ParasCall;
 pub use paras_sudo_wrapper::Call as ParasSudoWrapperCall;
 
 pub use areas::{CouncilCollective, TechnicalCollective};
-pub use helpers::traits::GetByKey;
 
 mod precompiles;
 mod helpers {
     pub mod runner;
-    pub mod traits;
 }
 pub mod areas;
 pub mod migrations;
