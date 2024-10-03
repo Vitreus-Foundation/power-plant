@@ -236,13 +236,12 @@ where
     }
 
     fn calculate_gas(call: T::RuntimeCall) -> UsedGas {
-        // let call_fee =
-        //     <T as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(&call, None, None);
-        // let gas = match call_fee {
-        //     CallFee::Regular(fee) => fee,
-        //     CallFee::EVM(fee) => fee,
-        // }
-        // .into();
-        UsedGas { standard: U256::from(9), effective: U256::from(9) }
+        let call_fee =
+            <T as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(&call, None, None);
+        let gas = match call_fee {
+            CallFee::Regular(fee) => fee,
+            CallFee::EVM(fee) => fee,
+        };
+        UsedGas { standard: U256::from(0), effective: U256::from(0) }
     }
 }
