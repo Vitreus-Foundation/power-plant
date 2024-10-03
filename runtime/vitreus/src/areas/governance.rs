@@ -1,8 +1,8 @@
 use crate::{
-    AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, MoreThanHalfCouncil,
-    OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin,
-    Scheduler, TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MICRO_VTRS,
-    MILLI_VTRS, MINUTES, NANO_VTRS, PICO_VTRS, UNITS,
+    AccountId, AssetId, Balance, Balances, BlockNumber, BlockWeights, Bounties,
+    MoreThanHalfCouncil, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent,
+    RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee, Treasury, TreasuryExtension,
+    DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, NANO_VTRS, PICO_VTRS, UNITS,
 };
 
 use crate::xcm_config::TreasuryAccount;
@@ -33,7 +33,12 @@ impl pallet_preimage::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type ManagerOrigin = EnsureRoot<AccountId>;
-    type Consideration = ();
+    type Consideration = HoldConsideration<
+        AccountId,
+        Balances,
+        PreimageHoldReason,
+        LinearStoragePrice<PreimageBaseDeposit, PreimageByteDeposit, Balance>,
+    >;
 }
 
 parameter_types! {

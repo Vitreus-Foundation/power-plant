@@ -449,8 +449,8 @@ parameter_types! {
 impl pallet_balances::Config for Runtime {
     /// The ubiquitous event type.
     type RuntimeEvent = RuntimeEvent;
-    type RuntimeHoldReason = ();
-    type RuntimeFreezeReason = ();
+    type RuntimeHoldReason = RuntimeHoldReason;
+    type RuntimeFreezeReason = RuntimeFreezeReason;
     type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
     /// The type for recording an account's balance.
     type Balance = Balance;
@@ -458,7 +458,7 @@ impl pallet_balances::Config for Runtime {
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
     type ReserveIdentifier = [u8; 8];
-    type FreezeIdentifier = ();
+    type FreezeIdentifier = RuntimeFreezeReason;
     type MaxLocks = MaxLocks;
     type MaxReserves = MaxReserves;
     type MaxFreezes = MaxFreezes;
