@@ -50,7 +50,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use sp_runtime::traits::{AccountIdConversion, ConvertInto, Keccak256, Zero};
+use sp_runtime::traits::{AccountIdConversion, Convert, ConvertInto, Keccak256, Zero};
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -754,8 +754,8 @@ impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerReputationPoint
 
 pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
 
-impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
-    fn get(k: &ReputationTier) -> Perbill {
+impl Convert<&ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
+    fn convert(k: &ReputationTier) -> Perbill {
         match k {
             ReputationTier::Vanguard(2) => Perbill::from_percent(2),
             ReputationTier::Vanguard(3) => Perbill::from_percent(4),
@@ -802,9 +802,9 @@ impl pallet_energy_generation::Config for Runtime {
     type MaxCooperatorRewardedPerValidator = ConstU32<128>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
-    // type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = ();
-    type ReputationTierEnergyRewardAdditionalPercentMapping = ();
+    type ReputationTierEnergyRewardAdditionalPercentMapping =
+        ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = ();
     type RewardRemainder = Treasury;
     type RuntimeEvent = RuntimeEvent;
@@ -1092,7 +1092,7 @@ impl pallet_vesting::Config for Runtime {
     type Currency = Balances;
     type BlockNumberToBalance = ConvertInto;
     type MinVestedTransfer = MinVestedTransfer;
-    type BlockNumberProvider = ();
+    type BlockNumberProvider = System;
     type WeightInfo = pallet_vesting::weights::SubstrateWeight<Runtime>;
     type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
     const MAX_VESTING_SCHEDULES: u32 = 28;
@@ -1490,7 +1490,7 @@ impl pallet_message_queue::Config for Runtime {
     type HeapSize = MessageQueueHeapSize;
     type MaxStale = MessageQueueMaxStale;
     type ServiceWeight = MessageQueueServiceWeight;
-    type IdleMaxServiceWeight = ();
+    type IdleMaxServiceWeight = (); // it will not call `ServiceQueues::service_queues` in `on_idle`.
     #[cfg(not(feature = "runtime-benchmarks"))]
     type MessageProcessor = MessageProcessor;
     #[cfg(feature = "runtime-benchmarks")]
@@ -1503,13 +1503,17 @@ impl pallet_message_queue::Config for Runtime {
 
 impl parachains_dmp::Config for Runtime {}
 
+parameter_types! {
+    pub const DefaultChannelSizeAndCapacityWithSystem: (u32, u32) = (51200, 500);
+}
+
 impl parachains_hrmp::Config for Runtime {
     type RuntimeOrigin = RuntimeOrigin;
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type ChannelManager = EnsureRoot<AccountId>;
-    type DefaultChannelSizeAndCapacityWithSystem = ();
-    type VersionWrapper = ();
+    type DefaultChannelSizeAndCapacityWithSystem = DefaultChannelSizeAndCapacityWithSystem;
+    type VersionWrapper = (); // use the latest XCM version for all parachains.
     type WeightInfo = weights::runtime_parachains_hrmp::WeightInfo<Self>;
 }
 
@@ -1523,7 +1527,7 @@ impl parachains_scheduler::Config for Runtime {
 
 parameter_types! {
     pub const OnDemandTrafficDefaultValue: FixedU128 = FixedU128::from_u32(1);
-    pub const MaxHistoricalRevenue: BlockNumber = 2 * 20;
+    pub const MaxHistoricalRevenue: BlockNumber = 600;
     pub const OnDemandPalletId: PalletId = PalletId(*b"py/ondmd");
 }
 
@@ -1737,7 +1741,7 @@ pub type SignedExtra = (
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
-    generic::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+    fp_self_contained::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic =
     fp_self_contained::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra, H160>;
@@ -2182,7 +2186,7 @@ impl_runtime_apis! {
         fn extrinsic_filter(
             xts: Vec<<Block as BlockT>::Extrinsic>,
         ) -> Vec<EthereumTransaction> {
-            xts.into_iter().filter_map(|xt| match xt.function {
+            xts.into_iter().filter_map(|xt| match xt.0.function {
                 RuntimeCall::Ethereum(transact { transaction }) => Some(transaction),
                 _ => None
             }).collect::<Vec<EthereumTransaction>>()
@@ -2572,7 +2576,7 @@ impl_runtime_apis! {
 
     impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
         fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
-            ReputationTierEnergyRewardAdditionalPercentMapping::get(&tier)
+            ReputationTierEnergyRewardAdditionalPercentMapping::convert(&tier)
         }
 
         fn current_energy_per_stake_currency() -> u128 {
