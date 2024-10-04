@@ -349,7 +349,7 @@ impl pallet_energy_generation::Config for Test {
 // Implement the trait for a specific type
 pub struct TestVipMembershipHandler;
 
-impl OnVipMembershipHandler<u64, Weight> for TestVipMembershipHandler {
+impl OnVipMembershipHandler<u64, Weight, Perbill> for TestVipMembershipHandler {
     fn change_quarter_info() -> Weight {
         Weight::zero()
     }
@@ -360,6 +360,10 @@ impl OnVipMembershipHandler<u64, Weight> for TestVipMembershipHandler {
 
     fn update_active_stake(_account: &u64) -> Weight {
         Weight::zero()
+    }
+
+    fn get_tax_percent(_account: &u64) -> Perbill {
+        Perbill::default()
     }
 }
 
