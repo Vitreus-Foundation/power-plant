@@ -147,9 +147,9 @@ fp-account = { workspace = true, default-features = true }
 fp-dynamic-fee = { workspace = true, default-features = true }
 fp-evm = { workspace = true, default-features = true }
 fp-rpc = { workspace = true, default-features = true }
-vitreus-power-plant-runtime = { workspace = true, default-features = true }
 
-polkadot-rpc = { path = "../../rpc" }
+vitreus-power-plant-runtime = { workspace = true, default-features = true }
+vitreus-rpc = { workspace = true, default-features = true }
 
 [dev-dependencies]
 assert_matches = { workspace = true, default-features = true }

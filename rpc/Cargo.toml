@@ -1,5 +1,5 @@
 [package]
-name = "polkadot-rpc"
+name = "vitreus-rpc"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -23,6 +23,7 @@ sc-network = { workspace = true, default-features = true }
 sc-network-sync = { workspace = true, default-features = true }
 sc-rpc = { workspace = true, default-features = true }
 sc-rpc-api = { workspace = true, default-features = true }
+sc-rpc-spec-v2 = { workspace = true, default-features = true }
 sc-service = { workspace = true, default-features = true }
 sc-sync-state-rpc = { workspace = true, default-features = true }
 sc-transaction-pool = { workspace = true, default-features = true }
@@ -32,14 +33,15 @@ sp-block-builder = { workspace = true, default-features = true }
 sp-blockchain = { workspace = true, default-features = true }
 sp-consensus = { workspace = true, default-features = true }
 sp-consensus-babe = { workspace = true, default-features = true }
+sp-consensus-beefy = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
+sp-inherents = { workspace = true, default-features = true }
 sp-keystore = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
 substrate-frame-rpc-system = { workspace = true, default-features = true }
 substrate-state-trie-migration-rpc = { workspace = true, default-features = true }
 
-pallet-transaction-payment-rpc = { workspace = true, default-features = true }
-
+fc-api = { workspace = true, default-features = true }
 fc-db = { workspace = true, default-features = true }
 fc-mapping-sync = { workspace = true, default-features = true }
 fc-rpc = { workspace = true, default-features = true }
@@ -48,7 +50,9 @@ fc-storage = { workspace = true, default-features = true }
 fp-rpc = { workspace = true, default-features = true }
 
 # RPC modules
-eth-rpc-server = { workspace = true, default-features = true }
+polkadot-rpc = { workspace = true, default-features = true }
+pallet-transaction-payment-rpc = { workspace = true, default-features = true }
+
 energy-fee-rpc = { workspace = true, default-features = true }
 energy-generation-rpc = { workspace = true, default-features = true }
 node-rpc-server = { workspace = true, default-features = true }

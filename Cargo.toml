@@ -55,7 +55,6 @@ members = [
     "node/chain-spec",
     "node/service",
     "rpc",
-    "rpc/eth-rpc-server",
     "rpc/node-rpc-server",
     "pallets/claiming",
     "pallets/energy-fee",
@@ -167,7 +166,7 @@ hex = { version = "0.4", default-features = false }
 hex-literal = { version = "0.3" }
 impl-serde = { version = "0.4", default-features = false }
 impl-trait-for-tuples = "0.2"
-jsonrpsee = { version = "0.16", default-features = false }
+jsonrpsee = { version = "0.23", default-features = false }
 kvdb = { version = "0.13.0" }
 kvdb-rocksdb = { version = "0.19.0" }
 libm = { version = "0.2.8" }
@@ -226,6 +225,7 @@ polkadot-node-network-protocol = { git = "https://github.com/paritytech/polkadot
 polkadot-runtime-common = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-subsystem-test-helpers = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-test-client = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+polkadot-rpc = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 
 # Polkadot Subsystems
 polkadot-approval-distribution = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -278,6 +278,7 @@ sc-network-sync = { git = "https://github.com/paritytech/polkadot-sdk", branch =
 sc-offchain = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sc-rpc = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sc-rpc-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+sc-rpc-spec-v2 = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sc-service = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sc-storage-monitor = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sc-sync-state-rpc = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -381,6 +382,7 @@ substrate-wasm-builder = { git = "https://github.com/paritytech/polkadot-sdk", b
 #try-runtime-cli = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 
 # Frontier Client
+fc-api = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 fc-cli = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 fc-consensus = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 fc-db = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
@@ -441,8 +443,8 @@ energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-feat
 energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api", default-features = false }
 energy-fee-rpc = { path = "pallets/energy-fee/rpc" }
 energy-generation-rpc = { path = "pallets/energy-generation/rpc" }
-eth-rpc-server = { path = "rpc/eth-rpc-server" }
 node-rpc-server = { path = "rpc/node-rpc-server" }
+vitreus-rpc = { path = "rpc" }
 
 # Arkworks
 ark-bls12-377 = { version = "0.4.0", default-features = false, features = [
