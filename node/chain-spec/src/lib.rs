@@ -268,7 +268,7 @@ pub fn testnet_config() -> ChainSpec {
 }
 
 pub fn stagenet_config() -> ChainSpec {
-    use devnet_keys::*;
+    use testnet_keys::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
@@ -279,10 +279,17 @@ pub fn stagenet_config() -> ChainSpec {
         "stagenet",
         ChainType::Custom("Stagenet".to_string()),
         move || {
+            let validators = vec![validator_1_keys(), validator_2_keys(), validator_3_keys()];
+            let invulnerables = validators.iter().map(|x| x.0).collect();
+
             mainnet_genesis(
                 wasm_binary,
+                // Sudo account
+                root(),
                 // Initial Validators
-                vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
+                validators,
+                // Invulnerables
+                invulnerables,
             )
         },
         // Bootnodes
@@ -313,6 +320,8 @@ pub fn mainnet_config() -> ChainSpec {
         move || {
             mainnet_genesis(
                 wasm_binary,
+                // Sudo account
+                root(),
                 // Initial Validators
                 vec![
                     validator_1_keys(),
@@ -321,6 +330,8 @@ pub fn mainnet_config() -> ChainSpec {
                     validator_4_keys(),
                     validator_5_keys(),
                 ],
+                // Invulnerables
+                vec![],
             )
         },
         // Bootnodes
@@ -509,6 +520,7 @@ pub fn testnet_genesis(
 /// Configure initial storage state for FRAME modules.
 fn mainnet_genesis(
     wasm_binary: &[u8],
+    root_key: AccountId,
     initial_validators: Vec<(
         AccountId,
         AccountId,
@@ -520,15 +532,12 @@ fn mainnet_genesis(
         AuthorityDiscoveryId,
         BeefyId,
     )>,
+    invulnerables: Vec<AccountId>,
 ) -> RuntimeGenesisConfig {
-    use mainnet_keys::*;
-
-    let root_key = root();
-    let endowed_accounts = [root()];
-
     const ENDOWMENT: Balance = 1_000 * vtrs::UNITS;
     const STASH: Balance = 1 * vtrs::UNITS;
 
+    let endowed_accounts = [root_key];
     let stakers = initial_validators
         .iter()
         .map(|x| (x.0, x.1, STASH, StakerStatus::Validator))
@@ -606,7 +615,7 @@ fn mainnet_genesis(
         nac_managing: NacManagingConfig {
             accounts: initial_validators
                 .iter()
-                .map(|x| x.1)
+                .map(|x| x.0)
                 .chain(genesis::vnode_accounts())
                 .map(|account| (account, 2))
                 .collect(),
@@ -639,7 +648,7 @@ fn mainnet_genesis(
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32 - 1,
-            invulnerables: vec![],
+            invulnerables,
             slash_reward_fraction: Perbill::from_percent(10),
             min_commission: Perbill::from_percent(20),
             min_cooperator_bond: MIN_COOPERATOR_BOND,
@@ -1161,7 +1170,7 @@ mod genesis {
     use super::*;
     use tech_addresses::*;
 
-    use vitreus_power_plant_runtime::{BlockNumber, ExistentialDeposit, DAYS, MILLI_VTRS};
+    use vitreus_power_plant_runtime::{BlockNumber, DAYS, MILLI_VTRS};
 
     const YEARS: BlockNumber = 36525 * (DAYS / 100);
     const MONTHS: BlockNumber = YEARS / 12;
@@ -1263,9 +1272,7 @@ mod genesis {
 
         let vesting = vesting
             .into_iter()
-            .map(|(address, _, start, period)| {
-                (address, start * MONTHS, period * MONTHS, ExistentialDeposit::get())
-            })
+            .map(|(address, _, start, period)| (address, start * MONTHS, period * MONTHS, 0))
             .collect();
 
         SimpleVestingConfig { vesting }
