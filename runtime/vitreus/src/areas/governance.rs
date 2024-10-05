@@ -33,6 +33,7 @@ impl pallet_preimage::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type ManagerOrigin = EnsureRoot<AccountId>;
+    // ToDo: check 'Consideration' config
     type Consideration = HoldConsideration<
         AccountId,
         Balances,
@@ -77,6 +78,7 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
     type MaxProposals = TechnicalMaxProposals;
     type MaxProposalWeight = MaxProposalWeight;
     type MaxMembers = TechnicalMaxMembers;
+    // ToDo: check 'DefaultVote' config
     type DefaultVote = pallet_collective::PrimeDefaultVote;
     type SetMembersOrigin = EnsureRoot<AccountId>;
     type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
@@ -115,11 +117,6 @@ parameter_types! {
     pub const CouncilSpendOriginMaxAmount: Balance = Balance::MAX;
 }
 
-type ApproveOrigin = EitherOfDiverse<
-    EnsureRoot<AccountId>,
-    pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 3, 5>,
->;
-
 impl pallet_treasury::Config for Runtime {
     type PalletId = TreasuryPalletId;
     type Currency = Balances;
@@ -142,6 +139,7 @@ impl pallet_treasury::Config for Runtime {
     type AssetKind = ();
     type Beneficiary = AccountId;
     type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+    // ToDo: check 'Paymaster' config
     type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
     type BalanceConverter = UnityAssetBalanceConversion;
     type PayoutPeriod = PayoutSpendPeriod;
@@ -196,6 +194,7 @@ impl pallet_bounties::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type MaximumReasonLength = MaximumReasonLength;
     type WeightInfo = pallet_bounties::weights::SubstrateWeight<Runtime>;
+    // ToDo: check 'ChildBountyManager' config
     type ChildBountyManager = ();
     type OnSlash = Treasury;
 }

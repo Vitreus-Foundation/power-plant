@@ -235,6 +235,7 @@ where
         Ok(())
     }
 
+    // TODO: need to update this structure
     fn calculate_gas(call: T::RuntimeCall) -> UsedGas {
         let call_fee =
             <T as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(&call, None, None);

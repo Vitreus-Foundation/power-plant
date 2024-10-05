@@ -199,6 +199,8 @@ pub mod opaque {
     /// Opaque block identifier type.
     pub type BlockId = generic::BlockId<Block>;
 
+    // TODO: maybe we can delete OldSessionKeys structure?
+
     impl_opaque_keys! {
         pub struct OldSessionKeys {
             pub grandpa: Grandpa,
@@ -256,10 +258,13 @@ pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
 pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
+    // TODO: need to calculate new authoring_version number
     authoring_version: 1,
+    // TODO: need to calculate new spec_version number
     spec_version: 124,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
+    // TODO: need to calculate new transaction_version number
     transaction_version: 1,
     state_version: 1,
 };
@@ -963,7 +968,7 @@ type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
 
 impl pallet_energy_broker::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type Formula = pallet_energy_broker::ConstantSum<EnergyRate>;
+    type Formula = ConstantSum<EnergyRate>;
     type Currency = Balances;
     type Balance = Balance;
     type HigherPrecisionBalance = sp_core::U256;
@@ -1111,6 +1116,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
         calculated_fee: Option<Balance>,
     ) -> CallFee<Balance> {
+        // TODO: Added new pallets. Check the list of these runtime calls.
         match runtime_call {
             RuntimeCall::Assets(..)
             | RuntimeCall::AssetRate(..)
@@ -1443,6 +1449,7 @@ impl parachains_paras::Config for Runtime {
     type QueueFootprinter = ParaInclusion;
     type OnNewHead = Registrar;
     type WeightInfo = weights::runtime_parachains_paras::WeightInfo<Runtime>;
+    // TODO: do we need to update this config
     type AssignCoretime = ();
 }
 
