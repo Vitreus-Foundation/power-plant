@@ -21,9 +21,8 @@ use polkadot_primitives::{
 use runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use runtime_parachains::{
-    assigner_coretime as parachains_assigner_coretime,
-    assigner_on_demand as parachains_assigner_on_demand, configuration as parachains_configuration,
-    disputes as parachains_disputes,
+    assigner_parachains as parachains_assigner_parachains,
+    configuration as parachains_configuration, disputes as parachains_disputes,
     disputes::slashing as parachains_slashing,
     dmp as parachains_dmp, hrmp as parachains_hrmp, inclusion as parachains_inclusion,
     inclusion::{AggregateMessageOrigin, UmpQueueId},
@@ -1520,25 +1519,10 @@ impl parachains_paras_inherent::Config for Runtime {
 }
 
 impl parachains_scheduler::Config for Runtime {
-    type AssignmentProvider = CoretimeAssignmentProvider;
+    type AssignmentProvider = ParaAssignmentProvider;
 }
 
-parameter_types! {
-    pub const OnDemandTrafficDefaultValue: FixedU128 = FixedU128::from_u32(1);
-    pub const MaxHistoricalRevenue: BlockNumber = 600;
-    pub const OnDemandPalletId: PalletId = PalletId(*b"py/ondmd");
-}
-
-impl parachains_assigner_on_demand::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
-    type TrafficDefaultValue = OnDemandTrafficDefaultValue;
-    type WeightInfo = weights::runtime_parachains_assigner_on_demand::WeightInfo<Runtime>;
-    type MaxHistoricalRevenue = MaxHistoricalRevenue;
-    type PalletId = OnDemandPalletId;
-}
-
-impl parachains_assigner_coretime::Config for Runtime {}
+impl parachains_assigner_parachains::Config for Runtime {}
 
 impl parachains_initializer::Config for Runtime {
     type Randomness = pallet_babe::RandomnessFromOneEpochAgo<Runtime>;
@@ -1667,8 +1651,7 @@ construct_runtime!(
         ParaSessionInfo: parachains_session_info::{Pallet, Storage} = 71,
         ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 72,
         ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 73,
-        OnDemandAssignmentProvider: parachains_assigner_on_demand::{Pallet, Call, Storage, Event<T>} = 74,
-        CoretimeAssignmentProvider: parachains_assigner_coretime = 75,
+        ParaAssignmentProvider: parachains_assigner_parachains = 74,
 
         // Parachain Onboarding Pallets. Start indices at 80 to leave room.
         Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 80,
