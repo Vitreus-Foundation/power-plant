@@ -20,14 +20,23 @@ pub const VALIDATE_ACCESS_LEVEL: u8 = 1;
 pub const CREATE_ACCESS_LEVEL: u8 = 3;
 pub const CALL_ACCESS_LEVEL: u8 = 1;
 
-impl <T> EvmRunner<T> for NacRunner<T>
+type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
+
+impl<T> EvmRunner<T> for NacRunner<T>
 where
-    T: pallet_evm::Config + pallet_nac_managing::Config + pallet_energy_fee::Config + pallet_transaction_payment::Config,
-    <<T as pallet_evm::Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance: TryFrom<U256> + Into<U256>,
-    <T as frame_system::Config>::RuntimeCall: From<Call<T>> + GetDispatchInfo + Dispatchable<Info = DispatchInfo>,
-    <T as pallet_balances::Config>::Balance: Into<U256>,
-    <T as pallet_transaction_payment::Config>::OnChargeTransaction:
-        OnChargeTransaction<T, Balance = <T as pallet_balances::Config>::Balance>,
+    T: pallet_evm::Config
+        + pallet_nac_managing::Config
+        + pallet_energy_fee::Config
+        + pallet_transaction_payment::Config,
+    <T as frame_system::Config>::RuntimeCall:
+        From<Call<T>> + GetDispatchInfo + Dispatchable<Info = DispatchInfo>,
+    <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance: Into<U256>,
+    <<T as pallet_evm::Config>::Currency as Currency<AccountIdOf<T>>>::Balance:
+        TryFrom<U256> + Into<U256>,
+    <T as pallet_transaction_payment::Config>::OnChargeTransaction: OnChargeTransaction<
+        T,
+        Balance = <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance,
+    >,
 {
     type Error = pallet_evm::Error<T>;
 
@@ -44,7 +53,7 @@ where
         is_transactional: bool,
         weight_limit: Option<Weight>,
         proof_size_base_cost: Option<u64>,
-        evm_config: &pallet_evm::EvmConfig
+        evm_config: &pallet_evm::EvmConfig,
     ) -> Result<(), RunnerError<Self::Error>> {
         Self::evm_user_has_permission(source, weight_limit, VALIDATE_ACCESS_LEVEL)?;
 
@@ -61,7 +70,7 @@ where
             is_transactional,
             weight_limit,
             proof_size_base_cost,
-            evm_config
+            evm_config,
         )
     }
 
@@ -92,8 +101,9 @@ where
             max_fee_per_gas.unwrap_or(U256::zero()),
             max_priority_fee_per_gas,
             nonce,
-            access_list.clone()
-        ).into();
+            access_list.clone(),
+        )
+        .into();
         let gas = Self::calculate_gas(call);
 
         Runner::call(
@@ -110,8 +120,9 @@ where
             validate,
             weight_limit,
             proof_size_base_cost,
-            config
-        ).map(|call_info| {
+            config,
+        )
+        .map(|call_info| {
             let mut call_info = call_info;
             call_info.used_gas = gas;
             call_info
@@ -143,8 +154,9 @@ where
             max_fee_per_gas.unwrap_or(U256::zero()),
             max_priority_fee_per_gas,
             nonce,
-            access_list.clone()
-        ).into();
+            access_list.clone(),
+        )
+        .into();
         let gas = Self::calculate_gas(call);
 
         Runner::create(
@@ -160,15 +172,31 @@ where
             validate,
             weight_limit,
             proof_size_base_cost,
-            config
-        ).map(|call_info| {
+            config,
+        )
+        .map(|call_info| {
             let mut call_info = call_info;
             call_info.used_gas = gas;
             call_info
         })
     }
 
-    fn create2(source: H160, init: Vec<u8>, salt: H256, value: U256, _gas_limit: u64, max_fee_per_gas: Option<U256>, max_priority_fee_per_gas: Option<U256>, nonce: Option<U256>, access_list: Vec<(H160, Vec<H256>)>, is_transactional: bool, validate: bool, weight_limit: Option<Weight>, proof_size_base_cost: Option<u64>, config: &pallet_evm::EvmConfig) -> Result<CreateInfo, RunnerError<Self::Error>> {
+    fn create2(
+        source: H160,
+        init: Vec<u8>,
+        salt: H256,
+        value: U256,
+        _gas_limit: u64,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
+        nonce: Option<U256>,
+        access_list: Vec<(H160, Vec<H256>)>,
+        is_transactional: bool,
+        validate: bool,
+        weight_limit: Option<Weight>,
+        proof_size_base_cost: Option<u64>,
+        config: &pallet_evm::EvmConfig,
+    ) -> Result<CreateInfo, RunnerError<Self::Error>> {
         let gas_limit = GetConstantGasLimit::get().as_u64();
         Self::evm_user_has_permission(source, weight_limit, CREATE_ACCESS_LEVEL)?;
         let call = Call::new_call_variant_create2(
@@ -180,8 +208,9 @@ where
             max_fee_per_gas.unwrap_or(U256::zero()),
             max_priority_fee_per_gas,
             nonce,
-            access_list.clone()
-        ).into();
+            access_list.clone(),
+        )
+        .into();
         let gas = Self::calculate_gas(call);
 
         Runner::create2(
@@ -198,8 +227,9 @@ where
             validate,
             weight_limit,
             proof_size_base_cost,
-            config
-        ).map(|call_info| {
+            config,
+        )
+        .map(|call_info| {
             let mut call_info = call_info;
             call_info.used_gas = gas;
             call_info
@@ -214,9 +244,11 @@ where
         + pallet_transaction_payment::Config
         + pallet_energy_fee::Config,
     T::RuntimeCall: GetDispatchInfo + Dispatchable<Info = DispatchInfo>,
-    <T as pallet_balances::Config>::Balance: Into<U256>,
-    <T as pallet_transaction_payment::Config>::OnChargeTransaction:
-        OnChargeTransaction<T, Balance = <T as pallet_balances::Config>::Balance>,
+    <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance: Into<U256>,
+    <T as pallet_transaction_payment::Config>::OnChargeTransaction: OnChargeTransaction<
+        T,
+        Balance = <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance,
+    >,
 {
     fn evm_user_has_permission(
         source: H160,
@@ -235,14 +267,14 @@ where
         Ok(())
     }
 
-    // TODO: need to update this structure
     fn calculate_gas(call: T::RuntimeCall) -> UsedGas {
         let call_fee =
             <T as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(&call, None, None);
         let gas = match call_fee {
             CallFee::Regular(fee) => fee,
             CallFee::EVM(fee) => fee,
-        };
-        UsedGas { standard: U256::from(0), effective: U256::from(0) }
+        }
+        .into();
+        UsedGas { standard: gas, effective: gas }
     }
 }
