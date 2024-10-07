@@ -30,7 +30,7 @@ use frame_support::{
 };
 use frame_system::EnsureRoot;
 use origin_conversion::SignedToAccountKey20;
-use runtime_common::{
+use polkadot_runtime_common::{
     paras_registrar, prod_or_fast,
     xcm_sender::{ChildParachainRouter, ExponentialPrice},
 };
@@ -40,11 +40,11 @@ use xcm::latest::prelude::*;
 use xcm_builder::{
     AccountKey20Aliases, AllowExplicitUnpaidExecutionFrom, AllowKnownQueryResponses,
     AllowSubscriptionsFrom, AllowTopLevelPaidExecutionFrom, AsPrefixedGeneralIndex,
-    BackingToPlurality, ChildParachainAsNative, ChildParachainConvertsVia,
-    CurrencyAdapter as XcmCurrencyAdapter, FixedWeightBounds, FrameTransactionalProcessor,
-    FungiblesAdapter, IsChildSystemParachain, IsConcrete, MatchedConvertedConcreteId, MintLocation,
-    NoChecking, SignedAccountKey20AsNative, SovereignSignedViaLocation, TakeWeightCredit,
-    TrailingSetTopicAsId, UsingComponents, WithComputedOrigin, WithUniqueTopic,
+    BackingToPlurality, ChildParachainAsNative, ChildParachainConvertsVia, FixedWeightBounds,
+    FrameTransactionalProcessor, FungiblesAdapter, IsChildSystemParachain, IsConcrete,
+    MatchedConvertedConcreteId, MintLocation, NoChecking, SignedAccountKey20AsNative,
+    SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId, UsingComponents,
+    WithComputedOrigin, WithUniqueTopic,
 };
 use xcm_executor::{traits::WithOriginFilter, XcmExecutor};
 
@@ -105,7 +105,8 @@ pub type LocationConverter = (
 /// view of XCM-only concepts like `Location` and `Asset`.
 ///
 /// Ours is only aware of the Balances pallet, which is mapped to `TokenLocation`.
-pub type LocalAssetTransactor = XcmCurrencyAdapter<
+#[allow(deprecated)]
+pub type LocalAssetTransactor = xcm_builder::CurrencyAdapter<
     // Use this currency:
     Balances,
     // Use this currency when it is a fungible asset matching the given location or name:
@@ -470,6 +471,7 @@ mod origin_conversion {
     }
 }
 
+#[allow(deprecated)]
 mod currency_adapter {
     use super::*;
     use frame_support::traits::{ExistenceRequirement::KeepAlive, Get, WithdrawReasons};

@@ -14299,7 +14299,6 @@ dependencies = [
  "pallet-evm-precompile-modexp",
  "pallet-evm-precompile-sha3fips",
  "pallet-evm-precompile-simple",
- "pallet-faucet",
  "pallet-grandpa",
  "pallet-hotfix-sufficients",
  "pallet-im-online",

@@ -1,18 +1,17 @@
 use crate::{
-    AccountId, AssetId, Balance, Balances, BlockNumber, BlockWeights, Bounties,
-    MoreThanHalfCouncil, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent,
-    RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee, Treasury, TreasuryExtension,
-    DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, NANO_VTRS, PICO_VTRS, UNITS,
+    AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, MoreThanHalfCouncil,
+    OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin,
+    Scheduler, TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MICRO_VTRS,
+    MILLI_VTRS, MINUTES, NANO_VTRS, PICO_VTRS, UNITS,
 };
 
-use crate::xcm_config::TreasuryAccount;
 use frame_support::traits::fungible::HoldConsideration;
 use frame_support::traits::tokens::{PayFromAccount, UnityAssetBalanceConversion};
 use frame_support::traits::{Currency, EitherOf, LinearStoragePrice, OnUnbalanced};
 use frame_support::{parameter_types, traits::EitherOfDiverse, weights::Weight, PalletId};
 use frame_system::{EnsureRoot, EnsureWithSuccess};
 use pallet_treasury::NegativeImbalanceOf;
-use runtime_common::{impls::VersionedLocatableAsset, prod_or_fast};
+use polkadot_runtime_common::prod_or_fast;
 use sp_core::ConstU32;
 use sp_runtime::traits::{AccountIdConversion, IdentityLookup};
 use sp_runtime::{Perbill, Permill};
@@ -33,7 +32,6 @@ impl pallet_preimage::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type ManagerOrigin = EnsureRoot<AccountId>;
-    // ToDo: check 'Consideration' config
     type Consideration = HoldConsideration<
         AccountId,
         Balances,
@@ -78,7 +76,6 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
     type MaxProposals = TechnicalMaxProposals;
     type MaxProposalWeight = MaxProposalWeight;
     type MaxMembers = TechnicalMaxMembers;
-    // ToDo: check 'DefaultVote' config
     type DefaultVote = pallet_collective::PrimeDefaultVote;
     type SetMembersOrigin = EnsureRoot<AccountId>;
     type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
@@ -139,8 +136,7 @@ impl pallet_treasury::Config for Runtime {
     type AssetKind = ();
     type Beneficiary = AccountId;
     type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
-    // ToDo: check 'Paymaster' config
-    type Paymaster = PayFromAccount<Balances, TreasuryAccount>;
+    type Paymaster = PayFromAccount<Balances, pallet_treasury::TreasuryAccountId<Runtime>>;
     type BalanceConverter = UnityAssetBalanceConversion;
     type PayoutPeriod = PayoutSpendPeriod;
     #[cfg(feature = "runtime-benchmarks")]
@@ -194,7 +190,6 @@ impl pallet_bounties::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type MaximumReasonLength = MaximumReasonLength;
     type WeightInfo = pallet_bounties::weights::SubstrateWeight<Runtime>;
-    // ToDo: check 'ChildBountyManager' config
     type ChildBountyManager = ();
     type OnSlash = Treasury;
 }

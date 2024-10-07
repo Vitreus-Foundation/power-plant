@@ -18,11 +18,13 @@ use polkadot_primitives::{
     ValidationCodeHash, ValidatorId, ValidatorIndex, ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
 };
 
-use runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
+use polkadot_runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
-use runtime_parachains::{
+use polkadot_runtime_parachains::{
     assigner_parachains as parachains_assigner_parachains,
-    configuration as parachains_configuration, disputes as parachains_disputes,
+    configuration as parachains_configuration,
+    configuration::ActiveConfigHrmpChannelSizeAndCapacityRatio,
+    disputes as parachains_disputes,
     disputes::slashing as parachains_slashing,
     dmp as parachains_dmp, hrmp as parachains_hrmp, inclusion as parachains_inclusion,
     inclusion::{AggregateMessageOrigin, UmpQueueId},
@@ -62,7 +64,7 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, FixedU128, Perbill, Permill,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Percent, Permill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
@@ -261,7 +263,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     // TODO: need to calculate new authoring_version number
     authoring_version: 1,
     // TODO: need to calculate new spec_version number
-    spec_version: 124,
+    spec_version: 123,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     // TODO: need to calculate new transaction_version number
@@ -1116,7 +1118,6 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         dispatch_info: Option<&DispatchInfoOf<RuntimeCall>>,
         calculated_fee: Option<Balance>,
     ) -> CallFee<Balance> {
-        // TODO: Added new pallets. Check the list of these runtime calls.
         match runtime_call {
             RuntimeCall::Assets(..)
             | RuntimeCall::AssetRate(..)
@@ -1425,7 +1426,7 @@ impl parachains_session_info::Config for Runtime {
 
 /// Special `RewardValidators` that does nothing ;)
 pub struct RewardValidators;
-impl runtime_parachains::inclusion::RewardValidators for RewardValidators {
+impl parachains_inclusion::RewardValidators for RewardValidators {
     fn reward_backing(_: impl IntoIterator<Item = ValidatorIndex>) {}
     fn reward_bitfields(_: impl IntoIterator<Item = ValidatorIndex>) {}
 }
@@ -1449,7 +1450,6 @@ impl parachains_paras::Config for Runtime {
     type QueueFootprinter = ParaInclusion;
     type OnNewHead = Registrar;
     type WeightInfo = weights::runtime_parachains_paras::WeightInfo<Runtime>;
-    // TODO: do we need to update this config
     type AssignCoretime = ();
 }
 
@@ -1460,6 +1460,7 @@ parameter_types! {
     ///
     /// This is not a good value for para-chains since the `Scheduler` already uses up to 80% block weight.
     pub MessageQueueServiceWeight: Weight = Perbill::from_percent(20) * BlockWeights::get().max_block;
+    pub MessageQueueIdleServiceWeight: Weight = Perbill::from_percent(20) * BlockWeights::get().max_block;
     pub const MessageQueueHeapSize: u32 = 65_536;
     pub const MessageQueueMaxStale: u32 = 8;
 }
@@ -1494,7 +1495,7 @@ impl pallet_message_queue::Config for Runtime {
     type HeapSize = MessageQueueHeapSize;
     type MaxStale = MessageQueueMaxStale;
     type ServiceWeight = MessageQueueServiceWeight;
-    type IdleMaxServiceWeight = (); // it will not call `ServiceQueues::service_queues` in `on_idle`.
+    type IdleMaxServiceWeight = MessageQueueIdleServiceWeight;
     #[cfg(not(feature = "runtime-benchmarks"))]
     type MessageProcessor = MessageProcessor;
     #[cfg(feature = "runtime-benchmarks")]
@@ -1508,16 +1509,22 @@ impl pallet_message_queue::Config for Runtime {
 impl parachains_dmp::Config for Runtime {}
 
 parameter_types! {
-    pub const DefaultChannelSizeAndCapacityWithSystem: (u32, u32) = (51200, 500);
+    pub const HrmpChannelSizeAndCapacityWithSystemRatio: Percent = Percent::from_percent(100);
 }
 
 impl parachains_hrmp::Config for Runtime {
-    type RuntimeOrigin = RuntimeOrigin;
     type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
+    type RuntimeOrigin = RuntimeOrigin;
     type ChannelManager = EnsureRoot<AccountId>;
-    type DefaultChannelSizeAndCapacityWithSystem = DefaultChannelSizeAndCapacityWithSystem;
-    type VersionWrapper = (); // use the latest XCM version for all parachains.
+    type Currency = Balances;
+    // Use the `HrmpChannelSizeAndCapacityWithSystemRatio` ratio from the actual active
+    // `HostConfiguration` configuration for `hrmp_channel_max_message_size` and
+    // `hrmp_channel_max_capacity`.
+    type DefaultChannelSizeAndCapacityWithSystem = ActiveConfigHrmpChannelSizeAndCapacityRatio<
+        Runtime,
+        HrmpChannelSizeAndCapacityWithSystemRatio,
+    >;
+    type VersionWrapper = XcmPallet;
     type WeightInfo = weights::runtime_parachains_hrmp::WeightInfo<Self>;
 }
 
@@ -1568,8 +1575,8 @@ parameter_types! {
 }
 
 impl paras_registrar::Config for Runtime {
-    type RuntimeOrigin = RuntimeOrigin;
     type RuntimeEvent = RuntimeEvent;
+    type RuntimeOrigin = RuntimeOrigin;
     type Currency = Balances;
     type OnSwap = Slots;
     type ParaDeposit = ParaDeposit;
@@ -2388,7 +2395,7 @@ impl_runtime_apis! {
         fn submit_report_equivocation_unsigned_extrinsic(
             equivocation_proof: fg_primitives::EquivocationProof<
                 <Block as BlockT>::Hash,
-                sp_runtime::traits::NumberFor<Block>,
+                NumberFor<Block>,
             >,
             key_owner_proof: fg_primitives::OpaqueKeyOwnershipProof,
         ) -> Option<()> {
@@ -2619,6 +2626,7 @@ impl_runtime_apis! {
         }
 
         fn candidate_pending_availability(para_id: ParaId) -> Option<CommittedCandidateReceipt<Hash>> {
+            #[allow(deprecated)]
             parachains_runtime_api_impl::candidate_pending_availability::<Runtime>(para_id)
         }
 
