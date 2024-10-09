@@ -17,6 +17,7 @@
 use crate::cli::{Cli, Subcommand};
 use fc_db::kv::frontier_database_dir;
 use futures::future::TryFutureExt;
+use polkadot_cli::NODE_VERSION;
 use sc_cli::SubstrateCli;
 use sc_service::DatabaseSource;
 use service::{self, eth::db_config_dir, ChainSpec};
@@ -66,8 +67,7 @@ impl SubstrateCli for Cli {
     fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
         Ok(match id {
             "dev" => {
-                let enable_manual_seal = self.sealing.map(|_| true);
-                Box::new(chain_spec::development_config(enable_manual_seal))
+                Box::new(chain_spec::development_config(None))
             },
             "devnet" => Box::new(chain_spec::devnet_config()),
             "stagenet" => Box::new(chain_spec::stagenet_config()),
@@ -137,9 +137,12 @@ fn run_node_inner<F>(
 where
     F: FnOnce(&mut sc_cli::LoggerBuilder, &sc_service::Configuration),
 {
-    let runner = cli
-        .create_runner_with_logger_hook::<sc_cli::RunCmd, F>(&cli.run.base, logger_hook)
+    let runner: sc_cli::Runner<Cli> = cli
+        .create_runner_with_logger_hook::<sc_cli::RunCmd, _, F>(&cli.run.base, logger_hook)
         .map_err(Error::from)?;
+
+    // By default, enable BEEFY on all networks, unless explicitly disabled through CLI.
+    let enable_beefy = !cli.run.no_beefy;
 
     let grandpa_pause = if cli.run.grandpa_pause.is_empty() {
         None
@@ -159,6 +162,10 @@ where
         None
     };
 
+    let node_version = if cli.run.disable_worker_version_check { None } else { Some(NODE_VERSION.to_string()) };
+
+    let secure_validator_mode = cli.run.base.validator && !cli.run.insecure_validator;
+
     runner.run_node_until_exit(move |config| async move {
         let hwbench = (!cli.run.no_hardware_benchmarks)
             .then_some(config.database.path().map(|database_path| {
@@ -171,25 +178,34 @@ where
         let task_manager = service::build_full(
             config,
             cli.eth,
-            service::IsCollator::No,
-            grandpa_pause,
-            cli.run.beefy,
-            jaeger_agent,
-            None,
-            false,
-            overseer_gen,
-            cli.run.overseer_channel_capacity_override,
-            maybe_malus_finality_delay,
-            hwbench,
-            cli.sealing,
+            polkadot_service::NewFullParams {
+                is_parachain_node: polkadot_service::IsParachainNode::No,
+                enable_beefy,
+                force_authoring_backoff: cli.run.force_authoring_backoff,
+                jaeger_agent,
+                telemetry_worker_handle: None,
+                node_version,
+                secure_validator_mode,
+                workers_path: cli.run.workers_path,
+                workers_names: None,
+                overseer_gen,
+                overseer_message_channel_capacity_override: cli.run.overseer_channel_capacity_override,
+                malus_finality_delay: maybe_malus_finality_delay,
+                hwbench,
+                execute_workers_max_num: cli.run.execute_workers_max_num,
+                prepare_workers_hard_max_num: cli.run.prepare_workers_hard_max_num,
+                prepare_workers_soft_max_num: cli.run.prepare_workers_soft_max_num,
+            }
         )
         .map(|full| full.task_manager)?;
 
-        sc_storage_monitor::StorageMonitorService::try_spawn(
-            cli.storage_monitor,
-            database_source,
-            &task_manager.spawn_essential_handle(),
-        )?;
+        if let Some(path) = database_source.path() {
+            sc_storage_monitor::StorageMonitorService::try_spawn(
+                cli.storage_monitor,
+                path.to_path_buf(),
+                &task_manager.spawn_essential_handle(),
+            )?;
+        }
 
         Ok(task_manager)
     })
@@ -224,12 +240,14 @@ pub fn run() -> Result<()> {
     }
 
     match &cli.subcommand {
-        None => run_node_inner(
-            cli,
-            service::RealOverseerGen,
-            None,
-            polkadot_node_metrics::logger_hook(),
-        ),
+        None => {
+            run_node_inner(
+                cli,
+                polkadot_service::ValidatorOverseerGen,
+                None,
+                polkadot_node_metrics::logger_hook(),
+            )
+        },
         Some(Subcommand::BuildSpec(cmd)) => {
             let runner = cli.create_runner(cmd)?;
             Ok(runner.sync_run(|config| cmd.run(config.chain_spec, config.network))?)
@@ -339,49 +357,53 @@ pub fn run() -> Result<()> {
                 ))
             })?)
         },
+        // TODO: Do we need this subcommand?
         Some(Subcommand::PvfPrepareWorker(cmd)) => {
-            let mut builder = sc_cli::LoggerBuilder::new("");
-            builder.with_colors(false);
-            let _ = builder.init();
-
-            #[cfg(target_os = "android")]
-            {
-                return Err(sc_cli::Error::Input(
-                    "PVF preparation workers are not supported under this platform".into(),
-                )
-                .into());
-            }
-
-            #[cfg(not(target_os = "android"))]
-            {
-                polkadot_node_core_pvf_prepare_worker::worker_entrypoint(
-                    &cmd.socket_path,
-                    Some(&cmd.node_impl_version),
-                );
-                Ok(())
-            }
+            Ok(())
+            // let mut builder = sc_cli::LoggerBuilder::new("");
+            // builder.with_colors(false);
+            // let _ = builder.init();
+            //
+            // #[cfg(target_os = "android")]
+            // {
+            //     return Err(sc_cli::Error::Input(
+            //         "PVF preparation workers are not supported under this platform".into(),
+            //     )
+            //     .into());
+            // }
+            //
+            // #[cfg(not(target_os = "android"))]
+            // {
+            //     polkadot_node_core_pvf_prepare_worker::worker_entrypoint(
+            //         &cmd.socket_path,
+            //         Some(&cmd.node_impl_version),
+            //     );
+            //     Ok(())
+            // }
         },
+        // TODO: Do we need this subcommand?
         Some(Subcommand::PvfExecuteWorker(cmd)) => {
-            let mut builder = sc_cli::LoggerBuilder::new("");
-            builder.with_colors(false);
-            let _ = builder.init();
-
-            #[cfg(target_os = "android")]
-            {
-                return Err(sc_cli::Error::Input(
-                    "PVF execution workers are not supported under this platform".into(),
-                )
-                .into());
-            }
-
-            #[cfg(not(target_os = "android"))]
-            {
-                polkadot_node_core_pvf_execute_worker::worker_entrypoint(
-                    &cmd.socket_path,
-                    Some(&cmd.node_impl_version),
-                );
-                Ok(())
-            }
+            Ok(())
+            // let mut builder = sc_cli::LoggerBuilder::new("");
+            // builder.with_colors(false);
+            // let _ = builder.init();
+            //
+            // #[cfg(target_os = "android")]
+            // {
+            //     return Err(sc_cli::Error::Input(
+            //         "PVF execution workers are not supported under this platform".into(),
+            //     )
+            //     .into());
+            // }
+            //
+            // #[cfg(not(target_os = "android"))]
+            // {
+            //     polkadot_node_core_pvf_execute_worker::worker_entrypoint(
+            //         &cmd.socket_path,
+            //         Some(&cmd.node_impl_version),
+            //     );
+            //     Ok(())
+            // }
         },
         #[cfg(feature = "runtime-benchmarks")]
         Some(Subcommand::Benchmark(cmd)) => {
@@ -448,6 +470,7 @@ pub fn run() -> Result<()> {
                 .into(),
         )
         .into()),
+        // TODO: Do we need this subcommand?
         Some(Subcommand::HostPerfCheck) => {
             let mut builder = sc_cli::LoggerBuilder::new("");
             builder.with_colors(true);
@@ -528,7 +551,7 @@ pub fn run() -> Result<()> {
                     service::new_chain_ops(&mut config, &cli.eth, None)
                         .map_err(Error::PolkadotService)?;
                 let frontier_backend = match frontier_backend {
-                    fc_db::Backend::KeyValue(kv) => std::sync::Arc::new(kv),
+                    fc_db::Backend::KeyValue(kv) => kv,
                     _ => panic!("Only fc_db::Backend::KeyValue supported"),
                 };
                 cmd.run(client, frontier_backend).map_err(Error::SubstrateCli)
