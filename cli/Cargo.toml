@@ -1,5 +1,5 @@
 [package]
-name = "polkadot-cli"
+name = "vitreus-cli"
 description = "Polkadot Relay-chain Client Node"
 version.workspace = true
 authors.workspace = true
@@ -44,7 +44,7 @@ vitreus-power-plant-runtime = { workspace = true, default-features = true }
 
 chain-spec = { workspace = true, default-features = true }
 # TODO: use workspace dependency
-service = { package = "polkadot-service", path = "../node/service", default-features = false, features = ["sql", "txpool", "with-rocksdb-weights"], optional = true }
+service = { package = "vitreus-service", path = "../node/service", default-features = false, features = ["sql", "txpool", "with-rocksdb-weights"], optional = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true, default-features = true }

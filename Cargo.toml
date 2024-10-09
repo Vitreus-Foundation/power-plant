@@ -17,8 +17,8 @@ color-eyre = { version = "0.6.1", default-features = false }
 tikv-jemallocator = "0.5.0"
 
 # Crates in our workspace, defined as dependencies so we can pass them feature flags.
-polkadot-cli = { path = "cli" }
-polkadot-service = { path = "node/service" }
+vitreus-cli = { path = "cli" }
+vitreus-service = { path = "node/service" }
 
 [dev-dependencies]
 assert_cmd = "2.0.4"
@@ -30,23 +30,23 @@ polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot-sdk",
 
 [features]
 default = ["with-rocksdb-weights", "rocksdb", "sql", "txpool"]
-with-rocksdb-weights = ["polkadot-service/with-rocksdb-weights"]
-with-paritydb-weights = ["polkadot-service/with-paritydb-weights"]
+with-rocksdb-weights = ["vitreus-service/with-rocksdb-weights"]
+with-paritydb-weights = ["vitreus-service/with-paritydb-weights"]
 rocksdb = [
-    "polkadot-cli/db",
-    "polkadot-service/db",
+    "vitreus-cli/db",
+    "vitreus-service/db",
 ]
-sql = ["polkadot-service/sql"]
-txpool = ["polkadot-service/txpool"]
-rpc-binary-search-estimate = ["polkadot-service/rpc-binary-search-estimate"]
+sql = ["vitreus-service/sql"]
+txpool = ["vitreus-service/txpool"]
+rpc-binary-search-estimate = ["vitreus-service/rpc-binary-search-estimate"]
 runtime-benchmarks = [
-    "polkadot-cli/runtime-benchmarks",
-    "polkadot-service/runtime-benchmarks",
+    "vitreus-cli/runtime-benchmarks",
+    "vitreus-service/runtime-benchmarks",
 ]
-try-runtime = ["polkadot-service/try-runtime"]
+try-runtime = ["vitreus-service/try-runtime"]
 fast-runtime = [
-    "polkadot-cli/fast-runtime",
-    "polkadot-service/fast-runtime",
+    "vitreus-cli/fast-runtime",
+    "vitreus-service/fast-runtime",
 ]
 
 [workspace]
@@ -211,6 +211,7 @@ polkadot-primitives = { git = "https://github.com/paritytech/polkadot-sdk", bran
 polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-core-pvf-execute-worker = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-core-pvf-prepare-worker = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+polkadot-node-core-prospective-parachains = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-metrics = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-core-parachains-inherent = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -248,6 +249,7 @@ polkadot-node-core-dispute-coordinator = { git = "https://github.com/paritytech/
 polkadot-node-core-provisioner = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-core-pvf-checker = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-core-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+polkadot-service = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-statement-distribution = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 
 # Substrate Client
