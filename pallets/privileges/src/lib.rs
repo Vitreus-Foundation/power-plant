@@ -517,7 +517,7 @@ impl<T: Config> Pallet<T> {
     }
 }
 
-impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight> for Pallet<T> {
+impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight, Perbill> for Pallet<T> {
     fn change_quarter_info() -> Weight {
         Self::update_quarter_info();
         Weight::from_parts(1, 1)
@@ -542,5 +542,20 @@ impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight> for Pallet<T> {
             }
         });
         Weight::from_parts(1, 2)
+    }
+
+    fn get_tax_percent(account: &T::AccountId) -> Perbill {
+        let current_date = Self::current_date();
+        let vip_info = Self::vip_members(account);
+        match vip_info {
+            Some(vip_member_info) => {
+                if !Self::is_penalty_free_period() {
+                    return vip_member_info.tax_type.penalty_percent(current_date.current_quarter);
+                }
+
+                Perbill::default()
+            },
+            None => Perbill::default(),
+        }
     }
 }

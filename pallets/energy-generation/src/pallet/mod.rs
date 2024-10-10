@@ -23,7 +23,7 @@ use frame_support::{
     storage::bounded_btree_set::BoundedBTreeSet,
     traits::{
         Currency, DefensiveResult, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
-        LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
+        Imbalance, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
     },
     weights::Weight,
 };
@@ -43,10 +43,10 @@ mod impls;
 pub use impls::*;
 
 use crate::{
-    slashing, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo, Cooperations,
-    DisablingStrategy, EnergyDebtOf, EnergyRateCalculator, Exposure, Forcing, RewardDestination,
-    SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakingLedger, UnappliedSlash,
-    UnlockChunk, ValidatorPrefs,
+	slashing, slashing::NegativeImbalanceOf, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo,
+	Cooperations, DisablingStrategy, EnergyDebtOf, EnergyRateCalculator, Exposure, Forcing, RewardDestination,
+	SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakingLedger, UnappliedSlash,
+	UnlockChunk, ValidatorPrefs,
 };
 
 #[cfg(feature = "try-runtime")]
@@ -242,7 +242,7 @@ pub mod pallet {
         type ValidatorNacLevel: for<'a> Convert<&'a Self::AccountId, Option<u8>>;
 
         /// A handler called for every operation depends on VIP status.
-        type OnVipMembershipHandler: OnVipMembershipHandler<Self::AccountId, Weight>;
+        type OnVipMembershipHandler: OnVipMembershipHandler<Self::AccountId, Weight, Perbill>;
 
         /// Some parameters of the benchmarking.
         type BenchmarkingConfig: BenchmarkingConfig;
@@ -988,6 +988,9 @@ pub mod pallet {
             let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
             let mut value = value.min(ledger.active);
 
+            let tax_percent = T::OnVipMembershipHandler::get_tax_percent(&ledger.stash);
+            let mut slashed_stake = tax_percent * value;
+
             ensure!(
                 ledger.unlocking.len() < T::MaxUnlockingChunks::get() as usize,
                 Error::<T>::NoMoreChunks,
@@ -999,6 +1002,7 @@ pub mod pallet {
                 // Avoid there being a dust balance left in the staking system.
                 if ledger.active < T::StakeCurrency::minimum_balance() {
                     value += ledger.active;
+                    slashed_stake += tax_percent * ledger.active;
                     ledger.active = Zero::zero();
                 }
 
@@ -1016,6 +1020,7 @@ pub mod pallet {
 
                 // Note: in case there is no current era it is fine to bond one era more.
                 let era = Self::current_era().unwrap_or(0) + T::BondingDuration::get();
+                value -= slashed_stake;
                 if let Some(chunk) = ledger.unlocking.last_mut().filter(|chunk| chunk.era == era) {
                     // To keep the chunk count down, we only keep one chunk per era. Since
                     // `unlocking` is a FiFo queue, if a chunk exists for `era` we know that it will
@@ -1027,6 +1032,15 @@ pub mod pallet {
                         .try_push(UnlockChunk { value, era })
                         .map_err(|_| Error::<T>::NoMoreChunks)?;
                 };
+
+                if !slashed_stake.is_zero() {
+                    let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
+                    let (imbalance, _) = T::StakeCurrency::slash(&ledger.stash, slashed_stake);
+                    slashed_imbalance.subsume(imbalance);
+                    T::Slash::on_unbalanced(slashed_imbalance);
+                    ledger.total -= slashed_stake;
+                }
+
                 // NOTE: ledger must be updated prior to calling `Self::weight_of`.
                 Self::update_ledger(&controller, &ledger);
 

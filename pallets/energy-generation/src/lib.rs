@@ -842,7 +842,7 @@ pub trait EnergyRateCalculator<Stake, Energy> {
     ) -> Energy;
 }
 
-pub trait OnVipMembershipHandler<T, Res> {
+pub trait OnVipMembershipHandler<T, Res, Perbill> {
     /// Change quarter info.
     fn change_quarter_info() -> Res;
 
@@ -851,6 +851,9 @@ pub trait OnVipMembershipHandler<T, Res> {
 
     /// Update active stake by VIP member.
     fn update_active_stake(account: &T) -> Res;
+
+    /// Get tax percent of account.
+    fn get_tax_percent(account: &T) -> Perbill;
 }
 
 /// Mode of era-forcing.

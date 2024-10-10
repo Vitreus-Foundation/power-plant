@@ -266,7 +266,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     // TODO: need to calculate new authoring_version number
     authoring_version: 1,
     // TODO: need to calculate new spec_version number
-    spec_version: 123,
+    spec_version: 124,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
     // TODO: need to calculate new transaction_version number
