@@ -178,8 +178,8 @@ where
         let task_manager = service::build_full(
             config,
             cli.eth,
-            polkadot_service::NewFullParams {
-                is_parachain_node: polkadot_service::IsParachainNode::No,
+            service::NewFullParams {
+                is_parachain_node: service::IsParachainNode::No,
                 enable_beefy,
                 force_authoring_backoff: cli.run.force_authoring_backoff,
                 jaeger_agent,
@@ -196,8 +196,7 @@ where
                 prepare_workers_hard_max_num: cli.run.prepare_workers_hard_max_num,
                 prepare_workers_soft_max_num: cli.run.prepare_workers_soft_max_num,
             }
-        )
-        .map(|full| full.task_manager)?;
+        )?;
 
         if let Some(path) = database_source.path() {
             sc_storage_monitor::StorageMonitorService::try_spawn(

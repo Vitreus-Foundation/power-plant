@@ -85,7 +85,7 @@ pub(crate) fn try_upgrade_db(
         remove_file_lock(&db_path);
 
         if version == target_version {
-            return Ok(())
+            return Ok(());
         }
     }
 
@@ -119,8 +119,9 @@ pub(crate) fn try_upgrade_db_to_next_version(
             None if db_kind == DatabaseKind::RocksDB => CURRENT_VERSION,
             // No version file. `ParityDB` did not previously have a version defined.
             // We handle this as a `0 -> 1` migration.
-            None if db_kind == DatabaseKind::ParityDB =>
-                migrate_from_version_0_to_1(db_path, db_kind)?,
+            None if db_kind == DatabaseKind::ParityDB => {
+                migrate_from_version_0_to_1(db_path, db_kind)?
+            },
             None => unreachable!(),
         }
     } else {
@@ -164,10 +165,10 @@ fn migrate_from_version_0_to_1(path: &Path, db_kind: DatabaseKind) -> Result<Ver
         DatabaseKind::ParityDB => paritydb_migrate_from_version_0_to_1(path),
         DatabaseKind::RocksDB => rocksdb_migrate_from_version_0_to_1(path),
     }
-        .and_then(|result| {
-            gum::info!(target: LOG_TARGET, "Migration complete! ");
-            Ok(result)
-        })
+    .and_then(|result| {
+        gum::info!(target: LOG_TARGET, "Migration complete! ");
+        Ok(result)
+    })
 }
 
 fn migrate_from_version_1_to_2(path: &Path, db_kind: DatabaseKind) -> Result<Version, Error> {
@@ -177,10 +178,10 @@ fn migrate_from_version_1_to_2(path: &Path, db_kind: DatabaseKind) -> Result<Ver
         DatabaseKind::ParityDB => paritydb_migrate_from_version_1_to_2(path),
         DatabaseKind::RocksDB => rocksdb_migrate_from_version_1_to_2(path),
     }
-        .and_then(|result| {
-            gum::info!(target: LOG_TARGET, "Migration complete! ");
-            Ok(result)
-        })
+    .and_then(|result| {
+        gum::info!(target: LOG_TARGET, "Migration complete! ");
+        Ok(result)
+    })
 }
 
 // Migrate approval voting database.
@@ -237,10 +238,10 @@ fn migrate_from_version_2_to_3(path: &Path, db_kind: DatabaseKind) -> Result<Ver
         DatabaseKind::ParityDB => paritydb_migrate_from_version_2_to_3(path),
         DatabaseKind::RocksDB => rocksdb_migrate_from_version_2_to_3(path),
     }
-        .and_then(|result| {
-            gum::info!(target: LOG_TARGET, "Migration complete! ");
-            Ok(result)
-        })
+    .and_then(|result| {
+        gum::info!(target: LOG_TARGET, "Migration complete! ");
+        Ok(result)
+    })
 }
 
 /// Migration from version 0 to version 1:
@@ -311,12 +312,12 @@ fn paritydb_fix_columns(
                 let changed = opts != options.columns[idx];
                 if changed {
                     gum::debug!(
-						target: LOG_TARGET,
-						"Column {} will be cleared. Old options: {:?}, New options: {:?}",
-						idx,
-						opts,
-						options.columns[idx]
-					);
+                        target: LOG_TARGET,
+                        "Column {} will be cleared. Old options: {:?}, New options: {:?}",
+                        idx,
+                        opts,
+                        options.columns[idx]
+                    );
                     Some(idx)
                 } else {
                     None
@@ -326,10 +327,10 @@ fn paritydb_fix_columns(
 
         if columns_to_clear.len() > 0 {
             gum::debug!(
-				target: LOG_TARGET,
-				"Database column changes detected, need to cleanup {} columns.",
-				columns_to_clear.len()
-			);
+                target: LOG_TARGET,
+                "Database column changes detected, need to cleanup {} columns.",
+                columns_to_clear.len()
+            );
         }
 
         for column in columns_to_clear {
@@ -440,7 +441,7 @@ pub fn remove_file_lock(path: &std::path::Path) {
             Err(error) => match error.kind() {
                 ErrorKind::WouldBlock => {
                     sleep(Duration::from_millis(100));
-                    continue
+                    continue;
                 },
                 _ => return,
             },
@@ -479,7 +480,7 @@ mod tests {
                 b"5678".to_vec(),
                 Some(b"somevalue".to_vec()),
             )])
-              .unwrap();
+            .unwrap();
         }
 
         try_upgrade_db(&path, DatabaseKind::ParityDB, 1).unwrap();
@@ -510,7 +511,7 @@ mod tests {
                 b"1234".to_vec(),
                 Some(b"somevalue".to_vec()),
             )])
-              .unwrap();
+            .unwrap();
 
             assert_eq!(db.num_columns(), columns::v1::NUM_COLUMNS as u8);
         }
@@ -532,7 +533,7 @@ mod tests {
             b"1337".to_vec(),
             Some(b"0xdeadb00b".to_vec()),
         )])
-          .unwrap();
+        .unwrap();
 
         // Read back data from new column.
         assert_eq!(
@@ -566,7 +567,7 @@ mod tests {
                     value: b"0xdeadb00b".to_vec(),
                 }],
             })
-              .unwrap();
+            .unwrap();
         }
 
         try_upgrade_db(&db_dir.path(), DatabaseKind::RocksDB, 2).unwrap();
@@ -591,7 +592,7 @@ mod tests {
                 value: b"0xdeadb00b".to_vec(),
             }],
         })
-          .unwrap();
+        .unwrap();
 
         // Read back data from new column.
         assert_eq!(
@@ -719,7 +720,7 @@ mod tests {
                 test_key.to_vec(),
                 Some(b"0xdeadb00b".to_vec()),
             )])
-              .unwrap();
+            .unwrap();
 
             assert_eq!(db.num_columns(), columns::v2::NUM_COLUMNS as u8);
         }

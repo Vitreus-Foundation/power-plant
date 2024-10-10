@@ -10,6 +10,7 @@ build = "build.rs"
 rand = { workspace = true, default-features = true }
 hex-literal = { workspace = true, default-features = true }
 serde = { workspace = true, default-features = true }
+serde_json = { workspace = true, default-features = true }
 
 polkadot-primitives = { workspace = true, default-features = true }
 polkadot-runtime-parachains = { workspace = true, default-features = true }

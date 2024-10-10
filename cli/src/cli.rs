@@ -18,7 +18,7 @@
 
 use clap::Parser;
 use std::path::PathBuf;
-use service::{eth::EthConfiguration, Sealing};
+use service::{eth::EthConfiguration};
 
 #[allow(missing_docs)]
 #[derive(Debug, Parser)]

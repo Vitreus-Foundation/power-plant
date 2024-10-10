@@ -6,7 +6,7 @@ edition = "2021"
 [dependencies]
 energy-generation-runtime-api = { workspace = true }
 parity-scale-codec = { workspace = true }
-jsonrpsee = { workspace = true, features = ["server", "macros"] }
+jsonrpsee = { workspace = true, features = ["server", "macros", "client"] }
 sp-runtime = { workspace = true, default-features = false }
 sp-blockchain = { workspace = true }
 sp-std = { workspace = true, default-features = false }

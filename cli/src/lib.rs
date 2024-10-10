@@ -28,7 +28,7 @@ mod error;
 mod host_perf_check;
 
 #[cfg(feature = "service")]
-pub use service::{self, Block, CoreApi, IdentifyVariant, ProvideRuntimeApi, TFullClient};
+pub use service::{self, Block, CoreApi, ProvideRuntimeApi, TFullClient};
 
 #[cfg(feature = "malus")]
 pub use service::overseer::prepared_overseer_builder;

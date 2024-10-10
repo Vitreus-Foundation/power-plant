@@ -65,6 +65,32 @@ pub struct EthDeps<B: BlockT, C, P, A: ChainApi, CT, CIDP> {
     pub pending_create_inherent_data_providers: CIDP,
 }
 
+impl<B: BlockT, C, P, A: ChainApi, CT: Clone, CIDP: Clone> Clone for EthDeps<B, C, P, A, CT, CIDP> {
+    fn clone(&self) -> Self {
+        Self {
+            client: self.client.clone(),
+            pool: self.pool.clone(),
+            graph: self.graph.clone(),
+            converter: self.converter.clone(),
+            is_authority: self.is_authority,
+            enable_dev_signer: self.enable_dev_signer,
+            network: self.network.clone(),
+            sync: self.sync.clone(),
+            frontier_backend: self.frontier_backend.clone(),
+            storage_override: self.storage_override.clone(),
+            block_data_cache: self.block_data_cache.clone(),
+            filter_pool: self.filter_pool.clone(),
+            max_past_logs: self.max_past_logs,
+            fee_history_cache: self.fee_history_cache.clone(),
+            fee_history_cache_limit: self.fee_history_cache_limit,
+            execute_gas_limit_multiplier: self.execute_gas_limit_multiplier,
+            forced_parent_hashes: self.forced_parent_hashes.clone(),
+            pending_create_inherent_data_providers: self
+                .pending_create_inherent_data_providers
+                .clone(),
+        }
+    }
+}
 /// Instantiate Ethereum-compatible RPC extensions.
 pub fn create_eth<B, C, BE, P, A, CT, CIDP, EC>(
     mut io: RpcModule<()>,

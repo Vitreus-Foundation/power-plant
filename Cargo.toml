@@ -234,6 +234,7 @@ polkadot-availability-bitfield-distribution = { git = "https://github.com/parity
 polkadot-availability-distribution = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-availability-recovery = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-collator-protocol = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+polkadot-cli = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-dispute-distribution = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-gossip-support = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-network-bridge = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }

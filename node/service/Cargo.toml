@@ -1,5 +1,5 @@
 [package]
-name = "polkadot-service"
+name = "vitreus-service"
 rust-version = "1.60"
 version.workspace = true
 authors.workspace = true
@@ -60,7 +60,9 @@ polkadot-node-core-provisioner = { workspace = true, default-features = true, op
 polkadot-node-core-pvf-checker = { workspace = true, default-features = true, optional = true }
 polkadot-node-core-runtime-api = { workspace = true, default-features = true, optional = true }
 polkadot-statement-distribution = { workspace = true, default-features = true, optional = true }
-
+polkadot-node-core-prospective-parachains = { workspace = true, default-features = true, optional = true }
+polkadot-rpc = { workspace = true, default-features = true }
+polkadot-service = { workspace = true, default-features = true }
 # Substrate Client
 mmr-gadget = { workspace = true, default-features = true }
 sc-authority-discovery = { workspace = true, default-features = true }
@@ -136,6 +138,7 @@ frame-benchmarking = { workspace = true, default-features = true }
 prometheus-endpoint = { package = "substrate-prometheus-endpoint", git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407" }
 
 # Frontier
+fc-api = { workspace = true, default-features = true }
 fc-cli = { workspace = true, default-features = true }
 fc-consensus = { workspace = true, default-features = true }
 fc-db = { workspace = true, default-features = true }
@@ -195,6 +198,7 @@ full-node = [
     "polkadot-node-core-chain-selection",
     "polkadot-node-core-dispute-coordinator",
     "polkadot-node-core-provisioner",
+    "polkadot-node-core-prospective-parachains",
     "polkadot-node-core-runtime-api",
     "polkadot-statement-distribution",
     "polkadot-approval-distribution",
