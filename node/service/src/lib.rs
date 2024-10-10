@@ -38,7 +38,6 @@ use {
     },
     polkadot_node_core_av_store::Config as AvailabilityConfig,
     polkadot_node_core_av_store::Error as AvailabilityError,
-    polkadot_node_core_candidate_validation::Config as CandidateValidationConfig,
     polkadot_node_core_chain_selection::{
         self as chain_selection_subsystem, Config as ChainSelectionConfig,
     },
@@ -46,12 +45,11 @@ use {
     polkadot_node_network_protocol::{
         peer_set::PeerSetProtocolNames, request_response::ReqProtocolNames,
     },
-    polkadot_service::{workers, ExtendedOverseerGenArgs},
+    polkadot_service::ExtendedOverseerGenArgs,
     sc_client_api::BlockBackend,
     sc_transaction_pool_api::OffchainTransactionPoolFactory,
     sp_core::traits::SpawnNamed,
     sp_core::U256,
-    sp_trie::PrefixedMemoryDB,
 };
 
 use polkadot_node_subsystem_util::database::Database;
@@ -74,10 +72,9 @@ pub use {
 #[cfg(feature = "full-node")]
 use polkadot_node_subsystem::jaeger;
 
-use std::{cell::RefCell, sync::Arc, time::Duration};
 use std::{collections::HashMap, path::Path};
+use std::{sync::Arc, time::Duration};
 
-use prometheus_endpoint::Registry;
 #[cfg(feature = "full-node")]
 use service::KeystoreContainer;
 use service::RpcHandlers;
@@ -87,16 +84,16 @@ use telemetry::{Telemetry, TelemetryWorkerHandle};
 
 use beefy_primitives::ecdsa_crypto::AuthorityId;
 pub use consensus_common::{Proposal, SelectChain};
-use fc_consensus::FrontierBlockImport;
+
 use frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
 use mmr_gadget::MmrGadget;
-use polkadot_availability_recovery::FETCH_CHUNKS_THRESHOLD;
+
 pub use polkadot_primitives::{Block, BlockId, BlockNumber, CollatorPair, Hash, Id as ParaId};
 pub use sc_client_api::{Backend, CallExecutor};
 pub use sc_consensus::{BlockImport, BoxBlockImport, LongestChain};
 pub use sc_executor::NativeExecutionDispatch;
 use sc_executor::{HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY};
-use service::WarpSyncParams;
+
 pub use service::{
     config::{DatabaseSource, PrometheusConfig},
     ChainSpec, Configuration, Error as SubstrateServiceError, PruningMode, Role, TFullBackend,
@@ -313,7 +310,6 @@ struct Basics {
     keystore_container: KeystoreContainer,
     telemetry: Option<Telemetry>,
 }
-
 
 #[cfg(feature = "full-node")]
 pub struct NewFull {
@@ -683,20 +679,20 @@ pub fn new_full<
     NewFullParams {
         is_parachain_node,
         enable_beefy,
-        force_authoring_backoff,
+        force_authoring_backoff: _,
         jaeger_agent,
         telemetry_worker_handle,
-        node_version,
-        secure_validator_mode,
-        workers_path,
-        workers_names,
+        node_version: _,
+        secure_validator_mode: _,
+        workers_path: _,
+        workers_names: _,
         overseer_gen,
         overseer_message_channel_capacity_override,
         malus_finality_delay: _malus_finality_delay,
         hwbench,
-        execute_workers_max_num,
-        prepare_workers_soft_max_num,
-        prepare_workers_hard_max_num,
+        execute_workers_max_num: _,
+        prepare_workers_soft_max_num: _,
+        prepare_workers_hard_max_num: _,
     }: NewFullParams<OverseerGenerator>,
 ) -> Result<TaskManager, Error> {
     use polkadot_availability_recovery::FETCH_CHUNKS_THRESHOLD;
@@ -720,7 +716,7 @@ pub fn new_full<
     let overseer_connector = OverseerConnector::default();
     let overseer_handle = Handle::new(overseer_connector.handle());
 
-    let chain_spec = config.chain_spec.cloned_box();
+    let _chain_spec = config.chain_spec.cloned_box();
 
     let keystore = basics.keystore_container.local_keystore();
     let auth_or_collator = role.is_authority() || is_parachain_node.is_collator();
@@ -817,7 +813,7 @@ pub fn new_full<
         std::collections::HashMap::new()
     };
 
-    let req_protocol_names = ReqProtocolNames::new(&genesis_hash, config.chain_spec.fork_id());
+    let req_protocol_names = ReqProtocolNames::new(genesis_hash, config.chain_spec.fork_id());
 
     let (collation_req_v1_receiver, cfg) =
         IncomingRequest::get_config_receiver::<_, Network>(&req_protocol_names);
@@ -886,7 +882,7 @@ pub fn new_full<
         net_config.add_request_response_protocol(cfg);
         let approval_voting_config = ApprovalVotingConfig {
             col_approval_data: parachains_db::REAL_COLUMNS.col_approval_data,
-            slot_duration_millis: slot_duration.as_millis() as u64,
+            slot_duration_millis: slot_duration.as_millis(),
         };
         let dispute_coordinator_config = DisputeCoordinatorConfig {
             col_dispute_data: parachains_db::REAL_COLUMNS.col_dispute_coordinator_data,
@@ -1038,7 +1034,7 @@ pub fn new_full<
     let overseer_client = client.clone();
     let spawner = task_manager.spawn_handle();
 
-    let authority_discovery_service = if role.is_authority()  {
+    let authority_discovery_service = if role.is_authority() {
         use futures::StreamExt;
         use sc_network::{Event, NetworkEventStream};
 
@@ -1110,7 +1106,8 @@ pub fn new_full<
             .map_err(|e| {
                 gum::error!("Failed to init overseer: {}", e);
                 e
-            }).map_err(|err| sp_blockchain::Error::Backend(err.to_string()))?;
+            })
+            .map_err(|err| sp_blockchain::Error::Backend(err.to_string()))?;
         let handle = Handle::new(overseer_handle.clone());
 
         {
@@ -1130,10 +1127,10 @@ pub fn new_full<
                     pin_mut!(forward);
 
                     select! {
-    					() = forward => (),
-    					() = overseer_fut => (),
-    					complete => (),
-    				}
+                        () = forward => (),
+                        () = overseer_fut => (),
+                        complete => (),
+                    }
                 }),
             );
         }
@@ -1210,16 +1207,7 @@ pub fn new_full<
             is_authority: role.is_authority(),
         };
 
-        let gadget = beefy::start_beefy_gadget::<
-            _,
-            _,
-            _,
-            _,
-            _,
-            _,
-            _,
-            AuthorityId,
-        >(beefy_params);
+        let gadget = beefy::start_beefy_gadget::<_, _, _, _, _, _, _, AuthorityId>(beefy_params);
 
         // BEEFY is part of consensus, if it fails we'll bring the node down with it to make sure it
         // is noticed.
@@ -1241,7 +1229,7 @@ pub fn new_full<
         );
     }
 
-    let rpc_handlers = service::spawn_tasks(service::SpawnTasksParams {
+    let _rpc_handlers = service::spawn_tasks(service::SpawnTasksParams {
         config,
         backend: backend.clone(),
         client: client.clone(),
@@ -1328,7 +1316,11 @@ pub fn new_full<
         };
 
         let babe = babe::start_babe(babe_config)?;
-        task_manager.spawn_essential_handle().spawn_blocking("babe-proposer", Some("block-authoring"), babe);
+        task_manager.spawn_essential_handle().spawn_blocking(
+            "babe-proposer",
+            Some("block-authoring"),
+            babe,
+        );
     }
 
     if !disable_grandpa {
@@ -1360,8 +1352,7 @@ pub fn new_full<
 
         if let Some(delay) = _malus_finality_delay {
             info!(?delay, "Enabling malus finality delay",);
-            voting_rules_builder =
-                voting_rules_builder.add(grandpa::BeforeBestBlockBy(delay));
+            voting_rules_builder = voting_rules_builder.add(grandpa::BeforeBestBlockBy(delay));
         };
 
         let grandpa_config = grandpa::GrandpaParams {
@@ -1505,95 +1496,4 @@ fn revert_approval_voting(db: Arc<dyn Database>, hash: Hash) -> sp_blockchain::R
     approval_voting
         .revert_to(hash)
         .map_err(|err| sp_blockchain::Error::Backend(err.to_string()))
-}
-
-fn run_manual_seal_authorship(
-    eth_config: &EthConfiguration,
-    client: Arc<FullClient>,
-    transaction_pool: Arc<sc_transaction_pool::FullPool<Block, FullClient>>,
-    select_chain: FullSelectChain,
-    block_import: BoxBlockImport<FullClient>,
-    task_manager: &TaskManager,
-    prometheus_registry: Option<&Registry>,
-    telemetry: Option<&Telemetry>,
-    commands_stream: futures::channel::mpsc::Receiver<
-        sc_consensus_manual_seal::rpc::EngineCommand<Hash>,
-    >,
-) -> Result<(), service::Error> {
-    let proposer_factory = sc_basic_authorship::ProposerFactory::new(
-        task_manager.spawn_handle(),
-        client.clone(),
-        transaction_pool.clone(),
-        prometheus_registry,
-        telemetry.as_ref().map(|x| x.handle()),
-    );
-
-    thread_local!(static TIMESTAMP: RefCell<u64> = RefCell::new(0));
-
-    /// Provide a mock duration starting at 0 in millisecond for timestamp inherent.
-    /// Each call will increment timestamp by slot_duration making Aura think time has passed.
-    struct MockTimestampInherentDataProvider;
-
-    #[async_trait::async_trait]
-    impl sp_inherents::InherentDataProvider for MockTimestampInherentDataProvider {
-        async fn provide_inherent_data(
-            &self,
-            inherent_data: &mut sp_inherents::InherentData,
-        ) -> Result<(), sp_inherents::Error> {
-            TIMESTAMP.with(|x| {
-                *x.borrow_mut() += vitreus_power_plant_runtime::SLOT_DURATION;
-                inherent_data.put_data(sp_timestamp::INHERENT_IDENTIFIER, &*x.borrow())
-            })
-        }
-
-        async fn try_handle_error(
-            &self,
-            _identifier: &sp_inherents::InherentIdentifier,
-            _error: &[u8],
-        ) -> Option<Result<(), sp_inherents::Error>> {
-            // The pallet never reports error.
-            None
-        }
-    }
-
-    let target_gas_price = eth_config.target_gas_price;
-    // let create_inherent_data_providers = move |_, ()| async move {
-    //     let timestamp = MockTimestampInherentDataProvider;
-    //     let dynamic_fee = fp_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
-    //     Ok((timestamp, dynamic_fee))
-    // };
-
-    // let manual_seal = match sealing {
-    //     Sealing::Manual => futures::future::Either::Left(
-    //         sc_consensus_manual_seal::run_manual_seal(sc_consensus_manual_seal::ManualSealParams {
-    //             block_import,
-    //             env: proposer_factory,
-    //             client,
-    //             pool: transaction_pool,
-    //             commands_stream,
-    //             select_chain,
-    //             consensus_data_provider: None,
-    //             create_inherent_data_providers,
-    //         }),
-    //     ),
-    //     Sealing::Instant => {
-    //         futures::future::Either::Right(sc_consensus_manual_seal::run_instant_seal(
-    //             sc_consensus_manual_seal::InstantSealParams {
-    //                 block_import,
-    //                 env: proposer_factory,
-    //                 client,
-    //                 pool: transaction_pool,
-    //                 select_chain,
-    //                 consensus_data_provider: None,
-    //                 create_inherent_data_providers,
-    //             },
-    //         ))
-    //     },
-    // };
-    //
-    // // we spawn the future on a background thread managed by service.
-    // task_manager
-    //     .spawn_essential_handle()
-    //     .spawn_blocking("manual-seal", None, manual_seal);
-    Ok(())
 }

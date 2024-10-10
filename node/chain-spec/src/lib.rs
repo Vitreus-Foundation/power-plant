@@ -18,10 +18,11 @@ use sp_runtime::{FixedU128, Perbill};
 use crate::tech_addresses::treasury;
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint,
-    RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus,
-    SudoConfig, SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
+    EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
+    NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig,
+    SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig,
+    SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -250,8 +251,10 @@ pub fn mainnet_config() -> ChainSpec {
                 ],
                 // Invulnerables
                 vec![],
-            )).unwrap()
-        ).build()
+            ))
+            .unwrap(),
+        )
+        .build()
 }
 
 /// Configure initial storage state for FRAME modules.

@@ -967,7 +967,7 @@ pub trait DisablingStrategy<T: Config> {
     fn decision(
         offender_stash: &T::AccountId,
         slash_era: EraIndex,
-        currently_disabled: &Vec<u32>,
+        currently_disabled: &[u32],
     ) -> Option<u32>;
 }
 
@@ -998,7 +998,7 @@ impl<T: Config, const DISABLING_LIMIT_FACTOR: usize> DisablingStrategy<T>
     fn decision(
         offender_stash: &T::AccountId,
         slash_era: EraIndex,
-        currently_disabled: &Vec<u32>,
+        currently_disabled: &[u32],
     ) -> Option<u32> {
         let active_set = T::SessionInterface::validators();
 

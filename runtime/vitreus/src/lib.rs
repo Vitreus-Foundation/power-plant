@@ -8,7 +8,10 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use frame_support::{PalletId, genesis_builder_helper::{build_state, get_preset}};
+use frame_support::{
+    genesis_builder_helper::{build_state, get_preset},
+    PalletId,
+};
 use pallet_balances::NegativeImbalance;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
