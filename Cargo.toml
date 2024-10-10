@@ -307,6 +307,7 @@ sp-consensus-grandpa = { git = "https://github.com/paritytech/polkadot-sdk", bra
 sp-consensus-slots = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-core = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-database = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+sp-genesis-builder = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-inherents = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-io = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 sp-keyring = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }

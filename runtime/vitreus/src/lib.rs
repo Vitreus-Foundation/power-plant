@@ -8,7 +8,7 @@
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
-use frame_support::PalletId;
+use frame_support::{PalletId, genesis_builder_helper::{build_state, get_preset}};
 use pallet_balances::NegativeImbalance;
 use polkadot_primitives::{
     runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
@@ -2568,6 +2568,21 @@ impl_runtime_apis! {
             Balances::reducible_balance(&account_id, Preservation::Preserve, Fortitude::Polite).into()
         }
     }
+
+    impl sp_genesis_builder::GenesisBuilder<Block> for Runtime {
+        fn build_state(config: Vec<u8>) -> sp_genesis_builder::Result {
+            build_state::<RuntimeGenesisConfig>(config)
+        }
+
+        fn get_preset(id: &Option<sp_genesis_builder::PresetId>) -> Option<Vec<u8>> {
+            get_preset::<RuntimeGenesisConfig>(id, |_| None)
+        }
+
+        fn preset_names() -> Vec<sp_genesis_builder::PresetId> {
+            vec![]
+        }
+    }
+
 
     impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
         fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
