@@ -204,19 +204,6 @@ pub mod opaque {
     /// Opaque block identifier type.
     pub type BlockId = generic::BlockId<Block>;
 
-    // TODO: maybe we can delete OldSessionKeys structure?
-
-    impl_opaque_keys! {
-        pub struct OldSessionKeys {
-            pub grandpa: Grandpa,
-            pub babe: Babe,
-            pub im_online: ImOnline,
-            pub para_validator: Initializer,
-            pub para_assignment: ParaSessionInfo,
-            pub authority_discovery: AuthorityDiscovery,
-        }
-    }
-
     impl_opaque_keys! {
         pub struct SessionKeys {
             pub grandpa: Grandpa,
@@ -226,28 +213,6 @@ pub mod opaque {
             pub para_assignment: ParaSessionInfo,
             pub authority_discovery: AuthorityDiscovery,
             pub beefy: Beefy,
-        }
-    }
-
-    // remove this when removing `OldSessionKeys`
-    pub fn transform_session_keys(v: AccountId, old: OldSessionKeys) -> SessionKeys {
-        log::info!("Update session keys for {:?}", v);
-
-        SessionKeys {
-            grandpa: old.grandpa,
-            babe: old.babe,
-            im_online: old.im_online,
-            para_validator: old.para_validator,
-            para_assignment: old.para_assignment,
-            authority_discovery: old.authority_discovery,
-            beefy: {
-                let mut id: BeefyId =
-                    sp_application_crypto::ecdsa::Public::from_raw([0u8; 33]).into();
-                let id_raw: &mut [u8] = id.as_mut();
-                id_raw[13..33].copy_from_slice(&v.0);
-                id_raw[0..4].copy_from_slice(b"beef");
-                id
-            },
         }
     }
 }
@@ -1750,15 +1715,7 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations = (
-    migrations::V0101,
-    migrations::V0103,
-    migrations::V0104,
-    migrations::V0108,
-    migrations::V0112,
-    migrations::Unreleased,
-    migrations::Permanent,
-);
+pub type Migrations = (migrations::Unreleased, migrations::Permanent);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
