@@ -9,19 +9,16 @@ use sp_consensus_babe::AuthorityId as BabeId;
 use sp_consensus_beefy::ecdsa_crypto::AuthorityId as BeefyId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
-use sp_core::{storage::Storage, Pair, Public};
+use sp_core::{Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::{FixedU128, Perbill};
-use sp_state_machine::BasicExternalities;
+
 // Frontier
-use crate::devnet_keys::{
-    alith, authority_keys_from_seed, baltathar, charleth, dorothy, ethan, faith, goliath,
-};
+
 use crate::tech_addresses::treasury;
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
-    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
+    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
     MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint,
     RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus,
     SudoConfig, SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
@@ -61,7 +58,7 @@ const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 const MIN_COOPERATOR_BOND: Balance = 1_000_000_000_000_000_000;
 const ENERGY_PER_STAKE_CURRENCY: Balance = 19_909_091_036_891;
 
-pub fn development_config(enable_manual_seal: Option<bool>) -> ChainSpec {
+pub fn development_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
 
@@ -259,7 +256,7 @@ pub fn mainnet_config() -> ChainSpec {
 
 /// Configure initial storage state for FRAME modules.
 pub fn testnet_genesis(
-    wasm_binary: &[u8],
+    _wasm_binary: &[u8],
     root_key: AccountId,
     mut endowed_accounts: Vec<AccountId>,
     initial_validators: Vec<(
@@ -429,7 +426,7 @@ pub fn testnet_genesis(
 
 /// Configure initial storage state for FRAME modules.
 fn mainnet_genesis(
-    wasm_binary: &[u8],
+    _wasm_binary: &[u8],
     root_key: AccountId,
     initial_validators: Vec<(
         AccountId,

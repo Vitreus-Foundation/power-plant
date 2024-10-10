@@ -3,7 +3,6 @@
 use super::*;
 use frame_support::dispatch::RawOrigin;
 use frame_support::traits::fungibles::roles::Inspect;
-use frame_support::traits::fungibles::Mutate;
 use frame_support::traits::{GetStorageVersion, OnRuntimeUpgrade, StorageVersion};
 use frame_support::weights::constants::RocksDbWeight;
 use hex_literal::hex;

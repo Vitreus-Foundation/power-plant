@@ -66,7 +66,7 @@ impl SubstrateCli for Cli {
 
     fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
         Ok(match id {
-            "dev" => Box::new(chain_spec::development_config(None)),
+            "dev" => Box::new(chain_spec::development_config()),
             "devnet" => Box::new(chain_spec::devnet_config()),
             "stagenet" => Box::new(chain_spec::stagenet_config()),
             "" | "localnet" => Box::new(chain_spec::localnet_config()),
