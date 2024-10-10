@@ -1757,6 +1757,7 @@ pub type Migrations = (
     migrations::V0108,
     migrations::V0112,
     migrations::Unreleased,
+    migrations::Permanent,
 );
 
 /// Executive: handles dispatch to the various modules.

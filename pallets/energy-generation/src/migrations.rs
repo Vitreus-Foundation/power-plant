@@ -173,8 +173,8 @@ impl<T: Config> OnRuntimeUpgrade for UpdateSlashStorages<T> {
             .map_err(|_| TryRuntimeError::Corruption)?;
         ensure!(old_counter == new_counter, TryRuntimeError::Corruption);
         ensure!(
-            Pallet::<T>::on_chain_storage_version() == 14,
-            TryRuntimeError::Other("Storage version wasn't updated")
+            StorageVersion::get::<Pallet<T>>() >= 14,
+            "Storage version should be >= 14 after the migration"
         );
         Ok(())
     }
