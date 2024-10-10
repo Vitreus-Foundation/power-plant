@@ -17,8 +17,8 @@
 //! Vitreus CLI library.
 
 use clap::Parser;
+use service::eth::EthConfiguration;
 use std::path::PathBuf;
-use service::{eth::EthConfiguration};
 
 #[allow(missing_docs)]
 #[derive(Debug, Parser)]

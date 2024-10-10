@@ -61,26 +61,6 @@ const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 const MIN_COOPERATOR_BOND: Balance = 1_000_000_000_000_000_000;
 const ENERGY_PER_STAKE_CURRENCY: Balance = 19_909_091_036_891;
 
-/// Extension for the dev genesis config to support a custom changes to the genesis state.
-#[derive(Serialize, Deserialize, Default)]
-pub struct DevGenesisExt {
-    /// Genesis config.
-    genesis_config: RuntimeGenesisConfig,
-    /// The flag that if enable manual-seal mode.
-    enable_manual_seal: Option<bool>,
-}
-
-impl sp_runtime::BuildStorage for DevGenesisExt {
-    fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
-        BasicExternalities::execute_with_storage(storage, || {
-            if let Some(enable_manual_seal) = &self.enable_manual_seal {
-                EnableManualSeal::set(enable_manual_seal);
-            }
-        });
-        self.genesis_config.assimilate_storage(storage)
-    }
-}
-
 pub fn development_config(enable_manual_seal: Option<bool>) -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
@@ -93,30 +73,27 @@ pub fn development_config(enable_manual_seal: Option<bool>) -> ChainSpec {
         .with_chain_type(ChainType::Development)
         .with_properties(properties())
         .with_genesis_config(
-            serde_json::to_value(DevGenesisExt {
-                genesis_config: testnet_genesis(
-                    wasm_binary,
-                    // Sudo account
+            serde_json::to_value(testnet_genesis(
+                wasm_binary,
+                // Sudo account
+                alith(),
+                // Pre-funded accounts
+                vec![
                     alith(),
-                    // Pre-funded accounts
-                    vec![
-                        alith(),
-                        baltathar(),
-                        charleth(),
-                        dorothy(),
-                        ethan(),
-                        faith(),
-                        goliath(),
-                        treasury(),
-                    ],
-                    // Initial Validators
-                    vec![authority_keys_from_seed("Alice")],
-                    vec![],
-                    // Ethereum chain ID
-                    SS58Prefix::get() as u64,
-                ),
-                enable_manual_seal,
-            })
+                    baltathar(),
+                    charleth(),
+                    dorothy(),
+                    ethan(),
+                    faith(),
+                    goliath(),
+                    treasury(),
+                ],
+                // Initial Validators
+                vec![authority_keys_from_seed("Alice")],
+                vec![],
+                // Ethereum chain ID
+                SS58Prefix::get() as u64,
+            ))
             .expect("Invalid genesis config"),
         )
         .build()

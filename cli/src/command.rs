@@ -66,9 +66,7 @@ impl SubstrateCli for Cli {
 
     fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
         Ok(match id {
-            "dev" => {
-                Box::new(chain_spec::development_config(None))
-            },
+            "dev" => Box::new(chain_spec::development_config(None)),
             "devnet" => Box::new(chain_spec::devnet_config()),
             "stagenet" => Box::new(chain_spec::stagenet_config()),
             "" | "localnet" => Box::new(chain_spec::localnet_config()),
@@ -144,7 +142,7 @@ where
     // By default, enable BEEFY on all networks, unless explicitly disabled through CLI.
     let enable_beefy = !cli.run.no_beefy;
 
-    let grandpa_pause = if cli.run.grandpa_pause.is_empty() {
+    let _grandpa_pause = if cli.run.grandpa_pause.is_empty() {
         None
     } else {
         Some((cli.run.grandpa_pause[0], cli.run.grandpa_pause[1]))
@@ -162,7 +160,8 @@ where
         None
     };
 
-    let node_version = if cli.run.disable_worker_version_check { None } else { Some(NODE_VERSION.to_string()) };
+    let node_version =
+        if cli.run.disable_worker_version_check { None } else { Some(NODE_VERSION.to_string()) };
 
     let secure_validator_mode = cli.run.base.validator && !cli.run.insecure_validator;
 
@@ -189,13 +188,15 @@ where
                 workers_path: cli.run.workers_path,
                 workers_names: None,
                 overseer_gen,
-                overseer_message_channel_capacity_override: cli.run.overseer_channel_capacity_override,
+                overseer_message_channel_capacity_override: cli
+                    .run
+                    .overseer_channel_capacity_override,
                 malus_finality_delay: maybe_malus_finality_delay,
                 hwbench,
                 execute_workers_max_num: cli.run.execute_workers_max_num,
                 prepare_workers_hard_max_num: cli.run.prepare_workers_hard_max_num,
                 prepare_workers_soft_max_num: cli.run.prepare_workers_soft_max_num,
-            }
+            },
         )?;
 
         if let Some(path) = database_source.path() {
@@ -239,14 +240,12 @@ pub fn run() -> Result<()> {
     }
 
     match &cli.subcommand {
-        None => {
-            run_node_inner(
-                cli,
-                polkadot_service::ValidatorOverseerGen,
-                None,
-                polkadot_node_metrics::logger_hook(),
-            )
-        },
+        None => run_node_inner(
+            cli,
+            polkadot_service::ValidatorOverseerGen,
+            None,
+            polkadot_node_metrics::logger_hook(),
+        ),
         Some(Subcommand::BuildSpec(cmd)) => {
             let runner = cli.create_runner(cmd)?;
             Ok(runner.sync_run(|config| cmd.run(config.chain_spec, config.network))?)
@@ -357,7 +356,7 @@ pub fn run() -> Result<()> {
             })?)
         },
         // TODO: Do we need this subcommand?
-        Some(Subcommand::PvfPrepareWorker(cmd)) => {
+        Some(Subcommand::PvfPrepareWorker(_cmd)) => {
             Ok(())
             // let mut builder = sc_cli::LoggerBuilder::new("");
             // builder.with_colors(false);
@@ -381,7 +380,7 @@ pub fn run() -> Result<()> {
             // }
         },
         // TODO: Do we need this subcommand?
-        Some(Subcommand::PvfExecuteWorker(cmd)) => {
+        Some(Subcommand::PvfExecuteWorker(_cmd)) => {
             Ok(())
             // let mut builder = sc_cli::LoggerBuilder::new("");
             // builder.with_colors(false);

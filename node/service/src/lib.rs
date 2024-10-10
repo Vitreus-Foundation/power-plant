@@ -724,7 +724,6 @@ pub fn new_full<
 
     let keystore = basics.keystore_container.local_keystore();
     let auth_or_collator = role.is_authority() || is_parachain_node.is_collator();
-    // let pvf_checker_enabled = role.is_authority();
 
     let select_chain = if auth_or_collator {
         let metrics =
@@ -789,57 +788,9 @@ pub fn new_full<
         );
     net_config.add_notification_protocol(grandpa_protocol_config);
 
-    // if sealing.is_none() {
-    //     net_config.add_notification_protocol(grandpa::grandpa_peers_set_config(
-    //         grandpa_protocol_name.clone(),
-    //         metrics.clone(),
-    //         Arc::clone(&peer_store_handle),
-    //     ));
-    // }
-
-    let beefy_gossip_proto_name =
-        beefy::gossip_protocol_name(genesis_hash, config.chain_spec.fork_id());
-    // `beefy_on_demand_justifications_handler` is given to `beefy-gadget` task to be run,
-    // while `beefy_req_resp_cfg` is added to `config.network.request_response_protocols`.
-    let (beefy_on_demand_justifications_handler, beefy_req_resp_cfg) =
-        beefy::communication::request_response::BeefyJustifsRequestHandler::new::<_, Network>(
-            &genesis_hash,
-            config.chain_spec.fork_id(),
-            client.clone(),
-            prometheus_registry.clone(),
-        );
-    let beefy_notification_service = match enable_beefy {
-        false => None,
-        true => {
-            let (beefy_notification_config, beefy_notification_service) =
-                beefy::communication::beefy_peers_set_config::<_, Network>(
-                    beefy_gossip_proto_name.clone(),
-                    metrics.clone(),
-                    Arc::clone(&peer_store_handle),
-                );
-
-            net_config.add_notification_protocol(beefy_notification_config);
-            net_config.add_request_response_protocol(beefy_req_resp_cfg);
-            Some(beefy_notification_service)
-        },
-    };
-
     // validation/collation protocols are enabled only if `Overseer` is enabled
     let peerset_protocol_names =
         PeerSetProtocolNames::new(genesis_hash, config.chain_spec.fork_id());
-
-    // {
-    //     use polkadot_network_bridge::{peer_sets_info, IsAuthority};
-    //     let is_authority = if role.is_authority() { IsAuthority::Yes } else { IsAuthority::No };
-    //     for config in peer_sets_info::<_, Network>(
-    //         is_authority,
-    //         &peerset_protocol_names,
-    //         metrics.clone(),
-    //         Arc::clone(&peer_store_handle),
-    //     ) {
-    //         net_config.add_notification_protocol(config);
-    //     }
-    // }
 
     // If this is a validator or running alongside a parachain node, we need to enable the
     // networking protocols.
@@ -887,49 +838,43 @@ pub fn new_full<
         IncomingRequest::get_config_receiver::<_, Network>(&req_protocol_names);
     net_config.add_request_response_protocol(cfg);
 
-    let grandpa_hard_forks = Vec::new();
-
     let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
         backend.clone(),
         import_setup.1.shared_authority_set().clone(),
-        grandpa_hard_forks,
+        Vec::new(),
     ));
 
-    //
-    // let approval_voting_config = ApprovalVotingConfig {
-    //     col_approval_data: parachains_db::REAL_COLUMNS.col_approval_data,
-    //     slot_duration_millis: slot_duration.as_millis(),
-    // };
-    //
+    let beefy_gossip_proto_name =
+        beefy::gossip_protocol_name(genesis_hash, config.chain_spec.fork_id());
+    // `beefy_on_demand_justifications_handler` is given to `beefy-gadget` task to be run,
+    // while `beefy_req_resp_cfg` is added to `config.network.request_response_protocols`.
+    let (beefy_on_demand_justifications_handler, beefy_req_resp_cfg) =
+        beefy::communication::request_response::BeefyJustifsRequestHandler::new::<_, Network>(
+            &genesis_hash,
+            config.chain_spec.fork_id(),
+            client.clone(),
+            prometheus_registry.clone(),
+        );
+    let beefy_notification_service = match enable_beefy {
+        false => None,
+        true => {
+            let (beefy_notification_config, beefy_notification_service) =
+                beefy::communication::beefy_peers_set_config::<_, Network>(
+                    beefy_gossip_proto_name.clone(),
+                    metrics.clone(),
+                    Arc::clone(&peer_store_handle),
+                );
+
+            net_config.add_notification_protocol(beefy_notification_config);
+            net_config.add_request_response_protocol(beefy_req_resp_cfg);
+            Some(beefy_notification_service)
+        },
+    };
 
     let ext_overseer_args = if is_parachain_node.is_running_alongside_parachain_node() {
         None
     } else {
         let parachains_db = open_database(&config.database)?;
-        let candidate_validation_config = if role.is_authority() {
-            let (prep_worker_path, exec_worker_path) =
-                workers::determine_workers_paths(workers_path, workers_names, node_version.clone())
-                    .map_err(|err| sp_blockchain::Error::Backend(err.to_string()))?;
-            log::info!("🚀 Using prepare-worker binary at: {:?}", prep_worker_path);
-            log::info!("🚀 Using execute-worker binary at: {:?}", exec_worker_path);
-
-            Some(CandidateValidationConfig {
-                artifacts_cache_path: config
-                    .database
-                    .path()
-                    .ok_or(Error::DatabasePathRequired)?
-                    .join("pvf-artifacts"),
-                node_version,
-                secure_validator_mode,
-                prep_worker_path,
-                exec_worker_path,
-                pvf_execute_workers_max_num: 4,
-                pvf_prepare_workers_soft_max_num: prepare_workers_soft_max_num.unwrap_or(1),
-                pvf_prepare_workers_hard_max_num: prepare_workers_hard_max_num.unwrap_or(2),
-            })
-        } else {
-            None
-        };
         let (statement_req_receiver, cfg) =
             IncomingRequest::get_config_receiver::<_, Network>(&req_protocol_names);
         net_config.add_request_response_protocol(cfg);
@@ -955,7 +900,7 @@ pub fn new_full<
         Some(ExtendedOverseerGenArgs {
             keystore,
             parachains_db,
-            candidate_validation_config,
+            candidate_validation_config: None,
             availability_config: AVAILABILITY_CONFIG,
             pov_req_receiver,
             chunk_req_v1_receiver,
@@ -999,7 +944,7 @@ pub fn new_full<
                 )),
                 network_provider: Arc::new(network.clone()),
                 is_validator: role.is_authority(),
-                enable_http_requests: false,
+                enable_http_requests: true,
                 custom_extensions: move |_| vec![],
             })
             .run(client.clone(), task_manager.spawn_handle())
@@ -1008,6 +953,15 @@ pub fn new_full<
     }
 
     let frontier_backend = Arc::new(frontier_backend);
+
+    // Sinks for pubsub notifications.
+    // Everytime a new subscription is created, a new mpsc channel is added to the sink pool.
+    // The MappingSyncWorker sends through the channel on block import and the subscription emits a notification to the subscriber on receiving a message through this channel.
+    // This way we avoid race conditions when using native substrate block import notification stream.
+    let pubsub_notification_sinks: fc_mapping_sync::EthereumBlockNotificationSinks<
+        fc_mapping_sync::EthereumBlockNotification<Block>,
+    > = Default::default();
+    let pubsub_notification_sinks = Arc::new(pubsub_notification_sinks);
 
     // for ethereum-compatibility rpc.
     config.rpc_id_provider = Some(Box::new(fc_rpc::EthereumSubIdProvider));
@@ -1055,111 +1009,6 @@ pub fn new_full<
         forced_parent_hashes: None,
         pending_create_inherent_data_providers,
     };
-
-    // Sinks for pubsub notifications.
-    // Everytime a new subscription is created, a new mpsc channel is added to the sink pool.
-    // The MappingSyncWorker sends through the channel on block import and the subscription emits a notification to the subscriber on receiving a message through this channel.
-    // This way we avoid race conditions when using native substrate block import notification stream.
-    let pubsub_notification_sinks: fc_mapping_sync::EthereumBlockNotificationSinks<
-        fc_mapping_sync::EthereumBlockNotification<Block>,
-    > = Default::default();
-    let pubsub_notification_sinks = Arc::new(pubsub_notification_sinks);
-
-    spawn_frontier_tasks(
-        &task_manager,
-        client.clone(),
-        backend.clone(),
-        frontier_backend,
-        filter_pool,
-        overrides,
-        fee_history_cache,
-        fee_history_cache_limit,
-        sync_service.clone(),
-        pubsub_notification_sinks.clone(),
-    );
-
-    let rpc_builder = {
-        let client = client.clone();
-        let transaction_pool = transaction_pool.clone();
-        let select_chain = select_chain.clone();
-        let chain_spec = config.chain_spec.cloned_box();
-        let pubsub_notification_sinks = pubsub_notification_sinks.clone();
-        let backend = backend.clone();
-        let node_name = name.clone();
-
-        move |deny_unsafe, subscription_executor: polkadot_rpc::SubscriptionTaskExecutor| {
-            let (babe, grandpa, beefy) = rpc_deps_builder(subscription_executor.clone());
-
-            let deps = vitreus_rpc::FullDeps {
-                polkadot: polkadot_rpc::FullDeps {
-                    client: client.clone(),
-                    pool: transaction_pool.clone(),
-                    select_chain: select_chain.clone(),
-                    chain_spec: chain_spec.cloned_box(),
-                    deny_unsafe,
-                    babe,
-                    grandpa,
-                    beefy,
-                    backend: backend.clone(),
-                },
-                command_sink: None,
-                eth: eth_rpc_params.clone(),
-                node: vitreus_rpc::NodeDeps { name: node_name.clone() },
-            };
-
-            vitreus_rpc::create_full(deps, subscription_executor, pubsub_notification_sinks.clone())
-                .map_err(Into::into)
-        }
-    };
-
-    let rpc_handlers = service::spawn_tasks(service::SpawnTasksParams {
-        config,
-        backend: backend.clone(),
-        client: client.clone(),
-        keystore: keystore_container.keystore(),
-        network: network.clone(),
-        sync_service: sync_service.clone(),
-        rpc_builder: Box::new(rpc_builder),
-        transaction_pool: transaction_pool.clone(),
-        task_manager: &mut task_manager,
-        system_rpc_tx,
-        tx_handler_controller,
-        telemetry: telemetry.as_mut(),
-    })?;
-
-    // // let candidate_validation_config = CandidateValidationConfig {
-    // //     artifacts_cache_path: config
-    // //         .database
-    // //         .path()
-    // //         .ok_or(Error::DatabasePathRequired)?
-    // //         .join("pvf-artifacts"),
-    // //     node_version,
-    // //     secure_validator_mode,
-    // //     prep_worker_path,
-    // //     exec_worker_path,
-    // //     pvf_execute_workers_max_num: 4,
-    // //     pvf_prepare_workers_soft_max_num: prepare_workers_soft_max_num.unwrap_or(1),
-    // //     pvf_prepare_workers_hard_max_num: prepare_workers_hard_max_num.unwrap_or(2),
-    // //     // program_path: match program_path {
-    // //     //     None => std::env::current_exe()?,
-    // //     //     Some(p) => p,
-    // //     // },
-    // // };
-    //
-    // let chain_selection_config = ChainSelectionConfig {
-    //     col_data: parachains_db::REAL_COLUMNS.col_chain_selection_data,
-    //     stagnant_check_interval: Default::default(),
-    //     stagnant_check_mode: chain_selection_subsystem::StagnantCheckMode::PruneOnly,
-    // };
-    //
-    // let dispute_coordinator_config = DisputeCoordinatorConfig {
-    //     col_dispute_data: parachains_db::REAL_COLUMNS.col_dispute_coordinator_data,
-    // };
-    //
-    // // Channel for the rpc handler to communicate with the authorship task.
-    // let (command_sink, commands_stream) = futures::channel::mpsc::channel(1000);
-    //
-    //
 
     if let Some(hwbench) = hwbench {
         sc_sysinfo::print_hwbench(&hwbench);
@@ -1297,67 +1146,39 @@ pub fn new_full<
         None
     };
 
-    if role.is_authority() {
-        let proposer = sc_basic_authorship::ProposerFactory::new(
-            task_manager.spawn_handle(),
-            client.clone(),
-            transaction_pool.clone(),
-            prometheus_registry.as_ref(),
-            telemetry.as_ref().map(|x| x.handle()),
-        );
+    let rpc_builder = {
+        let client = client.clone();
+        let transaction_pool = transaction_pool.clone();
+        let select_chain = select_chain.clone();
+        let chain_spec = config.chain_spec.cloned_box();
+        let pubsub_notification_sinks = pubsub_notification_sinks.clone();
+        let backend = backend.clone();
+        let node_name = name.clone();
 
-        let client_clone = client.clone();
-        let overseer_handle =
-            overseer_handle.as_ref().ok_or(Error::AuthoritiesRequireRealOverseer)?.clone();
-        let slot_duration = babe_link.config().slot_duration();
-        let babe_config = babe::BabeParams {
-            keystore: keystore_container.keystore(),
-            client: client.clone(),
-            select_chain,
-            block_import,
-            env: proposer,
-            sync_oracle: sync_service.clone(),
-            justification_sync_link: sync_service.clone(),
-            create_inherent_data_providers: move |parent, ()| {
-                let client_clone = client_clone.clone();
-                let overseer_handle = overseer_handle.clone();
+        move |deny_unsafe, subscription_executor: polkadot_rpc::SubscriptionTaskExecutor| {
+            let (babe, grandpa, beefy) = rpc_deps_builder(subscription_executor.clone());
 
-                async move {
-                    let parachain =
-                        polkadot_node_core_parachains_inherent::ParachainsInherentDataProvider::new(
-                            client_clone.clone(),
-                            overseer_handle,
-                            parent,
-                        );
+            let deps = vitreus_rpc::FullDeps {
+                polkadot: polkadot_rpc::FullDeps {
+                    client: client.clone(),
+                    pool: transaction_pool.clone(),
+                    select_chain: select_chain.clone(),
+                    chain_spec: chain_spec.cloned_box(),
+                    deny_unsafe,
+                    babe,
+                    grandpa,
+                    beefy,
+                    backend: backend.clone(),
+                },
+                command_sink: None,
+                eth: eth_rpc_params.clone(),
+                node: vitreus_rpc::NodeDeps { name: node_name.clone() },
+            };
 
-                    let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
-
-                    let slot =
-                        sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
-                            *timestamp,
-                            slot_duration,
-                        );
-
-                    let storage_proof =
-                        sp_transaction_storage_proof::registration::new_data_provider(
-                            &*client_clone,
-                            &parent,
-                        )?;
-
-                    Ok((slot, timestamp, parachain, storage_proof))
-                }
-            },
-            force_authoring,
-            backoff_authoring_blocks,
-            babe_link,
-            block_proposal_slot_portion: babe::SlotProportion::new(2f32 / 3f32),
-            max_block_proposal_slot_portion: None,
-            telemetry: telemetry.as_ref().map(|x| x.handle()),
-        };
-
-        let babe = babe::start_babe(babe_config)?;
-        task_manager.spawn_essential_handle().spawn_blocking("babe", None, babe);
-    }
+            vitreus_rpc::create_full(deps, subscription_executor, pubsub_notification_sinks.clone())
+                .map_err(Into::into)
+        }
+    };
 
     // if the node isn't actively participating in consensus then it doesn't
     // need a keystore, regardless of which protocol we use below.
@@ -1420,28 +1241,117 @@ pub fn new_full<
         );
     }
 
-    let config = grandpa::Config {
-        // FIXME substrate#1578 make this available through chainspec
-        // Grandpa performance can be improved a bit by tuning this parameter, see:
-        // https://github.com/paritytech/polkadot/issues/5464
-        gossip_duration: Duration::from_millis(1000),
-        justification_generation_period: 512,
-        name: Some(name),
-        observer_enabled: false,
-        keystore: keystore_opt,
-        local_role: role,
-        telemetry: telemetry.as_ref().map(|x| x.handle()),
-        protocol_name: grandpa_protocol_name,
-    };
+    let rpc_handlers = service::spawn_tasks(service::SpawnTasksParams {
+        config,
+        backend: backend.clone(),
+        client: client.clone(),
+        keystore: keystore_container.keystore(),
+        network: network.clone(),
+        sync_service: sync_service.clone(),
+        rpc_builder: Box::new(rpc_builder),
+        transaction_pool: transaction_pool.clone(),
+        task_manager: &mut task_manager,
+        system_rpc_tx,
+        tx_handler_controller,
+        telemetry: telemetry.as_mut(),
+    })?;
 
-    let enable_grandpa = !disable_grandpa;
-    if enable_grandpa {
+    spawn_frontier_tasks(
+        &task_manager,
+        client.clone(),
+        backend.clone(),
+        frontier_backend,
+        filter_pool,
+        overrides,
+        fee_history_cache,
+        fee_history_cache_limit,
+        sync_service.clone(),
+        pubsub_notification_sinks.clone(),
+    );
+
+    if role.is_authority() {
+        let proposer = sc_basic_authorship::ProposerFactory::new(
+            task_manager.spawn_handle(),
+            client.clone(),
+            transaction_pool.clone(),
+            prometheus_registry.as_ref(),
+            telemetry.as_ref().map(|x| x.handle()),
+        );
+
+        let client_clone = client.clone();
+        let overseer_handle =
+            overseer_handle.as_ref().ok_or(Error::AuthoritiesRequireRealOverseer)?.clone();
+        let slot_duration = babe_link.config().slot_duration();
+        let babe_config = babe::BabeParams {
+            keystore: keystore_container.keystore(),
+            client: client.clone(),
+            select_chain,
+            block_import,
+            env: proposer,
+            sync_oracle: sync_service.clone(),
+            justification_sync_link: sync_service.clone(),
+            create_inherent_data_providers: move |parent, ()| {
+                let client_clone = client_clone.clone();
+                let overseer_handle = overseer_handle.clone();
+
+                async move {
+                    let parachain =
+                        polkadot_node_core_parachains_inherent::ParachainsInherentDataProvider::new(
+                            client_clone.clone(),
+                            overseer_handle,
+                            parent,
+                        );
+
+                    let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+
+                    let slot =
+                        sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+                            *timestamp,
+                            slot_duration,
+                        );
+
+                    let storage_proof =
+                        sp_transaction_storage_proof::registration::new_data_provider(
+                            &*client_clone,
+                            &parent,
+                        )?;
+
+                    Ok((slot, timestamp, parachain, storage_proof))
+                }
+            },
+            force_authoring,
+            backoff_authoring_blocks,
+            babe_link,
+            block_proposal_slot_portion: babe::SlotProportion::new(2f32 / 3f32),
+            max_block_proposal_slot_portion: None,
+            telemetry: telemetry.as_ref().map(|x| x.handle()),
+        };
+
+        let babe = babe::start_babe(babe_config)?;
+        task_manager.spawn_essential_handle().spawn_blocking("babe-proposer", Some("block-authoring"), babe);
+    }
+
+    if !disable_grandpa {
         // start the full GRANDPA voter
         // NOTE: unlike in substrate we are currently running the full
         // GRANDPA voter protocol for all full nodes (regardless of whether
         // they're validators or not). at this point the full voter should
         // provide better guarantees of block and vote data availability than
         // the observer.
+
+        let config = grandpa::Config {
+            // FIXME substrate#1578 make this available through chainspec
+            // Grandpa performance can be improved a bit by tuning this parameter, see:
+            // https://github.com/paritytech/polkadot/issues/5464
+            gossip_duration: Duration::from_millis(1000),
+            justification_generation_period: 512,
+            name: Some(name),
+            observer_enabled: false,
+            keystore: keystore_opt,
+            local_role: role,
+            telemetry: telemetry.as_ref().map(|x| x.handle()),
+            protocol_name: grandpa_protocol_name,
+        };
 
         let mut voting_rules_builder = grandpa::VotingRulesBuilder::default();
 
@@ -1475,7 +1385,6 @@ pub fn new_full<
     }
 
     network_starter.start_network();
-
     Ok(task_manager)
 }
 
