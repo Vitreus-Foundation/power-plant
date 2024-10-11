@@ -22,7 +22,6 @@ pyroscope_pprofrs = { workspace = true, default-features = true, optional = true
 thiserror = { workspace = true, default-features = true }
 
 polkadot-cli = { workspace = true, default-features = true }
-polkadot-service = { workspace = true, default-features = true }
 polkadot-node-core-pvf-execute-worker = { workspace = true, default-features = true, optional = true }
 polkadot-node-core-pvf-prepare-worker = { workspace = true, default-features = true, optional = true }
 polkadot-node-metrics = { workspace = true, default-features = true }

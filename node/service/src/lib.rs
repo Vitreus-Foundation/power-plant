@@ -60,7 +60,7 @@ pub use {
     polkadot_node_subsystem_types::DefaultSubsystemClient,
     polkadot_overseer::{Handle, Overseer, OverseerConnector, OverseerHandle},
     polkadot_primitives::runtime_api::ParachainHost,
-    polkadot_service::{OverseerGen, OverseerGenArgs},
+    polkadot_service::{OverseerGen, OverseerGenArgs, ValidatorOverseerGen},
     relay_chain_selection::SelectRelayChain,
     sc_client_api::AuxStore,
     sc_network_sync::{service::network::Network, strategy::warp::WarpSyncProvider},

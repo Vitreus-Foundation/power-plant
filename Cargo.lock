@@ -14118,7 +14118,6 @@ dependencies = [
  "polkadot-node-core-pvf-execute-worker",
  "polkadot-node-core-pvf-prepare-worker",
  "polkadot-node-metrics",
- "polkadot-service",
  "pyroscope",
  "pyroscope_pprofrs",
  "sc-cli",

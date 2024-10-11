@@ -79,19 +79,6 @@ impl SubstrateCli for Cli {
     }
 }
 
-#[cfg(feature = "try-runtime")]
-const DEV_ONLY_ERROR_PATTERN: &'static str =
-	"can only use subcommand with --chain [polkadot-dev, kusama-dev, westend-dev, rococo-dev, wococo-dev], got ";
-
-#[cfg(feature = "try-runtime")]
-fn ensure_dev(spec: &Box<dyn vitreus_service::ChainSpec>) -> std::result::Result<(), String> {
-    if spec.is_dev() {
-        Ok(())
-    } else {
-        Err(format!("{}{}", DEV_ONLY_ERROR_PATTERN, spec.id()))
-    }
-}
-
 /// Runs performance checks.
 /// Should only be used in release build since the check would take too much time otherwise.
 fn host_perf_check() -> Result<()> {
@@ -242,7 +229,7 @@ pub fn run() -> Result<()> {
     match &cli.subcommand {
         None => run_node_inner(
             cli,
-            polkadot_service::ValidatorOverseerGen,
+            vitreus_service::ValidatorOverseerGen,
             None,
             polkadot_node_metrics::logger_hook(),
         ),
@@ -482,67 +469,6 @@ pub fn run() -> Result<()> {
             host_perf_check()
         },
         Some(Subcommand::Key(cmd)) => Ok(cmd.run(&cli)?),
-        #[cfg(feature = "try-runtime")]
-        Some(Subcommand::TryRuntime(cmd)) => {
-            use sc_service::TaskManager;
-            use try_runtime_cli::block_building_info::timestamp_with_babe_info;
-
-            let runner = cli.create_runner(cmd)?;
-            let chain_spec = &runner.config().chain_spec;
-
-            let registry = &runner.config().prometheus_config.as_ref().map(|cfg| &cfg.registry);
-            let task_manager = TaskManager::new(runner.config().tokio_handle.clone(), *registry)
-                .map_err(|e| Error::SubstrateService(sc_service::Error::Prometheus(e)))?;
-
-            ensure_dev(chain_spec).map_err(Error::Other)?;
-
-            #[cfg(feature = "kusama-native")]
-            if chain_spec.is_kusama() {
-                return runner.async_run(|_| {
-                    Ok((
-						cmd.run::<service::kusama_runtime::Block, sp_io::SubstrateHostFunctions, _>(
-							Some(timestamp_with_babe_info(service::kusama_runtime_constants::time::MILLISECS_PER_BLOCK))
-						)
-						.map_err(Error::SubstrateCli),
-						task_manager,
-					))
-                });
-            }
-
-            #[cfg(feature = "westend-native")]
-            if chain_spec.is_westend() {
-                return runner.async_run(|_| {
-                    Ok((
-						cmd.run::<service::westend_runtime::Block, sp_io::SubstrateHostFunctions, _>(
-							Some(timestamp_with_babe_info(service::westend_runtime_constants::time::MILLISECS_PER_BLOCK))
-						)
-						.map_err(Error::SubstrateCli),
-						task_manager,
-					))
-                });
-            }
-            // else we assume it is polkadot.
-            #[cfg(feature = "polkadot-native")]
-            {
-                return runner.async_run(|_| {
-                    Ok((
-						cmd.run::<service::polkadot_runtime::Block, sp_io::SubstrateHostFunctions, _>(
-							Some(timestamp_with_babe_info(service::polkadot_runtime_constants::time::MILLISECS_PER_BLOCK))
-						)
-						.map_err(Error::SubstrateCli),
-						task_manager,
-					))
-                });
-            }
-            #[cfg(not(feature = "polkadot-native"))]
-            panic!("No runtime feature (polkadot, kusama, westend, rococo) is enabled")
-        },
-        #[cfg(not(feature = "try-runtime"))]
-        Some(Subcommand::TryRuntime) => Err(Error::Other(
-            "TryRuntime wasn't enabled when building the node. \
-				You can enable it with `--features try-runtime`."
-                .into(),
-        )),
         Some(Subcommand::ChainInfo(cmd)) => {
             let runner = cli.create_runner(cmd)?;
             Ok(runner.sync_run(|config| cmd.run::<vitreus_service::Block>(&config))?)
