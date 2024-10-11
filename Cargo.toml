@@ -17,8 +17,8 @@ color-eyre = { version = "0.6.1", default-features = false }
 tikv-jemallocator = "0.5.0"
 
 # Crates in our workspace, defined as dependencies so we can pass them feature flags.
-vitreus-cli = { path = "cli" }
-vitreus-service = { path = "node/service" }
+vitreus-cli = { workspace = true }
+vitreus-service = { workspace = true, default-features = true }
 
 [dev-dependencies]
 assert_cmd = "2.0.4"
@@ -71,9 +71,6 @@ members = [
     "pallets/treasury-extension",
     "runtime/vitreus",
     "runtime/vitreus/runtime-api",
-    # "pallets/simple-staking",
-    # "precompiles/balances-erc20",
-    # "precompiles/utils",
 ]
 resolver = "2"
 
@@ -82,68 +79,6 @@ authors = ["Innowise FinTech Team"]
 edition = "2021"
 repository = "https://bitbucket.org/innowise-group/vitreus-power-plant"
 version = "1.0.0"
-
-# Disable some clippy checks for polkadot code
-[workspace.lints.clippy]
-bind_instead_of_map = "allow"
-boxed_local = "allow"
-collapsible_else_if = "allow"
-collapsible_match = "allow"
-comparison_chain = "allow"
-derivable_impls = "allow"
-excessive_precision = "allow"
-four_forward_slashes = "allow"
-from_over_into = "allow"
-identity_op = "allow"
-inconsistent_digit_grouping = "allow"
-into_iter_on_ref = "allow"
-iter_next_slice = "allow"
-iter_overeager_cloned = "allow"
-large_enum_variant = "allow"
-len_without_is_empty = "allow"
-len_zero = "allow"
-let_and_return = "allow"
-let_unit_value = "allow"
-manual_next_back = "allow"
-map_clone = "allow"
-match_like_matches_macro = "allow"
-match_ref_pats = "allow"
-match_result_ok = "allow"
-mem_replace_with_default = "allow"
-module_inception = "allow"
-needless_borrow = "allow"
-needless_borrows_for_generic_args = "allow"
-needless_return = "allow"
-new_without_default = "allow"
-nonminimal_bool = "allow"
-op_ref = "allow"
-option_map_or_none = "allow"
-option_map_unit_fn = "allow"
-partialeq_to_none = "allow"
-ptr_arg = "allow"
-redundant_closure = "allow"
-redundant_pattern = "allow"
-redundant_pattern_matching = "allow"
-redundant_static_lifetimes = "allow"
-result_large_err = "allow"
-result_unit_err = "allow"
-should_implement_trait = "allow"
-single_match = "allow"
-suspicious_doc_comments = "allow"
-tabs_in_doc_comments = "allow"
-too_many_arguments = "allow"
-type_complexity = "allow"
-unit_arg = "allow"
-unnecessary_cast = "allow"
-unnecessary_lazy_evaluations = "allow"
-unnecessary_mut_passed = "allow"
-unused_unit = "allow"
-unwrap_or_default = "allow"
-useless_conversion = "allow"
-vec_init_then_push = "allow"
-while_let_on_iterator = "allow"
-write_with_newline = "allow"
-wrong_self_convention = "allow"
 
 [workspace.dependencies]
 affix = "0.1"
@@ -156,7 +91,7 @@ csv = { version = "1.3.0", default-features = false }
 derive_more = "0.99"
 futures = { version = "0.3.21", default-features = false }
 futures-timer = "3.0.2"
-gum =  { git = "https://github.com/paritytech/polkadot-sdk", package = "tracing-gum", branch = "stable2407" }
+gum =  { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "tracing-gum", default-features = false }
 env_logger = { version = "0.9.0" }
 environmental = { version = "1.1", default-features = false }
 ethereum = { version = "0.15.0", default-features = false }
@@ -183,6 +118,7 @@ parity-scale-codec = { version = "3.6.12", default-features = false, features = 
 ] }
 paste = "1.0"
 primitive-types = { version = "0.12.2", default-features = false }
+pyroscope = { version = "0.5.3", default-features = false }
 pyroscope_pprofrs = { version = "0.2", default-features = false }
 rustc-hex = { version = "2.1.0", default-features = false }
 scale-info = { version = "2.3", default-features = false, features = [
@@ -216,8 +152,6 @@ polkadot-node-metrics = { git = "https://github.com/paritytech/polkadot-sdk", br
 polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-core-parachains-inherent = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-overseer = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-#TODO: rename
-polkadot-parachain = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "polkadot-parachain-primitives", default-features = false }
 polkadot-node-primitives = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-subsystem = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-subsystem-util = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -252,6 +186,11 @@ polkadot-node-core-pvf-checker = { git = "https://github.com/paritytech/polkadot
 polkadot-node-core-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-service = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-statement-distribution = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+
+# XCM
+xcm = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "staging-xcm", default-features = false }
+xcm-executor = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "staging-xcm-executor", default-features = false }
+xcm-builder = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "staging-xcm-builder", default-features = false }
 
 # Substrate Client
 mmr-gadget = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -336,14 +275,16 @@ frame-system = { git = "https://github.com/paritytech/polkadot-sdk", branch = "s
 frame-system-benchmarking = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 frame-try-runtime = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-assets = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-asset-rate = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-assets = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-atomic-swap = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-authority-discovery = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-authorship = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-babe = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-bags-list = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-balances = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-beefy = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-beefy-mmr = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-bounties = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-collective = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-democracy = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -351,12 +292,14 @@ pallet-grandpa = { git = "https://github.com/paritytech/polkadot-sdk", branch = 
 pallet-im-online = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-membership = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-message-queue = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-mmr =  { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-nfts = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-nfts-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-offences = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-preimage = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-scheduler = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-session = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false, features = [
-    "historical",
-] }
+pallet-session = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false, features = ["historical"] }
+pallet-staking-reward-curve = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-sudo = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-timestamp = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-transaction-payment = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -364,15 +307,10 @@ pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/polkadot
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-treasury = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-treasury-extension = { path = "pallets/treasury-extension", default-features = false }
-pallet-nfts = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-nfts-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-uniques = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-utility = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-vesting = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-staking-reward-curve = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-beefy = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-beefy-mmr = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-mmr =  { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-xcm = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 
 # Substrate Utility
 frame-benchmarking-cli = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -383,7 +321,6 @@ substrate-state-trie-migration-rpc = { git = "https://github.com/paritytech/polk
 substrate-test-runtime-client = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 substrate-test-utils = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 substrate-wasm-builder = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-#try-runtime-cli = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 
 # Frontier Client
 fc-api = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
@@ -416,20 +353,8 @@ pallet-evm-precompile-sha3fips = { git = "https://github.com/polkadot-evm/fronti
 pallet-evm-precompile-simple = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-evm-test-vector-support = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-hotfix-sufficients = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
-# Moonbeam
-# precompile-utils = { path = "precompiles/utils", default-features = false }
-# pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
 
-# XCM
-xcm = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "staging-xcm", default-features = false }
-xcm-executor = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "staging-xcm-executor", default-features = false }
-xcm-builder = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", package = "staging-xcm-builder", default-features = false }
-pallet-xcm = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-
-# Runtime
-vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
-vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false }
-
+# Vitreus pallets
 pallet-claiming = { path = "pallets/claiming", default-features = false }
 pallet-energy-broker = { path = "pallets/energy-broker", default-features = false }
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
@@ -438,23 +363,20 @@ pallet-faucet = { path = "pallets/faucet", default-features = false }
 pallet-nac-managing = { path = "pallets/nac-managing", default-features = false }
 pallet-privileges = { path = "pallets/privileges", default-features = false }
 pallet-reputation = { path = "pallets/reputation", default-features = false }
-pallet-simple-staking = { path = "pallets/simple-staking", default-features = false }
 pallet-simple-vesting = { path = "pallets/simple-vesting", default-features = false }
 
-# Node utility
-chain-spec = { path = "node/chain-spec" }
+# Runtime API
 energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-features = false }
 energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api", default-features = false }
+vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false }
+
+# RPC
 energy-fee-rpc = { path = "pallets/energy-fee/rpc" }
 energy-generation-rpc = { path = "pallets/energy-generation/rpc" }
 node-rpc-server = { path = "rpc/node-rpc-server" }
 vitreus-rpc = { path = "rpc" }
 
-# Arkworks
-ark-bls12-377 = { version = "0.4.0", default-features = false, features = [
-    "curve",
-] }
-ark-bw6-761 = { version = "0.4.0", default-features = false }
-ark-ec = { version = "0.4.0", default-features = false }
-ark-ff = { version = "0.4.0", default-features = false }
-ark-std = { version = "0.4.0", default-features = false }
+chain-spec = { path = "node/chain-spec" }
+vitreus-cli = { path = "cli" }
+vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
+vitreus-service = { path = "node/service", default-features = false }

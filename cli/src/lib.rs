@@ -31,7 +31,7 @@ mod host_perf_check;
 pub use service::{self, Block, CoreApi, ProvideRuntimeApi, TFullClient};
 
 #[cfg(feature = "malus")]
-pub use service::overseer::prepared_overseer_builder;
+pub use vitreus_service::overseer::prepared_overseer_builder;
 
 #[cfg(feature = "cli")]
 pub use cli::*;

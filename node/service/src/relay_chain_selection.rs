@@ -31,12 +31,11 @@
 //! leaf returned from the chain selection subsystem by calling into other
 //! subsystems which yield information about approvals and disputes.
 //!
-//! [chain-selection-guide]: https://w3f.github.io/parachain-implementers-guide/protocol-chain-selection.html
+//! [chain-selection-guide]: https://paritytech.github.io/polkadot-sdk/book/protocol-chain-selection.html
 
 #![cfg(feature = "full-node")]
 
 use super::{HeaderProvider, HeaderProviderProvider};
-use consensus_common::{Error as ConsensusError, SelectChain};
 use futures::channel::oneshot;
 use polkadot_node_primitives::MAX_FINALITY_LAG as PRIMITIVES_MAX_FINALITY_LAG;
 use polkadot_node_subsystem::messages::{
@@ -46,9 +45,10 @@ use polkadot_node_subsystem::messages::{
 use polkadot_node_subsystem_util::metrics::{self, prometheus};
 use polkadot_overseer::{AllMessages, Handle};
 use polkadot_primitives::{Block as PolkadotBlock, BlockNumber, Hash, Header as PolkadotHeader};
+use sp_consensus::{Error as ConsensusError, SelectChain};
 use std::sync::Arc;
 
-pub use service::SpawnTaskHandle;
+pub use sc_service::SpawnTaskHandle;
 
 /// The maximum amount of unfinalized blocks we are willing to allow due to approval checking
 /// or disputes.
@@ -73,25 +73,25 @@ struct MetricsInner {
 impl metrics::Metrics for Metrics {
     fn try_register(registry: &prometheus::Registry) -> Result<Self, prometheus::PrometheusError> {
         let metrics = MetricsInner {
-			approval_checking_finality_lag: prometheus::register(
-				prometheus::Gauge::with_opts(
-					prometheus::Opts::new(
-						"polkadot_parachain_approval_checking_finality_lag",
-						"How far behind the head of the chain the Approval Checking protocol wants to vote",
-					)
-				)?,
-				registry,
-			)?,
-			disputes_finality_lag: prometheus::register(
-				prometheus::Gauge::with_opts(
-					prometheus::Opts::new(
-						"polkadot_parachain_disputes_finality_lag",
-						"How far behind the head of the chain the Disputes protocol wants to vote",
-					)
-				)?,
-				registry,
-			)?,
-		};
+            approval_checking_finality_lag: prometheus::register(
+                prometheus::Gauge::with_opts(
+                    prometheus::Opts::new(
+                        "polkadot_parachain_approval_checking_finality_lag",
+                        "How far behind the head of the chain the Approval Checking protocol wants to vote",
+                    )
+                )?,
+                registry,
+            )?,
+            disputes_finality_lag: prometheus::register(
+                prometheus::Gauge::with_opts(
+                    prometheus::Opts::new(
+                        "polkadot_parachain_disputes_finality_lag",
+                        "How far behind the head of the chain the Disputes protocol wants to vote",
+                    )
+                )?,
+                registry,
+            )?,
+        };
 
         Ok(Metrics(Some(metrics)))
     }
@@ -475,8 +475,8 @@ where
         let lag = initial_leaf_number.saturating_sub(subchain_number);
         self.metrics.note_approval_checking_finality_lag(lag);
 
-        // Messages sent to `approval-distrbution` are known to have high `ToF`, we need to spawn a task for sending
-        // the message to not block here and delay finality.
+        // Messages sent to `approval-distribution` are known to have high `ToF`, we need to spawn a
+        // task for sending the message to not block here and delay finality.
         if let Some(spawn_handle) = &self.spawn_handle {
             let mut overseer_handle = self.overseer.clone();
             let lag_update_task = async move {
@@ -527,7 +527,7 @@ where
             // and not push it up the stack to cause additional issues in GRANDPA/BABE.
             let (lag, subchain_head) =
                 match rx.await.map_err(Error::DetermineUndisputedChainCanceled) {
-                    // If request succeded we will receive (block number, block hash).
+                    // If request succeeded we will receive (block number, block hash).
                     Ok((subchain_number, subchain_head)) => {
                         // The total lag accounting for disputes.
                         let lag_disputes = initial_leaf_number.saturating_sub(subchain_number);
@@ -540,9 +540,10 @@ where
                             error = ?e,
                             "Call to `DetermineUndisputedChain` failed",
                         );
-                        // We need to return a sane finality target. But, we are unable to ensure we are not
-                        // finalizing something that is being disputed or has been concluded as invalid. We will be
-                        // conservative here and not vote for finality above the ancestor passed in.
+                        // We need to return a sane finality target. But, we are unable to ensure we
+                        // are not finalizing something that is being disputed or has been concluded
+                        // as invalid. We will be conservative here and not vote for finality above
+                        // the ancestor passed in.
                         return Ok(target_hash);
                     },
                 };

@@ -31,7 +31,6 @@ mod tests;
 
 #[cfg(feature = "full-node")]
 use {
-    grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider},
     gum::info,
     polkadot_node_core_approval_voting::{
         self as approval_voting_subsystem, Config as ApprovalVotingConfig,
@@ -47,6 +46,7 @@ use {
     },
     polkadot_service::ExtendedOverseerGenArgs,
     sc_client_api::BlockBackend,
+    sc_consensus_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider},
     sc_transaction_pool_api::OffchainTransactionPoolFactory,
     sp_core::traits::SpawnNamed,
     sp_core::U256,
@@ -76,14 +76,14 @@ use std::{collections::HashMap, path::Path};
 use std::{sync::Arc, time::Duration};
 
 #[cfg(feature = "full-node")]
-use service::KeystoreContainer;
-use service::RpcHandlers;
-use telemetry::TelemetryWorker;
+use sc_service::KeystoreContainer;
+use sc_service::RpcHandlers;
+use sc_telemetry::TelemetryWorker;
 #[cfg(feature = "full-node")]
-use telemetry::{Telemetry, TelemetryWorkerHandle};
+use sc_telemetry::{Telemetry, TelemetryWorkerHandle};
 
-use beefy_primitives::ecdsa_crypto::AuthorityId;
-pub use consensus_common::{Proposal, SelectChain};
+pub use sp_consensus::{Proposal, SelectChain};
+use sp_consensus_beefy::ecdsa_crypto::AuthorityId;
 
 use frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
 use mmr_gadget::MmrGadget;
@@ -94,7 +94,7 @@ pub use sc_consensus::{BlockImport, BoxBlockImport, LongestChain};
 pub use sc_executor::NativeExecutionDispatch;
 use sc_executor::{HeapAllocStrategy, WasmExecutor, DEFAULT_HEAP_ALLOC_STRATEGY};
 
-pub use service::{
+pub use sc_service::{
     config::{DatabaseSource, PrometheusConfig},
     ChainSpec, Configuration, Error as SubstrateServiceError, PruningMode, Role, TFullBackend,
     TFullCallExecutor, TFullClient, TaskManager, TransactionPoolOptions,
@@ -121,10 +121,10 @@ pub use {rococo_runtime, rococo_runtime_constants};
 pub use {westend_runtime, westend_runtime_constants};
 
 #[cfg(feature = "full-node")]
-pub type FullBackend = service::TFullBackend<Block>;
+pub type FullBackend = sc_service::TFullBackend<Block>;
 
 #[cfg(feature = "full-node")]
-pub type FullClient = service::TFullClient<
+pub type FullClient = sc_service::TFullClient<
     Block,
     RuntimeApi,
     WasmExecutor<(sp_io::SubstrateHostFunctions, frame_benchmarking::benchmarking::HostFunctions)>,
@@ -213,16 +213,16 @@ pub enum Error {
     Blockchain(#[from] sp_blockchain::Error),
 
     #[error(transparent)]
-    Consensus(#[from] consensus_common::Error),
+    Consensus(#[from] sp_consensus::Error),
 
     #[error("Failed to create an overseer")]
     Overseer(#[from] polkadot_overseer::SubsystemError),
 
     #[error(transparent)]
-    Prometheus(#[from] prometheus_endpoint::PrometheusError),
+    Prometheus(#[from] substrate_prometheus_endpoint::PrometheusError),
 
     #[error(transparent)]
-    Telemetry(#[from] telemetry::Error),
+    Telemetry(#[from] sc_telemetry::Error),
 
     #[error(transparent)]
     Jaeger(#[from] polkadot_node_subsystem::jaeger::JaegerError),
@@ -297,10 +297,16 @@ fn jaeger_launch_collector_with_agent(
 type FullSelectChain = relay_chain_selection::SelectRelayChain<FullBackend>;
 #[cfg(feature = "full-node")]
 type FullGrandpaBlockImport<ChainSelection = FullSelectChain> =
-    grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, ChainSelection>;
+    sc_consensus_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, ChainSelection>;
 #[cfg(feature = "full-node")]
 type FullBeefyBlockImport<InnerBlockImport, AuthorityId> =
-    beefy::import::BeefyBlockImport<Block, FullBackend, FullClient, InnerBlockImport, AuthorityId>;
+    sc_consensus_beefy::import::BeefyBlockImport<
+        Block,
+        FullBackend,
+        FullClient,
+        InnerBlockImport,
+        AuthorityId,
+    >;
 
 #[cfg(feature = "full-node")]
 struct Basics {
@@ -417,7 +423,7 @@ fn new_partial_basics(
         .telemetry_endpoints
         .clone()
         .filter(|x| !x.is_empty())
-        .map(move |endpoints| -> Result<_, telemetry::Error> {
+        .map(move |endpoints| -> Result<_, sc_telemetry::Error> {
             let (worker, mut worker_handle) = if let Some(worker_handle) = telemetry_worker_handle {
                 (None, worker_handle)
             } else {
@@ -443,7 +449,7 @@ fn new_partial_basics(
         .build();
 
     let (client, backend, keystore_container, task_manager) =
-        service::new_full_parts::<Block, RuntimeApi, _>(
+        sc_service::new_full_parts::<Block, RuntimeApi, _>(
             config,
             telemetry.as_ref().map(|(_, telemetry)| telemetry.handle()),
             executor,
@@ -473,7 +479,7 @@ fn new_partial<ChainSelection>(
     Basics { task_manager, backend, client, keystore_container, telemetry }: Basics,
     select_chain: ChainSelection,
 ) -> Result<
-    service::PartialComponents<
+    sc_service::PartialComponents<
         FullClient,
         FullBackend,
         ChainSelection,
@@ -488,16 +494,16 @@ fn new_partial<ChainSelection>(
                 polkadot_rpc::BeefyDeps<AuthorityId>,
             ),
             (
-                babe::BabeBlockImport<
+                sc_consensus_babe::BabeBlockImport<
                     Block,
                     FullClient,
                     FullBeefyBlockImport<FullGrandpaBlockImport<ChainSelection>, AuthorityId>,
                 >,
-                grandpa::LinkHalf<Block, FullClient, ChainSelection>,
-                babe::BabeLink<Block>,
-                beefy::BeefyVoterLinks<Block, AuthorityId>,
+                sc_consensus_grandpa::LinkHalf<Block, FullClient, ChainSelection>,
+                sc_consensus_babe::BabeLink<Block>,
+                sc_consensus_beefy::BeefyVoterLinks<Block, AuthorityId>,
             ),
-            grandpa::SharedVoterState,
+            sc_consensus_grandpa::SharedVoterState,
             sp_consensus_babe::SlotDuration,
             Option<Telemetry>,
             FrontierBackend<FullClient>,
@@ -517,14 +523,15 @@ where
         client.clone(),
     );
 
-    let (grandpa_block_import, grandpa_link) = grandpa::block_import_with_authority_set_hard_forks(
-        client.clone(),
-        GRANDPA_JUSTIFICATION_PERIOD,
-        &(client.clone() as Arc<_>),
-        select_chain.clone(),
-        Vec::new(),
-        telemetry.as_ref().map(|x| x.handle()),
-    )?;
+    let (grandpa_block_import, grandpa_link) =
+        sc_consensus_grandpa::block_import_with_authority_set_hard_forks(
+            client.clone(),
+            GRANDPA_JUSTIFICATION_PERIOD,
+            &(client.clone() as Arc<_>),
+            select_chain.clone(),
+            Vec::new(),
+            telemetry.as_ref().map(|x| x.handle()),
+        )?;
     let justification_import = grandpa_block_import.clone();
 
     let storage_override = Arc::new(StorageOverrideHandler::new(client.clone()));
@@ -558,47 +565,49 @@ where
     };
 
     let (beefy_block_import, beefy_voter_links, beefy_rpc_links) =
-        beefy::beefy_block_import_and_links(
+        sc_consensus_beefy::beefy_block_import_and_links(
             grandpa_block_import,
             backend.clone(),
             client.clone(),
             config.prometheus_registry().cloned(),
         );
 
-    let babe_config = babe::configuration(&*client)?;
+    let babe_config = sc_consensus_babe::configuration(&*client)?;
     let (block_import, babe_link) =
-        babe::block_import(babe_config.clone(), beefy_block_import, client.clone())?;
+        sc_consensus_babe::block_import(babe_config.clone(), beefy_block_import, client.clone())?;
 
     let slot_duration = babe_link.config().slot_duration();
     let target_gas_price = eth_config.target_gas_price;
 
-    let (import_queue, babe_worker_handle) = babe::import_queue(babe::ImportQueueParams {
-        link: babe_link.clone(),
-        block_import: block_import.clone(),
-        justification_import: Some(Box::new(justification_import)),
-        client: client.clone(),
-        select_chain: select_chain.clone(),
-        create_inherent_data_providers: move |_, ()| async move {
-            let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
+    let (import_queue, babe_worker_handle) =
+        sc_consensus_babe::import_queue(sc_consensus_babe::ImportQueueParams {
+            link: babe_link.clone(),
+            block_import: block_import.clone(),
+            justification_import: Some(Box::new(justification_import)),
+            client: client.clone(),
+            select_chain: select_chain.clone(),
+            create_inherent_data_providers: move |_, ()| async move {
+                let timestamp = sp_timestamp::InherentDataProvider::from_system_time();
 
-            let slot =
+                let slot =
 				sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
 					*timestamp,
 					slot_duration,
 				);
-            let dynamic_fee = fp_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
+                let dynamic_fee =
+                    fp_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
 
-            Ok((slot, timestamp, dynamic_fee))
-        },
-        spawner: &task_manager.spawn_essential_handle(),
-        registry: config.prometheus_registry(),
-        telemetry: telemetry.as_ref().map(|x| x.handle()),
-        offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(transaction_pool.clone()),
-    })?;
+                Ok((slot, timestamp, dynamic_fee))
+            },
+            spawner: &task_manager.spawn_essential_handle(),
+            registry: config.prometheus_registry(),
+            telemetry: telemetry.as_ref().map(|x| x.handle()),
+            offchain_tx_pool_factory: OffchainTransactionPoolFactory::new(transaction_pool.clone()),
+        })?;
 
     let justification_stream = grandpa_link.justification_stream();
     let shared_authority_set = grandpa_link.shared_authority_set().clone();
-    let shared_voter_state = grandpa::SharedVoterState::empty();
+    let shared_voter_state = sc_consensus_grandpa::SharedVoterState::empty();
     let finality_proof_provider = GrandpaFinalityProofProvider::new_for_service(
         backend.clone(),
         Some(shared_authority_set.clone()),
@@ -636,7 +645,7 @@ where
         }
     };
 
-    Ok(service::PartialComponents {
+    Ok(sc_service::PartialComponents {
         client,
         backend,
         task_manager,
@@ -735,7 +744,7 @@ pub fn new_full<
         SelectRelayChain::new_longest_chain(basics.backend.clone())
     };
 
-    let service::PartialComponents::<_, _, SelectRelayChain<_>, _, _, _> {
+    let sc_service::PartialComponents::<_, _, SelectRelayChain<_>, _, _, _> {
         client,
         backend,
         mut task_manager,
@@ -775,9 +784,10 @@ pub fn new_full<
     // Note: GrandPa is pushed before the Polkadot-specific protocols. This doesn't change
     // anything in terms of behaviour, but makes the logs more consistent with the other
     // Substrate nodes.
-    let grandpa_protocol_name = grandpa::protocol_standard_name(&genesis_hash, &config.chain_spec);
+    let grandpa_protocol_name =
+        sc_consensus_grandpa::protocol_standard_name(&genesis_hash, &config.chain_spec);
     let (grandpa_protocol_config, grandpa_notification_service) =
-        grandpa::grandpa_peers_set_config::<_, Network>(
+        sc_consensus_grandpa::grandpa_peers_set_config::<_, Network>(
             grandpa_protocol_name.clone(),
             metrics.clone(),
             Arc::clone(&peer_store_handle),
@@ -834,28 +844,28 @@ pub fn new_full<
         IncomingRequest::get_config_receiver::<_, Network>(&req_protocol_names);
     net_config.add_request_response_protocol(cfg);
 
-    let warp_sync = Arc::new(grandpa::warp_proof::NetworkProvider::new(
+    let warp_sync = Arc::new(sc_consensus_grandpa::warp_proof::NetworkProvider::new(
         backend.clone(),
         import_setup.1.shared_authority_set().clone(),
         Vec::new(),
     ));
 
     let beefy_gossip_proto_name =
-        beefy::gossip_protocol_name(genesis_hash, config.chain_spec.fork_id());
+        sc_consensus_beefy::gossip_protocol_name(genesis_hash, config.chain_spec.fork_id());
     // `beefy_on_demand_justifications_handler` is given to `beefy-gadget` task to be run,
     // while `beefy_req_resp_cfg` is added to `config.network.request_response_protocols`.
     let (beefy_on_demand_justifications_handler, beefy_req_resp_cfg) =
-        beefy::communication::request_response::BeefyJustifsRequestHandler::new::<_, Network>(
-            &genesis_hash,
-            config.chain_spec.fork_id(),
-            client.clone(),
-            prometheus_registry.clone(),
+        sc_consensus_beefy::communication::request_response::BeefyJustifsRequestHandler::new::<
+            _,
+            Network,
+        >(
+            &genesis_hash, config.chain_spec.fork_id(), client.clone(), prometheus_registry.clone()
         );
     let beefy_notification_service = match enable_beefy {
         false => None,
         true => {
             let (beefy_notification_config, beefy_notification_service) =
-                beefy::communication::beefy_peers_set_config::<_, Network>(
+                sc_consensus_beefy::communication::beefy_peers_set_config::<_, Network>(
                     beefy_gossip_proto_name.clone(),
                     metrics.clone(),
                     Arc::clone(&peer_store_handle),
@@ -912,7 +922,7 @@ pub fn new_full<
     };
 
     let (network, system_rpc_tx, tx_handler_controller, network_starter, sync_service) =
-        service::build_network(service::BuildNetworkParams {
+        sc_service::build_network(sc_service::BuildNetworkParams {
             config: &config,
             net_config,
             client: client.clone(),
@@ -1083,7 +1093,7 @@ pub fn new_full<
 
     let overseer_handle = if let Some(authority_discovery_service) = authority_discovery_service {
         let (overseer, overseer_handle) = overseer_gen
-            .generate::<service::SpawnTaskHandle, DefaultSubsystemClient<FullClient>>(
+            .generate::<sc_service::SpawnTaskHandle, DefaultSubsystemClient<FullClient>>(
                 overseer_connector,
                 OverseerGenArgs {
                     runtime_client,
@@ -1184,7 +1194,7 @@ pub fn new_full<
     // beefy is enabled if its notification service exists
     if let Some(notification_service) = beefy_notification_service {
         let justifications_protocol_name = beefy_on_demand_justifications_handler.protocol_name();
-        let network_params = beefy::BeefyNetworkParams {
+        let network_params = sc_consensus_beefy::BeefyNetworkParams {
             network: Arc::new(network.clone()),
             sync: sync_service.clone(),
             gossip_protocol_name: beefy_gossip_proto_name,
@@ -1192,8 +1202,8 @@ pub fn new_full<
             notification_service,
             _phantom: core::marker::PhantomData::<Block>,
         };
-        let payload_provider = beefy_primitives::mmr::MmrRootProvider::new(client.clone());
-        let beefy_params = beefy::BeefyParams {
+        let payload_provider = sp_consensus_beefy::mmr::MmrRootProvider::new(client.clone());
+        let beefy_params = sc_consensus_beefy::BeefyParams {
             client: client.clone(),
             backend: backend.clone(),
             payload_provider,
@@ -1207,7 +1217,9 @@ pub fn new_full<
             is_authority: role.is_authority(),
         };
 
-        let gadget = beefy::start_beefy_gadget::<_, _, _, _, _, _, _, AuthorityId>(beefy_params);
+        let gadget = sc_consensus_beefy::start_beefy_gadget::<_, _, _, _, _, _, _, AuthorityId>(
+            beefy_params,
+        );
 
         // BEEFY is part of consensus, if it fails we'll bring the node down with it to make sure it
         // is noticed.
@@ -1229,7 +1241,7 @@ pub fn new_full<
         );
     }
 
-    let _rpc_handlers = service::spawn_tasks(service::SpawnTasksParams {
+    let _rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
         config,
         backend: backend.clone(),
         client: client.clone(),
@@ -1270,7 +1282,7 @@ pub fn new_full<
         let overseer_handle =
             overseer_handle.as_ref().ok_or(Error::AuthoritiesRequireRealOverseer)?.clone();
         let slot_duration = babe_link.config().slot_duration();
-        let babe_config = babe::BabeParams {
+        let babe_config = sc_consensus_babe::BabeParams {
             keystore: keystore_container.keystore(),
             client: client.clone(),
             select_chain,
@@ -1310,12 +1322,12 @@ pub fn new_full<
             force_authoring,
             backoff_authoring_blocks,
             babe_link,
-            block_proposal_slot_portion: babe::SlotProportion::new(2f32 / 3f32),
+            block_proposal_slot_portion: sc_consensus_babe::SlotProportion::new(2f32 / 3f32),
             max_block_proposal_slot_portion: None,
             telemetry: telemetry.as_ref().map(|x| x.handle()),
         };
 
-        let babe = babe::start_babe(babe_config)?;
+        let babe = sc_consensus_babe::start_babe(babe_config)?;
         task_manager.spawn_essential_handle().spawn_blocking(
             "babe-proposer",
             Some("block-authoring"),
@@ -1331,7 +1343,7 @@ pub fn new_full<
         // provide better guarantees of block and vote data availability than
         // the observer.
 
-        let config = grandpa::Config {
+        let config = sc_consensus_grandpa::Config {
             // FIXME substrate#1578 make this available through chainspec
             // Grandpa performance can be improved a bit by tuning this parameter, see:
             // https://github.com/paritytech/polkadot/issues/5464
@@ -1345,17 +1357,18 @@ pub fn new_full<
             protocol_name: grandpa_protocol_name,
         };
 
-        let mut voting_rules_builder = grandpa::VotingRulesBuilder::default();
+        let mut voting_rules_builder = sc_consensus_grandpa::VotingRulesBuilder::default();
 
         #[cfg(not(feature = "malus"))]
         let _malus_finality_delay = None;
 
         if let Some(delay) = _malus_finality_delay {
             info!(?delay, "Enabling malus finality delay",);
-            voting_rules_builder = voting_rules_builder.add(grandpa::BeforeBestBlockBy(delay));
+            voting_rules_builder =
+                voting_rules_builder.add(sc_consensus_grandpa::BeforeBestBlockBy(delay));
         };
 
-        let grandpa_config = grandpa::GrandpaParams {
+        let grandpa_config = sc_consensus_grandpa::GrandpaParams {
             config,
             link: link_half,
             network: network.clone(),
@@ -1371,7 +1384,7 @@ pub fn new_full<
         task_manager.spawn_essential_handle().spawn_blocking(
             "grandpa-voter",
             None,
-            grandpa::run_grandpa_voter(grandpa_config)?,
+            sc_consensus_grandpa::run_grandpa_voter(grandpa_config)?,
         );
     }
 
@@ -1395,15 +1408,16 @@ pub fn new_chain_ops(
     ),
     Error,
 > {
-    config.keystore = service::config::KeystoreConfig::InMemory;
+    config.keystore = sc_service::config::KeystoreConfig::InMemory;
 
     let basics = new_partial_basics(config, jaeger_agent, None)?;
 
     // use the longest chain selection, since there is no overseer available
     let chain_selection = LongestChain::new(basics.backend.clone());
 
-    let service::PartialComponents { client, backend, import_queue, task_manager, other, .. } =
-        new_partial::<LongestChain<_, Block>>(config, eth_config, basics, chain_selection)?;
+    let sc_service::PartialComponents {
+        client, backend, import_queue, task_manager, other, ..
+    } = new_partial::<LongestChain<_, Block>>(config, eth_config, basics, chain_selection)?;
     Ok((client, backend, import_queue, task_manager, other.5))
 }
 
@@ -1459,8 +1473,8 @@ pub fn revert_backend(
     revert_approval_voting(parachains_db.clone(), hash)?;
     revert_chain_selection(parachains_db, hash)?;
     // Revert Substrate consensus related components
-    babe::revert(client.clone(), backend, blocks)?;
-    grandpa::revert(client, blocks)?;
+    sc_consensus_babe::revert(client.clone(), backend, blocks)?;
+    sc_consensus_grandpa::revert(client, blocks)?;
 
     Ok(())
 }
@@ -1489,7 +1503,7 @@ fn revert_approval_voting(db: Arc<dyn Database>, hash: Hash) -> sp_blockchain::R
         config,
         db,
         Arc::new(sc_keystore::LocalKeystore::in_memory()),
-        Box::new(consensus_common::NoNetwork),
+        Box::new(sp_consensus::NoNetwork),
         approval_voting_subsystem::Metrics::default(),
     );
 

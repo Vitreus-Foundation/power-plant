@@ -20,10 +20,10 @@ use futures::future::TryFutureExt;
 use polkadot_cli::NODE_VERSION;
 use sc_cli::SubstrateCli;
 use sc_service::DatabaseSource;
-use service::{self, eth::db_config_dir, ChainSpec};
 use std::net::ToSocketAddrs;
+use vitreus_service::{self, eth::db_config_dir, ChainSpec};
 
-pub use crate::{error::Error, service::BlockId};
+pub use crate::error::Error;
 #[cfg(feature = "runtime-benchmarks")]
 use chain_spec::devnet_keys::get_account_id_from_seed;
 #[cfg(feature = "hostperfcheck")]
@@ -84,7 +84,7 @@ const DEV_ONLY_ERROR_PATTERN: &'static str =
 	"can only use subcommand with --chain [polkadot-dev, kusama-dev, westend-dev, rococo-dev, wococo-dev], got ";
 
 #[cfg(feature = "try-runtime")]
-fn ensure_dev(spec: &Box<dyn service::ChainSpec>) -> std::result::Result<(), String> {
+fn ensure_dev(spec: &Box<dyn vitreus_service::ChainSpec>) -> std::result::Result<(), String> {
     if spec.is_dev() {
         Ok(())
     } else {
@@ -120,7 +120,7 @@ fn host_perf_check() -> Result<()> {
 #[cfg(feature = "malus")]
 pub fn run_node(
     run: Cli,
-    overseer_gen: impl service::OverseerGen,
+    overseer_gen: impl vitreus_service::OverseerGen,
     malus_finality_delay: Option<u32>,
 ) -> Result<()> {
     run_node_inner(run, overseer_gen, malus_finality_delay, |_logger_builder, _config| {})
@@ -128,7 +128,7 @@ pub fn run_node(
 
 fn run_node_inner<F>(
     cli: Cli,
-    overseer_gen: impl service::OverseerGen,
+    overseer_gen: impl vitreus_service::OverseerGen,
     maybe_malus_finality_delay: Option<u32>,
     logger_hook: F,
 ) -> Result<()>
@@ -174,11 +174,11 @@ where
             .flatten();
 
         let database_source = config.database.clone();
-        let task_manager = service::build_full(
+        let task_manager = vitreus_service::build_full(
             config,
             cli.eth,
-            service::NewFullParams {
-                is_parachain_node: service::IsParachainNode::No,
+            vitreus_service::NewFullParams {
+                is_parachain_node: vitreus_service::IsParachainNode::No,
                 enable_beefy,
                 force_authoring_backoff: cli.run.force_authoring_backoff,
                 jaeger_agent,
@@ -223,7 +223,7 @@ pub fn run() -> Result<()> {
             .next()
             .ok_or_else(|| Error::AddressResolutionMissing)?;
         // The pyroscope agent requires a `http://` prefix, so we just do that.
-        let agent = pyro::PyroscopeAgent::builder(
+        let agent = pyroscope::PyroscopeAgent::builder(
             "http://".to_owned() + address.to_string().as_str(),
             "polkadot".to_owned(),
         )
@@ -255,7 +255,7 @@ pub fn run() -> Result<()> {
 
             runner.async_run(|mut config| {
                 let (client, _, import_queue, task_manager, _) =
-                    service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
                 Ok((cmd.run(client, import_queue).map_err(Error::SubstrateCli), task_manager))
             })
         },
@@ -264,7 +264,7 @@ pub fn run() -> Result<()> {
 
             Ok(runner.async_run(|mut config| {
                 let (client, _, _, task_manager, _) =
-                    service::new_chain_ops(&mut config, &cli.eth, None)
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)
                         .map_err(Error::PolkadotService)?;
                 Ok((cmd.run(client, config.database).map_err(Error::SubstrateCli), task_manager))
             })?)
@@ -274,7 +274,7 @@ pub fn run() -> Result<()> {
 
             Ok(runner.async_run(|mut config| {
                 let (client, _, _, task_manager, _) =
-                    service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
                 Ok((cmd.run(client, config.chain_spec).map_err(Error::SubstrateCli), task_manager))
             })?)
         },
@@ -283,7 +283,7 @@ pub fn run() -> Result<()> {
 
             Ok(runner.async_run(|mut config| {
                 let (client, _, import_queue, task_manager, _) =
-                    service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
                 Ok((cmd.run(client, import_queue).map_err(Error::SubstrateCli), task_manager))
             })?)
         },
@@ -293,7 +293,7 @@ pub fn run() -> Result<()> {
                 // Remove Frontier offchain db
                 let db_config_dir = db_config_dir(&config);
                 match cli.eth.frontier_backend_type {
-                    service::eth::BackendType::KeyValue => {
+                    vitreus_service::eth::BackendType::KeyValue => {
                         let frontier_database_config = match config.database {
                             DatabaseSource::RocksDb { .. } => DatabaseSource::RocksDb {
                                 path: frontier_database_dir(&db_config_dir, "db"),
@@ -312,7 +312,7 @@ pub fn run() -> Result<()> {
                         };
                         cmd.run(frontier_database_config)?;
                     },
-                    service::eth::BackendType::Sql => {
+                    vitreus_service::eth::BackendType::Sql => {
                         let db_path = db_config_dir.join("sql");
                         match std::fs::remove_dir_all(&db_path) {
                             Ok(_) => {
@@ -339,15 +339,17 @@ pub fn run() -> Result<()> {
 
             Ok(runner.async_run(|mut config| {
                 let (client, backend, _, task_manager, _) =
-                    service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
                 let aux_revert = Box::new(|client, backend, blocks| {
-                    service::revert_backend(client, backend, blocks, config).map_err(|err| {
-                        match err {
-                            service::Error::Blockchain(err) => err.into(),
-                            // Generic application-specific error.
-                            err => sc_cli::Error::Application(err.into()),
-                        }
-                    })
+                    vitreus_service::revert_backend(client, backend, blocks, config).map_err(
+                        |err| {
+                            match err {
+                                vitreus_service::Error::Blockchain(err) => err.into(),
+                                // Generic application-specific error.
+                                err => sc_cli::Error::Application(err.into()),
+                            }
+                        },
+                    )
                 });
                 Ok((
                     cmd.run(client, backend, Some(aux_revert)).map_err(Error::SubstrateCli),
@@ -408,29 +410,31 @@ pub fn run() -> Result<()> {
             use frame_benchmarking_cli::{
                 BenchmarkCmd, ExtrinsicFactory, SUBSTRATE_REFERENCE_HARDWARE,
             };
-            use service::{
+            use vitreus_power_plant_runtime::{Block, ExistentialDeposit};
+            use vitreus_service::{
                 benchmarking::{inherent_benchmark_data, RemarkBuilder, TransferKeepAliveBuilder},
                 HeaderBackend,
             };
-            use vitreus_power_plant_runtime::{Block, ExistentialDeposit};
 
             let runner = cli.create_runner(cmd)?;
             match cmd {
                 BenchmarkCmd::Pallet(cmd) => runner
                     .sync_run(|config| cmd.run::<Block, ()>(config).map_err(Error::SubstrateCli)),
                 BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
-                    let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    let (client, _, _, _, _) =
+                        vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
                     cmd.run(client).map_err(Error::SubstrateCli)
                 }),
                 BenchmarkCmd::Storage(cmd) => runner.sync_run(|mut config| {
                     let (client, backend, _, _, _) =
-                        service::new_chain_ops(&mut config, &cli.eth, None)?;
+                        vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
                     let db = backend.expose_db();
                     let storage = backend.expose_storage();
                     cmd.run(config, client, db, storage).map_err(Error::SubstrateCli)
                 }),
                 BenchmarkCmd::Overhead(cmd) => runner.sync_run(|mut config| {
-                    let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    let (client, _, _, _, _) =
+                        vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
                     let ext_builder = RemarkBuilder::new(client.clone());
                     let header = client.header(client.info().genesis_hash).unwrap().unwrap();
                     let inherent_data = inherent_benchmark_data(header)
@@ -439,7 +443,8 @@ pub fn run() -> Result<()> {
                         .map_err(Error::SubstrateCli)
                 }),
                 BenchmarkCmd::Extrinsic(cmd) => runner.sync_run(|mut config| {
-                    let (client, _, _, _, _) = service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    let (client, _, _, _, _) =
+                        vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
                     // Register the *Remark* and *TKA* builders.
                     let ext_factory = ExtrinsicFactory(vec![
                         Box::new(RemarkBuilder::new(client.clone())),
@@ -540,13 +545,13 @@ pub fn run() -> Result<()> {
         )),
         Some(Subcommand::ChainInfo(cmd)) => {
             let runner = cli.create_runner(cmd)?;
-            Ok(runner.sync_run(|config| cmd.run::<service::Block>(&config))?)
+            Ok(runner.sync_run(|config| cmd.run::<vitreus_service::Block>(&config))?)
         },
         Some(Subcommand::FrontierDb(cmd)) => {
             let runner = cli.create_runner(cmd)?;
             Ok(runner.sync_run(|mut config| {
                 let (client, _, _, _, frontier_backend) =
-                    service::new_chain_ops(&mut config, &cli.eth, None)
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)
                         .map_err(Error::PolkadotService)?;
                 let frontier_backend = match frontier_backend {
                     fc_db::Backend::KeyValue(kv) => kv,

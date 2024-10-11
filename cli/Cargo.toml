@@ -17,10 +17,9 @@ crate-type = ["cdylib", "rlib"]
 clap = { workspace = true, features = ["default", "derive"], optional = true }
 futures = { workspace = true, default-features = true }
 log = { workspace = true, default-features = true }
+pyroscope = { workspace = true, default-features = true, optional = true }
 pyroscope_pprofrs = { workspace = true, default-features = true, optional = true }
 thiserror = { workspace = true, default-features = true }
-# TODO: use workspace dependency
-pyro = { package = "pyroscope", version = "0.5.3", optional = true }
 
 polkadot-cli = { workspace = true, default-features = true }
 polkadot-service = { workspace = true, default-features = true }
@@ -42,18 +41,17 @@ sp-keyring = { workspace = true, default-features = true }
 
 fc-cli = { workspace = true, default-features = true }
 fc-db = { workspace = true, default-features = true }
-vitreus-power-plant-runtime = { workspace = true, default-features = true }
 
 chain-spec = { workspace = true, default-features = true }
-# TODO: use workspace dependency
-service = { package = "vitreus-service", path = "../node/service", default-features = false, features = ["sql", "txpool", "with-rocksdb-weights"], optional = true }
+vitreus-service = { workspace = true, default-features = false, features = ["sql", "txpool", "with-rocksdb-weights"], optional = true }
+vitreus-power-plant-runtime = { workspace = true, default-features = true }
 
 [build-dependencies]
 substrate-build-script-utils = { workspace = true, default-features = true }
 
 [features]
 default = ["db", "cli", "full-node"]
-db = ["service/db"]
+db = ["vitreus-service/db"]
 cli = [
 	"clap",
 	"sc-cli",
@@ -62,19 +60,19 @@ cli = [
 	"frame-benchmarking-cli",
 	"polkadot-node-core-pvf-execute-worker",
 	"polkadot-node-core-pvf-prepare-worker",
-	"service",
+	"vitreus-service",
 ]
 runtime-benchmarks = [
-	"service/runtime-benchmarks",
 	"polkadot-node-metrics/runtime-benchmarks",
 #	"polkadot-performance-test?/runtime-benchmarks",
 	"vitreus-power-plant-runtime/runtime-benchmarks",
+	"vitreus-service/runtime-benchmarks",
 ]
-full-node = ["service/full-node"]
-try-runtime = ["service/try-runtime"]
-fast-runtime = ["service/fast-runtime"]
-pyroscope = ["pyro", "pyroscope_pprofrs"]
+full-node = ["vitreus-service/full-node"]
+try-runtime = ["vitreus-service/try-runtime"]
+fast-runtime = ["vitreus-service/fast-runtime"]
+pyroscope = ["dep:pyroscope", "pyroscope_pprofrs"]
 #hostperfcheck = ["polkadot-performance-test"]
 
-malus = ["full-node", "service/malus"]
-runtime-metrics = ["service/runtime-metrics", "polkadot-node-metrics/runtime-metrics"]
+malus = ["full-node", "vitreus-service/malus"]
+runtime-metrics = ["vitreus-service/runtime-metrics", "polkadot-node-metrics/runtime-metrics"]
