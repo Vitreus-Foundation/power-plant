@@ -161,7 +161,7 @@ where
             .flatten();
 
         let database_source = config.database.clone();
-        let task_manager = vitreus_service::build_full(
+        let vitreus_service::NewFull { task_manager, .. } = vitreus_service::build_full(
             config,
             cli.eth,
             vitreus_service::NewFullParams {

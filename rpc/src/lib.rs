@@ -2,12 +2,10 @@
 
 use std::sync::Arc;
 
-use futures::channel::mpsc;
 use jsonrpsee::RpcModule;
 
 // Substrate
 use sc_client_api::{backend::StorageProvider, client::BlockchainEvents, AuxStore, UsageProvider};
-use sc_consensus_manual_seal::rpc::EngineCommand;
 use sc_rpc::SubscriptionTaskExecutor;
 use sc_service::TransactionPool;
 use sc_transaction_pool::ChainApi;
@@ -23,7 +21,7 @@ use sp_runtime::RuntimeAppPublic;
 
 // Runtime
 use vitreus_power_plant_runtime::{
-    opaque::Block, AccountId, Balance, BlockNumber, Hash, Nonce, RuntimeCall,
+    opaque::Block, AccountId, Balance, BlockNumber, Nonce, RuntimeCall,
 };
 
 mod eth;
@@ -35,16 +33,10 @@ pub struct NodeDeps {
     pub name: String,
 }
 
-/// Full client dependencies.
-pub struct FullDeps<C, P, SC, B, AuthorityId, A, CT, CIDP>
-where
-    AuthorityId: AuthorityIdBound,
-    A: ChainApi,
-{
-    /// Polkadot dependencies.
-    pub polkadot: polkadot_rpc::FullDeps<C, P, SC, B, AuthorityId>,
-    /// Manual seal command sink.
-    pub command_sink: Option<mpsc::Sender<EngineCommand<Hash>>>,
+/// Extra dependencies.
+pub struct ExtraDeps<C, P, A: ChainApi, CT, CIDP> {
+    /// The client instance to use.
+    pub client: Arc<C>,
     /// Ethereum-compatibility specific dependencies.
     pub eth: EthDeps<Block, C, P, A, CT, CIDP>,
     /// Node specific dependencies.
@@ -64,8 +56,9 @@ where
 }
 
 /// Instantiate all RPC extensions.
-pub fn create_full<C, P, SC, B, AuthorityId, A, CT, CIDP>(
-    FullDeps { polkadot, eth, node, command_sink }: FullDeps<C, P, SC, B, AuthorityId, A, CT, CIDP>,
+pub fn create_full<C, P, A, CT, CIDP, B>(
+    mut io: RpcModule<()>,
+    ExtraDeps { client, eth, node }: ExtraDeps<C, P, A, CT, CIDP>,
     subscription_task_executor: SubscriptionTaskExecutor,
     pubsub_notification_sinks: Arc<
         fc_mapping_sync::EthereumBlockNotificationSinks<
@@ -73,6 +66,61 @@ pub fn create_full<C, P, SC, B, AuthorityId, A, CT, CIDP>(
         >,
     >,
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
+where
+    C: ProvideRuntimeApi<Block>
+        + HeaderBackend<Block>
+        + AuxStore
+        + HeaderMetadata<Block, Error = BlockChainError>
+        + CallApiAt<Block>
+        + BlockchainEvents<Block>
+        + UsageProvider<Block>
+        + StorageProvider<Block, B>
+        + 'static,
+    C::Api: BlockBuilder<Block>,
+    C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
+    C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
+    C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block, AccountId, Balance, RuntimeCall>,
+    C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block>,
+    C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
+    P: TransactionPool<Block = Block> + 'static,
+    A: ChainApi<Block = Block> + 'static,
+    CT: fp_rpc::ConvertTransaction<<Block as BlockT>::Extrinsic> + Send + Sync + 'static,
+    CIDP: CreateInherentDataProviders<Block, ()> + Send + 'static,
+    B: sc_client_api::Backend<Block> + Send + Sync + 'static,
+{
+    use energy_fee_rpc::{EnergyFee, EnergyFeeApiServer};
+    use energy_generation_rpc::{EnergyGeneration, EnergyGenerationApiServer};
+    use node_rpc_server::{Node, NodeApiServer};
+
+    io.merge(EnergyFee::new(client.clone()).into_rpc())?;
+    io.merge(EnergyGeneration::new(client.clone()).into_rpc())?;
+    io.merge(Node::new(node.name).into_rpc())?;
+
+    // Ethereum compatibility RPCs
+    let io = create_eth::<_, _, _, _, _, _, _, DefaultEthConfig<C, B>>(
+        io,
+        eth,
+        subscription_task_executor,
+        pubsub_notification_sinks,
+    )?;
+
+    Ok(io)
+}
+
+/// A copy of `polkadot_rpc::create_full` because the original function supports only AccountId32
+pub fn create_basic<C, P, SC, B, AuthorityId>(
+    polkadot_rpc::FullDeps {
+        client,
+        pool,
+        select_chain,
+        chain_spec,
+        deny_unsafe,
+        babe,
+        grandpa,
+        beefy,
+        backend,
+    }: polkadot_rpc::FullDeps<C, P, SC, B, AuthorityId>,
+) -> Result<polkadot_rpc::RpcExtension, Box<dyn std::error::Error + Send + Sync>>
 where
     C: ProvideRuntimeApi<Block>
         + HeaderBackend<Block>
@@ -92,21 +140,6 @@ where
     B::State: sc_client_api::StateBackend<sp_runtime::traits::HashingFor<Block>>,
     AuthorityId: AuthorityIdBound,
     <AuthorityId as RuntimeAppPublic>::Signature: Send + Sync,
-
-    // Extra bounds for custom RPC
-    C: CallApiAt<Block>
-        + BlockchainEvents<Block>
-        + UsageProvider<Block>
-        + StorageProvider<Block, B>,
-    C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
-    C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
-    C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block, AccountId, Balance, RuntimeCall>,
-    C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block>,
-    C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
-    P: TransactionPool<Block = Block>,
-    A: ChainApi<Block = Block> + 'static,
-    CT: fp_rpc::ConvertTransaction<<Block as BlockT>::Extrinsic> + Send + Sync + 'static,
-    CIDP: CreateInherentDataProviders<Block, ()> + Send + 'static,
 {
     use mmr_rpc::{Mmr, MmrApiServer};
     use pallet_transaction_payment_rpc::{TransactionPayment, TransactionPaymentApiServer};
@@ -118,24 +151,7 @@ where
     use substrate_frame_rpc_system::{System, SystemApiServer};
     use substrate_state_trie_migration_rpc::{StateMigration, StateMigrationApiServer};
 
-    use energy_fee_rpc::{EnergyFee, EnergyFeeApiServer};
-    use energy_generation_rpc::{EnergyGeneration, EnergyGenerationApiServer};
-    use node_rpc_server::{Node, NodeApiServer};
-    use sc_consensus_manual_seal::rpc::{ManualSeal, ManualSealApiServer};
-
     let mut io = RpcModule::new(());
-
-    let polkadot_rpc::FullDeps {
-        client,
-        pool,
-        select_chain,
-        chain_spec,
-        deny_unsafe,
-        babe,
-        grandpa,
-        beefy,
-        backend,
-    } = polkadot;
     let polkadot_rpc::BabeDeps { babe_worker_handle, keystore } = babe;
     let polkadot_rpc::GrandpaDeps {
         shared_voter_state,
@@ -177,8 +193,7 @@ where
         .into_rpc(),
     )?;
     io.merge(
-        SyncState::new(chain_spec, client.clone(), shared_authority_set, babe_worker_handle)?
-            .into_rpc(),
+        SyncState::new(chain_spec, client, shared_authority_set, babe_worker_handle)?.into_rpc(),
     )?;
 
     io.merge(
@@ -188,26 +203,6 @@ where
             beefy.subscription_executor,
         )?
         .into_rpc(),
-    )?;
-
-    io.merge(EnergyFee::new(client.clone()).into_rpc())?;
-    io.merge(EnergyGeneration::new(client.clone()).into_rpc())?;
-    io.merge(Node::new(node.name).into_rpc())?;
-
-    if let Some(command_sink) = command_sink {
-        io.merge(
-            // We provide the rpc handler with the sending end of the channel to allow the rpc
-            // send EngineCommands to the background block authorship task.
-            ManualSeal::new(command_sink).into_rpc(),
-        )?;
-    }
-
-    // Ethereum compatibility RPCs
-    let io = create_eth::<_, _, _, _, _, _, _, DefaultEthConfig<C, B>>(
-        io,
-        eth,
-        subscription_task_executor,
-        pubsub_notification_sinks,
     )?;
 
     Ok(io)
