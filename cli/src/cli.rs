@@ -16,6 +16,8 @@
 
 //! Vitreus CLI library.
 
+pub use polkadot_cli::NODE_VERSION;
+
 use clap::Parser;
 use std::path::PathBuf;
 use vitreus_service::eth::EthConfiguration;

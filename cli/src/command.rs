@@ -14,10 +14,9 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-use crate::cli::{Cli, Subcommand};
+use crate::cli::{Cli, Subcommand, NODE_VERSION};
 use fc_db::kv::frontier_database_dir;
 use futures::future::TryFutureExt;
-use polkadot_cli::NODE_VERSION;
 use sc_cli::SubstrateCli;
 use sc_service::DatabaseSource;
 use std::net::ToSocketAddrs;
