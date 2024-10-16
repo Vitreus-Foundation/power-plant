@@ -1,8 +1,8 @@
 [package]
 name = "pallet-energy-fee"
 version = "0.1.0"
-authors = ["Innowise FinTech Team"]
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
 readme = "README.md"
 
 [package.metadata.docs.rs]

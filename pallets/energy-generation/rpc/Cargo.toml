@@ -1,7 +1,8 @@
 [package]
 name = "energy-generation-rpc"
 version = "0.1.0"
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
 
 [dependencies]
 energy-generation-runtime-api = { workspace = true }

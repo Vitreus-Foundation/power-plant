@@ -1021,7 +1021,7 @@ dependencies = [
 
 [[package]]
 name = "chain-spec"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "csv",
  "hex-literal 0.3.4",
@@ -5945,7 +5945,7 @@ checksum = "b93853da6d84c2e3c7d730d6473e8817692dd89be387eb01b94d7f108ecb5b8c"
 
 [[package]]
 name = "node-rpc-server"
-version = "0.1.0"
+version = "1.1.0"
 dependencies = [
  "jsonrpsee",
  "serde",
@@ -14105,7 +14105,7 @@ checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
 
 [[package]]
 name = "vitreus-cli"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "chain-spec",
  "clap 4.5.18",
@@ -14137,7 +14137,7 @@ dependencies = [
 
 [[package]]
 name = "vitreus-power-plant-node"
-version = "0.0.0"
+version = "1.1.0"
 dependencies = [
  "assert_cmd",
  "color-eyre",
@@ -14157,7 +14157,7 @@ dependencies = [
 
 [[package]]
 name = "vitreus-power-plant-runtime"
-version = "0.0.0"
+version = "0.1.0"
 dependencies = [
  "binary-merkle-tree",
  "chain-spec",
@@ -14264,7 +14264,7 @@ dependencies = [
 
 [[package]]
 name = "vitreus-rpc"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "energy-fee-rpc",
  "energy-generation-rpc",
@@ -14319,7 +14319,7 @@ dependencies = [
 
 [[package]]
 name = "vitreus-service"
-version = "1.0.0"
+version = "1.1.0"
 dependencies = [
  "assert_matches",
  "async-trait",

@@ -12,13 +12,13 @@ path = "src/bin/prepare-worker.rs"
 
 [package]
 name = "vitreus-power-plant-node"
-version = "0.0.0"
-license = "Unlicense"
 description = "A fresh FRAME-based Substrate node, ready for hacking."
-publish = false
+version = { workspace = true }
 authors = { workspace = true }
 edition = { workspace = true }
 repository = { workspace = true }
+license = "Unlicense"
+publish = false
 default-run = "vitreus-power-plant-node"
 
 [dependencies]
@@ -92,7 +92,7 @@ resolver = "2"
 authors = ["Innowise FinTech Team"]
 edition = "2021"
 repository = "https://bitbucket.org/innowise-group/vitreus-power-plant"
-version = "1.0.0"
+version = "1.1.0"
 
 [workspace.dependencies]
 affix = "0.1"

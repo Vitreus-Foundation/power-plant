@@ -44,7 +44,7 @@ impl SubstrateCli for Cli {
     }
 
     fn impl_version() -> String {
-        env!("SUBSTRATE_CLI_IMPL_VERSION").into()
+        format!("{}-{}", env!("SUBSTRATE_CLI_IMPL_VERSION"), NODE_VERSION)
     }
 
     fn description() -> String {
