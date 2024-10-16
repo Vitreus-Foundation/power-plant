@@ -7,6 +7,7 @@ edition.workspace = true
 [dependencies]
 futures = { workspace = true, default-features = true }
 jsonrpsee = { workspace = true, features = ["server"] }
+thiserror = { workspace = true, default-features = true }
 
 mmr-rpc = { workspace = true, default-features = true }
 sc-chain-spec = { workspace = true, default-features = true }

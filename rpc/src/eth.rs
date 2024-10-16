@@ -24,6 +24,8 @@ pub use fc_rpc_core::types::{FeeHistoryCache, FeeHistoryCacheLimit, FilterPool};
 use fc_storage::StorageOverride;
 use fp_rpc::{ConvertTransaction, ConvertTransactionRuntimeApi, EthereumRuntimeRPCApi};
 
+use crate::consensus_data_providers::BabeConsensusDataProvider;
+
 /// Extra dependencies for Ethereum compatibility.
 pub struct EthDeps<B: BlockT, C, P, A: ChainApi, CT, CIDP> {
     /// The client instance to use.
@@ -165,8 +167,7 @@ where
             execute_gas_limit_multiplier,
             forced_parent_hashes,
             pending_create_inherent_data_providers,
-            // TODO: set ConsensusDataProvider
-            None,
+            Some(Box::new(BabeConsensusDataProvider::new())),
         )
         .replace_config::<EC>()
         .into_rpc(),

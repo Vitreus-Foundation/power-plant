@@ -14312,6 +14312,7 @@ dependencies = [
  "sp-runtime",
  "substrate-frame-rpc-system",
  "substrate-state-trie-migration-rpc",
+ "thiserror",
  "vitreus-power-plant-runtime",
  "vitreus-utility-runtime-api",
 ]

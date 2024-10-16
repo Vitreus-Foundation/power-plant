@@ -24,6 +24,7 @@ use vitreus_power_plant_runtime::{
     opaque::Block, AccountId, Balance, BlockNumber, Nonce, RuntimeCall,
 };
 
+mod consensus_data_providers;
 mod eth;
 pub use self::eth::{create_eth, EthDeps};
 
