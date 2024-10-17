@@ -355,10 +355,6 @@ where
         },
     };
 
-    // TODO: maybe we should use it
-    // let _frontier_block_import =
-    // 	FrontierBlockImport::new(grandpa_block_import.clone(), client.clone());
-
     let (beefy_block_import, beefy_voter_links, beefy_rpc_links) =
         sc_consensus_beefy::beefy_block_import_and_links(
             grandpa_block_import,
