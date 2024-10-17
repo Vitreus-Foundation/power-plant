@@ -7760,34 +7760,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "polkadot-cli"
-version = "17.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#69c31908042fc5ebdd48814bce823a8b173baa22"
-dependencies = [
- "cfg-if",
- "clap 4.5.18",
- "frame-benchmarking-cli",
- "futures",
- "log",
- "polkadot-node-metrics",
- "polkadot-node-primitives",
- "polkadot-service",
- "sc-cli",
- "sc-executor",
- "sc-service",
- "sc-storage-monitor",
- "sc-sysinfo",
- "sc-tracing",
- "sp-core",
- "sp-io",
- "sp-keyring",
- "sp-maybe-compressed-blob",
- "sp-runtime",
- "substrate-build-script-utils",
- "thiserror",
-]
-
-[[package]]
 name = "polkadot-collator-protocol"
 version = "17.0.0"
 source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#69c31908042fc5ebdd48814bce823a8b173baa22"
@@ -14114,10 +14086,10 @@ dependencies = [
  "frame-benchmarking-cli",
  "futures",
  "log",
- "polkadot-cli",
  "polkadot-node-core-pvf-execute-worker",
  "polkadot-node-core-pvf-prepare-worker",
  "polkadot-node-metrics",
+ "polkadot-node-primitives",
  "pyroscope",
  "pyroscope_pprofrs",
  "sc-cli",

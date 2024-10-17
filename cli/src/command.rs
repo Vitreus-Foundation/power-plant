@@ -78,26 +78,6 @@ impl SubstrateCli for Cli {
     }
 }
 
-/// Runs performance checks.
-/// Should only be used in release build since the check would take too much time otherwise.
-fn host_perf_check() -> Result<()> {
-    #[cfg(not(feature = "hostperfcheck"))]
-    {
-        Err(Error::FeatureNotEnabled { feature: "hostperfcheck" })
-    }
-
-    #[cfg(all(not(build_type = "release"), feature = "hostperfcheck"))]
-    {
-        return Err(PerfCheckError::WrongBuildType.into());
-    }
-
-    #[cfg(all(feature = "hostperfcheck", build_type = "release"))]
-    {
-        crate::host_perf_check::host_perf_check()?;
-        return Ok(());
-    }
-}
-
 /// Launch a node, accepting arguments just like a regular node,
 /// accepts an alternative overseer generator, to adjust behavior
 /// for integration tests as needed.
@@ -127,12 +107,6 @@ where
 
     // By default, enable BEEFY on all networks, unless explicitly disabled through CLI.
     let enable_beefy = !cli.run.no_beefy;
-
-    let _grandpa_pause = if cli.run.grandpa_pause.is_empty() {
-        None
-    } else {
-        Some((cli.run.grandpa_pause[0], cli.run.grandpa_pause[1]))
-    };
 
     let jaeger_agent = if let Some(ref jaeger_agent) = cli.run.jaeger_agent {
         Some(
@@ -343,54 +317,6 @@ pub fn run() -> Result<()> {
                 ))
             })?)
         },
-        // TODO: Do we need this subcommand?
-        Some(Subcommand::PvfPrepareWorker(_cmd)) => {
-            Ok(())
-            // let mut builder = sc_cli::LoggerBuilder::new("");
-            // builder.with_colors(false);
-            // let _ = builder.init();
-            //
-            // #[cfg(target_os = "android")]
-            // {
-            //     return Err(sc_cli::Error::Input(
-            //         "PVF preparation workers are not supported under this platform".into(),
-            //     )
-            //     .into());
-            // }
-            //
-            // #[cfg(not(target_os = "android"))]
-            // {
-            //     polkadot_node_core_pvf_prepare_worker::worker_entrypoint(
-            //         &cmd.socket_path,
-            //         Some(&cmd.node_impl_version),
-            //     );
-            //     Ok(())
-            // }
-        },
-        // TODO: Do we need this subcommand?
-        Some(Subcommand::PvfExecuteWorker(_cmd)) => {
-            Ok(())
-            // let mut builder = sc_cli::LoggerBuilder::new("");
-            // builder.with_colors(false);
-            // let _ = builder.init();
-            //
-            // #[cfg(target_os = "android")]
-            // {
-            //     return Err(sc_cli::Error::Input(
-            //         "PVF execution workers are not supported under this platform".into(),
-            //     )
-            //     .into());
-            // }
-            //
-            // #[cfg(not(target_os = "android"))]
-            // {
-            //     polkadot_node_core_pvf_execute_worker::worker_entrypoint(
-            //         &cmd.socket_path,
-            //         Some(&cmd.node_impl_version),
-            //     );
-            //     Ok(())
-            // }
-        },
         #[cfg(feature = "runtime-benchmarks")]
         Some(Subcommand::Benchmark(cmd)) => {
             use frame_benchmarking_cli::{
@@ -459,14 +385,6 @@ pub fn run() -> Result<()> {
                 .into(),
         )
         .into()),
-        // TODO: Do we need this subcommand?
-        Some(Subcommand::HostPerfCheck) => {
-            let mut builder = sc_cli::LoggerBuilder::new("");
-            builder.with_colors(true);
-            builder.init()?;
-
-            host_perf_check()
-        },
         Some(Subcommand::Key(cmd)) => Ok(cmd.run(&cli)?),
         Some(Subcommand::ChainInfo(cmd)) => {
             let runner = cli.create_runner(cmd)?;

@@ -16,7 +16,7 @@
 
 //! Vitreus CLI library.
 
-pub use polkadot_cli::NODE_VERSION;
+pub use polkadot_node_primitives::NODE_VERSION;
 
 use clap::Parser;
 use std::path::PathBuf;
@@ -46,14 +46,6 @@ pub enum Subcommand {
     /// Revert the chain to a previous state.
     Revert(sc_cli::RevertCmd),
 
-    #[allow(missing_docs)]
-    #[command(name = "prepare-worker", hide = true)]
-    PvfPrepareWorker(ValidationWorkerCommand),
-
-    #[allow(missing_docs)]
-    #[command(name = "execute-worker", hide = true)]
-    PvfExecuteWorker(ValidationWorkerCommand),
-
     /// Sub-commands concerned with benchmarking.
     #[cfg(feature = "runtime-benchmarks")]
     #[command(subcommand)]
@@ -62,10 +54,6 @@ pub enum Subcommand {
     /// Sub-commands concerned with benchmarking.
     #[cfg(not(feature = "runtime-benchmarks"))]
     Benchmark,
-
-    /// Runs performance checks such as PVF compilation in order to measure machine
-    /// capabilities of running a validator.
-    HostPerfCheck,
 
     /// Key management CLI utilities
     #[command(subcommand)]
@@ -79,34 +67,14 @@ pub enum Subcommand {
 
 #[allow(missing_docs)]
 #[derive(Debug, Parser)]
-pub struct ValidationWorkerCommand {
-    /// The path to the validation host's socket.
-    #[arg(long)]
-    pub socket_path: String,
-    /// Calling node implementation version
-    #[arg(long)]
-    pub node_impl_version: String,
-}
-
-#[allow(missing_docs)]
-#[derive(Debug, Parser)]
 #[group(skip)]
 pub struct RunCmd {
     #[clap(flatten)]
     pub base: sc_cli::RunCmd,
 
-    /// Setup a GRANDPA scheduled voting pause.
-    ///
-    /// This parameter takes two values, namely a block number and a delay (in
-    /// blocks). After the given block number is finalized the GRANDPA voter
-    /// will temporarily stop voting for new blocks until the given delay has
-    /// elapsed (i.e. until a block at height `pause_block + delay` is imported).
-    #[arg(long = "grandpa-pause", num_args = 2)]
-    pub grandpa_pause: Vec<u32>,
-
     /// Disable the BEEFY gadget.
     ///
-    /// Currently enabled by default 'Vitreus'.
+    /// Currently enabled by default on 'Vitreus'.
     #[arg(long)]
     pub no_beefy: bool,
 
@@ -120,45 +88,17 @@ pub struct RunCmd {
     #[arg(long)]
     pub force_authoring_backoff: bool,
 
-    /// Path to the directory where auxiliary worker binaries reside.
+    /// Add the destination address to the 'Jaeger' agent.
     ///
-    /// TESTING ONLY: if the path points to an executable rather then directory,
-    /// that executable is used both as preparation and execution worker.
-    #[arg(long, value_name = "PATH")]
-    pub workers_path: Option<PathBuf>,
-
-    /// Add the destination address to the jaeger agent.
-    ///
-    /// Must be valid socket address, of format `IP:Port`
-    /// commonly `127.0.0.1:6831`.
+    /// Must be valid socket address, of format `IP:Port` (commonly `127.0.0.1:6831`).
     #[arg(long)]
     pub jaeger_agent: Option<String>,
 
     /// Add the destination address to the `pyroscope` agent.
     ///
-    /// Must be valid socket address, of format `IP:Port`
-    /// commonly `127.0.0.1:4040`.
+    /// Must be valid socket address, of format `IP:Port` (commonly `127.0.0.1:4040`).
     #[arg(long)]
     pub pyroscope_server: Option<String>,
-
-    /// Override the maximum number of pvf execute workers.
-    ///
-    ///  **Dangerous!** Do not touch unless explicitly advised to.
-    #[arg(long)]
-    pub execute_workers_max_num: Option<usize>,
-
-    /// Override the maximum number of pvf workers that can be spawned in the pvf prepare
-    /// pool for tasks with the priority below critical.
-    ///
-    ///  **Dangerous!** Do not touch unless explicitly advised to.
-    #[arg(long)]
-    pub prepare_workers_soft_max_num: Option<usize>,
-
-    /// Override the absolute number of pvf workers that can be spawned in the pvf prepare pool.
-    ///
-    ///  **Dangerous!** Do not touch unless explicitly advised to.
-    #[arg(long)]
-    pub prepare_workers_hard_max_num: Option<usize>,
 
     /// Disable automatic hardware benchmarks.
     ///
@@ -172,10 +112,34 @@ pub struct RunCmd {
 
     /// Overseer message capacity override.
     ///
-    /// **Dangerous!** Do not touch unless explicitly adviced to.
+    /// **Dangerous!** Do not touch unless explicitly advised to.
     #[arg(long)]
     pub overseer_channel_capacity_override: Option<usize>,
 
+    /// Path to the directory where auxiliary worker binaries reside.
+    ///
+    /// TESTING ONLY: if the path points to an executable rather then directory,
+    /// that executable is used both as preparation and execution worker.
+    #[arg(long, value_name = "PATH")]
+    pub workers_path: Option<PathBuf>,
+
+    /// Override the maximum number of pvf execute workers.
+    ///
+    ///  **Dangerous!** Do not touch unless explicitly advised to.
+    #[arg(long)]
+    pub execute_workers_max_num: Option<usize>,
+    /// Override the maximum number of pvf workers that can be spawned in the pvf prepare
+    /// pool for tasks with the priority below critical.
+    ///
+    ///  **Dangerous!** Do not touch unless explicitly advised to.
+
+    #[arg(long)]
+    pub prepare_workers_soft_max_num: Option<usize>,
+    /// Override the absolute number of pvf workers that can be spawned in the pvf prepare pool.
+    ///
+    ///  **Dangerous!** Do not touch unless explicitly advised to.
+    #[arg(long)]
+    pub prepare_workers_hard_max_num: Option<usize>,
     /// TESTING ONLY: disable the version check between nodes and workers.
     #[arg(long, hide = true)]
     pub disable_worker_version_check: bool,
