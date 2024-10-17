@@ -30,9 +30,6 @@ pub mod benchmarking;
 pub mod eth;
 mod parachains_db;
 
-#[cfg(test)]
-mod tests;
-
 #[cfg(feature = "full-node")]
 use {
     gum::info,
