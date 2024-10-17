@@ -149,8 +149,9 @@ assert_matches = { workspace = true, default-features = true }
 env_logger = { workspace = true, default-features = true }
 tempfile = { workspace = true, default-features = true }
 
-polkadot-test-client = { workspace = true, default-features = true }
 polkadot-node-subsystem-test-helpers = { workspace = true, default-features = true }
+polkadot-primitives-test-helpers = { workspace = true, default-features = true }
+polkadot-test-client = { workspace = true, default-features = true }
 
 [features]
 default = ["db", "full-node", "sql", "txpool", "with-rocksdb-weights"]
