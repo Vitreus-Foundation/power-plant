@@ -8481,6 +8481,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "polkadot-primitives-test-helpers"
+version = "0.1.0"
+source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
+dependencies = [
+ "polkadot-primitives",
+ "rand",
+ "sp-application-crypto",
+ "sp-core",
+ "sp-keyring",
+ "sp-runtime",
+]
+
+[[package]]
 name = "polkadot-rpc"
 version = "17.0.0"
 source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
@@ -14358,6 +14371,7 @@ dependencies = [
  "polkadot-node-subsystem-util",
  "polkadot-overseer",
  "polkadot-primitives",
+ "polkadot-primitives-test-helpers",
  "polkadot-rpc",
  "polkadot-runtime-common",
  "polkadot-runtime-parachains",

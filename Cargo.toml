@@ -193,6 +193,7 @@ polkadot-node-subsystem-types = { git = "https://github.com/paritytech/polkadot-
 polkadot-node-subsystem-util = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-overseer = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-primitives = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+polkadot-primitives-test-helpers = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-rpc = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-runtime-common = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-runtime-parachains = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
