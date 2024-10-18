@@ -89,9 +89,9 @@ members = [
 resolver = "2"
 
 [workspace.package]
-authors = ["Innowise FinTech Team"]
+authors = ["Vitreus Foundation"]
 edition = "2021"
-repository = "https://bitbucket.org/innowise-group/vitreus-power-plant"
+repository = "https://bitbucket.org/vitreus/vitreus-power-plant"
 version = "1.1.0"
 
 [workspace.dependencies]
