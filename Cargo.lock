@@ -6527,21 +6527,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-dynamic-fee"
-version = "4.0.0-dev"
-source = "git+https://github.com/polkadot-evm/frontier?branch=stable2407#2e219e17a526125da003e64ef22ec037917083fa"
-dependencies = [
- "fp-dynamic-fee",
- "fp-evm",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-inherents",
-]
-
-[[package]]
 name = "pallet-election-provider-multi-phase"
 version = "36.0.0"
 source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
@@ -13886,14 +13871,12 @@ dependencies = [
  "pallet-authorship",
  "pallet-babe",
  "pallet-balances",
- "pallet-base-fee",
  "pallet-beefy",
  "pallet-beefy-mmr",
  "pallet-bounties",
  "pallet-claiming",
  "pallet-collective",
  "pallet-democracy",
- "pallet-dynamic-fee",
  "pallet-energy-broker",
  "pallet-energy-fee",
  "pallet-energy-generation",
