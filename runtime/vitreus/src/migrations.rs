@@ -4,7 +4,7 @@ use super::*;
 
 pub type Permanent = (pallet_xcm::migration::MigrateToLatestXcmVersion<Runtime>);
 
-pub type Unreleased = (
+pub type V0200 = (
     pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
     pallet_energy_generation::migrations::v15::MigrateV14ToV15<Runtime>,
     polkadot_runtime_parachains::configuration::migration::v7::MigrateToV7<Runtime>,
@@ -18,3 +18,5 @@ pub type Unreleased = (
     polkadot_runtime_parachains::scheduler::migration::MigrateV1ToV2<Runtime>,
     polkadot_runtime_common::paras_registrar::migration::MigrateToV1<Runtime, ()>,
 );
+
+pub type Unreleased = ();

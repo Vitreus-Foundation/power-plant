@@ -238,14 +238,11 @@ pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
 pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
-    // TODO: need to calculate new authoring_version number
     authoring_version: 1,
-    // TODO: need to calculate new spec_version number
-    spec_version: 124,
+    spec_version: 200,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
-    // TODO: need to calculate new transaction_version number
-    transaction_version: 1,
+    transaction_version: 2,
     state_version: 1,
 };
 
@@ -1725,7 +1722,7 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations = (migrations::Unreleased, migrations::Permanent);
+pub type Migrations = (migrations::Unreleased, migrations::V0200, migrations::Permanent);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
