@@ -1040,7 +1040,6 @@ dependencies = [
  "sp-consensus-grandpa",
  "sp-core",
  "sp-runtime",
- "sp-state-machine",
  "vitreus-power-plant-runtime",
 ]
 
@@ -2206,19 +2205,6 @@ dependencies = [
 
 [[package]]
 name = "env_logger"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a12e6657c4c97ebab115a42dcee77225f7f482cdd841cf7088c657a42e9e00e7"
-dependencies = [
- "atty",
- "humantime",
- "log",
- "regex",
- "termcolor",
-]
-
-[[package]]
-name = "env_logger"
 version = "0.10.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cd405aab171cb85d6735e5c8d9db038c17d3ca007a4d2c25f337935c3d90580"
@@ -2689,7 +2675,7 @@ version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84f2e425d9790201ba4af4630191feac6dcc98765b118d4d18e91d23c2353866"
 dependencies = [
- "env_logger 0.10.2",
+ "env_logger",
  "log",
 ]
 
@@ -4586,9 +4572,9 @@ checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
 
 [[package]]
 name = "libc"
-version = "0.2.160"
+version = "0.2.161"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f0b21006cd1874ae9e650973c565615676dc4a274c965bb0a73796dac838ce4f"
+checksum = "8e9489c2807c139ffd9c1794f4af0ebe86a828db53ecdc7fea2111d0fed085d1"
 
 [[package]]
 name = "libflate"
@@ -4746,7 +4732,7 @@ dependencies = [
  "libp2p-identity",
  "libp2p-swarm",
  "log",
- "lru 0.12.5",
+ "lru",
  "quick-protobuf",
  "quick-protobuf-codec",
  "smallvec",
@@ -5283,15 +5269,6 @@ name = "log"
 version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a7a70ba024b9dc04c27ea2f0c0548feb474ec5c54bba33a7f72f873a39d07b24"
-
-[[package]]
-name = "lru"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "71e7d46de488603ffdd5f30afbc64fbba2378214a2c3a2fb83abf3d33126df17"
-dependencies = [
- "hashbrown 0.13.2",
-]
 
 [[package]]
 name = "lru"
@@ -6902,22 +6879,6 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-staking",
-]
-
-[[package]]
-name = "pallet-indices"
-version = "37.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-core",
- "sp-io",
- "sp-keyring",
- "sp-runtime",
 ]
 
 [[package]]
@@ -8632,7 +8593,6 @@ dependencies = [
  "sp-runtime",
  "sp-session",
  "sp-staking",
- "sp-tracing",
  "staging-xcm",
  "staging-xcm-executor",
 ]
@@ -8784,142 +8744,6 @@ dependencies = [
  "parity-scale-codec",
  "polkadot-primitives",
  "sp-core",
- "tracing-gum",
-]
-
-[[package]]
-name = "polkadot-test-client"
-version = "1.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
-dependencies = [
- "frame-benchmarking",
- "parity-scale-codec",
- "polkadot-node-subsystem",
- "polkadot-primitives",
- "polkadot-test-runtime",
- "polkadot-test-service",
- "sc-block-builder",
- "sc-consensus",
- "sc-offchain",
- "sc-service",
- "sp-api",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-core",
- "sp-inherents",
- "sp-io",
- "sp-runtime",
- "sp-state-machine",
- "sp-timestamp",
- "substrate-test-client",
-]
-
-[[package]]
-name = "polkadot-test-runtime"
-version = "1.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
-dependencies = [
- "frame-election-provider-support",
- "frame-executive",
- "frame-support",
- "frame-system",
- "frame-system-rpc-runtime-api",
- "log",
- "pallet-authority-discovery",
- "pallet-authorship",
- "pallet-babe",
- "pallet-balances",
- "pallet-grandpa",
- "pallet-indices",
- "pallet-offences",
- "pallet-session",
- "pallet-staking",
- "pallet-staking-reward-curve",
- "pallet-sudo",
- "pallet-timestamp",
- "pallet-transaction-payment",
- "pallet-transaction-payment-rpc-runtime-api",
- "pallet-vesting",
- "pallet-xcm",
- "parity-scale-codec",
- "polkadot-primitives",
- "polkadot-runtime-common",
- "polkadot-runtime-parachains",
- "scale-info",
- "serde",
- "sp-api",
- "sp-authority-discovery",
- "sp-block-builder",
- "sp-consensus-babe",
- "sp-consensus-beefy",
- "sp-core",
- "sp-genesis-builder",
- "sp-inherents",
- "sp-io",
- "sp-mmr-primitives",
- "sp-offchain",
- "sp-runtime",
- "sp-session",
- "sp-staking",
- "sp-transaction-pool",
- "sp-version",
- "staging-xcm",
- "staging-xcm-builder",
- "staging-xcm-executor",
- "substrate-wasm-builder",
- "test-runtime-constants",
-]
-
-[[package]]
-name = "polkadot-test-service"
-version = "1.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
-dependencies = [
- "frame-system",
- "futures",
- "hex",
- "pallet-balances",
- "pallet-staking",
- "pallet-transaction-payment",
- "polkadot-node-primitives",
- "polkadot-node-subsystem",
- "polkadot-overseer",
- "polkadot-parachain-primitives",
- "polkadot-primitives",
- "polkadot-rpc",
- "polkadot-runtime-common",
- "polkadot-runtime-parachains",
- "polkadot-service",
- "polkadot-test-runtime",
- "rand",
- "sc-authority-discovery",
- "sc-chain-spec",
- "sc-cli",
- "sc-client-api",
- "sc-consensus",
- "sc-consensus-babe",
- "sc-consensus-grandpa",
- "sc-network",
- "sc-service",
- "sc-tracing",
- "sc-transaction-pool",
- "serde_json",
- "sp-arithmetic",
- "sp-authority-discovery",
- "sp-blockchain",
- "sp-consensus",
- "sp-consensus-babe",
- "sp-consensus-grandpa",
- "sp-core",
- "sp-inherents",
- "sp-keyring",
- "sp-runtime",
- "sp-state-machine",
- "substrate-test-client",
- "tempfile",
- "test-runtime-constants",
- "tokio",
  "tracing-gum",
 ]
 
@@ -11709,9 +11533,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.128"
+version = "1.0.129"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ff5456707a1de34e7e37f2a6fd3d3f808c318259cbd01ab6377795054b483d8"
+checksum = "6dbcf9b78a125ee667ae19388837dd12294b858d101fdd393cb9d5501ef09eb2"
 dependencies = [
  "itoa",
  "memchr",
@@ -13141,33 +12965,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "substrate-test-client"
-version = "2.0.1"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
-dependencies = [
- "array-bytes",
- "async-trait",
- "futures",
- "parity-scale-codec",
- "sc-client-api",
- "sc-client-db",
- "sc-consensus",
- "sc-executor",
- "sc-offchain",
- "sc-service",
- "serde",
- "serde_json",
- "sp-blockchain",
- "sp-consensus",
- "sp-core",
- "sp-keyring",
- "sp-keystore",
- "sp-runtime",
- "sp-state-machine",
- "tokio",
-]
-
-[[package]]
 name = "substrate-test-utils"
 version = "3.0.0"
 source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
@@ -13351,17 +13148,6 @@ name = "termtree"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3369f5ac52d5eb6ab48c6b4ffdc8efbcad6b89c765749064ba298f2c68a16a76"
-
-[[package]]
-name = "test-runtime-constants"
-version = "1.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
-dependencies = [
- "frame-support",
- "polkadot-primitives",
- "smallvec",
- "sp-runtime",
-]
 
 [[package]]
 name = "textwrap"
@@ -14097,24 +13883,18 @@ dependencies = [
  "clap 4.5.20",
  "fc-cli",
  "fc-db",
- "frame-benchmarking-cli",
  "futures",
  "log",
- "polkadot-node-core-pvf-execute-worker",
- "polkadot-node-core-pvf-prepare-worker",
  "polkadot-node-metrics",
  "polkadot-node-primitives",
  "pyroscope",
  "pyroscope_pprofrs",
  "sc-cli",
- "sc-executor",
  "sc-service",
  "sc-storage-monitor",
  "sc-sysinfo",
  "sc-tracing",
  "sp-core",
- "sp-io",
- "sp-keyring",
  "substrate-build-script-utils",
  "thiserror",
  "vitreus-power-plant-runtime",
@@ -14294,7 +14074,6 @@ dependencies = [
  "sp-consensus-beefy",
  "sp-core",
  "sp-inherents",
- "sp-keystore",
  "sp-runtime",
  "substrate-frame-rpc-system",
  "substrate-state-trie-migration-rpc",
@@ -14307,12 +14086,7 @@ dependencies = [
 name = "vitreus-service"
 version = "1.1.0"
 dependencies = [
- "assert_matches",
- "async-trait",
  "clap 4.5.20",
- "env_logger 0.9.3",
- "fc-api",
- "fc-cli",
  "fc-consensus",
  "fc-db",
  "fc-mapping-sync",
@@ -14321,50 +14095,30 @@ dependencies = [
  "fc-storage",
  "fp-account",
  "fp-dynamic-fee",
- "fp-evm",
  "fp-rpc",
  "frame-benchmarking",
  "frame-benchmarking-cli",
- "frame-support",
  "frame-system",
- "frame-system-rpc-runtime-api",
  "futures",
- "hex-literal 0.3.4",
  "kvdb",
  "kvdb-rocksdb",
  "log",
- "lru 0.9.0",
  "mmr-gadget",
  "pallet-energy-fee",
  "pallet-transaction-payment",
  "pallet-transaction-payment-rpc-runtime-api",
  "parity-db",
  "parity-scale-codec",
- "polkadot-approval-distribution",
- "polkadot-availability-bitfield-distribution",
- "polkadot-availability-distribution",
  "polkadot-availability-recovery",
- "polkadot-collator-protocol",
  "polkadot-core-primitives",
- "polkadot-dispute-distribution",
- "polkadot-gossip-support",
  "polkadot-network-bridge",
- "polkadot-node-collation-generation",
  "polkadot-node-core-approval-voting",
  "polkadot-node-core-av-store",
- "polkadot-node-core-backing",
- "polkadot-node-core-bitfield-signing",
  "polkadot-node-core-candidate-validation",
- "polkadot-node-core-chain-api",
  "polkadot-node-core-chain-selection",
  "polkadot-node-core-dispute-coordinator",
  "polkadot-node-core-parachains-inherent",
- "polkadot-node-core-prospective-parachains",
- "polkadot-node-core-provisioner",
- "polkadot-node-core-pvf-checker",
- "polkadot-node-core-runtime-api",
  "polkadot-node-network-protocol",
- "polkadot-node-primitives",
  "polkadot-node-subsystem",
  "polkadot-node-subsystem-test-helpers",
  "polkadot-node-subsystem-types",
@@ -14373,18 +14127,10 @@ dependencies = [
  "polkadot-primitives",
  "polkadot-primitives-test-helpers",
  "polkadot-rpc",
- "polkadot-runtime-common",
- "polkadot-runtime-parachains",
  "polkadot-service",
- "polkadot-statement-distribution",
- "polkadot-test-client",
  "sc-authority-discovery",
  "sc-basic-authorship",
- "sc-block-builder",
- "sc-chain-spec",
- "sc-cli",
  "sc-client-api",
- "sc-client-db",
  "sc-consensus",
  "sc-consensus-babe",
  "sc-consensus-beefy",
@@ -14393,20 +14139,15 @@ dependencies = [
  "sc-executor",
  "sc-keystore",
  "sc-network",
- "sc-network-common",
  "sc-network-sync",
  "sc-offchain",
  "sc-service",
- "sc-sync-state-rpc",
  "sc-sysinfo",
  "sc-telemetry",
  "sc-transaction-pool",
  "sc-transaction-pool-api",
- "serde",
- "serde_json",
  "sp-api",
  "sp-authority-discovery",
- "sp-block-builder",
  "sp-blockchain",
  "sp-consensus",
  "sp-consensus-babe",
@@ -14414,21 +14155,10 @@ dependencies = [
  "sp-core",
  "sp-inherents",
  "sp-io",
- "sp-keyring",
- "sp-keystore",
  "sp-mmr-primitives",
- "sp-offchain",
  "sp-runtime",
- "sp-session",
- "sp-state-machine",
- "sp-storage",
  "sp-timestamp",
  "sp-transaction-pool",
- "sp-transaction-storage-proof",
- "sp-trie",
- "sp-version",
- "sp-weights",
- "substrate-prometheus-endpoint",
  "tempfile",
  "thiserror",
  "tracing-gum",

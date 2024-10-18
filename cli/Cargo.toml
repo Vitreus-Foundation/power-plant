@@ -1,6 +1,6 @@
 [package]
 name = "vitreus-cli"
-description = "Polkadot Relay-chain Client Node"
+description = "Vitreus relay-chain client node"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -21,22 +21,15 @@ pyroscope = { workspace = true, default-features = true, optional = true }
 pyroscope_pprofrs = { workspace = true, default-features = true, optional = true }
 thiserror = { workspace = true, default-features = true }
 
-polkadot-node-core-pvf-execute-worker = { workspace = true, default-features = true, optional = true }
-polkadot-node-core-pvf-prepare-worker = { workspace = true, default-features = true, optional = true }
 polkadot-node-metrics = { workspace = true, default-features = true }
 polkadot-node-primitives = { workspace = true, default-features = true }
-#polkadot-performance-test = { path = "../node/test/performance-test", optional = true }
 
-frame-benchmarking-cli = { workspace = true, default-features = true, optional = true }
 sc-cli = { workspace = true, default-features = true, optional = true }
-sc-executor = { workspace = true, default-features = true }
 sc-service = { workspace = true, default-features = true, optional = true }
 sc-storage-monitor = { workspace = true, default-features = true }
 sc-sysinfo = { workspace = true, default-features = true }
 sc-tracing = { workspace = true, default-features = true, optional = true }
 sp-core = { workspace = true, default-features = true }
-sp-io = { workspace = true, default-features = true }
-sp-keyring = { workspace = true, default-features = true }
 
 fc-cli = { workspace = true, default-features = true }
 fc-db = { workspace = true, default-features = true }
@@ -56,14 +49,10 @@ cli = [
 	"sc-cli",
 	"sc-service",
 	"sc-tracing",
-	"frame-benchmarking-cli",
-	"polkadot-node-core-pvf-execute-worker",
-	"polkadot-node-core-pvf-prepare-worker",
 	"vitreus-service",
 ]
 runtime-benchmarks = [
 	"polkadot-node-metrics/runtime-benchmarks",
-#	"polkadot-performance-test?/runtime-benchmarks",
 	"vitreus-power-plant-runtime/runtime-benchmarks",
 	"vitreus-service/runtime-benchmarks",
 ]
@@ -71,7 +60,6 @@ full-node = ["vitreus-service/full-node"]
 try-runtime = ["vitreus-service/try-runtime"]
 fast-runtime = ["vitreus-service/fast-runtime"]
 pyroscope = ["dep:pyroscope", "pyroscope_pprofrs"]
-#hostperfcheck = ["polkadot-performance-test"]
 
 malus = ["full-node", "vitreus-service/malus"]
-runtime-metrics = ["vitreus-service/runtime-metrics", "polkadot-node-metrics/runtime-metrics"]
+runtime-metrics = ["polkadot-node-metrics/runtime-metrics"]

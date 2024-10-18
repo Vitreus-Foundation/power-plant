@@ -5,8 +5,6 @@ authors.workspace = true
 edition.workspace = true
 build = "build.rs"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
 [dependencies]
 rand = { workspace = true, default-features = true }
 hex-literal = { workspace = true, default-features = true }
@@ -25,7 +23,6 @@ sp-consensus-beefy = { workspace = true, default-features = true }
 sp-consensus-grandpa = { workspace = true, default-features = true }
 sp-core = { workspace = true, default-features = true }
 sp-runtime = { workspace = true, default-features = true }
-sp-state-machine = { workspace = true, default-features = true }
 
 pallet-claiming = { workspace = true, default-features = true }
 vitreus-power-plant-runtime = { workspace = true, default-features = true }
