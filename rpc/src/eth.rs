@@ -58,7 +58,7 @@ pub struct EthDeps<B: BlockT, C, P, A: ChainApi, CT, CIDP> {
     pub fee_history_cache: FeeHistoryCache,
     /// Maximum fee history cache size.
     pub fee_history_cache_limit: FeeHistoryCacheLimit,
-    /// Maximum allowed gas limit will be ` block.gas_limit * execute_gas_limit_multiplier` when
+    /// Maximum allowed gas limit will be `block.gas_limit * execute_gas_limit_multiplier` when
     /// using eth_call/eth_estimateGas.
     pub execute_gas_limit_multiplier: u64,
     /// Mandated parent hashes for a given block hash.
@@ -93,6 +93,7 @@ impl<B: BlockT, C, P, A: ChainApi, CT: Clone, CIDP: Clone> Clone for EthDeps<B, 
         }
     }
 }
+
 /// Instantiate Ethereum-compatible RPC extensions.
 pub fn create_eth<B, C, BE, P, A, CT, CIDP, EC>(
     mut io: RpcModule<()>,
