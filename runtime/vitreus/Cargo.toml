@@ -1,12 +1,9 @@
 [package]
 name = "vitreus-power-plant-runtime"
-description = "A fresh FRAME-based Substrate runtime, ready for hacking."
 version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 repository = { workspace = true }
-license = "Unlicense"
-publish = false
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
@@ -14,9 +11,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
-num_enum = { workspace = true }
 log = { workspace = true }
-libsecp256k1 = { workspace = true }
 hex-literal = { workspace = true }
 primitive-types = { workspace = true, features = ["codec", "scale-info", "num-traits"] }
 
@@ -33,12 +28,10 @@ xcm-builder = { workspace = true }
 # Substrate
 binary-merkle-tree = { workspace = true }
 sp-api = { workspace = true }
-sp-application-crypto = { workspace = true }
 sp-authority-discovery = { workspace = true }
 sp-block-builder = { workspace = true }
 sp-consensus-babe = { workspace = true }
 sp-consensus-beefy = { workspace = true }
-sp-consensus-grandpa = { workspace = true }
 sp-core = { workspace = true }
 sp-genesis-builder = { workspace = true }
 sp-inherents = { workspace = true }
@@ -103,8 +96,6 @@ fp-rpc = { workspace = true }
 fp-self-contained = { workspace = true, features = ["serde"] }
 
 # Frontier FRAME
-pallet-base-fee = { workspace = true }
-pallet-dynamic-fee = { workspace = true }
 pallet-ethereum = { workspace = true }
 pallet-evm = { workspace = true }
 pallet-evm-chain-id = { workspace = true }
@@ -195,9 +186,7 @@ try-runtime = [
 ]
 fast-runtime = []
 std = [
-    "libsecp256k1/std",
     "log/std",
-    "num_enum/std",
     "parity-scale-codec/std",
     "primitive-types/std",
     "scale-info/std",
@@ -210,12 +199,10 @@ std = [
     "xcm-builder/std",
     # Substrate
     "sp-api/std",
-    "sp-application-crypto/std",
     "sp-authority-discovery/std",
     "sp-block-builder/std",
     "sp-consensus-babe/std",
     "sp-consensus-beefy/std",
-    "sp-consensus-grandpa/std",
     "sp-core/std",
     "sp-inherents/std",
     "sp-io/std",
