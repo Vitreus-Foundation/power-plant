@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   power_plant:
-    image: cdivtrs/power-plant:latest
+    image: cdivtrs/power-plant-mainnet:latest
     container_name: power-plant
     restart: always
     volumes:
@@ -18,11 +18,9 @@ services:
       --validator
       --prometheus-external
       --node-key 2ff192293ad8a89715d92c59108afdce8d448521e24f6f1c9154cb4d537bdc3c
-      --bootnodes /ip4/45.77.147.229/tcp/30333/p2p/12D3KooWKXt45GhWobDEzM9hP62JaYgNiZUvFTJ2HARBE2o5fV13
       --rpc-cors all
       --blocks-pruning 2048
-      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 1"
-      --beefy
+      --sync warp
 
     ports:
       - "0.0.0.0:30333:30333/tcp"

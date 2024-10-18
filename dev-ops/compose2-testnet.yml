@@ -1,18 +1,8 @@
 version: "3.3"
 
 services:
-  vitreus_power_plant:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-      args:
-        BUILD_FEATURES: fast-runtime
-    image: vitreus_power_plant
-    networks:
-      - vitreus_power_plant_network
-
   second_node:
-    image: vitreus_power_plant
+    image: cdivtrs/power-plant-testnet:latest
     container_name: power-plant-second-node
     restart: always
     depends_on:
@@ -22,7 +12,7 @@ services:
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
-      --chain testnet
+      --chain ./target/release/vitreus-power-plant-testnet.json
       --name testnet-val2
       --port 30333
       --rpc-port 9944
@@ -30,10 +20,8 @@ services:
       --node-key 18c78063e4bba1dc1077ce4013de211f170fa8bbedc3906de373aa7c997b587c
       --validator
       --prometheus-external
-      --bootnodes /ip4/45.77.100.209/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn
       --rpc-cors all
-      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 1"
-      --beefy
+      --sync warp
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
