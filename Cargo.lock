@@ -13983,6 +13983,7 @@ dependencies = [
  "staging-xcm-executor",
  "substrate-wasm-builder",
  "vitreus-utility-runtime-api",
+ "xcm-runtime-apis",
 ]
 
 [[package]]

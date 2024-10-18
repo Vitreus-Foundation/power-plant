@@ -86,7 +86,9 @@ use frame_support::{
         fungible::ItemOf, AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8,
         ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
-    weights::{constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter},
+    weights::{
+        constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter, WeightToFee,
+    },
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
@@ -111,6 +113,14 @@ use sp_consensus_beefy::{
     mmr::{BeefyDataProvider, MmrLeafVersion},
 };
 use sp_runtime::transaction_validity::InvalidTransaction;
+use xcm::{
+    latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
+    VersionedXcm,
+};
+use xcm_runtime_apis::{
+    dry_run::{CallDryRunEffects, Error as XcmDryRunApiError, XcmDryRunEffects},
+    fees::Error as XcmPaymentApiError,
+};
 
 pub use pallet_im_online::sr25519::AuthorityId as ImOnlineId;
 
@@ -1873,6 +1883,60 @@ impl_runtime_apis! {
 
         fn initialize_block(header: &<Block as BlockT>::Header) -> sp_runtime::ExtrinsicInclusionMode {
             Executive::initialize_block(header)
+        }
+    }
+
+    impl xcm_runtime_apis::fees::XcmPaymentApi<Block> for Runtime {
+        fn query_acceptable_payment_assets(xcm_version: xcm::Version) -> Result<Vec<VersionedAssetId>, XcmPaymentApiError> {
+            let acceptable_assets = vec![XcmAssetId(xcm_config::TokenLocation::get())];
+            XcmPallet::query_acceptable_payment_assets(xcm_version, acceptable_assets)
+        }
+
+        fn query_weight_to_asset_fee(weight: Weight, asset: VersionedAssetId) -> Result<u128, XcmPaymentApiError> {
+            match asset.try_as::<XcmAssetId>() {
+                Ok(asset_id) if asset_id.0 == xcm_config::TokenLocation::get() => {
+                    // for native token
+                    Ok(xcm_config::WeightToFee::weight_to_fee(&weight))
+                },
+                Ok(asset_id) => {
+                    log::trace!(target: "xcm::xcm_runtime_api", "query_weight_to_asset_fee - unhandled asset_id: {asset_id:?}!");
+                    Err(XcmPaymentApiError::AssetNotFound)
+                },
+                Err(_) => {
+                    log::trace!(target: "xcm::xcm_runtime_api", "query_weight_to_asset_fee - failed to convert asset: {asset:?}!");
+                    Err(XcmPaymentApiError::VersionedConversionFailed)
+                }
+            }
+        }
+
+        fn query_xcm_weight(message: VersionedXcm<()>) -> Result<Weight, XcmPaymentApiError> {
+            XcmPallet::query_xcm_weight(message)
+        }
+
+        fn query_delivery_fees(destination: VersionedLocation, message: VersionedXcm<()>) -> Result<VersionedAssets, XcmPaymentApiError> {
+            XcmPallet::query_delivery_fees(destination, message)
+        }
+    }
+
+    impl xcm_runtime_apis::dry_run::DryRunApi<Block, RuntimeCall, RuntimeEvent, OriginCaller> for Runtime {
+        fn dry_run_call(origin: OriginCaller, call: RuntimeCall) -> Result<CallDryRunEffects<RuntimeEvent>, XcmDryRunApiError> {
+            XcmPallet::dry_run_call::<Runtime, xcm_config::XcmRouter, OriginCaller, RuntimeCall>(origin, call)
+        }
+
+        fn dry_run_xcm(origin_location: VersionedLocation, xcm: VersionedXcm<RuntimeCall>) -> Result<XcmDryRunEffects<RuntimeEvent>, XcmDryRunApiError> {
+            XcmPallet::dry_run_xcm::<Runtime, xcm_config::XcmRouter, RuntimeCall, xcm_config::XcmConfig>(origin_location, xcm)
+        }
+    }
+
+    impl xcm_runtime_apis::conversions::LocationToAccountApi<Block, AccountId> for Runtime {
+        fn convert_location(location: VersionedLocation) -> Result<
+            AccountId,
+            xcm_runtime_apis::conversions::Error
+        > {
+            xcm_runtime_apis::conversions::LocationToAccountHelper::<
+                AccountId,
+                xcm_config::LocationConverter,
+            >::convert_location(location)
         }
     }
 
