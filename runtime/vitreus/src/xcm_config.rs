@@ -44,7 +44,7 @@ use xcm_builder::{
     FrameTransactionalProcessor, FungiblesAdapter, IsChildSystemParachain, IsConcrete,
     MatchedConvertedConcreteId, MintLocation, NoChecking, SignedAccountKey20AsNative,
     SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId, UsingComponents,
-    WithComputedOrigin, WithUniqueTopic,
+    WithComputedOrigin, WithUniqueTopic, XcmFeeManagerFromComponents,
 };
 use xcm_executor::{traits::WithOriginFilter, XcmExecutor};
 
@@ -343,6 +343,9 @@ impl Contains<RuntimeCall> for SafeCallFilter {
     }
 }
 
+/// Locations that will not be charged fees in the executor, neither for execution nor delivery.
+pub type WaivedLocations = ();
+
 pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
@@ -369,8 +372,10 @@ impl xcm_executor::Config for XcmConfig {
     type SubscriptionService = XcmPallet;
     type PalletInstancesInfo = AllPalletsWithSystem;
     type MaxAssetsIntoHolding = MaxAssetsIntoHolding;
-    // TODO: set FeeManager?
-    type FeeManager = ();
+    type FeeManager = XcmFeeManagerFromComponents<
+        WaivedLocations,
+        fee_handler::XcmFeeToAccount<Self::AssetTransactor, AccountId, TreasuryAccount>,
+    >;
     type MessageExporter = ();
     type UniversalAliases = Nothing;
     type CallDispatcher = WithOriginFilter<SafeCallFilter>;
@@ -653,6 +658,41 @@ mod currency_adapter {
                 AccountId,
                 CheckedAccount,
             >::internal_transfer_asset(asset, from, to, context)
+        }
+    }
+}
+
+mod fee_handler {
+    use super::*;
+    use frame_support::traits::Get;
+    use sp_std::marker::PhantomData;
+    use xcm::latest::Assets;
+    use xcm_builder::HandleFee;
+    use xcm_executor::traits::{FeeReason, TransactAsset};
+
+    pub struct XcmFeeToAccount<AssetTransactor, AccountId, ReceiverAccount>(
+        PhantomData<(AssetTransactor, AccountId, ReceiverAccount)>,
+    );
+
+    impl<
+            AssetTransactor: TransactAsset,
+            AccountId: Clone + Into<[u8; 20]>,
+            ReceiverAccount: Get<AccountId>,
+        > HandleFee for XcmFeeToAccount<AssetTransactor, AccountId, ReceiverAccount>
+    {
+        fn handle_fee(fee: Assets, context: Option<&XcmContext>, _reason: FeeReason) -> Assets {
+            let dest = AccountKey20 { network: None, key: ReceiverAccount::get().into() }.into();
+            for asset in fee.into_inner() {
+                if let Err(e) = AssetTransactor::deposit_asset(&asset, &dest, context) {
+                    log::trace!(
+                        target: "xcm::fees",
+                        "`AssetTransactor::deposit_asset` returned error: {:?}. Burning fee: {:?}. \
+                        They might be burned.",
+                        e, asset,
+                    );
+                }
+            }
+            Assets::new()
         }
     }
 }
