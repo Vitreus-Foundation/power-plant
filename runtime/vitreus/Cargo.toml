@@ -93,6 +93,7 @@ pallet-uniques = { workspace = true }
 pallet-utility = { workspace = true }
 pallet-vesting = { workspace = true }
 pallet-xcm = { workspace = true }
+xcm-runtime-apis = { workspace = true }
 
 # Frontier
 ethereum = { workspace = true }
@@ -267,6 +268,7 @@ std = [
     "pallet-utility/std",
     "pallet-vesting/std",
     "pallet-xcm/std",
+    "xcm-runtime-apis/std",
     # Frontier
     "fp-account/std",
     "fp-evm/std",
@@ -312,4 +314,5 @@ runtime-benchmarks = [
     "pallet-uniques/runtime-benchmarks",
     "pallet-xcm/runtime-benchmarks",
     "xcm-builder/runtime-benchmarks",
+    "xcm-runtime-apis/runtime-benchmarks",
 ]

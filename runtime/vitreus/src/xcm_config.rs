@@ -345,6 +345,7 @@ impl Contains<RuntimeCall> for SafeCallFilter {
 
 /// Locations that will not be charged fees in the executor, neither for execution nor delivery.
 pub type WaivedLocations = ();
+pub type WeightToFee = ConstantMultiplier<Balance, TransactionPicosecondFee>;
 
 pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
@@ -358,7 +359,7 @@ impl xcm_executor::Config for XcmConfig {
     type Barrier = Barrier;
     type Weigher = FixedWeightBounds<FixedXcmWeight, RuntimeCall, MaxInstructions>;
     type Trader = UsingComponents<
-        ConstantMultiplier<Balance, TransactionPicosecondFee>,
+        WeightToFee,
         TokenLocation,
         AccountId,
         Balances,
