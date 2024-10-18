@@ -22,15 +22,12 @@ frame-system = { workspace = true }
 
 log = { workspace = true }
 serde = { workspace = true, default-features = false, features = ["alloc"] }
-serde_derive = { workspace = true }
 rustc-hex = { workspace = true, default-features = false }
 
 [dev-dependencies]
-pallet-balances = { workspace = true }
 pallet-vesting = { workspace = true }
-sp-runtime = { workspace = true }
-libsecp256k1 = "0.7.0"
-hex-literal = "0.4.1"
+libsecp256k1 = { workspace = true }
+hex-literal = { workspace = true }
 
 [features]
 default = ["std"]

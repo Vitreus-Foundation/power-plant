@@ -1018,7 +1018,7 @@ name = "chain-spec"
 version = "1.1.0"
 dependencies = [
  "csv",
- "hex-literal 0.3.4",
+ "hex-literal",
  "pallet-claiming",
  "polkadot-primitives",
  "polkadot-runtime-parachains",
@@ -2089,7 +2089,6 @@ dependencies = [
 name = "energy-fee-rpc"
 version = "0.1.0"
 dependencies = [
- "anyhow",
  "energy-fee-runtime-api",
  "ethereum-types",
  "jsonrpsee",
@@ -3695,12 +3694,6 @@ checksum = "212ab92002354b4819390025006c897e8140934349e8635c9b077f47b4dcbd20"
 
 [[package]]
 name = "hex-literal"
-version = "0.3.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ebdb29d2ea9ed0083cd8cece49bbd968021bd99b0849edb4a9a7ee0fdf6a4e0"
-
-[[package]]
-name = "hex-literal"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6fe2267d4ed49bc07b63801559be28c718ea06c4738b7a03c94df7386d2cde46"
@@ -5206,7 +5199,7 @@ dependencies = [
  "ed25519-dalek",
  "futures",
  "futures-timer",
- "hex-literal 0.4.1",
+ "hex-literal",
  "indexmap 2.6.0",
  "libc",
  "mockall 0.12.1",
@@ -6477,7 +6470,7 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "hex-literal 0.4.1",
+ "hex-literal",
  "libsecp256k1",
  "log",
  "pallet-balances",
@@ -6486,7 +6479,6 @@ dependencies = [
  "rustc-hex",
  "scale-info",
  "serde",
- "serde_derive",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6590,7 +6582,6 @@ dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
- "log",
  "pallet-asset-rate",
  "pallet-assets",
  "pallet-balances",
@@ -6607,15 +6598,11 @@ dependencies = [
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",
- "serde",
- "smallvec",
- "sp-application-crypto",
  "sp-arithmetic",
  "sp-core",
  "sp-io",
  "sp-runtime",
  "sp-std",
- "sp-tracing",
  "substrate-test-utils",
 ]
 
@@ -6683,7 +6670,7 @@ dependencies = [
  "frame-support",
  "frame-system",
  "hash-db",
- "hex-literal 0.4.1",
+ "hex-literal",
  "impl-trait-for-tuples",
  "log",
  "parity-scale-codec",
@@ -8377,7 +8364,7 @@ version = "15.0.0"
 source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#fc627930d54785acaaa30fe003190244221ca36a"
 dependencies = [
  "bitvec",
- "hex-literal 0.4.1",
+ "hex-literal",
  "log",
  "parity-scale-codec",
  "polkadot-core-primitives",
@@ -8565,7 +8552,7 @@ dependencies = [
  "frame-system",
  "frame-system-rpc-runtime-api",
  "futures",
- "hex-literal 0.4.1",
+ "hex-literal",
  "is_executable",
  "kvdb",
  "kvdb-rocksdb",
@@ -13862,7 +13849,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
- "hex-literal 0.3.4",
+ "hex-literal",
  "log",
  "pallet-asset-rate",
  "pallet-assets",
