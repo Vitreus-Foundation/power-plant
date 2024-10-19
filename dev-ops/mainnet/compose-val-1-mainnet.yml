@@ -2,11 +2,9 @@ version: "3.3"
 
 services:
   power_plant_first_node:
-    image: cdivtrs/power-plant-mainnet:latest
+    image: cdivtrs/power-plant:mainnet-latest
     container_name: power-plant-first-node
     restart: always
-    depends_on:
-      - vitreus_power_plant
     volumes:
       - node_data:/tmp/node
     command: >

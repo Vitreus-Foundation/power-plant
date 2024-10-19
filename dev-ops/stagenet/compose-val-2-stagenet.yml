@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   power_plant:
-    image: cdivtrs/power-plant-mainnet:latest
+    image: cdivtrs/power-plant:mainnet-latest
     container_name: power-plant
     restart: always
     volumes:
@@ -17,7 +17,6 @@ services:
       --rpc-methods=unsafe
       --validator
       --prometheus-external
-      --node-key 2ff192293ad8a89715d92c59108afdce8d448521e24f6f1c9154cb4d537bdc3c
       --rpc-cors all
       --blocks-pruning 2048
       --sync warp

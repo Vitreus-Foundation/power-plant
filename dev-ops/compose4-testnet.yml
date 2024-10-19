@@ -2,11 +2,9 @@ version: "3.3"
 
 services:
   fourth_node:
-    image: cdivtrs/power-plant-testnet:latest
+    image: cdivtrs/power-plant:testnet-latest
     container_name: power-plant-fourth-node
     restart: always
-    depends_on:
-      - vitreus_power_plant
     volumes:
       - node_data:/tmp/node
     command: >
@@ -17,7 +15,6 @@ services:
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
-      --node-key 18c78063e4bba1dc1077ce4013de211f170fa8bbedc3906de373aa7c997b587c
       --validator
       --prometheus-external
       --rpc-cors all

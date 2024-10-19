@@ -2,11 +2,9 @@ version: "3.3"
 
 services:
   power_plant_boot_node:
-    image: cdivtrs/power-plant-mainnet:latest
+    image: cdivtrs/power-plant:mainnet-latest
     container_name: power-plant-boot-node
     restart: always
-    depends_on:
-      - vitreus_power_plant
     volumes:
       - node_data:/tmp/node
     command: >
@@ -17,7 +15,7 @@ services:
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
-      --node-key 06ef833a7c5e1576d8a7f9b9a8eeeef37dd3f4c4b9927f4d4184b7dfb18af1e8
+      --node-key ${NODE_KEY}
       --validator
       --prometheus-external
       --rpc-cors all

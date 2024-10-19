@@ -2,11 +2,9 @@ version: "3.3"
 
 services:
   archive_node:
-    image: cdivtrs/power-plant-testnet:latest
+    image: cdivtrs/power-plant:testnet-latest
     container_name: power-plant-archive-node
     restart: always
-    depends_on:
-      - vitreus_power_plant
     volumes:
       - node_data:/tmp/node
     command: >

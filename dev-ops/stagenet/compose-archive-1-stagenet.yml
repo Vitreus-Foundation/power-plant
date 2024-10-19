@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   power_plant:
-    image: cdivtrs/power-plant-mainnet:latest
+    image: cdivtrs/power-plant:mainnet-latest
     container_name: power-plant
     restart: always
     volumes:
@@ -16,7 +16,6 @@ services:
       --rpc-port 9944
       --rpc-external
       --prometheus-external
-      --node-key 3ab373e99b2ac7e5ed1e1ca3abd58f51a0e48040066472bdb919bc9dc5e3e123
       --rpc-cors all
       --rpc-max-connections 5000
       --state-pruning archive
