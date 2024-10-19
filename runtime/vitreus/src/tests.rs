@@ -70,7 +70,7 @@ fn fee_multiplier_update_works() {
         assert_eq!(TransactionPayment::next_fee_multiplier(), upper_fee_multiplier);
 
         let call_with_custom_fee =
-            RuntimeCall::Balances(BalancesCall::transfer { dest: alith(), value: 1 });
+            RuntimeCall::Balances(BalancesCall::transfer_keep_alive { dest: alith(), value: 1 });
         let updated_custom_fee =
             upper_fee_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
 

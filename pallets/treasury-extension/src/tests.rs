@@ -11,7 +11,7 @@ fn spend_funds_should_work() {
         let spent = threshold - 1;
         let left = budget_remaining - threshold;
 
-        Treasury::spend(RuntimeOrigin::root(), spent, ALICE)
+        Treasury::spend_local(RuntimeOrigin::root(), spent, ALICE)
             .expect("Expected to add and approve treasury spend proposal");
         Treasury::spend_funds();
 
@@ -36,7 +36,7 @@ fn ensure_no_recycle_upon_spend_threhsold_exceeding() {
         let spent = threshold;
         let left = budget_remaining - threshold;
 
-        Treasury::spend(RuntimeOrigin::root(), spent, ALICE)
+        Treasury::spend_local(RuntimeOrigin::root(), spent, ALICE)
             .expect("Expected to add and approve treasury spend proposal");
         Treasury::spend_funds();
 

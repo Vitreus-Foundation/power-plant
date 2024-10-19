@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   power_plant:
-    image: cdivtrs/power-plant:latest
+    image: cdivtrs/power-plant:mainnet-latest
     container_name: power-plant
     restart: always
     volumes:
@@ -16,14 +16,10 @@ services:
       --rpc-port 9944
       --rpc-external
       --prometheus-external
-      --node-key bd318740aed8921c31bb4c1084adf72c5264e431ee298564ad6c0bbbb2d77e36
-      --bootnodes /ip4/45.77.147.229/tcp/30333/p2p/12D3KooWKXt45GhWobDEzM9hP62JaYgNiZUvFTJ2HARBE2o5fV13
       --rpc-cors all
       --rpc-max-connections 5000
       --state-pruning archive
-      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
       --enable-offchain-indexing true
-      --beefy
       -lwarn
 
     ports:

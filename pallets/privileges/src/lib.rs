@@ -13,7 +13,6 @@ use frame_support::{
     pallet_prelude::{Decode, DispatchResult, TypeInfo},
     traits::{LockableCurrency, UnixTime},
     weights::Weight,
-    RuntimeDebug,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;

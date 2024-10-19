@@ -15,7 +15,6 @@ use frame_support::{
     BoundedBTreeMap,
 };
 use frame_system::pallet_prelude::BlockNumberFor;
-use orml_traits::GetByKey;
 use scale_info::prelude::*;
 
 use crate::OnVipMembershipHandler;
@@ -26,7 +25,7 @@ use sp_runtime::{
     Perbill,
 };
 use sp_staking::{
-    offence::{DisableStrategy, OffenceDetails, OnOffenceHandler},
+    offence::{OffenceDetails, OnOffenceHandler},
     EraIndex, SessionIndex,
 };
 use sp_std::prelude::*;
@@ -502,10 +501,8 @@ impl<T: Config> Pallet<T> {
         }
 
         // disable all offending validators that have been disabled for the whole era
-        for (index, disabled) in <OffendingValidators<T>>::get() {
-            if disabled {
-                T::SessionInterface::disable_validator(index);
-            }
+        for index in <DisabledValidators<T>>::get() {
+            T::SessionInterface::disable_validator(index);
         }
 
         Ok(())
@@ -591,8 +588,8 @@ impl<T: Config> Pallet<T> {
     }
 
     fn end_era(_active_era: ActiveEraInfo, _session_index: SessionIndex) {
-        // Clear offending validators.
-        <OffendingValidators<T>>::kill();
+        // Clear disabled validators.
+        <DisabledValidators<T>>::kill();
     }
 
     /// Plan a new era.
@@ -855,14 +852,6 @@ impl<T: Config> Pallet<T> {
         Self::deposit_event(Event::<T>::ForceEra { mode });
     }
 
-    /// Ensures that at the end of the current session there will be a new era.
-    pub(crate) fn ensure_new_era() {
-        match ForceEra::<T>::get() {
-            Forcing::ForceAlways | Forcing::ForceNew => (),
-            _ => Self::set_force_era(Forcing::ForceNew),
-        }
-    }
-
     #[cfg(feature = "runtime-benchmarks")]
     pub fn add_era_stakers(
         current_era: EraIndex,
@@ -991,7 +980,7 @@ impl<T: Config> Pallet<T> {
         };
 
         if let Some(tier) = reputation.tier() {
-            T::ReputationTierEnergyRewardAdditionalPercentMapping::get(&tier)
+            T::ReputationTierEnergyRewardAdditionalPercentMapping::convert(&tier)
         } else {
             Perbill::zero()
         }
@@ -1097,7 +1086,6 @@ where
         >],
         slash_fraction: &[Perbill],
         slash_session: SessionIndex,
-        disable_strategy: DisableStrategy,
     ) -> Weight {
         let reward_proportion = SlashRewardFraction::<T>::get();
         let mut consumed_weight = Weight::from_parts(0, 0);
@@ -1162,7 +1150,6 @@ where
                 window_start,
                 now: active_era,
                 reward_proportion,
-                disable_strategy,
             });
 
             Self::deposit_event(Event::<T>::SlashReported {

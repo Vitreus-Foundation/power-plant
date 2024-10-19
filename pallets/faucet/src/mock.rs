@@ -1,6 +1,6 @@
 use crate as pallet_faucet;
-use frame_support::parameter_types;
 use frame_support::traits::{ConstU16, ConstU32, ConstU64, Everything};
+use frame_support::{derive_impl, parameter_types};
 use frame_system::pallet_prelude::*;
 use sp_core::H256;
 use sp_runtime::{
@@ -26,6 +26,7 @@ frame_support::construct_runtime!(
     }
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type BaseCallFilter = Everything;
     type BlockWeights = ();
@@ -52,6 +53,7 @@ impl frame_system::Config for Test {
     type MaxConsumers = ConstU32<16>;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type MaxLocks = ConstU32<1024>;
     type MaxReserves = ();
@@ -64,7 +66,6 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ();
-    type MaxHolds = ();
     type RuntimeHoldReason = ();
 }
 

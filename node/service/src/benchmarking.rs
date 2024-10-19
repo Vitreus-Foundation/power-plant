@@ -21,7 +21,7 @@
 
 use std::{sync::Arc, time::Duration};
 
-use codec::Encode;
+use parity_scale_codec::Encode;
 // Substrate
 use sc_client_api::BlockBackend;
 use sp_core::{ecdsa, Pair};

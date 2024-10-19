@@ -28,6 +28,6 @@ pub static ALLOC: tikv_jemallocator::Jemalloc = tikv_jemallocator::Jemalloc;
 
 fn main() -> eyre::Result<()> {
     color_eyre::install()?;
-    polkadot_cli::run()?;
+    vitreus_cli::run()?;
     Ok(())
 }

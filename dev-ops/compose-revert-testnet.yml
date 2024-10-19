@@ -1,18 +1,8 @@
 version: "3.3"
 
 services:
-  vitreus_power_plant:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-      args:
-        BUILD_FEATURES: fast-runtime
-    image: vitreus_power_plant
-    networks:
-      - vitreus_power_plant_network
-
   revert:
-    image: vitreus_power_plant
+    image: cdivtrs/power-plant-testnet:latest
     container_name: power-plant-revert
     depends_on:
       - vitreus_power_plant
@@ -22,7 +12,7 @@ services:
       ./target/release/vitreus-power-plant-node
       revert
       --base-path /tmp/node
-      --chain testnet
+      --chain ./target/release/vitreus-power-plant-testnet.json
       1024
 
 volumes:

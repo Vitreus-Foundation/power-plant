@@ -1,6 +1,6 @@
 # Stage 1: Build the application
 
-FROM rust:1.71 as builder
+FROM rust:1.71 AS builder
 
 ARG PROFILE=release
 ARG BUILD_FEATURES
@@ -41,6 +41,7 @@ COPY --from=builder \
     /app/chain-specs/* \
     /app/scripts/purge_chain.sh \
     /app/scripts/revert_chain.sh \
-    /app/target/release/lib* \
     /app/target/release/vitreus-power-plant-node \
+    /app/target/release/polkadot-execute-worker \
+    /app/target/release/polkadot-prepare-worker \
     /app/target/release/

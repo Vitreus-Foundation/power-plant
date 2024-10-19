@@ -1,7 +1,7 @@
 use jsonrpsee::{
-    core::{Error as RpcError, RpcResult},
+    core::RpcResult,
     proc_macros::rpc,
-    types::error::CallError,
+    types::{ErrorCode, ErrorObject},
 };
 use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
@@ -54,8 +54,13 @@ where
             // If the block hash is not supplied assume the best block.
             self.client.info().best_hash,
         );
-        api.reputation_tier_additional_reward(at, tier)
-            .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
+        api.reputation_tier_additional_reward(at, tier).map_err(|e| {
+            ErrorObject::owned(
+                ErrorCode::InternalError.code(),
+                "Unable to query reputation_tier_additional_reward.",
+                Some(e.to_string()),
+            )
+        })
     }
 
     fn current_energy_per_stake_currency(
@@ -67,7 +72,12 @@ where
             // If the block hash is not supplied assume the best block.
             self.client.info().best_hash,
         );
-        api.current_energy_per_stake_currency(at)
-            .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
+        api.current_energy_per_stake_currency(at).map_err(|e| {
+            ErrorObject::owned(
+                ErrorCode::InternalError.code(),
+                "Unable to query current_energy_per_stake_currency.",
+                Some(e.to_string()),
+            )
+        })
     }
 }
