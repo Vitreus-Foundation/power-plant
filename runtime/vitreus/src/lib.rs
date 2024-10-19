@@ -14,11 +14,12 @@ use frame_support::{
 };
 use pallet_balances::NegativeImbalance;
 use polkadot_primitives::{
-    runtime_api, slashing, CandidateCommitments, CandidateEvent, CandidateHash,
-    CommittedCandidateReceipt, CoreState, DisputeState, ExecutorParams, GroupRotationInfo,
-    Id as ParaId, InboundDownwardMessage, InboundHrmpMessage, OccupiedCoreAssumption,
-    PersistedValidationData, PvfCheckStatement, ScrapedOnChainVotes, SessionInfo, ValidationCode,
-    ValidationCodeHash, ValidatorId, ValidatorIndex, ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
+    runtime_api, slashing, ApprovalVotingParams, CandidateCommitments, CandidateEvent,
+    CandidateHash, CommittedCandidateReceipt, CoreIndex, CoreState, DisputeState, ExecutorParams,
+    GroupRotationInfo, Id as ParaId, InboundDownwardMessage, InboundHrmpMessage, NodeFeatures,
+    OccupiedCoreAssumption, PersistedValidationData, PvfCheckStatement, ScrapedOnChainVotes,
+    SessionInfo, ValidationCode, ValidationCodeHash, ValidatorId, ValidatorIndex,
+    ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
 };
 
 use polkadot_runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
@@ -33,7 +34,9 @@ use polkadot_runtime_parachains::{
     inclusion::{AggregateMessageOrigin, UmpQueueId},
     initializer as parachains_initializer, origin as parachains_origin, paras as parachains_paras,
     paras_inherent as parachains_paras_inherent,
-    runtime_api_impl::v10 as parachains_runtime_api_impl,
+    runtime_api_impl::{
+        v10 as parachains_runtime_api_impl, vstaging as vstaging_parachains_runtime_api_impl,
+    },
     scheduler as parachains_scheduler, session_info as parachains_session_info,
     shared as parachains_shared,
 };
@@ -70,7 +73,11 @@ use sp_runtime::{
     ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Percent, Permill,
 };
 use sp_staking::{EraIndex, SessionIndex};
-use sp_std::{collections::btree_map::BTreeMap, marker::PhantomData, prelude::*};
+use sp_std::{
+    collections::{btree_map::BTreeMap, vec_deque::VecDeque},
+    marker::PhantomData,
+    prelude::*,
+};
 use sp_version::RuntimeVersion;
 // Substrate FRAME
 use energy_fee_runtime_api::CallRequest;
@@ -238,14 +245,11 @@ pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
 pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
-    // TODO: need to calculate new authoring_version number
     authoring_version: 1,
-    // TODO: need to calculate new spec_version number
-    spec_version: 124,
+    spec_version: 200,
     impl_version: 1,
     apis: RUNTIME_API_VERSIONS,
-    // TODO: need to calculate new transaction_version number
-    transaction_version: 1,
+    transaction_version: 2,
     state_version: 1,
 };
 
@@ -1725,7 +1729,7 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations = (migrations::Unreleased, migrations::Permanent);
+pub type Migrations = (migrations::Unreleased, migrations::V0200, migrations::Permanent);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
@@ -2621,6 +2625,7 @@ impl_runtime_apis! {
         }
     }
 
+    #[api_version(11)]
     impl runtime_api::ParachainHost<Block> for Runtime {
         fn validators() -> Vec<ValidatorId> {
             parachains_runtime_api_impl::validators::<Runtime>()
@@ -2752,6 +2757,38 @@ impl_runtime_apis! {
                 key_ownership_proof,
             )
         }
+
+        fn minimum_backing_votes() -> u32 {
+            parachains_runtime_api_impl::minimum_backing_votes::<Runtime>()
+        }
+
+        fn para_backing_state(para_id: ParaId) -> Option<polkadot_primitives::async_backing::BackingState> {
+            parachains_runtime_api_impl::backing_state::<Runtime>(para_id)
+        }
+
+        fn async_backing_params() -> polkadot_primitives::AsyncBackingParams {
+            parachains_runtime_api_impl::async_backing_params::<Runtime>()
+        }
+
+        fn approval_voting_params() -> ApprovalVotingParams {
+            parachains_runtime_api_impl::approval_voting_params::<Runtime>()
+        }
+
+        fn disabled_validators() -> Vec<ValidatorIndex> {
+            parachains_runtime_api_impl::disabled_validators::<Runtime>()
+        }
+
+        fn node_features() -> NodeFeatures {
+            parachains_runtime_api_impl::node_features::<Runtime>()
+        }
+
+        fn claim_queue() -> BTreeMap<CoreIndex, VecDeque<ParaId>> {
+            vstaging_parachains_runtime_api_impl::claim_queue::<Runtime>()
+        }
+
+        fn candidates_pending_availability(para_id: ParaId) -> Vec<CommittedCandidateReceipt<Hash>> {
+            vstaging_parachains_runtime_api_impl::candidates_pending_availability::<Runtime>(para_id)
+        }
     }
 
     impl sp_authority_discovery::AuthorityDiscoveryApi<Block> for Runtime {
@@ -2760,6 +2797,7 @@ impl_runtime_apis! {
         }
     }
 
+    #[api_version(4)]
     impl sp_consensus_beefy::BeefyApi<Block, BeefyId> for Runtime {
         fn beefy_genesis() -> Option<BlockNumber> {
             pallet_beefy::GenesisBlock::<Runtime>::get()
@@ -2797,6 +2835,7 @@ impl_runtime_apis! {
         }
     }
 
+    #[api_version(2)]
     impl sp_mmr_primitives::MmrApi<Block, Hash, BlockNumber> for Runtime {
         fn mmr_root() -> Result<Hash, sp_mmr_primitives::Error> {
             Ok(Mmr::mmr_root())
