@@ -5,7 +5,7 @@
     "Custom": "Testnet"
   },
   "bootNodes": [
-    "/ip4/45.77.100.209/tcp/30333/p2p/12D3KooWMzJX1C1PSUXmxkHoVbR9uJKuGQgXJZszx8oA73fnacZn"
+    "/ip4/45.77.100.209/tcp/30333/p2p/12D3KooWHzt6QtAs3oXCjdYCNNcK1ZGYScQxPubfZ8YTXt6zm6k3"
   ],
   "telemetryEndpoints": [
      ["wss://telemetry-dev.compliq.io/submit/", 1]
