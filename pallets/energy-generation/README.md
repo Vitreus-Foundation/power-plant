@@ -1,257 +1,227 @@
-# Staking Module
+# Energy Generation Pallet
 
-The Staking module is used to manage funds at stake by network maintainers.
+[![Substrate version](https://img.shields.io/badge/Substrate-4.0.0-brightgreen?logo=Parity%20Substrate)](https://substrate.io)
+[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
-- [`staking::Config`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html)
-- [`Call`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html)
-- [`Module`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Module.html)
+A Substrate pallet for managing energy generation, staking, and reputation-based validation in a decentralized network.
 
 ## Overview
 
-The Staking module is the means by which a set of network maintainers (known as _authorities_ in
-some contexts and _validators_ in others) are chosen based upon those who voluntarily place
-funds under deposit. Under deposit, those funds are rewarded under normal operation but are held
-at pain of _slash_ (expropriation) should the staked maintainer be found not to be discharging
-its duties properly.
+The Energy Generation pallet extends traditional staking mechanisms to incorporate energy generation metrics and reputation-based validation. It manages funds at stake by network maintainers while tying them to energy production capabilities and reputation scores.
 
-### Terminology
-<!-- Original author of paragraph: @gavofyork -->
+### Key Features
 
-- Staking: The process of locking up funds for some time, placing them at risk of slashing
-  (loss) in order to become a rewarded maintainer of the network.
-- Validating: The process of running a node to actively maintain the network, either by
-  producing blocks or guaranteeing finality of the chain.
-- Nominating: The process of placing staked funds behind one or more validators in order to
-  share in any reward, and punishment, they take.
-- Stash account: The account holding an owner's funds used for staking.
-- Controller account: The account that controls an owner's funds for staking.
-- Era: A (whole) number of sessions, which is the period that the validator set (and each
-  validator's active nominator set) is recalculated and where rewards are paid out.
-- Slash: The punishment of a staker by reducing its funds.
+- Energy-per-stake currency rate calculation
+- Reputation-tied validator selection
+- Collaborative staking mechanisms
+- NAC (Network Access Control) level integration
+- VIP membership handling
+- Battery slot capacity management
 
-### Goals
-<!-- Original author of paragraph: @gavofyork -->
+## Architecture
 
-The staking system in Substrate NPoS is designed to make the following possible:
+The pallet is organized into several key components:
 
-- Stake funds that are controlled by a cold wallet.
-- Withdraw some, or deposit more, funds without interrupting the role of an entity.
-- Switch between roles (nominator, validator, idle) with minimal overhead.
+```
+energy-generation/
+├── reward-curve/      # Reward calculation implementations
+├── reward-fn/         # Reward distribution functions
+├── rpc/               # RPC interface definitions
+├── runtime-api/       # Runtime API implementations
+└── src/              
+    ├── pallet/        # Core pallet implementation
+    ├── benchmarking/  # Performance benchmarks
+    ├── migrations/    # Storage migrations
+    └── slashing/      # Slashing mechanisms
+```
 
-### Scenarios
+## Core Concepts
 
-#### Staking
+### Staking Roles
 
-Almost any interaction with the Staking module requires a process of _**bonding**_ (also known
-as being a _staker_). To become *bonded*, a fund-holding account known as the _stash account_,
-which holds some or all of the funds that become frozen in place as part of the staking process,
-is paired with an active **controller** account, which issues instructions on how they shall be
-used.
+1. **Validators**
+  - Run nodes to maintain network
+  - Generate energy revenue
+  - Earn rewards based on performance and reputation
+  - Must maintain minimum reputation tier
 
-An account pair can become bonded using the [`bond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.bond) call.
+2. **Cooperators**
+  - Support validators through stake delegation
+  - Share in rewards and penalties
+  - Must meet minimum bond requirements
 
-Stash accounts can change their associated controller using the
-[`set_controller`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_controller) call.
+### Energy Generation
 
-There are three possible roles that any staked account pair can be in: `Validator`, `Nominator`
-and `Idle` (defined in [`StakerStatus`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.StakerStatus.html)). There are three
-corresponding instructions to change between roles, namely:
-[`validate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.validate),
-[`nominate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.nominate), and [`chill`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.chill).
-
-#### Validating
-
-A **validator** takes the role of either validating blocks or ensuring their finality,
-maintaining the veracity of the network. A validator should avoid both any sort of malicious
-misbehavior and going offline. Bonded accounts that state interest in being a validator do NOT
-get immediately chosen as a validator. Instead, they are declared as a _candidate_ and they
-_might_ get elected at the _next era_ as a validator. The result of the election is determined
-by nominators and their votes.
-
-An account can become a validator candidate via the
-[`validate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.validate) call.
-
-#### Nomination
-
-A **nominator** does not take any _direct_ role in maintaining the network, instead, it votes on
-a set of validators  to be elected. Once interest in nomination is stated by an account, it
-takes effect at the next election round. The funds in the nominator's stash account indicate the
-_weight_ of its vote. Both the rewards and any punishment that a validator earns are shared
-between the validator and its nominators. This rule incentivizes the nominators to NOT vote for
-the misbehaving/offline validators as much as possible, simply because the nominators will also
-lose funds if they vote poorly.
-
-An account can become a nominator via the [`nominate`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.nominate) call.
-
-#### Rewards and Slash
-
-The **reward and slashing** procedure is the core of the Staking module, attempting to _embrace
-valid behavior_ while _punishing any misbehavior or lack of availability_.
-
-Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
-`payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-validator as well as its nominators. Only the [`Config::MaxNominatorRewardedPerValidator`]
-biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
-nominator's account.
-
-Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
-determined, a value is deducted from the balance of the validator and all the nominators who
-voted for this validator (values are deducted from the _stash_ account of the slashed entity).
-
-Slashing logic is further described in the documentation of the `slashing` module.
-
-Similar to slashing, rewards are also shared among a validator and its associated nominators.
-Yet, the reward funds are not always transferred to the stash account and can be configured. See
-[Reward Calculation](https://docs.rs/pallet-staking/latest/pallet_staking/#reward-calculation) for more details.
-
-#### Chilling
-
-Finally, any of the roles above can choose to step back temporarily and just chill for a while.
-This means that if they are a nominator, they will not be considered as voters anymore and if
-they are validators, they will no longer be a candidate for the next election.
-
-An account can step back via the [`chill`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.chill) call.
-
-### Session managing
-
-The module implement the trait `SessionManager`. Which is the only API to query new validator
-set and allowing these validator set to be rewarded once their era is ended.
-
-## Interface
-
-### Dispatchable Functions
-
-The dispatchable functions of the Staking module enable the steps needed for entities to accept
-and change their role, alongside some helper functions to get/set the metadata of the module.
-
-### Public Functions
-
-The Staking module contains many public storage items and (im)mutable functions.
-
-## Usage
-
-### Example: Rewarding a validator by id.
+The pallet tracks energy generation through a unique energy-per-stake currency rate:
 
 ```rust
-use pallet_staking::{self as staking};
-
-#[frame_support::pallet]
-pub mod pallet {
-    use super::*;
-    use frame_support::pallet_prelude::*;
-    use frame_system::pallet_prelude::*;
-
-    #[pallet::pallet]
-    pub struct Pallet<T>(_);
-
-    #[pallet::config]
-    pub trait Config: frame_system::Config + staking::Config {}
-
-    #[pallet::call]
-    impl<T: Config> Pallet<T> {
-        /// Reward a validator.
-        #[pallet::weight(0)]
-        pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
-            let reported = ensure_signed(origin)?;
-            <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10)]);
-            Ok(())
-        }
-    }
+pub trait EnergyRateCalculator<Stake, Energy> {
+    fn calculate_energy_rate(
+        total_staked: Stake,
+        total_issuance: Energy,
+        core_nodes_num: u32,
+        battery_slot_cap: Energy,
+    ) -> Energy;
 }
 ```
 
-## Implementation Details
+### Reputation Integration
 
-### Era payout
+Validators and cooperators are evaluated based on:
+- Block authoring performance
+- Network participation
+- Energy generation consistency
+- Slashing history
 
-The era payout is computed using yearly inflation curve defined at
-[`T::RewardCurve`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardCurve) as such:
+## Configuration
 
-```nocompile
-staker_payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year
+### Key Types
+
+```rust
+pub trait Config: frame_system::Config + pallet_assets::Config + pallet_reputation::Config {
+    type StakeCurrency: LockableCurrency<Self::AccountId>;
+    type StakeBalance: AtLeast32BitUnsigned;
+    type EnergyAssetId: Get<Self::AssetId>;
+    type BatterySlotCapacity: Get<EnergyOf<Self>>;
+    // ... additional configuration types
+}
 ```
-This payout is used to reward stakers as defined in next section
 
-```nocompile
-remaining_payout = max_yearly_inflation * total_tokens / era_per_year - staker_payout
+### Constants
+
+- `SessionsPerEra`: Number of sessions per era
+- `BondingDuration`: Lock period for staked funds
+- `MaxCooperations`: Maximum cooperations per cooperator
+- `HistoryDepth`: Number of eras to keep in history
+
+## Usage
+
+### Becoming a Validator
+
+```rust
+// Bond your stake
+pallet_energy_generation::Pallet::<T>::bond(
+    origin,
+    controller,
+    value,
+    payee
+)?;
+
+// Set validator preferences
+pallet_energy_generation::Pallet::<T>::validate(
+    origin,
+    ValidatorPrefs {
+        commission: Perbill::from_percent(5),
+        collaborative: true,
+        ..Default::default()
+    }
+)?;
 ```
-The remaining reward is send to the configurable end-point
-[`T::RewardRemainder`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.RewardRemainder).
 
-### Reward Calculation
+### Cooperating
 
-Validators and nominators are rewarded at the end of each era. The total reward of an era is
-calculated using the era duration and the staking rate (the total amount of tokens staked by
-nominators and validators, divided by the total token supply). It aims to incentivize toward a
-defined staking rate. The full specification can be found
-[here](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model).
+```rust
+// Bond stake first
+pallet_energy_generation::Pallet::<T>::bond(
+    origin,
+    controller,
+    value,
+    payee
+)?;
 
-Total reward is split among validators and their nominators depending on the number of points
-they received during the era. Points are added to a validator using
-[`reward_by_ids`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.reward_by_ids) or
-[`reward_by_indices`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.reward_by_indices).
+// Choose validators to support
+pallet_energy_generation::Pallet::<T>::cooperate(
+    origin,
+    vec![(validator_stash, stake_amount)]
+)?;
+```
 
-[`Module`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Module.html) implements
-[`pallet_authorship::EventHandler`](https://docs.rs/pallet-authorship/latest/pallet_authorship/trait.EventHandler.html) to add reward
-points to block producer and block producer of referenced uncles.
+## Rewards
 
-The validator and its nominator split their reward as following:
+Rewards are calculated based on:
+1. Energy generation rate
+2. Reputation tier multipliers
+3. Validator commission
+4. Cooperation distribution
 
-The validator can declare an amount, named
-[`commission`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.ValidatorPrefs.html#structfield.commission), that does not get shared
-with the nominators at each reward payout through its
-[`ValidatorPrefs`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.ValidatorPrefs.html). This value gets deducted from the total reward
-that is paid to the validator and its nominators. The remaining portion is split among the
-validator and all of the nominators that nominated the validator, proportional to the value
-staked behind this validator (_i.e._ dividing the
-[`own`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.own) or
-[`others`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.others) by
-[`total`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html#structfield.total) in [`Exposure`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Exposure.html)).
+The reward formula incorporates:
+```rust
+let reward = base_reward
+    .saturating_mul(energy_rate)
+    .saturating_mul(reputation_multiplier);
+```
 
-All entities who receive a reward have the option to choose their reward destination through the
-[`Payee`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.Payee.html) storage item (see
-[`set_payee`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.set_payee)), to be one of the following:
+## Slashing
 
-- Controller account, (obviously) not increasing the staked value.
-- Stash account, not increasing the staked value.
-- Stash account, also increasing the staked value.
+Slashing occurs for:
+- Offline validators
+- Equivocation
+- Energy generation manipulation
+- Reputation decay
 
-### Additional Fund Management Operations
+Slashed amounts affect both validators and cooperators proportionally.
 
-Any funds already placed into stash can be the target of the following operations:
+## RPC Interface
 
-The controller account can free a portion (or all) of the funds using the
-[`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond) call. Note that the funds are not immediately
-accessible. Instead, a duration denoted by [`BondingDuration`](https://docs.rs/pallet-staking/latest/pallet_staking/trait.Config.html#associatedtype.BondingDuration)
-(in number of eras) must pass until the funds can actually be removed. Once the
-`BondingDuration` is over, the [`withdraw_unbonded`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.withdraw_unbonded)
-call can be used to actually withdraw the funds.
+The pallet exposes RPC methods for querying:
+- Current energy per stake currency rate
+- Reputation tier additional rewards
+- Validator and cooperator statuses
 
-Note that there is a limitation to the number of fund-chunks that can be scheduled to be
-unlocked in the future via [`unbond`](https://docs.rs/pallet-staking/latest/pallet_staking/enum.Call.html#variant.unbond). In case this maximum
-(`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
-call to `withdraw_unbonded` to remove some of the chunks.
+Example:
+```rust
+#[rpc(server, client)]
+pub trait EnergyGenerationApi<BlockHash> {
+    #[method(name = "energyGeneration_currentEnergyPerStakeCurrency")]
+    fn current_energy_per_stake_currency(&self, at: Option<BlockHash>) -> RpcResult<u128>;
+}
+```
 
-### Election Algorithm
+## Testing
 
-The current election algorithm is implemented based on Phragmén. The reference implementation
-can be found [here](https://github.com/w3f/consensus/tree/master/NPoS).
+Run the test suite:
+```bash
+cargo test --package pallet-energy-generation
+```
 
-The election algorithm, aside from electing the validators with the most stake value and votes,
-tries to divide the nominator votes among candidates in an equal manner. To further assure this,
-an optional post-processing can be applied that iteratively normalizes the nominator staked
-values until the total difference among votes of a particular nominator are less than a
-threshold.
+Run benchmarks:
+```bash
+cargo test --package pallet-energy-generation --features runtime-benchmarks
+```
 
-## GenesisConfig
+## Security Considerations
 
-The Staking module depends on the [`GenesisConfig`](https://docs.rs/pallet-staking/latest/pallet_staking/struct.GenesisConfig.html). The
-`GenesisConfig` is optional and allow to set some initial stakers.
+1. **Reputation Verification**
+  - All reputation changes are verified through multiple validators
+  - Reputation cannot be manipulated through stake size alone
 
-## Related Modules
+2. **Energy Rate Protection**
+  - Rates are calculated using verifiable on-chain data
+  - Protected against manipulation through minimum/maximum bounds
 
-- [Balances](https://docs.rs/pallet-balances/latest/pallet_balances/): Used to manage values at stake.
-- [Session](https://docs.rs/pallet-session/latest/pallet_session/): Used to manage sessions. Also, a list of new
-  validators is stored in the Session module's `Validators` at the end of each era.
+3. **Slashing Safety**
+  - Gradual slashing with warning mechanisms
+  - Protected against mass-exit attacks
 
-License: Apache-2.0
+## Development
+
+### Prerequisites
+- Rust 1.70+
+- Substrate 4.0.0+
+- `wasm32-unknown-unknown` target
+
+### Building
+```bash
+cargo build --release
+```
+
+### Contributing
+1. Fork the repository
+2. Create your feature branch
+3. Commit your changes
+4. Push to the branch
+5. Create a Pull Request
+
+## License
+
+Licensed under Apache 2.0 - see [LICENSE](LICENSE)
