@@ -1,8 +1,8 @@
 [package]
 name = "pallet-privileges"
 version = "0.1.0"
-authors = ["Innowise FinTech Team"]
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
 readme = "README.md"
 
 [package.metadata.docs.rs]
@@ -38,7 +38,6 @@ pallet-assets = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-claiming = { workspace = true }
 pallet-session = { workspace = true }
-orml-traits = { workspace = true }
 parity-scale-codec = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-reputation = { workspace = true }

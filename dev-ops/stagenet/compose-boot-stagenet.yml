@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   power_plant:
-    image: cdivtrs/power-plant:latest
+    image: cdivtrs/power-plant:mainnet-latest
     container_name: power-plant
     restart: always
     volumes:
@@ -15,13 +15,12 @@ services:
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
-      --node-key 89454e3f71b525ba73235a99ffe3ca59610f276035bb553601902a963502f508
+      --node-key ${NODE_KEY}
       --validator
       --prometheus-external
       --rpc-cors all
       --blocks-pruning 2048
-      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 1"
-      --beefy
+      --sync warp
 
     ports:
       - "0.0.0.0:30333:30333/tcp"

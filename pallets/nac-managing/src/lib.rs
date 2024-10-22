@@ -257,7 +257,8 @@ pub mod pallet {
                 Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
 
                 // Get collection Id.
-                let collection_id: T::CollectionId = T::CollectionId::initial_value();
+                let collection_id: T::CollectionId =
+                    T::CollectionId::initial_value().unwrap_or_default();
 
                 for (n, (account, level)) in self.accounts.iter().enumerate() {
                     Pallet::<T>::do_mint((n as u32).into(), account.clone())
@@ -361,7 +362,7 @@ impl<T: Config> Pallet<T> {
             let item_id = key;
             // Get NAC by NFT attribute key.
             let nac_level =
-                T::Nfts::system_attribute(&collection_id, &item_id, &NAC_LEVEL_ATTRIBUTE_KEY);
+                T::Nfts::system_attribute(&collection_id, Some(&item_id), &NAC_LEVEL_ATTRIBUTE_KEY);
 
             return match nac_level {
                 Some(bytes) => Some((bytes[0], item_id)),
@@ -418,7 +419,7 @@ impl<T: Config> Pallet<T> {
         if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account).next() {
             let item_id = key;
             let vipp_status_exist =
-                T::Nfts::system_attribute(&collection_id, &item_id, &VIPP_STATUS_EXIST);
+                T::Nfts::system_attribute(&collection_id, Some(&item_id), &VIPP_STATUS_EXIST);
 
             return match vipp_status_exist {
                 Some(_) => None,
@@ -444,8 +445,11 @@ impl<T: Config> Pallet<T> {
         if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account_id).next() {
             let item_id = key;
             // Get claim amount by NFT attribute key.
-            let claim_balance =
-                T::Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY);
+            let claim_balance = T::Nfts::system_attribute(
+                &collection_id,
+                Some(&item_id),
+                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            );
 
             return match claim_balance {
                 Some(bytes) => match T::Balance::decode(&mut bytes.as_slice()) {
@@ -497,9 +501,11 @@ impl<T: Config> Pallet<T> {
         for key in T::Nfts::owned_in_collection(&collection_id, account) {
             let item_id = key;
 
-            if let Some(claim_value) =
-                T::Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-            {
+            if let Some(claim_value) = T::Nfts::system_attribute(
+                &collection_id,
+                Some(&item_id),
+                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            ) {
                 match lowest_claim_value {
                     Some((min_claim, _)) if claim_value < min_claim => {
                         lowest_claim_value = Some((claim_value, item_id))
@@ -553,7 +559,7 @@ impl<T: Config> Pallet<T> {
             .ok_or(Error::<T>::NftNotFound)?;
 
         let claimed_raw =
-            T::Nfts::system_attribute(&collection, &item, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
+            T::Nfts::system_attribute(&collection, Some(&item), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
                 .unwrap_or(vec![]);
         let currently_claimed =
             T::Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(T::Balance::zero());
@@ -576,9 +582,11 @@ impl<T: Config> Pallet<T> {
         for key in T::Nfts::owned_in_collection(&collection_id, account) {
             let item_id = key;
 
-            if let Some(claim_value_bytes) =
-                T::Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-            {
+            if let Some(claim_value_bytes) = T::Nfts::system_attribute(
+                &collection_id,
+                Some(&item_id),
+                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            ) {
                 if let Ok(claim_value) = T::Balance::decode(&mut &claim_value_bytes[..]) {
                     total_sum += claim_value;
                 }
@@ -625,7 +633,7 @@ where
             .ok_or(Error::<T>::NftNotFound)?;
 
         let claimed_raw =
-            T::Nfts::system_attribute(&collection, &item, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
+            T::Nfts::system_attribute(&collection, Some(&item), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
                 .unwrap_or(vec![]);
         let currently_claimed =
             Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(Balance::zero());

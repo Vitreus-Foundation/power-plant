@@ -40,7 +40,7 @@ pub struct CallRequest {
     pub transaction_type: Option<U256>,
 }
 
-#[derive(Encode, Decode, TypeInfo)]
+#[derive(Copy, Clone, Encode, Decode, TypeInfo)]
 #[cfg_attr(feature = "std", derive(Debug, Serialize, Deserialize))]
 pub struct FeeDetails<Balance> {
     pub vtrs: Balance,

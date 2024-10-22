@@ -5,7 +5,7 @@
 use crate::{self as pallet_energy_generation, *};
 use frame_support::weights::Weight;
 use frame_support::{
-    assert_ok, ord_parameter_types, parameter_types,
+    assert_ok, derive_impl, ord_parameter_types, parameter_types,
     storage::StorageValue,
     traits::{
         AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Currency, EitherOfDiverse,
@@ -14,7 +14,6 @@ use frame_support::{
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use orml_traits::GetByKey;
 use pallet_reputation::{
     ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_BLOCK,
 };
@@ -23,10 +22,10 @@ use sp_core::H256;
 use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{Header, TestSignature, UintAuthorityId},
-    traits::{IdentifyAccount, IdentityLookup, Verify, Zero},
+    traits::{Dispatchable, IdentifyAccount, IdentityLookup, Verify, Zero},
     BuildStorage, MultiSignature, Percent,
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails, OnOffenceHandler};
+use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
@@ -78,15 +77,15 @@ type Block = frame_system::mocking::MockBlock<Test>;
 
 frame_support::construct_runtime!(
     pub enum Test {
-        Assets: pallet_assets,
-        Authorship: pallet_authorship,
-        Balances: pallet_balances,
-        Historical: pallet_session::historical,
-        ReputationPallet: pallet_reputation,
-        Session: pallet_session,
-        PowerPlant: pallet_energy_generation,
         System: frame_system,
+        Authorship: pallet_authorship,
         Timestamp: pallet_timestamp,
+        Balances: pallet_balances,
+        Assets: pallet_assets,
+        ReputationPallet: pallet_reputation,
+        PowerPlant: pallet_energy_generation,
+        Session: pallet_session,
+        Historical: pallet_session::historical,
     }
 );
 
@@ -109,6 +108,7 @@ parameter_types! {
     pub static Offset: BlockNumber = 0;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type BaseCallFilter = frame_support::traits::Everything;
     type BlockWeights = ();
@@ -135,6 +135,7 @@ impl frame_system::Config for Test {
     type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type MaxLocks = frame_support::traits::ConstU32<1024>;
     type MaxReserves = ();
@@ -147,7 +148,6 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ();
-    type MaxHolds = ();
     type RuntimeHoldReason = ();
 }
 
@@ -283,6 +283,7 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
         _pool_account: &AccountId,
         slashed_bonded: Balance,
         slashed_chunks: &BTreeMap<EraIndex, Balance>,
+        _slashed_total: Balance,
     ) {
         LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
     }
@@ -290,8 +291,8 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
 
 pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
 
-impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
-    fn get(k: &ReputationTier) -> Perbill {
+impl Convert<&ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
+    fn convert(k: &ReputationTier) -> Perbill {
         match k {
             ReputationTier::Vanguard(2) => Perbill::from_percent(2),
             ReputationTier::Vanguard(3) => Perbill::from_percent(4),
@@ -313,6 +314,8 @@ impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalP
     }
 }
 
+pub(crate) const DISABLING_LIMIT_FACTOR: usize = 3;
+
 impl pallet_energy_generation::Config for Test {
     type AdminOrigin = EnsureOneOrRoot;
     type BatterySlotCapacity = BatterySlotCapacity;
@@ -326,8 +329,9 @@ impl pallet_energy_generation::Config for Test {
     type MaxCooperatorRewardedPerValidator = ConstU32<64>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
-    type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type EventListeners = EventListenerMock;
+    type DisablingStrategy =
+        pallet_energy_generation::UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR>;
     type ReputationTierEnergyRewardAdditionalPercentMapping =
         ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = MockReward;
@@ -349,7 +353,7 @@ impl pallet_energy_generation::Config for Test {
 // Implement the trait for a specific type
 pub struct TestVipMembershipHandler;
 
-impl OnVipMembershipHandler<u64, Weight> for TestVipMembershipHandler {
+impl OnVipMembershipHandler<u64, Weight, Perbill> for TestVipMembershipHandler {
     fn change_quarter_info() -> Weight {
         Weight::zero()
     }
@@ -360,6 +364,10 @@ impl OnVipMembershipHandler<u64, Weight> for TestVipMembershipHandler {
 
     fn update_active_stake(_account: &u64) -> Weight {
         Weight::zero()
+    }
+
+    fn get_tax_percent(_account: &u64) -> Perbill {
+        Perbill::default()
     }
 }
 
@@ -525,7 +533,10 @@ impl ExtBuilder {
                 (21, collab_validator_rep),
                 // simple validators
                 (31, validator_reputation.clone()),
-                (41, validator_reputation),
+                (41, validator_reputation.clone()),
+                (51, validator_reputation.clone()),
+                (201, validator_reputation.clone()),
+                (202, validator_reputation),
             ],
         }
         .assimilate_storage(&mut storage);
@@ -548,6 +559,8 @@ impl ExtBuilder {
                 (31, self.balance_factor * 2000),
                 (41, self.balance_factor * 2000),
                 (51, self.balance_factor * 2000),
+                (201, self.balance_factor * 2000),
+                (202, self.balance_factor * 2000),
                 // optional cooperator
                 (100, self.balance_factor * 2000),
                 (101, self.balance_factor * 2000),
@@ -575,6 +588,9 @@ impl ExtBuilder {
                 (31, 30, self.balance_factor * 500, StakerStatus::Validator),
                 // an idle validator
                 (41, 40, self.balance_factor * 1000, StakerStatus::Idle),
+                (51, 50, self.balance_factor * 1000, StakerStatus::Idle),
+                (201, 201, self.balance_factor * 1000, StakerStatus::Idle),
+                (202, 202, self.balance_factor * 1000, StakerStatus::Idle),
             ];
             // optionally add a cooperator
             match self.cooperate {
@@ -841,13 +857,11 @@ pub(crate) fn on_offence_in_era(
     >],
     slash_fraction: &[Perbill],
     era: EraIndex,
-    disable_strategy: DisableStrategy,
 ) {
     let bonded_eras = crate::BondedEras::<Test>::get();
     for &(bonded_era, start_session) in bonded_eras.iter() {
         if bonded_era == era {
-            let _ =
-                PowerPlant::on_offence(offenders, slash_fraction, start_session, disable_strategy);
+            let _ = PowerPlant::on_offence(offenders, slash_fraction, start_session);
             return;
         } else if bonded_era > era {
             break;
@@ -859,7 +873,6 @@ pub(crate) fn on_offence_in_era(
             offenders,
             slash_fraction,
             PowerPlant::eras_start_session_index(era).unwrap(),
-            disable_strategy,
         );
     } else {
         panic!("cannot slash in era {}", era);
@@ -874,7 +887,7 @@ pub(crate) fn on_offence_now(
     slash_fraction: &[Perbill],
 ) {
     let now = PowerPlant::active_era().unwrap().index;
-    on_offence_in_era(offenders, slash_fraction, now, DisableStrategy::WhenSlashed)
+    on_offence_in_era(offenders, slash_fraction, now)
 }
 
 pub(crate) fn add_slash(who: &AccountId) {

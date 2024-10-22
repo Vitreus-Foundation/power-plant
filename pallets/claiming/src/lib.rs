@@ -158,7 +158,7 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// Tokens was claimed.
+        /// Tokens were claimed.
         Claimed {
             /// To whom the tokens were claimed.
             account_id: T::AccountId,
@@ -166,7 +166,7 @@ pub mod pallet {
             amount: BalanceOf<T>,
         },
 
-        /// Tokens was minted to claim.
+        /// Tokens were minted to claim.
         TokenMintedToClaim(BalanceOf<T>),
     }
 
@@ -409,11 +409,13 @@ mod secp_utils {
     pub fn public(secret: &libsecp256k1::SecretKey) -> libsecp256k1::PublicKey {
         libsecp256k1::PublicKey::from_secret_key(secret)
     }
+
     pub fn eth(secret: &libsecp256k1::SecretKey) -> EthereumAddress {
         let mut res = EthereumAddress::default();
         res.0.copy_from_slice(&keccak_256(&public(secret).serialize()[1..65])[12..]);
         res
     }
+
     pub fn sig<T: Config>(
         secret: &libsecp256k1::SecretKey,
         what: &[u8],

@@ -1,12 +1,13 @@
 use crate as pallet_treasury_extension;
 
+use frame_support::traits::tokens::{PayFromAccount, UnityAssetBalanceConversion};
 use frame_support::PalletId;
 use frame_support::{
-    parameter_types,
+    derive_impl, parameter_types,
     traits::{ConstU128, ConstU32, ConstU64, Everything},
 };
 use frame_system::{EnsureRoot, EnsureRootWithSuccess};
-
+use pallet_treasury::TreasuryAccountId;
 use sp_core::H256;
 
 use sp_runtime::{
@@ -41,6 +42,7 @@ frame_support::construct_runtime!(
     }
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type BaseCallFilter = Everything;
     type BlockWeights = ();
@@ -67,6 +69,7 @@ impl frame_system::Config for Test {
     type MaxConsumers = ConstU32<16>;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type MaxLocks = ConstU32<1024>;
     type MaxReserves = ();
@@ -79,15 +82,12 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ();
-    type MaxHolds = ();
     type RuntimeHoldReason = ();
 }
 
 parameter_types! {
-    pub const ProposalBond: Permill = Permill::from_percent(5);
-    pub const ProposalBondMinimum: Balance = Balance::MIN;
-    pub const ProposalBondMaximum: Balance = Balance::MAX;
     pub const SpendPeriod: BlockNumber = 10;
+    pub const PayoutPeriod: BlockNumber = 5;
     pub const Burn: Permill = Permill::from_percent(1);
     pub const TreasuryPalletId: PalletId = PalletId(TREASURY.to_le_bytes());
 
@@ -104,20 +104,21 @@ parameter_types! {
 impl pallet_treasury::Config for Test {
     type PalletId = TreasuryPalletId;
     type Currency = Balances;
-    type ApproveOrigin = EnsureRoot<AccountId>;
     type RejectOrigin = EnsureRoot<AccountId>;
     type RuntimeEvent = RuntimeEvent;
-    type OnSlash = Treasury;
-    type ProposalBond = ProposalBond;
-    type ProposalBondMinimum = ProposalBondMinimum;
-    type ProposalBondMaximum = ProposalBondMaximum;
     type SpendPeriod = SpendPeriod;
     type Burn = Burn;
     type BurnDestination = ();
     type SpendFunds = (Bounties, TreasuryExtension);
     type MaxApprovals = MaxApprovals;
-    type WeightInfo = ();
     type SpendOrigin = EnsureRootWithSuccess<AccountId, ConstU128<{ Balance::MAX }>>;
+    type AssetKind = ();
+    type Beneficiary = AccountId;
+    type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+    type Paymaster = PayFromAccount<Balances, TreasuryAccountId<Test>>;
+    type BalanceConverter = UnityAssetBalanceConversion;
+    type PayoutPeriod = PayoutPeriod;
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -143,6 +144,7 @@ impl pallet_bounties::Config for Test {
     type ChildBountyManager = ();
     type DataDepositPerByte = DataDepositPerByte;
     type MaximumReasonLength = MaximumReasonLength;
+    type OnSlash = ();
     type WeightInfo = ();
 }
 

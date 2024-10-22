@@ -1,8 +1,8 @@
 [package]
 name = "energy-fee-runtime-api"
 version = "0.1.0"
-edition = "2021"
-authors = ["Innowise FinTech Team"]
+authors.workspace = true
+edition.workspace = true
 
 [dependencies]
 serde = { workspace = true }

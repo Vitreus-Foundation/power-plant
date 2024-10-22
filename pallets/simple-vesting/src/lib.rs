@@ -19,8 +19,6 @@ use sp_std::vec::Vec;
 
 pub use pallet::*;
 
-mod migration;
-
 #[cfg(test)]
 mod mock;
 
@@ -191,15 +189,6 @@ pub mod pallet {
         AlreadyVesting,
         /// Failed to create a new schedule because some parameter was invalid.
         InvalidScheduleParams,
-    }
-
-    #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
-        fn on_runtime_upgrade() -> Weight {
-            let mut weight = Weight::zero();
-            weight += migration::migrate_to_v1::<T>();
-            weight
-        }
     }
 
     #[pallet::call]

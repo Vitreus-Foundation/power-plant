@@ -22,6 +22,7 @@ use sp_runtime::{
     transaction_validity::{InvalidTransaction, TransactionValidityError},
     DispatchError, Perbill, Perquintill,
 };
+use sp_std::boxed::Box;
 
 #[cfg(test)]
 pub(crate) mod mock;
@@ -35,7 +36,8 @@ pub mod benchmarking;
 pub mod extension;
 pub mod traits;
 
-pub(crate) type BalanceOf<T> = <T as pallet_asset_rate::Config>::Balance;
+pub(crate) type BalanceOf<T> =
+    <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance;
 pub(crate) type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 pub(crate) type NegativeImbalanceOf<T> =
     <<T as Config>::MainTokenBalanced as Currency<AccountIdOf<T>>>::NegativeImbalance;
@@ -114,7 +116,7 @@ pub mod pallet {
             BalanceOf<Self>,
         >;
         /// Used for initializing the pallet
-        type EnergyAssetId: Get<Self::AssetId>;
+        type EnergyAssetId: Get<Self::AssetKind>;
         /// Handler for when a fee has been withdrawn
         type OnWithdrawFee: OnWithdrawFeeHandler<Self::AccountId>;
 
@@ -179,7 +181,7 @@ pub mod pallet {
         fn build(&self) {
             let _ = AssetRatePallet::<T>::create(
                 RawOrigin::Root.into(),
-                T::EnergyAssetId::get(),
+                Box::new(T::EnergyAssetId::get()),
                 self.initial_energy_rate,
             );
         }
