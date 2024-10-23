@@ -5,7 +5,7 @@
     "Custom": "Stagenet"
   },
   "bootNodes": [
-    "/ip4/45.77.147.229/tcp/30333/p2p/12D3KooWKXt45GhWobDEzM9hP62JaYgNiZUvFTJ2HARBE2o5fV13"
+    "/ip4/45.77.147.229/tcp/30333/p2p/12D3KooWConBK7xN5BJycV2ZiupKHH6x8MfzPr3E2mJrVoYAk3XP"
   ],
   "telemetryEndpoints": [
      ["wss://telemetry-dev.compliq.io/submit/", 1]
