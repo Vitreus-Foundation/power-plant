@@ -15,42 +15,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Substrate Asset Conversion pallet
+//! # Asset Conversion (AMM) Pallet
 //!
-//! Substrate Asset Conversion pallet based on the [Uniswap V2](https://github.com/Uniswap/v2-core) logic.
+//! A Substrate implementation of an Automated Market Maker (AMM) based on Uniswap V2 mechanics.
 //!
-//! ## Overview
+//! ## Core Features
 //!
-//! This pallet allows you to:
+//! ### Pool Management
+//! - Create liquidity pools for asset pairs
+//! - Add/remove liquidity with slippage protection
+//! - LP token minting/burning
+//! - Pool fee collection
+//! - Minimum liquidity requirements
 //!
-//!  - [create a liquidity pool](`Pallet::create_pool()`) for 2 assets
-//!  - [provide the liquidity](`Pallet::add_liquidity()`) and receive back an LP token
-//!  - [exchange the LP token back to assets](`Pallet::remove_liquidity()`)
-//!  - [swap a specific amount of assets for another](`Pallet::swap_exact_tokens_for_tokens()`) if
-//!    there is a pool created, or
-//!  - [swap some assets for a specific amount of
-//!    another](`Pallet::swap_tokens_for_exact_tokens()`).
-//!  - [query for an exchange price](`AssetConversionApi::quote_price_exact_tokens_for_tokens`) via
-//!    a runtime call endpoint
-//!  - [query the size of a liquidity pool](`AssetConversionApi::get_reserves`) via a runtime api
-//!    endpoint.
+//! ### Trading Functions
+//! - Exact input swaps
+//! - Exact output swaps
+//! - Multi-hop routing
+//! - Price quoting
+//! - Native asset integration
 //!
-//! The `quote_price_exact_tokens_for_tokens` and `quote_price_tokens_for_exact_tokens` functions
-//! both take a path parameter of the route to take. If you want to swap from native asset to
-//! non-native asset 1, you would pass in a path of `[DOT, 1]` or `[1, DOT]`. If you want to swap
-//! from non-native asset 1 to non-native asset 2, you would pass in a path of `[1, DOT, 2]`.
+//! ### Security Features
+//! - Slippage protection
+//! - Minimum liquidity requirements
+//! - Pool setup fees
+//! - Withdrawal fees
+//! - Keep-alive checks
 //!
-//! (For an example of configuring this pallet to use `MultiLocation` as an asset id, see the
-//! cumulus repo).
+//! ## Technical Design
 //!
-//! Here is an example `state_call` that asks for a quote of a pool of native versus asset 1:
+//! ### Formula Implementation
+//! Uses constant product formula (x * y = k) for:
+//! - Price calculation
+//! - Liquidity provision
+//! - Swap execution
 //!
-//! ```text
-//! curl -sS -H "Content-Type: application/json" -d \
-//! '{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["AssetConversionApi_quote_price_tokens_for_exact_tokens", "0x0101000000000000000000000011000000000000000000"]}' \
-//! http://localhost:9933/
-//! ```
-//! (This can be run against the kitchen sync node in the `node` folder of this repo.)
+//! ### Asset Handling
+//! - Supports both native and non-native assets
+//! - Multi-asset pool configurations
+//! - Automatic LP token management
+//!
+//! ### Runtime APIs
+//! - Pool reserve queries
+//! - Price quotes for swaps
+//! - Path-based routing support
+//!
+//! ## Configuration
+//! Key parameters include:
+//! - LP fees
+//! - Pool setup costs
+//! - Withdrawal fees
+//! - Min liquidity thresholds
+//! - Max swap path length
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![allow(clippy::result_unit_err, clippy::too_many_arguments)]

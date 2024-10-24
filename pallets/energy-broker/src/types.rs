@@ -15,6 +15,42 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! # Asset Conversion Types and Formulas
+//!
+//! Core type definitions and mathematical formulas for AMM operations.
+//!
+//! ## Key Components
+//!
+//! ### Asset Identification
+//! - `PoolIdOf`: Pool identifier using asset pair
+//! - `PoolInfo`: LP token tracking for pools
+//! - `NativeOrAssetId`: Enum for native/non-native assets
+//! - `MultiAssetIdConverter`: Asset type conversion traits
+//!
+//! ### Price Calculation
+//! - `Formula` trait: Core AMM math interface
+//! - `ConstantSum`: Fixed-rate conversion implementation
+//! - Liquidity calculations
+//! - Swap amount computation
+//! - Fee handling
+//!
+//! ### Key Operations
+//! - LP token amount calculation
+//! - Optimal liquidity determination
+//! - Input/output amount computation
+//! - Price quotes with/without fees
+//! - Asset normalization
+//!
+//! ## Safety Features
+//! - Overflow protection
+//! - Type-safe asset conversions
+//! - Error propagation
+//! - Ordering guarantees for pool pairs
+//! - Minimum amount validation
+//!
+//! This module provides the mathematical foundation and type safety for AMM operations while
+//! maintaining precision and preventing numerical errors.
+//!
 use super::*;
 use core::marker::PhantomData;
 use frame_support::traits::Get;

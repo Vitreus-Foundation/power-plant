@@ -1,13 +1,13 @@
-# Vitreus Power Plant 🌿⚡
+# Vitreus - Layer 0 Blockchain Ecosystem🌿⚡
 
-A next-generation Layer 0 blockchain platform focused on decentralized energy trading and management, built using Substrate and featuring comprehensive EVM compatibility.
+Vitreus is a  next-generation Layer 0 blockchain platform focused on decentralized energy trading and management, built using Substrate and featuring comprehensive EVM compatibility.
 
 [![Substrate version](https://img.shields.io/badge/Substrate-4.0.0-brightgreen?logo=Parity%20Substrate)](https://substrate.io)
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
 
 ## Overview
 
-Vitreus is a sophisticated blockchain infrastructure designed to revolutionize energy trading and management. Built on Substrate with full EVM compatibility, it combines traditional blockchain capabilities with specialized energy-focused features.
+Vitreus is a sophisticated blockchain ecosystem designed to revolutionize energy trading and management. Built on Substrate with full EVM compatibility, it combines traditional blockchain capabilities with specialized energy-focused features.
 
 ### Core Features
 

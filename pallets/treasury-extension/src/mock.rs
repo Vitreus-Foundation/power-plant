@@ -1,3 +1,34 @@
+//! Mock Runtime for Treasury Pallet Extension Testing
+//!
+//! This module provides a mock runtime environment specifically for testing the Treasury pallet extension.
+//! It sets up necessary configurations, types, and constants required to simulate a blockchain environment for unit testing purposes.
+//!
+//! # Features
+//! - Defines a mock runtime using `construct_runtime!` to include core components like System and the Treasury pallet extension.
+//! - Configures essential runtime elements such as `PalletId`, Treasury-specific accounts, and balance conversions.
+//! - Provides constants like `VTRS_INIT` to simulate initial balances and setup scenarios for comprehensive testing.
+//!
+//! # Structure
+//! - Sets up the `Test` runtime that includes both the System pallet and the Treasury extension.
+//! - Defines key type aliases and parameter types, ensuring the mock runtime is compatible with the Treasury pallet.
+//! - Uses `BlakeTwo256` for hashing and `IdentityLookup` for account identity resolution.
+//!
+//! # Usage
+//! - Import this mock runtime in your unit tests to validate the functionality of the Treasury pallet extension.
+//! - Write test cases that target different treasury-related operations, including fund transfers, balance checks, and governance interactions.
+//! - Utilize constants like `VTRS_INIT` for setting up consistent initial state scenarios.
+//!
+//! # Dependencies
+//! - Uses `frame_support` and `frame_system` for fundamental blockchain logic and utilities.
+//! - Relies on `sp_runtime` and `sp_core` for runtime traits, hashing, and other core functionalities.
+//! - Includes Treasury-specific traits like `PayFromAccount` and `UnityAssetBalanceConversion` for enhanced fund handling capabilities.
+//!
+//! # Important Notes
+//! - The mock runtime is designed for testing only and should not be used in production environments.
+//! - It allows developers to simulate various scenarios and validate treasury logic in a controlled environment.
+//! - Expand the mock setup as needed to accommodate more advanced features or additional pallets that interact with the Treasury.
+
+
 use crate as pallet_treasury_extension;
 
 use frame_support::traits::tokens::{PayFromAccount, UnityAssetBalanceConversion};

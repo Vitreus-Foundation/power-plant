@@ -1,4 +1,56 @@
-//! Tests for the module.
+//! Energy Fee Pallet Test Suite
+//!
+//! Comprehensive test coverage for the Energy Fee pallet's functionality, including fee
+//! calculation, token exchange, threshold management, and EVM integration.
+//!
+//! # Test Categories
+//!
+//! ## Standard Fee Management
+//! - `withdraw_fee_with_stock_coefficients_works`: Base fee withdrawal functionality
+//! - `withdraw_fee_with_custom_coefficients_works`: Custom fee calculation paths
+//! - `update_base_fee_works`: Base fee modification tests
+//!
+//! ## EVM Integration
+//! - `withdraw_zero_fee_during_evm_extrinsic_call_works`: EVM zero-fee scenarios
+//! - `evm_withdraw_fee_works`: EVM fee withdrawal functionality
+//! - `vtrs_exchange_during_withdraw_evm_fee_works`: Token exchange in EVM context
+//! - `fee_multiplier_works_for_evm`: EVM fee multiplier functionality
+//!
+//! ## Token Exchange
+//! - `vtrs_exchange_during_withdraw_fee_with_stock_coefficients_works`: VTRS/VNRG exchange
+//! - `exchange_should_not_withdraw_reserved_balance`: Reserved balance protection
+//!
+//! ## Threshold Management
+//! - `check_burned_energy_threshold_works`: Energy burn limits
+//! - `check_sudo_bypass_burned_energy_threshold_works`: Admin override tests
+//! - `reset_burned_energy_on_init_works`: Energy reset functionality
+//!
+//! ## Fee Multiplier
+//! - `update_upper_fee_multiplier_works`: Fee multiplier configuration
+//! - `fee_multiplier_works`: Dynamic fee adjustment tests
+//!
+//! # Test Constants
+//!
+//! ```rust
+//! const INITIAL_ENERGY_BALANCE: Balance = 1_000_000_000_000;
+//! ```
+//!
+//! # Test Utilities
+//!
+//! The test suite uses the mock runtime defined in `mock.rs` and includes:
+//! - Block weight simulation
+//! - Account balance checking
+//! - Event verification
+//! - Transaction validation
+//!
+//! # Security Testing Notes
+//!
+//! Tests specifically verify:
+//! 1. Proper access control for admin functions
+//! 2. Protection of reserved balances
+//! 3. Correct threshold enforcement
+//! 4. Fee calculation accuracy
+//! 5. Safe token exchange mechanics
 
 use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event, TokenExchange};
 use frame_support::{

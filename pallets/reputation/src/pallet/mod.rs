@@ -1,4 +1,25 @@
-//! Pallet implementation (dispatchables and storages).
+//! Pallet Implementation for Reputation Management
+//!
+//! This module provides the implementation of the Reputation pallet for use in a Substrate-based blockchain.
+//! It includes the dispatchables, storages, and core logic for managing reputation points, reputation records, and reputation tiers.
+//!
+//! # Features
+//! - Defines and manages reputation points and records.
+//! - Provides dispatchable functions to interact with and modify reputation tiers.
+//! - Includes configurable weights for reputation actions.
+//!
+//! # Structure
+//! - `impls.rs`: Contains the core implementation logic for the pallet.
+//! - This file: Defines the pallet using FRAME macros and manages interaction between modules.
+//!
+//! # Dependencies
+//! - Uses FRAME support and system libraries to ensure compatibility with the Substrate runtime.
+//! - Relies on `sp_runtime` for data type definitions.
+//!
+//! # Usage
+//! Import this pallet into your runtime to leverage its functionality for managing user reputation within your blockchain.
+//! Ensure to adjust weights and parameters to match your network's needs.
+
 use crate::weights::*;
 use crate::{ReputationPoint, ReputationRecord, ReputationTier};
 pub use impls::*;

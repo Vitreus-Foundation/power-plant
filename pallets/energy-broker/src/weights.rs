@@ -42,6 +42,38 @@
 // --header=./HEADER-APACHE2
 // --template=./.maintain/frame-weight-template.hbs
 
+//! # Asset Conversion Weight Configuration
+//!
+//! Auto-generated weights for the asset conversion pallet's extrinsics, based on benchmarking.
+//!
+//! ## Core Operations and Weights
+//!
+//! ### Pool Management
+//! - Create Pool: ~132.5M ps, 8 reads, 8 writes
+//! - Add Liquidity: ~157.9M ps, 8 reads, 7 writes
+//! - Remove Liquidity: ~143.6M ps, 7 reads, 6 writes
+//!
+//! ### Trading Operations
+//! - Swap Exact Tokens: ~221.6M ps, 10 reads, 10 writes
+//! - Swap For Exact Tokens: ~217.3M ps, 10 reads, 10 writes
+//!
+//! ## Benchmark Details
+//! - Hardware: Intel Xeon CPU @ 2.60GHz
+//! - Steps: 50
+//! - Repeat: 20
+//! - Execution: Wasm Compiled
+//! - DB Cache: 1024MB
+//! - Max Map Size: 1,000,000
+//!
+//! All weights include both computational time (ps) and storage proof sizes.
+//! Storage operations tracked include:
+//! - Pool management
+//! - Asset balances
+//! - Account data
+//! - System parameters
+//!
+//! Weights are critical for proper fee calculation and resource usage.
+
 #![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]

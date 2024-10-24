@@ -1,3 +1,67 @@
+//! Energy Fee Pallet
+//!
+//! A dual-token transaction fee system that uses both native tokens (VTRS) and energy tokens (VNRG)
+//! for transaction fees with dynamic fee adjustments based on network conditions.
+//!
+//! # Overview
+//!
+//! This pallet implements a sophisticated fee mechanism that:
+//! - Supports payment in both VTRS and VNRG tokens
+//! - Dynamically adjusts fees based on block fullness
+//! - Provides automatic token exchange for fee payments
+//! - Manages energy burning thresholds
+//! - Integrates with EVM transaction fee handling
+//!
+//! # Security Notes
+//!
+//! Important security considerations when using this pallet:
+//! 1. Fee burning thresholds protect against network spam and DoS attacks
+//! 2. Block fullness thresholds prevent network congestion
+//! 3. Energy rate manipulation is prevented through controlled exchange mechanisms
+//! 4. Only authorized origins can modify system parameters
+//!
+//! # Fee Calculation
+//!
+//! Fees are calculated based on:
+//! - Base fee amount
+//! - Dynamic multiplier based on block fullness
+//! - Custom fee logic for specific extrinsics
+//! - EVM-specific fee calculations
+//!
+//! # Interface
+//!
+//! Key traits:
+//! - `OnChargeTransaction`: Handles standard transaction fee withdrawal
+//! - `OnChargeEVMTransaction`: Handles EVM transaction fee withdrawal
+//! - `MultiplierUpdate`: Controls fee multiplier adjustments
+//! - `TokenExchange`: Manages VTRS/VNRG exchange for fees
+//!
+//! # Configuration
+//!
+//! Required configuration parameters:
+//! - `ManageOrigin`: Authority allowed to modify pallet parameters
+//! - `GetConstantFee`: Base fee value
+//! - `CustomFee`: Custom fee calculation logic
+//! - `FeeTokenBalanced`: Fee token (VNRG) operations
+//! - `MainTokenBalanced`: Main token (VTRS) operations
+//! - `EnergyExchange`: Token exchange mechanism
+//!
+//! # Examples
+//!
+//! ```rust
+//! # use frame_support::assert_ok;
+//! # use pallet_energy_fee::{Pallet, Config};
+//! # fn example<T: Config>(origin: T::RuntimeOrigin, new_threshold: T::Balance) {
+//! // Update burned energy threshold
+//! assert_ok!(Pallet::<T>::update_burned_energy_threshold(origin, new_threshold));
+//! # }
+//! ```
+//!
+//! # Warning
+//!
+//! Modifying fee parameters can significantly impact network economics and security.
+//! Changes should be carefully considered and gradually implemented.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use crate::extension::CheckEnergyFee;

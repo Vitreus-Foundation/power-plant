@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -15,8 +15,43 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for 'pallet-claiming'.
-
+//! # Test Environment for Claims Pallet
+//!
+//! Provides a mock runtime configuration for testing the claims pallet functionality.
+//!
+//! ## Test Runtime Configuration
+//! The mock environment includes:
+//! - Basic Substrate system configuration
+//! - Balances pallet for token management
+//! - Vesting pallet for schedule handling
+//! - Claims pallet with test parameters
+//!
+//! ## Test Accounts
+//! Provides pre-configured test accounts with corresponding Ethereum keys:
+//! - Alice: Standard account with vesting schedule (50 tokens, 10 per block, starting at block 1)
+//! - Bob: Account without initial claims
+//! - Dave: Account with 200 token claim
+//! - Eve: Account with 300 token claim
+//! - Frank: Account with 400 token claim
+//!
+//! ## Genesis Configuration
+//! Initializes test state with:
+//! - Pre-configured claims for test accounts
+//! - Vesting schedule for Alice
+//! - Standard Substrate system parameters
+//!
+//! ## Usage
+//! ```rust
+//! let mut ext = new_test_ext();
+//! ext.execute_with(|| {
+//!     // Test code here
+//! });
+//! ```
+//!
+//! ## Security Notes
+//! - Uses deterministic key generation for reproducible tests
+//! - Implements basic balance and vesting functionality
+//! - Configures minimal withdrawal restrictions for testing
 use super::secp_utils::eth;
 use crate as pallet_claiming;
 

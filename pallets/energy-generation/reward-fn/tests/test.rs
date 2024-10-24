@@ -15,6 +15,33 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+///
+/// # Script Overview
+///
+/// This Rust script is part of the Substrate framework and is designed to test the precision of the staking reward inflation calculation for different types of `PerThing` precision (e.g., `Perquintill`, `Perbill`, `Percent`). The script includes functions and tests that verify the accuracy of the computed inflation values against expected results based on different parameters.
+///
+/// # Key Functions
+///
+/// - `test_precision<P: PerThing>`: This function tests the precision of the inflation calculation by comparing the computed value against an expected value (`float_i_npos`). It panics if the error exceeds a certain threshold to ensure the precision is within acceptable limits.
+///
+/// - `float_i_npos<P: PerThing>`: This function calculates the expected inflation using floating-point arithmetic. It serves as the reference for comparison in `test_precision`.
+///
+/// - `test_precision_for_minimum_falloff()`: This test function iterates over different stake values with a minimum falloff, using multiple `PerThing` types, to ensure that the precision holds for low falloff values.
+///
+/// - `compute_inflation_works()`: This test function iterates through different combinations of stake, ideal stake, and falloff, to validate the correctness of the computed inflation for each case across multiple `PerThing` types.
+///
+/// # Usage
+///
+/// This script is designed for use in the context of Substrate, typically by blockchain developers who are contributing to or extending the staking pallet. The test functions can be executed to validate the correctness and precision of the staking reward computations under varying conditions.
+///
+/// # Developer Notes
+///
+/// - The script uses the `PerThing` trait from `sp_arithmetic` to handle various levels of precision, such as `Percent`, `Perbill`, `Perquintill`, and `PerU16`.
+/// - Tests are implemented using the `#[test]` attribute to ensure each scenario is validated automatically.
+/// - The functions are designed to handle different ranges of `stake`, `ideal_stake`, and `falloff` values to comprehensively test the accuracy of inflation calculations.
+/// - Ensure that any modifications to the reward calculation logic are thoroughly tested using the provided test cases.
+
+
 use sp_arithmetic::{PerThing, PerU16, Perbill, Percent, Perquintill};
 
 /// This test the precision and panics if error too big error.

@@ -10,6 +10,28 @@
 //! should avoid any mechanism for points movement between accounts, because as you get reputation
 //! per time, you could simply accumulate reputation between different accounts and get <N of
 //! accounts>x points rewards.
+//! Reputation Pallet Library
+//!
+//! This library provides the core functionality for evaluating user behavior within a Substrate-based blockchain.
+//! It defines the structure and logic for rewarding reputation to users and updating their reputation points.
+//!
+//! # Features
+//! - Grants basic reputation rewards to users for every block, promoting positive behavior.
+//! - Includes functions for managing reputation updates across multiple users.
+//! - Offers an efficient mechanism for bulk updates of reputation points, using `Pallet::update_points_for_time`.
+//!
+//! # Structure
+//! - Contains the main entry points for the Reputation pallet, including public-facing functions.
+//! - Defines key traits, storage items, and runtime configuration for the pallet.
+//!
+//! # Usage
+//! - Call `Pallet::update_points_for_time` to perform reputation updates for all users, particularly when time-based changes are required.
+//! - This function is computationally intensive, as it iterates through all accounts, and should therefore be used with caution to avoid frequent execution.
+//!
+//! # Dependencies
+//! - Relies on Substrate FRAME macros and traits to build the pallet structure.
+//! - Uses types like `points` to quantify reputation, which are updated based on user activity and specific conditions.
+
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::all)]

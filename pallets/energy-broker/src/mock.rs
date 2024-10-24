@@ -15,7 +15,45 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test environment for Asset Conversion pallet.
+//! # Asset Conversion Mock Test Environment
+//!
+//! Test configuration and mock runtime for the Asset Conversion (AMM) pallet.
+//!
+//! ## Runtime Configuration
+//!
+//! ### Core Components
+//! - System: Basic substrate framework
+//! - Balances: Native currency handling
+//! - Assets: Non-native token management (Instance1)
+//! - PoolAssets: LP token management (Instance2)
+//! - AssetConversion: Main AMM functionality
+//!
+//! ### Key Parameters
+//! - PalletId: py/ascon
+//! - LP Fee: 2%
+//! - Pool Setup Fee: 100 units
+//! - Min Liquidity: 100 units
+//! - Max Swap Path: 4 hops
+//! - Withdrawal Fee: Configurable (0% default)
+//!
+//! ### Test Accounts
+//! Pre-funded accounts for testing:
+//! - Account 1: 10,000 units
+//! - Account 2: 20,000 units
+//! - Account 3: 30,000 units
+//! - Account 4: 40,000 units
+//!
+//! ### Asset Rates
+//! Implements fixed 1:2 conversion ratio between native/non-native assets for
+//! predictable test scenarios.
+//!
+//! ## Usage
+//! ```rust
+//! let mut ext = new_test_ext();
+//! ext.execute_with(|| {
+//!     // Test code here
+//! });
+//! ```
 
 use super::*;
 use crate as pallet_asset_conversion;

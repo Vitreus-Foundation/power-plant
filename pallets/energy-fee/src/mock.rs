@@ -1,3 +1,62 @@
+//! Mock Runtime Configuration for Energy Fee Pallet Tests
+//!
+//! This module provides a comprehensive test environment for the Energy Fee pallet,
+//! implementing all necessary dependencies and configurations for thorough testing.
+//!
+//! # Test Configuration
+//!
+//! ## Constants
+//! ```rust
+//! const VNRG: AssetId = 1;                    // Energy asset identifier
+//! const VNRG_TO_VTRS_RATE: FixedU128 = ...;   // 10^9 with 18 decimals conversion rate
+//! const VTRS_INITIAL_BALANCE: u128 = ...;     // 2 billion initial balance
+//! ```
+//!
+//! ## Key Components
+//!
+//! * Runtime Configuration
+//!   - Custom currency types (VTRS, VNRG)
+//!   - Asset management system
+//!   - EVM compatibility layer
+//!   - Transaction payment system
+//!
+//! * Test Accounts
+//!   - ALICE: Primary test account and sudo user
+//!   - BOB: Secondary test account
+//!   - FEE_DEST: Fee destination account
+//!   - MAIN_DEST: Main token destination account
+//!
+//! ## Features
+//!
+//! - Dual token system implementation (VTRS/VNRG)
+//! - Custom fee calculation logic
+//! - Asset conversion mechanisms
+//! - Block weight simulation utilities
+//! - EVM compatibility testing
+//!
+//! # Usage Example
+//!
+//! ```rust
+//! # use self::mock::{new_test_ext, Test};
+//! let mut ext = new_test_ext(0);
+//! ext.execute_with(|| {
+//!     // Test code here
+//! });
+//! ```
+//!
+//! # Testing Utilities
+//!
+//! - `new_test_ext(energy_balance)`: Creates a new test externality
+//! - `calculate_block_weight_based_on_threshold()`: Simulates block weight
+//! - Custom implementations for fee burning and recycling
+//!
+//! # Important Notes
+//!
+//! 1. Always use the provided test accounts for consistency
+//! 2. Remember to reset state between tests using `new_test_ext()`
+//! 3. Block weight calculations affect fee adjustments
+//! 4. EVM operations require specific setup consideration
+
 use core::marker::PhantomData;
 
 use crate::traits::{AssetsBalancesConverter, NativeExchange};

@@ -1,3 +1,33 @@
+//! Mock Runtime for Simple Vesting Pallet Testing
+//!
+//! This module provides a mock runtime environment specifically for testing the Simple Vesting pallet.
+//! It sets up the necessary configurations, types, and constants required to simulate a blockchain runtime for unit testing purposes.
+//!
+//! # Features
+//! - Defines a mock runtime using the `construct_runtime!` macro to include core components like System and the Simple Vesting pallet.
+//! - Configures basic runtime types such as `AccountId`, `Balance`, and `Nonce` to simulate account behavior.
+//! - Provides constants like `ALICE`, `BOB`, and `ED` to facilitate common testing scenarios.
+//!
+//! # Structure
+//! - Sets up the `Test` runtime that includes the `System` pallet along with the `SimpleVestingPallet`.
+//! - Defines key type aliases to match the expected types used in the pallet, ensuring compatibility during tests.
+//! - Uses `BlakeTwo256` for hashing and `IdentityLookup` for resolving account identities.
+//!
+//! # Usage
+//! - Import this mock runtime in your unit tests to validate the functionality of the Simple Vesting pallet.
+//! - Write test cases that target specific vesting scenarios, such as account setup, vesting progression, and balance checks.
+//! - Utilize constants like `ALICE` and `BOB` to create consistent test cases.
+//!
+//! # Dependencies
+//! - Uses `frame_support` and `frame_system` for core blockchain logic and support utilities.
+//! - Relies on `sp_runtime` and `sp_core` for runtime traits, hashing, and building storage configurations.
+//!
+//! # Important Notes
+//! - This mock runtime is intended for testing only and should not be used in production environments.
+//! - It allows developers to simulate different scenarios and behaviors, ensuring the vesting logic functions correctly in a controlled setup.
+//! - Expand the mock runtime as needed to include additional pallets or to accommodate more complex testing requirements.
+
+
 use crate as pallet_simple_vesting;
 use frame_support::{
     derive_impl,

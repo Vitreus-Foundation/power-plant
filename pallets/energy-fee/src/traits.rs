@@ -1,3 +1,65 @@
+//! Trait Definitions for Energy Fee Pallet
+//!
+//! This module defines the core traits and conversion mechanisms used for fee calculation,
+//! token exchange, and asset balance conversion in the Energy Fee system.
+//!
+//! # Core Traits
+//!
+//! ## CustomFee
+//! Enables custom fee calculation for specific scenarios:
+//! ```rust
+//! pub trait CustomFee<RuntimeCall, DispatchInfo, Balance, ConstantFee> {
+//!     fn dispatch_info_to_fee(...) -> CallFee<Balance>;
+//!     fn custom_fee() -> Balance;
+//!     fn weight_fee(...) -> Balance;
+//!     fn ethereum_fee() -> Balance;
+//! }
+//! ```
+//!
+//! ## TokenExchange
+//! Manages bi-directional token exchange operations:
+//! ```rust
+//! pub trait TokenExchange<AccountId, SourceToken, TargetToken, SourceTokenRecycleDest, TokenBalance> {
+//!     fn convert_from_input(amount: TokenBalance) -> Result<TokenBalance, DispatchError>;
+//!     fn convert_from_output(amount: TokenBalance) -> Result<TokenBalance, DispatchError>;
+//!     fn exchange_from_input(who: &AccountId, amount: TokenBalance) -> Result<...>;
+//!     fn exchange_from_output(who: &AccountId, amount: TokenBalance) -> Result<...>;
+//! }
+//! ```
+//!
+//! # Conversion Utilities
+//!
+//! ## AssetsBalancesConverter
+//! Handles conversions between different asset balance types:
+//! - Implements `ConversionFromAssetBalance` for asset to native conversion
+//! - Implements `ConversionToAssetBalance` for native to asset conversion
+//! - Integrates with asset rate calculations
+//!
+//! ## NativeExchange
+//! Implements `TokenExchange` for native currency operations:
+//! - Manages VTRS/VNRG exchanges
+//! - Handles rate-based conversions
+//! - Ensures safe balance transfers
+//!
+//! # Security Considerations
+//!
+//! 1. Balance Protection
+//!    - Maintains existential deposits
+//!    - Handles failed conversions safely
+//!    - Protects against overflow/underflow
+//!
+//! 2. Exchange Safety
+//!    - Atomic exchange operations
+//!    - Proper error handling
+//!    - Rate validation
+//!
+//! # Implementation Notes
+//!
+//! - All exchange operations maintain "keep-alive" requirements
+//! - Zero amount exchanges are handled efficiently
+//! - Failed exchanges properly recycle credits
+//! - Exchange rates use fixed-point arithmetic for accuracy
+
 use crate::CallFee;
 use frame_support::ensure;
 use frame_support::traits::{

@@ -15,7 +15,73 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Proc macro to generate the reward curve functions and tests.
+//! Reward Curve Generation Procedural Macro
+//!
+//! This proc macro generates piecewise linear reward curves for Nominated Proof of Stake (NPoS)
+//! validators, implementing the economic model described in the Web3 Foundation research.
+//!
+//! # Parameters
+//!
+//! The macro accepts the following parameters for curve configuration:
+//!
+//! ```rust
+//! pallet_staking_reward_curve::build! {
+//!     const CURVE_NAME: PiecewiseLinear<'static> = curve!(
+//!         min_inflation: u32,     // Minimum inflation rate (I_0), in millionths
+//!         max_inflation: u32,     // Maximum inflation at ideal stake, in millionths
+//!         ideal_stake: u32,       // Ideal staking rate (x_ideal), in millionths
+//!         falloff: u32,           // Decay rate for inflation adjustment
+//!         max_piece_count: u32,   // Maximum curve segments (2..1000)
+//!         test_precision: u32,    // Maximum allowed error in tests
+//!     );
+//! }
+//! ```
+//!
+//! # Mathematical Model
+//!
+//! The curve implements the formula:
+//! ```text
+//! y = i_0 + (i_ideal * x_ideal - i_0) * 2^((x_ideal - x)/d)
+//! ```
+//! where:
+//! - `i_0` is min_inflation
+//! - `x_ideal` is ideal_stake
+//! - `d` is falloff
+//!
+//! # Generated Output
+//!
+//! The macro generates:
+//! 1. A constant containing the piecewise linear approximation
+//! 2. A test module verifying the approximation's accuracy
+//! 3. Runtime validation of parameters
+//!
+//! # Security Considerations
+//!
+//! - All parameters are validated at compile time
+//! - Generated curves are tested against mathematical model
+//! - Precision requirements are enforced through tests
+//!
+//! # Examples
+//!
+//! ```rust
+//! use sp_runtime::curve::PiecewiseLinear;
+//!
+//! pallet_staking_reward_curve::build! {
+//!     const I_NPOS: PiecewiseLinear<'static> = curve!(
+//!         min_inflation: 25_000,      // 2.5%
+//!         max_inflation: 100_000,     // 10%
+//!         ideal_stake: 500_000,       // 50%
+//!         falloff: 50_000,           // 5%
+//!         max_piece_count: 40,
+//!         test_precision: 5_000,
+//!     );
+//! }
+//! ```
+//!
+//! # Note
+//!
+//! This macro is critical for economic parameter configuration. Changes should be
+//! carefully reviewed as they directly impact network incentives.
 
 mod log;
 

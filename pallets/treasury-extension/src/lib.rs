@@ -1,3 +1,33 @@
+//! Treasury Pallet
+//!
+//! This pallet provides the implementation for a Treasury system within a Substrate-based blockchain.
+//! The Treasury is responsible for managing on-chain funds and redistributing them based on proposals, allowing governance to determine the allocation of resources.
+//!
+//! # Features
+//! - Manages funds using a Treasury model, where spending proposals can be submitted and approved by governance participants.
+//! - Handles imbalances using the `OnUnbalanced` trait to ensure funds are appropriately managed.
+//! - Supports custom configurations for proposal thresholds and Treasury parameters.
+//! - Works in conjunction with other pallets like `pallet_treasury` for treasury-specific balance operations.
+//!
+//! # Structure
+//! - Defines core traits such as `Currency`, `Get`, `Imbalance`, and `OnUnbalanced` to handle balance changes and ensure stability.
+//! - Uses `Permill` for defining percentage-based parameters, making it flexible for configuring spending limits.
+//! - Includes multiple modules such as `mock` for testing, `tests` for unit testing, and `benchmarking` for runtime performance measurement.
+//!
+//! # Usage
+//! - Integrate this pallet in your runtime to enable treasury functionality, allowing for decentralized funding and resource allocation.
+//! - Configure treasury-related parameters by implementing runtime configuration traits to suit your chain's specific needs.
+//!
+//! # Dependencies
+//! - Relies on `frame_support` for fundamental utilities like balance management and configuration traits.
+//! - Uses `sp_arithmetic` for safe arithmetic operations and ensuring balance-related calculations are handled accurately.
+//! - The `weights` module provides weight information to manage the execution costs of the Treasury's dispatchable functions.
+//!
+//! # Important Notes
+//! - The Treasury system is highly reliant on good governance to prevent misuse of funds; make sure governance mechanisms are well defined.
+//! - Always validate and benchmark any changes to ensure the system remains performant, especially when modifying spending thresholds or proposal requirements.
+//! - Proper testing should be done using both unit tests (`tests.rs`) and mock environments (`mock.rs`) to verify correctness.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::{

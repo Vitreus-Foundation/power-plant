@@ -15,6 +15,96 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//!
+//! # Module Overview
+//!
+//! This Rust module is responsible for calculating the total payout to all validators and their
+//! cooperators in a Substrate-based blockchain, based on the nominated proof-of-stake (NPoS) model.
+//! The core functionality provided by this module centers around determining staking rewards for
+//! each era, based on the overall staking rate, the total supply, and specific inflation targets.
+//!
+//! # Key Features and Functions
+//!
+//! - **Payout Calculation**:
+//!   - `compute_total_payout(yearly_inflation: &PiecewiseLinear, npos_token_staked: N, total_tokens: N, era_duration: u64) -> (N, N)`:
+//!     This function calculates the total payout for an era, considering the yearly inflation rate,
+//!     the number of tokens staked by cooperators and validators, the total token supply, and the
+//!     duration of the era in milliseconds. It returns two values:
+//!     - **Staker Payout**: The reward portion that goes to the stakers.
+//!     - **Maximum Payout**: The maximum allowable reward payout for the era.
+//!
+//! - **Mathematical Model**:
+//!   - The function utilizes a `PiecewiseLinear` model to calculate the yearly inflation rate, which
+//!     is then adjusted for the length of the staking era. This ensures that payouts are proportional
+//!     to the network's inflation goals and staking participation.
+//!   - The computation takes into account the staking rate (i.e., the fraction of total tokens that
+//!     are staked), enabling dynamic adjustment of rewards to incentivize more or less staking
+//!     participation as needed.
+//!
+//! # Access Control and Security
+//!
+//! - **Restricted Use**: This module's primary function, `compute_total_payout`, is intended to be
+//!   used by the staking pallet internally, typically during each era's payout calculation phase.
+//!   It is crucial that this calculation remains consistent to ensure fair reward distribution among
+//!   validators and their nominators.
+//! - **Fair Reward Distribution**: By basing the payout on the staking rate and adjusting for yearly
+//!   inflation, the module ensures that the rewards are fair and sustainable, aligning with the
+//!   economic model of the blockchain. This approach helps maintain the desired staking participation
+//!   rate without introducing inflationary pressures that could destabilize the token's value.
+//!
+//! # Developer Notes
+//!
+//! - **Constants for Time Calculation**: The module uses constants like `MILLISECONDS_PER_YEAR` to
+//!   perform the necessary conversion of yearly inflation to the appropriate rate per staking era.
+//!   This constant represents the Julian year (365.25 days) and is used to accurately compute
+//!   era-based payouts.
+//! - **Flexible Token Types**: The function is generic over types implementing `AtLeast32BitUnsigned`,
+//!   making it adaptable for use with different types of numerical representations (e.g., `u64`,
+//!   `u128`). This flexibility allows it to support various tokenomics and supply sizes across
+//!   different blockchain networks.
+//! - **Inflation Control**: The use of a piecewise linear curve (`PiecewiseLinear`) for yearly
+//!   inflation provides flexibility in adjusting the rewards based on network conditions. This allows
+//!   developers to fine-tune inflation rates to incentivize desirable behaviors in the staking
+//!   ecosystem, such as increasing validator participation during times of low staking engagement.
+//!
+//! # Usage Scenarios
+//!
+//! - **Era Payout Calculation**: The `compute_total_payout` function is typically called at the end of
+//!   each era to determine how much reward should be distributed to all validators and their
+//!   cooperators. This is crucial for maintaining a predictable and transparent reward system that
+//!   validators and stakers can rely on when deciding to stake their tokens.
+//! - **Governance Adjustments**: The curve-based inflation model allows the governance body of the
+//!   blockchain to adjust the inflation rate dynamically, ensuring that the staking rewards are aligned
+//!   with overall economic goals. For instance, the yearly inflation can be increased to encourage
+//!   more staking, or reduced if the participation is already high.
+//!
+//! # Integration Considerations
+//!
+//! - **Staking Economics**: When integrating this module with a blockchain, it is essential to ensure
+//!   that the parameters, such as yearly inflation rates and era duration, are set in accordance with
+//!   the chain's economic model. Improper settings may result in over-inflation or under-rewarding
+//!   stakers, which can negatively impact the stability and attractiveness of the staking process.
+//! - **Adjustable Era Duration**: The payout calculation is affected by the `era_duration`, expressed
+//!   in milliseconds. Developers need to ensure that era durations are set consistently across the
+//!   staking module, as changes to this value will impact the total rewards calculated for each era.
+//! - **Piecewise Linear Inflation**: The `PiecewiseLinear` model for inflation can be customized to
+//!   define different segments and corresponding rates. It is advisable to have governance-approved
+//!   settings for these curves to avoid manipulation that could favor specific validators or create
+//!   unsustainable inflation dynamics.
+//!
+//! # Example Scenario
+//!
+//! Suppose a blockchain network aims for a yearly inflation rate that adjusts dynamically based on
+//! the staking rate. At the end of an era, the `compute_total_payout` function is invoked to determine
+//! the total reward to distribute among validators and their cooperators. The function calculates the
+//! payout based on the current staking rate, ensuring that the reward is proportional to the number
+//! of tokens staked in relation to the total supply. If staking participation is low, the inflation
+//! curve might increase rewards to incentivize more staking, whereas high participation could reduce
+//! the rewards to control inflation. This approach helps maintain a balanced and fair staking
+//! ecosystem, encouraging participation without over-inflating the token supply.
+//!
+
+
 //! This module expose one function `P_NPoS` (Payout NPoS) or `compute_total_payout` which returns
 //! the total payout for the era given the era duration and the staking rate in NPoS.
 //! The staking rate in NPoS is the total amount of tokens staked by cooperators and validators,

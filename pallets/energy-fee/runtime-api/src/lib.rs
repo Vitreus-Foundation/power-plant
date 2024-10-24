@@ -1,3 +1,39 @@
+//! # Energy Fee Runtime API Definitions
+//!
+//! Core types and runtime API traits for energy fee calculations.
+//!
+//! ## Core Types
+//!
+//! ### CallRequest
+//! Ethereum-compatible call request structure containing:
+//! - `from`: Optional sender address
+//! - `to`: Optional recipient address
+//! - `gas_price`, `max_fee_per_gas`: Gas pricing options
+//! - `gas`: Optional gas limit
+//! - `value`: Optional transfer value
+//! - `data`: Optional call data
+//! - `access_list`: Optional EIP-2930 access list
+//!
+//! ### FeeDetails
+//! Fee breakdown containing both token types:
+//! - `vtrs`: Native token fee amount
+//! - `vnrg`: Energy token fee amount
+//!
+//! ## Runtime API Methods
+//!
+//! ### Fee Estimation
+//! - `estimate_gas`: Calculate gas cost for EVM calls
+//! - `estimate_call_fee`: Calculate total fee for runtime calls
+//! - `vtrs_to_vnrg_swap_rate`: Get current token exchange rate
+//!
+//! ## Implementation Notes
+//! - No-std compatible
+//! - Implements necessary codec traits
+//! - Ethereum type compatibility
+//! - Serialization support for RPC
+//!
+//! This API enables fee estimation and exchange rate queries from the runtime.
+
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use ethereum::AccessListItem;

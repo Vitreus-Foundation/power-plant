@@ -1,4 +1,24 @@
-//! Implementations for the Reputation pallet (non-dispatchables).
+//! Implementations for Reputation Pallet (Non-Dispatchables)
+//!
+//! This module contains core implementations for the Reputation pallet, focusing on non-dispatchable functionality.
+//! It extends and complements the pallet by providing the logic needed for maintaining and modifying reputation records.
+//!
+//! # Features
+//! - Implements the `OnNewAccount` and `OnKilledAccount` traits from FRAME support, allowing reputation tracking on account creation and removal.
+//! - Provides core functions for managing and modifying reputation points and records.
+//! - Converts values using `SaturatedConversion` for safety.
+//!
+//! # Structure
+//! - Implements reputation-related functionality that is invoked internally within the pallet.
+//! - Defines how new accounts are initialized with reputation and how reputation is handled when accounts are removed.
+//!
+//! # Dependencies
+//! - Uses FRAME support traits such as `OnNewAccount` and `OnKilledAccount` for handling lifecycle events of accounts.
+//! - Relies on `frame_support::pallet_prelude` for prelude items to ensure consistent pallet interaction.
+//!
+//! # Usage
+//! This file should be used to define the core, non-user facing logic of the Reputation pallet.
+//! It is automatically utilized by the pallet during account lifecycle events and when updating reputation records.
 
 use crate::{ReputationPoint, ReputationRecord};
 
