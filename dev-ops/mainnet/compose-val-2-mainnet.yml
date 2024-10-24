@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   power_plant_second_node:
-    image: cdivtrs/power-plant:mainnet-latest
+    image: cdivtrs/power-plant:latest
     container_name: power-plant-second-node
     restart: always
     volumes:
