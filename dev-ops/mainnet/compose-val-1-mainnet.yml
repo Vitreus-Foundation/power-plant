@@ -16,6 +16,7 @@ services:
       --rpc-port 9944
       --rpc-methods=unsafe
       --validator
+      --node-key ${NODE_KEY}
       --prometheus-external
       --rpc-cors all
       --sync warp
