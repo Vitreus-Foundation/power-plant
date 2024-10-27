@@ -79,7 +79,7 @@ pipelines:
                   - cargo build --features "fast-runtime" --locked
                   - cargo test -j 2 --workspace --locked
 
-    stage:
+    stagenet:
       - step:
           name: First step
           script:
@@ -106,8 +106,8 @@ pipelines:
                 deployment: stage-bootnode
                 script:
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d --build && docker system prune -a -f"
-                  - ssh ${USERNAME}@${HOST1} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep boot-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Stage Boot Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep boot-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Stage Boot Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down && docker system prune -a -f || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST1} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep boot-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Stage Boot Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep boot-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Stage Boot Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
                 name: inno STAGEnet node1
@@ -116,18 +116,18 @@ pipelines:
                 deployment: stage-node-1
                 script:
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose1-${ENV}.yml down || true && docker compose -f ./dev-ops/compose1-${ENV}.yml up -d --build && docker system prune -a -f"
-                  - ssh ${USERNAME}@${HOST2} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep first-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Stage First Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep first-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Stage First Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-val-1-${ENV}.yml down && docker system prune -a -f || true && docker compose -f ./dev-ops/compose-val-1-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST2} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep first-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Stage First Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep first-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Stage First Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
-                name: inno STAGEet archive
+                name: inno STAGEnet archive
                 image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
                 trigger: manual
                 deployment: stage-archive
                 script:
                   - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-archive-${ENV}.yml up -d --build && docker system prune -a -f"
-                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Stage Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Stage Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-1-${ENV}.yml down && docker system prune -a -f || true && docker compose -f ./dev-ops/compose-archive-1-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Stage Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Stage Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
     testnet:
       - step:
@@ -169,8 +169,8 @@ pipelines:
                 deployment: testnet-bootnode
                 script:
                   - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST1} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep boot-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Boot Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep boot-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Boot Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOST1} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-boot-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose-boot-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST1} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep boot-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Boot Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep boot-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Boot Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
                 name: inno testnet archive
@@ -179,8 +179,8 @@ pipelines:
                 deployment: testnet-archive
                 script:
                   - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-archive-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose-archive-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
                 name: inno testnet archive-2
@@ -188,9 +188,9 @@ pipelines:
                 trigger: manual
                 deployment: testnet-archive-2
                 script:
-                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOSTARCHIVE} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose-archive-2-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Second Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Second Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOSTARCHIVE2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOSTARCHIVE2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose-archive-2-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose-archive-2-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOSTARCHIVE} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep archive-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Second Archive Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep archive-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Second Archive Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
                 name: inno testnet node1
@@ -199,8 +199,8 @@ pipelines:
                 deployment: testnet2
                 script:
                   - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose1-${ENV}.yml down || true && docker compose -f ./dev-ops/compose1-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST2} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep first-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet First Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep first-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet First Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOST2} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose1-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose1-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST2} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep first-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet First Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep first-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet First Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
 
             - step:
                 name: inno testnet node2
@@ -209,8 +209,8 @@ pipelines:
                 deployment: testnet3
                 script:
                   - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST3} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep second-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Second Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep second-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Second Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOST3} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose2-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose2-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST3} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep second-node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Second Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep second-node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Second Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
                   
             - step:
                 name: inno testnet node3
@@ -219,8 +219,8 @@ pipelines:
                 deployment: testnet4
                 script:
                   - ssh ${USERNAME}@${HOST4} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST4} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose3-${ENV}.yml down || true && docker compose -f ./dev-ops/compose3-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST4} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep third_node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Third Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep third_node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Third Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOST4} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose3-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose3-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST4} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep third_node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Third Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep third_node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Third Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
                   
             - step:
                 name: inno testnet node4
@@ -229,8 +229,8 @@ pipelines:
                 deployment: testnet5
                 script:
                   - ssh ${USERNAME}@${HOST5} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST5} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose4-${ENV}.yml down || true && docker compose -f ./dev-ops/compose4-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST5} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep fourth_node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Fourth Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep fourth_node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Fourth Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOST5} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose4-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose4-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST5} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep fourth_node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Fourth Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep fourth_node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Fourth Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
                   
             - step:
                 name: inno testnet node5
@@ -239,6 +239,26 @@ pipelines:
                 deployment: testnet6
                 script:
                   - ssh ${USERNAME}@${HOST6} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
-                  - ssh ${USERNAME}@${HOST6} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose5-${ENV}.yml down || true && docker compose -f ./dev-ops/compose5-${ENV}.yml up -d --build"
-                  - ssh ${USERNAME}@${HOST6} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep fifth_node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Fifth Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep fifth_node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Fifth Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+                  - ssh ${USERNAME}@${HOST6} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose5-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose5-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST6} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep fifth_node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Fifth Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep fifth_node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Fifth Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
                              
+            - step:
+                name: inno testnet node6
+                image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
+                deployment: testnet7
+                script:
+                  - ssh ${USERNAME}@${HOST7} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOST7} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose6-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose6-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST6} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep fifth_node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Fifth Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep fifth_node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Fifth Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+
+            - step:
+                name: inno testnet node7
+                image: leojonathanoh/docker-kubectl:envsubst-git-jq-kustomize-ssh-v1.14.4
+                trigger: manual
+                deployment: testnet8
+                script:
+                  - ssh ${USERNAME}@${HOST8} "cd /vitreus/${PRJNAME} && git pull && git checkout ${ENV} && git log | head"
+                  - ssh ${USERNAME}@${HOST8} "cd /vitreus/${PRJNAME} && docker compose -f ./dev-ops/compose7-${ENV}.yml down && docker image prune -a -f || true && docker compose -f ./dev-ops/compose7-${ENV}.yml up -d"
+#                  - ssh ${USERNAME}@${HOST6} "sleep 30 && export GOOGLE_CHAT_WEBHOOK_TOKEN=${GOOGLE_CHAT_WEBHOOK_TOKEN} && docker ps | grep fifth_node && curl -H 'Content-Type:application/json' -d '{\"text\":\"Innowise Testnet Fifth Node is up and running\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}' ; docker ps | grep fifth_node || curl -H 'Content-Type:application/json' -d '{\"text\":\"Issues with Innowise Testnet Fifth Node\"}' 'https://chat.googleapis.com/v1/spaces/AAAAECMvV34/messages?key=AIzaSyDdI0hCZtE6vySjMm-WEfRq3CPzqKqqsHI&token=${GOOGLE_CHAT_WEBHOOK_TOKEN}'"
+  
