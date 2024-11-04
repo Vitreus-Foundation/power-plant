@@ -1133,7 +1133,8 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
                     .fold(Balance::zero(), |acc, call_fee| match call_fee {
                         CallFee::Regular(fee) => acc.saturating_add(fee),
                         CallFee::EVM(fee) => acc.saturating_add(fee),
-                    });
+                    })
+                    .max(Self::custom_fee());
                 CallFee::Regular(resulting_fee)
             },
             RuntimeCall::Utility(pallet_utility::Call::dispatch_as { call, .. })
