@@ -22,7 +22,7 @@ use polkadot_primitives::{
     ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
 };
 
-use polkadot_runtime_common::{paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
+use polkadot_runtime_common::{auctions, paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use polkadot_runtime_parachains::{
     assigner_parachains as parachains_assigner_parachains,
@@ -1103,6 +1103,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
         match runtime_call {
             RuntimeCall::Assets(..)
             | RuntimeCall::AssetRate(..)
+            | RuntimeCall::Auctions(..)
             | RuntimeCall::Balances(..)
             | RuntimeCall::Bounties(..)
             | RuntimeCall::EnergyGeneration(..)
@@ -1582,6 +1583,25 @@ impl slots::Config for Runtime {
 
 impl paras_sudo_wrapper::Config for Runtime {}
 
+parameter_types! {
+    // The average auction is 7 days long, so this will be 70% for ending period.
+    // 5 Days = 72000 Blocks @ 6 sec per block
+    pub const EndingPeriod: BlockNumber = prod_or_fast!(5 * DAYS, 2 * HOURS);
+    // ~ 1000 samples per day -> ~ 20 blocks per sample -> 2 minute samples
+    pub const SampleLength: BlockNumber = 2 * MINUTES;
+}
+
+impl auctions::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Leaser = Slots;
+    type Registrar = Registrar;
+    type EndingPeriod = EndingPeriod;
+    type SampleLength = SampleLength;
+    type Randomness = pallet_babe::RandomnessFromOneEpochAgo<Runtime>;
+    type InitiateOrigin = MoreThanHalfCouncil;
+    type WeightInfo = weights::runtime_common_auctions::WeightInfo<Runtime>;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -1653,6 +1673,7 @@ construct_runtime!(
         Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 80,
         Slots: slots::{Pallet, Call, Storage, Event<T>} = 81,
         ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 82,
+        Auctions: auctions = 83,
 
         // Pallet for sending XCM.
         XcmPallet: pallet_xcm::{Pallet, Call, Storage, Event<T>, Origin, Config<T>} = 99,
