@@ -1,13 +1,8 @@
-use crate::{
-    AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, MoreThanHalfCouncil,
-    OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin,
-    Scheduler, TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MICRO_VTRS,
-    MILLI_VTRS, MINUTES, NANO_VTRS, PICO_VTRS, UNITS,
-};
+use crate::{AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, MoreThanHalfCouncil, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, NANO_VTRS, PICO_VTRS, UNITS};
 
 use frame_support::traits::fungible::HoldConsideration;
 use frame_support::traits::tokens::{PayFromAccount, UnityAssetBalanceConversion};
-use frame_support::traits::{Currency, EitherOf, LinearStoragePrice, OnUnbalanced};
+use frame_support::traits::{Currency, EitherOf, LinearStoragePrice, OnUnbalanced, LockIdentifier};
 use frame_support::{parameter_types, traits::EitherOfDiverse, weights::Weight, PalletId};
 use frame_system::{EnsureRoot, EnsureWithSuccess};
 use pallet_treasury::NegativeImbalanceOf;
@@ -15,6 +10,7 @@ use polkadot_runtime_common::prod_or_fast;
 use sp_core::ConstU32;
 use sp_runtime::traits::{AccountIdConversion, IdentityLookup};
 use sp_runtime::{Perbill, Permill};
+use static_assertions::const_assert;
 
 pub const fn deposit(items: u32, bytes: u32) -> Balance {
     items as Balance * 200 * NANO_VTRS + (bytes as Balance) * PICO_VTRS
@@ -59,6 +55,47 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
     type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
     type SetMembersOrigin = EnsureRoot<AccountId>;
     type MaxProposalWeight = MaxProposalWeight;
+}
+
+parameter_types! {
+    pub const CandidacyBond: Balance = 100 * UNITS;
+    // 1 storage item created, key size is 32 bytes, value size is 16+16.
+    pub const VotingBondBase: Balance = deposit(1, 64);
+    // additional data per vote is 32 bytes (account id).
+    pub const VotingBondFactor: Balance = deposit(0, 32);
+    pub const DesiredMembers: u32 = 13;
+    pub const DesiredRunnersUp: u32 = 7;
+    pub const TermDuration: BlockNumber = prod_or_fast!(7 * DAYS, 5 * MINUTES);
+    pub const MaxCandidates: u32 = 64;
+    pub const MaxVoters: u32 = 512;
+    pub const MaxVotesPerVoter: u32 = 16;
+    pub const ElectionsPhragmenPalletId: LockIdentifier = *b"electphr";
+}
+
+// Make sure that there are no more than `MaxMembers` members elected via elections-phragmen.
+const_assert!(DesiredMembers::get() <= CouncilMaxMembers::get());
+
+impl pallet_elections_phragmen::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type PalletId = ElectionsPhragmenPalletId;
+    type Currency = Balances;
+    type ChangeMembers = Council;
+    // NOTE: this implies that council's genesis members cannot be set directly and must come from
+    // this module.
+    type InitializeMembers = Council;
+    type CurrencyToVote = sp_staking::currency_to_vote::U128CurrencyToVote;
+    type CandidacyBond = CandidacyBond;
+    type VotingBondBase = VotingBondBase;
+    type VotingBondFactor = VotingBondFactor;
+    type LoserCandidate = ();
+    type KickedMember = ();
+    type DesiredMembers = DesiredMembers;
+    type DesiredRunnersUp = DesiredRunnersUp;
+    type TermDuration = TermDuration;
+    type MaxCandidates = MaxCandidates;
+    type MaxVoters = MaxVoters;
+    type MaxVotesPerVoter = MaxVotesPerVoter;
+    type WeightInfo = pallet_elections_phragmen::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -269,3 +306,4 @@ impl pallet_democracy::Config for Runtime {
     type PalletsOrigin = OriginCaller;
     type Slash = Treasury;
 }
+

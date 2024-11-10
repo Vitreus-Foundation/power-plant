@@ -1653,6 +1653,7 @@ construct_runtime!(
         TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>} = 51,
         Bounties: pallet_bounties = 52,
         Democracy: pallet_democracy = 53,
+        Elections: pallet_elections_phragmen = 54,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,
