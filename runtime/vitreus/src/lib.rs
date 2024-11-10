@@ -1119,6 +1119,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::TechnicalMembership(..)
             | RuntimeCall::Treasury(..)
             | RuntimeCall::Democracy(..)
+            | RuntimeCall::Elections(..)
             | RuntimeCall::Session(..)
             | RuntimeCall::XcmPallet(..)
             | RuntimeCall::SimpleVesting(..)
