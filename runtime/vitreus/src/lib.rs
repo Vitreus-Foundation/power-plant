@@ -246,8 +246,8 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 200,
-    impl_version: 1,
+    spec_version: 201,
+    impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 2,
     state_version: 1,
@@ -1119,6 +1119,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::TechnicalMembership(..)
             | RuntimeCall::Treasury(..)
             | RuntimeCall::Democracy(..)
+            | RuntimeCall::Elections(..)
             | RuntimeCall::Session(..)
             | RuntimeCall::XcmPallet(..)
             | RuntimeCall::SimpleVesting(..)
@@ -1653,6 +1654,7 @@ construct_runtime!(
         TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>} = 51,
         Bounties: pallet_bounties = 52,
         Democracy: pallet_democracy = 53,
+        Elections: pallet_elections_phragmen = 54,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,

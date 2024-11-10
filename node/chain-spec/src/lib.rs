@@ -404,6 +404,7 @@ pub fn testnet_genesis(
         },
         technical_membership: Default::default(),
         treasury: Default::default(),
+        elections: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: 125,
             minimum_validator_count: initial_validators.len() as u32,
@@ -556,6 +557,7 @@ fn mainnet_genesis(
         technical_committee: genesis::technical_committee_config(),
         technical_membership: Default::default(),
         treasury: Default::default(),
+        elections: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32 - 1,
