@@ -46,8 +46,9 @@ use polkadot_runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_support::traits::tokens::{
-    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
-    Preservation, Provenance, WithdrawConsequence,
+    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, ConversionFromAssetBalance,
+    ConversionToAssetBalance, DepositConsequence, Fortitude, Preservation, Provenance,
+    WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, ProcessMessage,
@@ -100,7 +101,6 @@ use frame_support::{
     },
 };
 use frame_system::{EnsureNever, EnsureRoot, EnsureSignedBy};
-use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_energy_fee::{traits::AssetsBalancesConverter, CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -936,14 +936,20 @@ impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
     type BenchmarkHelper = ();
 }
 
+type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<AssetId>;
+
+pub type NativeAndAssets = frame_support::traits::fungible::UnionOf<
+    Balances,
+    Assets,
+    frame_support::traits::fungible::NativeFromLeft,
+    NativeOrAssetId,
+    AccountId,
+>;
+
 parameter_types! {
     pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
-    pub const AllowMultiAssetPools: bool = false;
-    pub const LiquidityWithdrawalFee: Permill = Permill::from_percent(1);
-    pub const PoolSetupFee: Balance = 0;
-    pub const PoolSwapFee: u32 = 10; // 1%
-    pub const MaxSwapPathLength: u32 = 2;
-    pub const MintMinLiquidity: Balance = 100;
+    pub const SwapFee: u32 = 10; // 1%
+    pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
 }
 
 ord_parameter_types! {
@@ -951,33 +957,48 @@ ord_parameter_types! {
         AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
-type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
+
+pub struct EnergyRate;
+
+impl pallet_energy_broker::EnergyBalanceConverter<Balance, NativeOrAssetId> for EnergyRate {
+    fn asset_to_energy_balance(asset_id: NativeOrAssetId, balance: Balance) -> Option<Balance> {
+        match asset_id {
+            NativeOrAssetId::Native => {
+                AssetsBalancesConverter::<Runtime, AssetRate>::to_asset_balance(
+                    balance,
+                    VNRG::get(),
+                )
+                .ok()
+            },
+            _ => None,
+        }
+    }
+
+    fn energy_to_asset_balance(asset_id: NativeOrAssetId, balance: Balance) -> Option<Balance> {
+        match asset_id {
+            NativeOrAssetId::Native => {
+                AssetsBalancesConverter::<Runtime, AssetRate>::from_asset_balance(
+                    balance,
+                    VNRG::get(),
+                )
+                .ok()
+            },
+            _ => None,
+        }
+    }
+}
 
 impl pallet_energy_broker::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type Formula = ConstantSum<EnergyRate>;
-    type Currency = Balances;
     type Balance = Balance;
+    type AssetKind = NativeOrAssetId;
+    type Assets = NativeAndAssets;
     type HigherPrecisionBalance = sp_core::U256;
-    type AssetBalance = Balance;
-    type AssetId = AssetId;
-    type Assets = Assets;
-    type PoolAssetId = AssetId;
-    type PoolAssets = PoolAssets;
-    type PalletId = AssetConversionPalletId;
-    type LPFee = PoolSwapFee;
-    type PoolSetupFee = PoolSetupFee;
-    type PoolSetupFeeReceiver = AssetConversionOrigin;
-    type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
-    type AllowMultiAssetPools = AllowMultiAssetPools;
-    type MaxSwapPathLength = MaxSwapPathLength;
-    type MintMinLiquidity = MintMinLiquidity;
-    type MultiAssetId = NativeOrAssetId<AssetId>;
-    type MultiAssetIdConverter = NativeOrAssetIdConverter<AssetId>;
-    type WeightInfo = pallet_energy_broker::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BalanceConverter = EnergyRate;
+    type SwapFee = SwapFee;
+    type NativeAsset = NativeAsset;
+    type EnergyAsset = VNRG;
 }
 
 parameter_types! {
@@ -1002,27 +1023,23 @@ impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
     for EnergyBrokerExchange
 {
     fn convert_from_input(amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::get_amount_out(
-            &amount,
-            (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
-        )
-        .map_err(|e| e.into())
+        EnergyBroker::get_amount_out(amount, &(NativeAsset::get(), VNRG::get().into()))
+            .map(|(amount, _)| amount)
+            .map_err(|e| e.into())
     }
 
     fn convert_from_output(amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::get_amount_in(
-            &amount,
-            (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
-        )
-        .map_err(|e| e.into())
+        EnergyBroker::get_amount_in(amount, &(NativeAsset::get(), VNRG::get().into()))
+            .map(|(amount, _)| amount)
+            .map_err(|e| e.into())
     }
 
     fn exchange_from_input(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::swap_exact_native_for_tokens(*who, VNRG::get(), amount, None, *who, true)
+        EnergyBroker::swap_exact_native_for_energy(*who, amount)
     }
 
     fn exchange_from_output(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::swap_native_for_exact_tokens(*who, VNRG::get(), amount, None, *who, true)
+        EnergyBroker::swap_native_for_exact_energy(*who, amount)
     }
 
     fn exchange_inner(
@@ -2557,44 +2574,12 @@ impl_runtime_apis! {
         }
 
         fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
-            EnergyBroker::quote_price_exact_tokens_for_tokens(
-                NativeOrAssetId::Native,
-                NativeOrAssetId::Asset(VNRG::get()),
+            EnergyBroker::get_amount_out(
                 UNITS,
-                true
+                &(NativeAsset::get(), VNRG::get().into())
             )
-        }
-    }
-
-    impl pallet_energy_broker::AssetConversionApi<
-        Block,
-        Balance,
-        Balance,
-        NativeOrAssetId<AssetId>
-    > for Runtime {
-        fn quote_price_tokens_for_exact_tokens(
-            asset1: NativeOrAssetId<AssetId>,
-            asset2: NativeOrAssetId<AssetId>,
-            amount: Balance,
-            include_fee: bool,
-        ) -> Option<Balance> {
-            EnergyBroker::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
-        }
-
-        fn quote_price_exact_tokens_for_tokens(
-            asset1: NativeOrAssetId<AssetId>,
-            asset2: NativeOrAssetId<AssetId>,
-            amount: Balance,
-            include_fee: bool,
-        ) -> Option<Balance> {
-            EnergyBroker::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
-        }
-
-        fn get_reserves(
-            asset1: NativeOrAssetId<AssetId>,
-            asset2: NativeOrAssetId<AssetId>,
-        ) -> Option<(Balance, Balance)> {
-            EnergyBroker::get_reserves(&asset1, &asset2).ok()
+            .map(|(amount, _)| amount)
+            .ok()
         }
     }
 

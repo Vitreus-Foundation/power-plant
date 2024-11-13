@@ -1,51 +1,29 @@
-// This file is part of Substrate.
-
-// Copyright (C) 2019-2022 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// 	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
-//! Test environment for Asset Conversion pallet.
+//! Test environment for Energy Broker pallet.
 
 use super::*;
-use crate as pallet_asset_conversion;
+use crate as pallet_energy_broker;
 
 use frame_support::{
-    construct_runtime, derive_impl,
-    instances::{Instance1, Instance2},
-    ord_parameter_types, parameter_types,
-    traits::{
-        tokens::{ConversionFromAssetBalance, ConversionToAssetBalance},
-        AsEnsureOriginWithArg, ConstU128, ConstU32,
-    },
-    PalletId,
+    construct_runtime, derive_impl, parameter_types,
+    traits::{AsEnsureOriginWithArg, ConstU128, ConstU32},
 };
-use frame_system::{EnsureSigned, EnsureSignedBy};
-use sp_arithmetic::{FixedPointNumber, FixedU128, Permill};
-use sp_runtime::{
-    traits::{AccountIdConversion, IdentityLookup},
-    BuildStorage,
-};
+use frame_system::EnsureSigned;
+use sp_arithmetic::{FixedPointNumber, FixedU128};
+use sp_runtime::{traits::IdentityLookup, BuildStorage};
+
 type Block = frame_system::mocking::MockBlock<Test>;
+
+pub const ALICE: u128 = 1;
+pub const INITIAL_BALANCE: u128 = 10000;
+pub const INITIAL_ENERGY_BALANCE: u128 = 10000;
 
 construct_runtime!(
     pub enum Test
     {
         System: frame_system,
         Balances: pallet_balances,
-        Assets: pallet_assets::<Instance1>,
-        PoolAssets: pallet_assets::<Instance2>,
-        AssetConversion: pallet_asset_conversion,
+        Assets: pallet_assets,
+        EnergyBroker: pallet_energy_broker,
     }
 );
 
@@ -64,7 +42,7 @@ impl pallet_balances::Config for Test {
     type AccountStore = System;
 }
 
-impl pallet_assets::Config<Instance1> for Test {
+impl pallet_assets::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Balance = u128;
     type RemoveItemsLimit = ConstU32<1000>;
@@ -88,101 +66,73 @@ impl pallet_assets::Config<Instance1> for Test {
     }
 }
 
-impl pallet_assets::Config<Instance2> for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type Balance = u128;
-    type RemoveItemsLimit = ConstU32<1000>;
-    type AssetId = u32;
-    type AssetIdParameter = u32;
-    type Currency = Balances;
-    type CreateOrigin =
-        AsEnsureOriginWithArg<EnsureSignedBy<AssetConversionOrigin, Self::AccountId>>;
-    type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type AssetDeposit = ConstU128<0>;
-    type AssetAccountDeposit = ConstU128<0>;
-    type MetadataDepositBase = ConstU128<0>;
-    type MetadataDepositPerByte = ConstU128<0>;
-    type ApprovalDeposit = ConstU128<0>;
-    type StringLimit = ConstU32<50>;
-    type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
-    type CallbackHandle = ();
-    pallet_assets::runtime_benchmarks_enabled! {
-        type BenchmarkHelper = ();
-    }
-}
-
-parameter_types! {
-    pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
-    pub storage AllowMultiAssetPools: bool = true;
-    pub storage LiquidityWithdrawalFee: Permill = Permill::from_percent(0); // should be non-zero if AllowMultiAssetPools is true, otherwise can be zero
-}
-
-ord_parameter_types! {
-    pub const AssetConversionOrigin: u128 = AccountIdConversion::<u128>::into_account_truncating(&AssetConversionPalletId::get());
-}
-
 pub struct AssetRate;
 impl AssetRate {
-    const RATE: FixedU128 = FixedU128::from_rational(1, 2);
+    const RATE: FixedU128 = FixedU128::from_rational(1, 10);
 }
 
-impl ConversionFromAssetBalance<u128, u32, u128> for AssetRate {
-    type Error = DispatchError;
+impl EnergyBalanceConverter<u128, NativeOrAssetId> for AssetRate {
+    fn asset_to_energy_balance(asset_id: NativeOrAssetId, balance: u128) -> Option<u128> {
+        match asset_id {
+            NativeOrAssetId::Native => {
+                Self::RATE.reciprocal().map(|x| x.saturating_mul_int(balance))
+            },
+            _ => None,
+        }
+    }
 
-    fn from_asset_balance(balance: u128, _asset_id: u32) -> Result<u128, Self::Error> {
-        Ok(Self::RATE.saturating_mul_int(balance))
+    fn energy_to_asset_balance(asset_id: NativeOrAssetId, balance: u128) -> Option<u128> {
+        match asset_id {
+            NativeOrAssetId::Native => Some(Self::RATE.saturating_mul_int(balance)),
+            _ => None,
+        }
     }
 }
 
-impl ConversionToAssetBalance<u128, u32, u128> for AssetRate {
-    type Error = DispatchError;
+pub type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<u32>;
 
-    fn to_asset_balance(balance: u128, _asset_id: u32) -> Result<u128, Self::Error> {
-        let result = Self::RATE
-            .reciprocal()
-            .ok_or(DispatchError::Other("Asset rate too low"))?
-            .saturating_mul_int(balance);
+type NativeAndAssets = frame_support::traits::fungible::UnionOf<
+    Balances,
+    Assets,
+    frame_support::traits::fungible::NativeFromLeft,
+    NativeOrAssetId,
+    u128,
+>;
 
-        Ok(result)
-    }
+parameter_types! {
+    pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
+    pub const VNRG: u32 = 1;
 }
 
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type Formula = ConstantSum<AssetRate>;
-    type Currency = Balances;
-    type AssetBalance = <Self as pallet_balances::Config>::Balance;
-    type AssetId = u32;
-    type PoolAssetId = u32;
-    type Assets = Assets;
-    type PoolAssets = PoolAssets;
-    type PalletId = AssetConversionPalletId;
-    type WeightInfo = ();
-    type LPFee = ConstU32<20>; // means 2%
-    type PoolSetupFee = ConstU128<100>; // should be more or equal to the existential deposit
-    type PoolSetupFeeReceiver = AssetConversionOrigin;
-    type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
-    type AllowMultiAssetPools = AllowMultiAssetPools;
-    type MaxSwapPathLength = ConstU32<4>;
-    type MintMinLiquidity = ConstU128<100>; // 100 is good enough when the main currency has 12 decimals.
-
     type Balance = u128;
     type HigherPrecisionBalance = sp_core::U256;
-
-    type MultiAssetId = NativeOrAssetId<u32>;
-    type MultiAssetIdConverter = NativeOrAssetIdConverter<u32>;
-
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type AssetKind = NativeOrAssetId;
+    type Assets = NativeAndAssets;
+    type BalanceConverter = AssetRate;
+    // means 2%
+    type SwapFee = ConstU32<20>;
+    type NativeAsset = NativeAsset;
+    type EnergyAsset = VNRG;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
     pallet_balances::GenesisConfig::<Test> {
-        balances: vec![(1, 10000), (2, 20000), (3, 30000), (4, 40000)],
+        balances: vec![(EnergyBroker::account_id(), INITIAL_BALANCE), (ALICE, 1000)],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+
+    pallet_assets::GenesisConfig::<Test> {
+        assets: vec![(VNRG::get(), 42, false, 20)],
+        accounts: vec![
+            (VNRG::get(), EnergyBroker::account_id(), INITIAL_ENERGY_BALANCE),
+            (VNRG::get(), ALICE, 5000),
+        ],
+        ..Default::default()
     }
     .assimilate_storage(&mut t)
     .unwrap();
