@@ -213,7 +213,7 @@ nonce: <empty> {None}
 
 The values for `gas_limit` and `gas_price` were chosen for convenience and have
 little inherent or special meaning. Note that `None` for the nonce will
-increment the known nonce for the source account. Starting from `0x0`, you may
+increment the known nonce for the source account, starting from `0x0`, you may
 manually set this but will get an "evm.InvalidNonce" error if not set correctly.
 
 Once the extrinsic is in a block, navigate to the `Network` -> `Explorer` tab in
