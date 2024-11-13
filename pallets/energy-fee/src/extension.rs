@@ -1,7 +1,8 @@
 #![allow(clippy::new_without_default)]
 
 use crate::{BalanceOf, CallFee, Config, CustomFee, Pallet};
-use frame_support::dispatch::{fmt::Debug, Callable, DispatchInfo, Dispatchable};
+use core::fmt::Debug;
+use frame_support::dispatch::{Callable, DispatchInfo};
 use frame_support::traits::IsSubType;
 use pallet_sudo::{Config as SudoConfig, Pallet as SudoPallet};
 use pallet_transaction_payment::{
@@ -10,7 +11,7 @@ use pallet_transaction_payment::{
 use parity_scale_codec::{Decode, Encode};
 use scale_info::TypeInfo;
 use sp_runtime::{
-    traits::{DispatchInfoOf, SignedExtension},
+    traits::{DispatchInfoOf, Dispatchable, SignedExtension},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
 };
 use sp_std::marker::PhantomData;

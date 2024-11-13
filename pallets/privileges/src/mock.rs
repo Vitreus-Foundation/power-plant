@@ -2,7 +2,7 @@ use crate::{self as pallet_privileges, *};
 use std::collections::BTreeMap;
 
 use frame_support::{
-    ord_parameter_types, parameter_types,
+    derive_impl, ord_parameter_types, parameter_types,
     traits::{
         AsEnsureOriginWithArg, ConstU32, ConstU64, EitherOfDiverse, FindAuthor, Hooks, Imbalance,
         OnUnbalanced, OneSessionHandler, WithdrawReasons,
@@ -10,12 +10,11 @@ use frame_support::{
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
-use orml_traits::GetByKey;
 use pallet_claiming::{EcdsaSignature, EthereumAddress};
 use pallet_energy_generation::{
     EnergyDebtOf, EnergyOf, StakeNegativeImbalanceOf, StakeOf, StakerStatus, TestBenchmarkingConfig,
 };
-use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier, RANKS_PER_TIER};
+use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use parity_scale_codec::Compact;
 use sp_core::H256;
 use sp_io::hashing::keccak_256;
@@ -109,6 +108,7 @@ impl FindAuthor<AccountId> for Author11 {
     }
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type BaseCallFilter = frame_support::traits::Everything;
@@ -133,31 +133,6 @@ impl frame_system::Config for Test {
     type SS58Prefix = ();
     type OnSetCode = ();
     type MaxConsumers = ConstU32<16>;
-}
-
-pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
-
-impl GetByKey<ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
-    fn get(k: &ReputationTier) -> Perbill {
-        match k {
-            ReputationTier::Vanguard(2) => Perbill::from_percent(2),
-            ReputationTier::Vanguard(3) => Perbill::from_percent(4),
-            ReputationTier::Trailblazer(0) => Perbill::from_percent(5),
-            ReputationTier::Trailblazer(1) => Perbill::from_percent(8),
-            ReputationTier::Trailblazer(2) => Perbill::from_percent(10),
-            ReputationTier::Trailblazer(3) => Perbill::from_percent(12),
-            ReputationTier::Ultramodern(0) => Perbill::from_percent(13),
-            ReputationTier::Ultramodern(1) => Perbill::from_percent(16),
-            ReputationTier::Ultramodern(2) => Perbill::from_percent(18),
-            ReputationTier::Ultramodern(3) => Perbill::from_percent(20),
-            ReputationTier::Ultramodern(rank) => {
-                let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
-                Perbill::from_percent(20_u8.saturating_add(additional_percentage).into())
-            },
-            // includes unhandled cases
-            _ => Perbill::zero(),
-        }
-    }
 }
 
 parameter_types! {
@@ -298,6 +273,7 @@ impl pallet_privileges::Config for Test {
     type WeightInfo = ();
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -310,7 +286,6 @@ impl pallet_balances::Config for Test {
     type FreezeIdentifier = ();
     type MaxLocks = ();
     type MaxReserves = ();
-    type MaxHolds = ();
     type MaxFreezes = ();
 }
 
@@ -327,6 +302,7 @@ impl pallet_vesting::Config for Test {
     type MinVestedTransfer = MinVestedTransfer;
     type WeightInfo = ();
     type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
+    type BlockNumberProvider = System;
     const MAX_VESTING_SCHEDULES: u32 = 28;
 }
 
@@ -397,6 +373,7 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
         _pool_account: &AccountId,
         slashed_bonded: Balance,
         slashed_chunks: &BTreeMap<EraIndex, Balance>,
+        _slashed_total: Balance,
     ) {
         LedgerSlashPerEra::set((slashed_bonded, slashed_chunks.clone()));
     }
@@ -435,13 +412,12 @@ impl pallet_energy_generation::Config for Test {
     type EnergyPerStakeCurrency = EnergyGeneration;
     type NextNewSession = Session;
     type MaxCooperatorRewardedPerValidator = ConstU32<64>;
-    type OffendingValidatorsThreshold = OffendingValidatorsThreshold;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type EventListeners = EventListenerMock;
+    type DisablingStrategy = pallet_energy_generation::UpToLimitDisablingStrategy<3>;
     type ValidatorReputationTier = ValidatorReputationTier;
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
-    type ReputationTierEnergyRewardAdditionalPercentMapping =
-        ReputationTierEnergyRewardAdditionalPercentMapping;
+    type ReputationTierEnergyRewardAdditionalPercentMapping = ();
     type ValidatorNacLevel = ();
     type OnVipMembershipHandler = Privileges;
     type BenchmarkingConfig = TestBenchmarkingConfig;

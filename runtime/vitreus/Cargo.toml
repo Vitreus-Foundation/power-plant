@@ -1,9 +1,6 @@
 [package]
 name = "vitreus-power-plant-runtime"
-version = "0.0.0"
-license = "Unlicense"
-description = "A fresh FRAME-based Substrate runtime, ready for hacking."
-publish = false
+version = "0.1.0"
 authors = { workspace = true }
 edition = { workspace = true }
 repository = { workspace = true }
@@ -14,15 +11,15 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
-num_enum = { workspace = true }
 log = { workspace = true }
-libsecp256k1 = { workspace = true }
-orml-traits = { workspace = true }
 hex-literal = { workspace = true }
 primitive-types = { workspace = true, features = ["codec", "scale-info", "num-traits"] }
+static_assertions = { workspace = true }
 
 # Polkadot
 polkadot-primitives = { workspace = true }
+polkadot-runtime-parachains = { workspace = true, default-features = false }
+polkadot-runtime-common = { workspace = true, default-features = false }
 
 # XCM
 xcm = { workspace = true }
@@ -30,17 +27,16 @@ xcm-executor = { workspace = true }
 xcm-builder = { workspace = true }
 
 # Substrate
+binary-merkle-tree = { workspace = true }
 sp-api = { workspace = true }
 sp-authority-discovery = { workspace = true }
 sp-block-builder = { workspace = true }
 sp-consensus-babe = { workspace = true }
 sp-consensus-beefy = { workspace = true }
-binary-merkle-tree = { workspace = true }
-sp-consensus-grandpa = { workspace = true }
 sp-core = { workspace = true }
+sp-genesis-builder = { workspace = true }
 sp-inherents = { workspace = true }
 sp-io = { workspace = true }
-sp-application-crypto = { workspace = true }
 sp-mmr-primitives = { workspace = true }
 sp-offchain = { workspace = true }
 sp-runtime = { workspace = true }
@@ -49,62 +45,50 @@ sp-staking = { workspace = true }
 sp-std = { workspace = true }
 sp-transaction-pool = { workspace = true }
 sp-version = { workspace = true }
+
 # Substrate FRAME
 frame-benchmarking = { workspace = true, optional = true }
 frame-executive = { workspace = true }
-frame-support = { workspace = true }
+frame-support = { workspace = true, features = ["tuples-96"] }
 frame-system = { workspace = true }
 frame-system-benchmarking = { workspace = true, optional = true }
 frame-system-rpc-runtime-api = { workspace = true }
 frame-try-runtime = { workspace = true, optional = true }
-pallet-assets = { workspace = true }
 pallet-asset-rate = { workspace = true }
+pallet-assets = { workspace = true }
 pallet-atomic-swap = { workspace = true }
 pallet-authority-discovery = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-babe = { workspace = true }
 pallet-balances = { workspace = true }
+pallet-beefy = { workspace = true }
+pallet-beefy-mmr = { workspace = true }
 pallet-bounties = { workspace = true }
-pallet-claiming = { workspace = true }
 pallet-collective = { workspace = true }
 pallet-democracy = { workspace = true }
-pallet-energy-broker = { workspace = true }
-pallet-energy-generation = { workspace = true }
-pallet-energy-fee = { workspace = true }
-pallet-faucet = { workspace = true }
+pallet-elections-phragmen = { workspace = true }
 pallet-grandpa = { workspace = true }
 pallet-im-online = { workspace = true }
 pallet-membership = { workspace = true }
 pallet-message-queue = { workspace = true }
-pallet-nac-managing = { workspace = true }
+pallet-mmr = { workspace = true }
 pallet-nfts = { workspace = true }
 pallet-nfts-runtime-api = { workspace = true }
 pallet-offences = { workspace = true }
 pallet-preimage = { workspace = true }
-pallet-privileges = { workspace = true }
-pallet-reputation = { workspace = true }
 pallet-scheduler = { workspace = true }
 pallet-session = { workspace = true }
-pallet-simple-vesting = { workspace = true }
 pallet-staking-reward-curve = { workspace = true }
 pallet-sudo = { workspace = true }
 pallet-timestamp = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 pallet-treasury = { workspace = true }
-pallet-treasury-extension = { workspace = true }
 pallet-uniques = { workspace = true }
 pallet-utility = { workspace = true }
 pallet-vesting = { workspace = true }
 pallet-xcm = { workspace = true }
-pallet-beefy = { workspace = true }
-pallet-beefy-mmr = { workspace = true }
-pallet-mmr = { workspace = true }
-
-# Runtime API
-energy-fee-runtime-api = { workspace = true }
-energy-generation-runtime-api = { workspace = true }
-vitreus-utility-runtime-api = { workspace = true }
+xcm-runtime-apis = { workspace = true }
 
 # Frontier
 ethereum = { workspace = true }
@@ -112,9 +96,8 @@ fp-account = { workspace = true, features = ["serde"] }
 fp-evm = { workspace = true, features = ["serde"] }
 fp-rpc = { workspace = true }
 fp-self-contained = { workspace = true, features = ["serde"] }
+
 # Frontier FRAME
-pallet-base-fee = { workspace = true }
-pallet-dynamic-fee = { workspace = true }
 pallet-ethereum = { workspace = true }
 pallet-evm = { workspace = true }
 pallet-evm-chain-id = { workspace = true }
@@ -122,12 +105,22 @@ pallet-evm-precompile-modexp = { workspace = true }
 pallet-evm-precompile-sha3fips = { workspace = true }
 pallet-evm-precompile-simple = { workspace = true }
 pallet-hotfix-sufficients = { workspace = true }
-# moonbean
-# precompile-utils = { workspace = true }
-# pallet-evm-precompile-balances-erc20 = { workspace = true }
 
-runtime-common = { package = "polkadot-runtime-common", path = "../common", default-features = false }
-runtime-parachains = { package = "polkadot-runtime-parachains", path = "../parachains", default-features = false }
+# Vitreus pallets
+pallet-claiming = { workspace = true }
+pallet-energy-broker = { workspace = true }
+pallet-energy-fee = { workspace = true }
+pallet-energy-generation = { workspace = true }
+pallet-nac-managing = { workspace = true }
+pallet-privileges = { workspace = true }
+pallet-reputation = { workspace = true }
+pallet-simple-vesting = { workspace = true }
+pallet-treasury-extension = { workspace = true }
+
+# Runtime API
+energy-fee-runtime-api = { workspace = true }
+energy-generation-runtime-api = { workspace = true }
+vitreus-utility-runtime-api = { workspace = true }
 
 [dev-dependencies]
 chain-spec = { workspace = true }
@@ -141,84 +134,76 @@ default = ["std", "with-rocksdb-weights"]
 with-rocksdb-weights = []
 with-paritydb-weights = []
 try-runtime = [
-    "frame-try-runtime",
+    "fp-self-contained/try-runtime",
     "frame-executive/try-runtime",
     "frame-system/try-runtime",
-    "runtime-common/try-runtime",
-    "runtime-parachains/try-runtime",
-    "pallet-assets/try-runtime",
+    "frame-try-runtime",
     "pallet-asset-rate/try-runtime",
+    "pallet-assets/try-runtime",
     "pallet-atomic-swap/try-runtime",
     "pallet-authority-discovery/try-runtime",
     "pallet-authorship/try-runtime",
     "pallet-babe/try-runtime",
     "pallet-balances/try-runtime",
+    "pallet-beefy-mmr/try-runtime",
+    "pallet-beefy/try-runtime",
     "pallet-bounties/try-runtime",
+    "pallet-claiming/try-runtime",
     "pallet-collective/try-runtime",
     "pallet-democracy/try-runtime",
-    "pallet-grandpa/try-runtime",
-    "pallet-im-online/try-runtime",
-    "pallet-membership/try-runtime",
-    "pallet-message-queue/try-runtime",
-    "pallet-nfts/try-runtime",
-    "pallet-offences/try-runtime",
-    "pallet-preimage/try-runtime",
-    "pallet-scheduler/try-runtime",
-    "pallet-session/try-runtime",
-    "pallet-sudo/try-runtime",
-    "pallet-timestamp/try-runtime",
-    "pallet-transaction-payment/try-runtime",
-    "pallet-treasury/try-runtime",
-    "pallet-vesting/try-runtime",
-    "pallet-utility/try-runtime",
-    "fp-self-contained/try-runtime",
-    "pallet-base-fee/try-runtime",
-    "pallet-dynamic-fee/try-runtime",
-    "pallet-ethereum/try-runtime",
-    "pallet-evm/try-runtime",
-    "pallet-evm-chain-id/try-runtime",
-    "pallet-claiming/try-runtime",
+    "pallet-elections-phragmen/try-runtime",
     "pallet-energy-broker/try-runtime",
     "pallet-energy-fee/try-runtime",
     "pallet-energy-generation/try-runtime",
+    "pallet-energy-generation/try-runtime",
+    "pallet-ethereum/try-runtime",
+    "pallet-evm-chain-id/try-runtime",
+    "pallet-evm/try-runtime",
+    "pallet-grandpa/try-runtime",
     "pallet-hotfix-sufficients/try-runtime",
+    "pallet-im-online/try-runtime",
+    "pallet-membership/try-runtime",
+    "pallet-message-queue/try-runtime",
+    "pallet-mmr/try-runtime",
     "pallet-nac-managing/try-runtime",
+    "pallet-nfts/try-runtime",
+    "pallet-offences/try-runtime",
+    "pallet-preimage/try-runtime",
     "pallet-privileges/try-runtime",
     "pallet-reputation/try-runtime",
+    "pallet-scheduler/try-runtime",
+    "pallet-session/try-runtime",
     "pallet-simple-vesting/try-runtime",
+    "pallet-sudo/try-runtime",
+    "pallet-timestamp/try-runtime",
+    "pallet-transaction-payment/try-runtime",
     "pallet-treasury-extension/try-runtime",
-    "pallet-energy-generation/try-runtime",
+    "pallet-treasury/try-runtime",
+    "pallet-utility/try-runtime",
+    "pallet-vesting/try-runtime",
     "pallet-xcm/try-runtime",
-    "pallet-beefy/try-runtime",
-    "pallet-beefy-mmr/try-runtime",
-    "pallet-mmr/try-runtime",
+    "polkadot-runtime-common/try-runtime",
+    "polkadot-runtime-parachains/try-runtime",
 ]
 fast-runtime = []
 std = [
-    "libsecp256k1/std",
     "log/std",
-    "num_enum/std",
-    # "precompile-utils/std",
-    # "pallet-evm-precompile-balances-erc20/std",
     "parity-scale-codec/std",
     "primitive-types/std",
     "scale-info/std",
-    "orml-traits/std",
     # Polkadot
     "polkadot-primitives/std",
-    "runtime-common/std",
+    "polkadot-runtime-common/std",
     # XCM
     "xcm/std",
     "xcm-executor/std",
     "xcm-builder/std",
     # Substrate
     "sp-api/std",
-    "sp-application-crypto/std",
     "sp-authority-discovery/std",
     "sp-block-builder/std",
     "sp-consensus-babe/std",
     "sp-consensus-beefy/std",
-    "sp-consensus-grandpa/std",
     "sp-core/std",
     "sp-inherents/std",
     "sp-io/std",
@@ -235,70 +220,71 @@ std = [
     "frame-benchmarking/std",
     "frame-executive/std",
     "frame-support/std",
-    "frame-system/std",
-    "frame-system-rpc-runtime-api/std",
     "frame-system-benchmarking?/std",
+    "frame-system-rpc-runtime-api/std",
+    "frame-system/std",
     "frame-try-runtime?/std",
-    "pallet-atomic-swap/std",
-    "pallet-assets/std",
     "pallet-asset-rate/std",
+    "pallet-assets/std",
+    "pallet-atomic-swap/std",
     "pallet-authority-discovery/std",
     "pallet-authorship/std",
     "pallet-babe/std",
     "pallet-balances/std",
+    "pallet-beefy-mmr/std",
+    "pallet-beefy/std",
     "pallet-bounties/std",
     "pallet-collective/std",
     "pallet-democracy/std",
-    "pallet-faucet/std",
+    "pallet-elections-phragmen/std",
     "pallet-grandpa/std",
     "pallet-im-online/std",
+    "pallet-membership/std",
+    "pallet-message-queue/std",
+    "pallet-mmr/std",
+    "pallet-nfts-runtime-api/std",
+    "pallet-nfts/std",
     "pallet-offences/std",
+    "pallet-preimage/std",
+    "pallet-scheduler/std",
     "pallet-session/std",
     "pallet-sudo/std",
     "pallet-timestamp/std",
     "pallet-transaction-payment-rpc-runtime-api/std",
     "pallet-transaction-payment/std",
-    "pallet-membership/std",
-    "pallet-message-queue/std",
-    "pallet-nfts/std",
-    "pallet-nfts-runtime-api/std",
-    "pallet-preimage/std",
-    "pallet-scheduler/std",
     "pallet-treasury/std",
-    "pallet-treasury-extension/std",
     "pallet-uniques/std",
     "pallet-utility/std",
     "pallet-vesting/std",
     "pallet-xcm/std",
+    "xcm-runtime-apis/std",
     # Frontier
     "fp-account/std",
     "fp-evm/std",
     "fp-rpc/std",
     "fp-self-contained/std",
     # Frontier FRAME
-    "pallet-base-fee/std",
-    "pallet-dynamic-fee/std",
     "pallet-ethereum/std",
-    "pallet-evm/std",
     "pallet-evm-chain-id/std",
     "pallet-evm-precompile-modexp/std",
     "pallet-evm-precompile-sha3fips/std",
     "pallet-evm-precompile-simple/std",
+    "pallet-evm/std",
     "pallet-hotfix-sufficients/std",
+    # Vitreus pallets
     "pallet-claiming/std",
-    "pallet-simple-vesting/std",
+    "pallet-energy-broker/std",
+    "pallet-energy-fee/std",
+    "pallet-energy-generation/std",
     "pallet-nac-managing/std",
     "pallet-privileges/std",
     "pallet-reputation/std",
-    "pallet-energy-broker/std",
-    "pallet-energy-generation/std",
-    "pallet-energy-fee/std",
+    "pallet-simple-vesting/std",
+    "pallet-treasury-extension/std",
+    # Runtime API
     "energy-fee-runtime-api/std",
     "energy-generation-runtime-api/std",
     "vitreus-utility-runtime-api/std",
-    "pallet-beefy/std",
-    "pallet-beefy-mmr/std",
-    "pallet-mmr/std"
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
@@ -315,4 +301,5 @@ runtime-benchmarks = [
     "pallet-uniques/runtime-benchmarks",
     "pallet-xcm/runtime-benchmarks",
     "xcm-builder/runtime-benchmarks",
+    "xcm-runtime-apis/runtime-benchmarks",
 ]

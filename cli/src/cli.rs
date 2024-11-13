@@ -14,10 +14,13 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI library.
+//! Vitreus CLI library.
+
+pub use polkadot_node_primitives::NODE_VERSION;
 
 use clap::Parser;
-use service::{eth::EthConfiguration, Sealing};
+use std::path::PathBuf;
+use vitreus_service::eth::EthConfiguration;
 
 #[allow(missing_docs)]
 #[derive(Debug, Parser)]
@@ -43,14 +46,6 @@ pub enum Subcommand {
     /// Revert the chain to a previous state.
     Revert(sc_cli::RevertCmd),
 
-    #[allow(missing_docs)]
-    #[command(name = "prepare-worker", hide = true)]
-    PvfPrepareWorker(ValidationWorkerCommand),
-
-    #[allow(missing_docs)]
-    #[command(name = "execute-worker", hide = true)]
-    PvfExecuteWorker(ValidationWorkerCommand),
-
     /// Sub-commands concerned with benchmarking.
     #[cfg(feature = "runtime-benchmarks")]
     #[command(subcommand)]
@@ -59,18 +54,6 @@ pub enum Subcommand {
     /// Sub-commands concerned with benchmarking.
     #[cfg(not(feature = "runtime-benchmarks"))]
     Benchmark,
-
-    /// Runs performance checks such as PVF compilation in order to measure machine
-    /// capabilities of running a validator.
-    HostPerfCheck,
-
-    /// Try some command against runtime state.
-    #[cfg(feature = "try-runtime")]
-    TryRuntime(try_runtime_cli::TryRuntimeCmd),
-
-    /// Try some command against runtime state. Note: `try-runtime` feature must be enabled.
-    #[cfg(not(feature = "try-runtime"))]
-    TryRuntime,
 
     /// Key management CLI utilities
     #[command(subcommand)]
@@ -84,58 +67,36 @@ pub enum Subcommand {
 
 #[allow(missing_docs)]
 #[derive(Debug, Parser)]
-pub struct ValidationWorkerCommand {
-    /// The path to the validation host's socket.
-    #[arg(long)]
-    pub socket_path: String,
-    /// Calling node implementation version
-    #[arg(long)]
-    pub node_impl_version: String,
-}
-
-#[allow(missing_docs)]
-#[derive(Debug, Parser)]
 #[group(skip)]
 pub struct RunCmd {
     #[clap(flatten)]
     pub base: sc_cli::RunCmd,
 
-    /// Force using Kusama native runtime.
-    #[arg(long = "force-kusama")]
-    pub force_kusama: bool,
-
-    /// Force using Westend native runtime.
-    #[arg(long = "force-westend")]
-    pub force_westend: bool,
-
-    /// Force using Rococo native runtime.
-    #[arg(long = "force-rococo")]
-    pub force_rococo: bool,
-
-    /// Setup a GRANDPA scheduled voting pause.
+    /// Disable the BEEFY gadget.
     ///
-    /// This parameter takes two values, namely a block number and a delay (in
-    /// blocks). After the given block number is finalized the GRANDPA voter
-    /// will temporarily stop voting for new blocks until the given delay has
-    /// elapsed (i.e. until a block at height `pause_block + delay` is imported).
-    #[arg(long = "grandpa-pause", num_args = 2)]
-    pub grandpa_pause: Vec<u32>,
-
-    /// Enable the BEEFY gadget, disabled by default
+    /// Currently enabled by default on 'Vitreus'.
     #[arg(long)]
-    pub beefy: bool,
+    pub no_beefy: bool,
 
-    /// Add the destination address to the jaeger agent.
+    /// Allows a validator to run insecurely outside of Secure Validator Mode. Security features
+    /// are still enabled on a best-effort basis, but missing features are no longer required. For
+    /// more information see <https://github.com/w3f/polkadot-wiki/issues/4881>.
+    #[arg(long = "insecure-validator-i-know-what-i-do", requires = "validator")]
+    pub insecure_validator: bool,
+
+    /// Enable the block authoring backoff that is triggered when finality is lagging.
+    #[arg(long)]
+    pub force_authoring_backoff: bool,
+
+    /// Add the destination address to the 'Jaeger' agent.
     ///
-    /// Must be valid socket address, of format `IP:Port`
-    /// commonly `127.0.0.1:6831`.
+    /// Must be valid socket address, of format `IP:Port` (commonly `127.0.0.1:6831`).
     #[arg(long)]
     pub jaeger_agent: Option<String>,
 
     /// Add the destination address to the `pyroscope` agent.
     ///
-    /// Must be valid socket address, of format `IP:Port`
-    /// commonly `127.0.0.1:4040`.
+    /// Must be valid socket address, of format `IP:Port` (commonly `127.0.0.1:4040`).
     #[arg(long)]
     pub pyroscope_server: Option<String>,
 
@@ -151,9 +112,37 @@ pub struct RunCmd {
 
     /// Overseer message capacity override.
     ///
-    /// **Dangerous!** Do not touch unless explicitly adviced to.
+    /// **Dangerous!** Do not touch unless explicitly advised to.
     #[arg(long)]
     pub overseer_channel_capacity_override: Option<usize>,
+
+    /// Path to the directory where auxiliary worker binaries reside.
+    ///
+    /// TESTING ONLY: if the path points to an executable rather then directory,
+    /// that executable is used both as preparation and execution worker.
+    #[arg(long, value_name = "PATH")]
+    pub workers_path: Option<PathBuf>,
+
+    /// Override the maximum number of pvf execute workers.
+    ///
+    ///  **Dangerous!** Do not touch unless explicitly advised to.
+    #[arg(long)]
+    pub execute_workers_max_num: Option<usize>,
+    /// Override the maximum number of pvf workers that can be spawned in the pvf prepare
+    /// pool for tasks with the priority below critical.
+    ///
+    ///  **Dangerous!** Do not touch unless explicitly advised to.
+
+    #[arg(long)]
+    pub prepare_workers_soft_max_num: Option<usize>,
+    /// Override the absolute number of pvf workers that can be spawned in the pvf prepare pool.
+    ///
+    ///  **Dangerous!** Do not touch unless explicitly advised to.
+    #[arg(long)]
+    pub prepare_workers_hard_max_num: Option<usize>,
+    /// TESTING ONLY: disable the version check between nodes and workers.
+    #[arg(long, hide = true)]
+    pub disable_worker_version_check: bool,
 }
 
 #[allow(missing_docs)]
@@ -167,10 +156,6 @@ pub struct Cli {
 
     #[clap(flatten)]
     pub storage_monitor: sc_storage_monitor::StorageMonitorParams,
-
-    /// Choose sealing method.
-    #[arg(long, value_enum, ignore_case = true)]
-    pub sealing: Option<Sealing>,
 
     #[command(flatten)]
     pub eth: EthConfiguration,

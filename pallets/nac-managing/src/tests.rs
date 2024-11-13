@@ -27,8 +27,9 @@ type BalanceOf<Test> = <Test as pallet_balances::Config>::Balance;
 const VANGUARD_1_REPUTATION_POINT: u64 = 7398066;
 
 fn get_claimed(collection_id: CollectionId, item_id: ItemId) -> BalanceOf<Test> {
-    let claimed_raw = Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-        .unwrap_or(vec![]);
+    let claimed_raw =
+        Nfts::system_attribute(&collection_id, Some(&item_id), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
+            .unwrap_or(vec![]);
     BalanceOf::<Test>::decode(&mut claimed_raw.as_slice()).unwrap_or(BalanceOf::<Test>::default())
 }
 

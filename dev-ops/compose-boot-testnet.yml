@@ -1,38 +1,24 @@
 version: "3.3"
 
 services:
-  vitreus_power_plant:
-    build:
-      context: ..
-      dockerfile: Dockerfile
-      args:
-        BUILD_FEATURES: fast-runtime
-    image: vitreus_power_plant
-    networks:
-      - vitreus_power_plant_network
-
   boot_node:
-    image: vitreus_power_plant
+    image: cdivtrs/power-plant:testnet-latest
     container_name: power-plant-boot-node
     restart: always
-    depends_on:
-      - vitreus_power_plant
     volumes:
       - node_data:/tmp/node
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
-      --chain testnet
+      --chain ./target/release/vitreus-power-plant-testnet.json
       --name testnet-bootnode
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
-      --node-key bf4912e408a4cf864623e8f01c4e74f3cf61f7863129d65a8df47d007fe00f22
+      --node-key ${NODE_KEY}
       --validator
       --prometheus-external
       --rpc-cors all
-      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 1"
-      --beefy
 
     ports:
       - "0.0.0.0:30333:30333/tcp"

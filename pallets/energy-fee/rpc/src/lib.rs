@@ -1,8 +1,8 @@
 use ethereum_types::U256;
 use jsonrpsee::{
-    core::{Error as RpcError, RpcResult},
+    core::RpcResult,
     proc_macros::rpc,
-    types::error::CallError,
+    types::{ErrorCode, ErrorObject},
 };
 use parity_scale_codec::{Codec, Decode};
 use sp_api::ProvideRuntimeApi;
@@ -63,8 +63,13 @@ where
             // If the block hash is not supplied assume the best block.
             self.client.info().best_hash,
         );
-        api.estimate_gas(at, request)
-            .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
+        api.estimate_gas(at, request).map_err(|e| {
+            ErrorObject::owned(
+                ErrorCode::InternalError.code(),
+                "Unable to query estimate_gas.",
+                Some(e.to_string()),
+            )
+        })
     }
 
     fn estimate_call_fee(
@@ -79,11 +84,21 @@ where
             self.client.info().best_hash,
         );
 
-        let call = Decode::decode(&mut &*encoded_call)
-            .map_err(|e| CallError::InvalidParams(anyhow::Error::new(e)))?;
+        let call = Decode::decode(&mut &*encoded_call).map_err(|e| {
+            ErrorObject::owned(
+                ErrorCode::InternalError.code(),
+                "Unable to decode call.",
+                Some(e.to_string()),
+            )
+        })?;
 
-        api.estimate_call_fee(at, account, call)
-            .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
+        api.estimate_call_fee(at, account, call).map_err(|e| {
+            ErrorObject::owned(
+                ErrorCode::InternalError.code(),
+                "Unable to query estimate_call_fee.",
+                Some(e.to_string()),
+            )
+        })
     }
 
     fn vtrs_to_vnrg_swap_rate(
@@ -95,7 +110,12 @@ where
             // If the block hash is not supplied assume the best block.
             self.client.info().best_hash,
         );
-        api.vtrs_to_vnrg_swap_rate(at)
-            .map_err(|e| RpcError::Call(CallError::Failed(e.into())))
+        api.vtrs_to_vnrg_swap_rate(at).map_err(|e| {
+            ErrorObject::owned(
+                ErrorCode::InternalError.code(),
+                "Unable to query vtrs_to_vnrg_swap_rate.",
+                Some(e.to_string()),
+            )
+        })
     }
 }
