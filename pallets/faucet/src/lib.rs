@@ -74,13 +74,15 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Requset some funds.
+        /// Request some funds.
         #[pallet::call_index(0)]
-        #[pallet::weight(
-            (<T as Config>::WeightInfo::request_funds(), DispatchClass::Normal, Pays::No)
-            )]
-        pub fn request_funds(origin: OriginFor<T>, amount: T::Balance) -> DispatchResult {
-            let who = ensure_signed(origin)?;
+        #[pallet::weight((<T as Config>::WeightInfo::request_funds(), DispatchClass::Normal, Pays::No))]
+        pub fn request_funds(
+            origin: OriginFor<T>,
+            who: T::AccountId,
+            amount: T::Balance,
+        ) -> DispatchResult {
+            ensure_none(origin)?;
 
             ensure!(amount <= T::MaxAmount::get(), Error::<T>::AmountTooHigh);
 
@@ -103,6 +105,21 @@ pub mod pallet {
             Self::deposit_event(Event::FundsSent { who, amount });
 
             Ok(())
+        }
+    }
+
+    #[pallet::validate_unsigned]
+    impl<T: Config> ValidateUnsigned for Pallet<T> {
+        type Call = Call<T>;
+
+        fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+            match call {
+                Call::request_funds { who, amount } => ValidTransaction::with_tag_prefix("Faucet")
+                    .and_provides((who, amount))
+                    .propagate(true)
+                    .build(),
+                _ => InvalidTransaction::Call.into(),
+            }
         }
     }
 }
