@@ -155,10 +155,11 @@ mod helpers {
 }
 pub mod areas;
 pub mod migrations;
-#[cfg(test)]
-mod tests;
 mod weights;
 mod xcm_config;
+
+#[cfg(all(test, feature = "testnet-runtime"))]
+mod tests;
 
 use precompiles::VitreusPrecompiles;
 
