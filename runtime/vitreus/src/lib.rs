@@ -1606,6 +1606,19 @@ impl auctions::Config for Runtime {
     type WeightInfo = weights::runtime_common_auctions::WeightInfo<Runtime>;
 }
 
+parameter_types! {
+    pub const FaucetMaxAmount: Balance = 1000 * UNITS;
+    pub const FaucetAccumulationPeriod: BlockNumber = 1 * DAYS;
+}
+
+#[cfg(feature = "testnet-runtime")]
+impl pallet_faucet::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type MaxAmount = FaucetMaxAmount;
+    type AccumulationPeriod = FaucetAccumulationPeriod;
+    type WeightInfo = pallet_faucet::weights::SubstrateWeight<Runtime>;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -1692,6 +1705,9 @@ construct_runtime!(
         // refer to block<N>. See https://github.com/polkadot-fellows/runtimes/issues/160 for details.
         Mmr: pallet_mmr = 201,
         MmrLeaf: pallet_beefy_mmr = 202,
+
+        #[cfg(feature = "testnet-runtime")]
+        Faucet: pallet_faucet = 240,
     }
 );
 
