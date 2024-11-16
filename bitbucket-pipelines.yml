@@ -13,9 +13,9 @@ pipelines:
             - export RUSTFLAGS="-C strip=debuginfo"
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
-            - cargo clippy -- -D warnings
-            - cargo build --locked
-            - cargo test -j 2 --workspace --locked
+            - cargo clippy --features testnet-native -- -D warnings
+            - cargo build --features testnet-native --locked
+            - cargo test -j 2 --features testnet-native --workspace --locked
 #            - cargo test -j 2 --workspace --features "runtime-benchmarks" --locked
 
     feature/*:
@@ -27,9 +27,9 @@ pipelines:
             - export RUSTFLAGS="-C strip=debuginfo"
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
-            - cargo clippy -- -D warnings
-            - cargo build --locked
-            - cargo test -j 2 --workspace --locked
+            - cargo clippy --features testnet-native -- -D warnings
+            - cargo build --features testnet-native --locked
+            - cargo test -j 2 --features testnet-native --workspace --locked
 #            - cargo test -j 2 --workspace --features "runtime-benchmarks" --locked
 
     devops/*:
@@ -41,9 +41,9 @@ pipelines:
             - export RUSTFLAGS="-C strip=debuginfo"
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
             - cargo fmt -- --check
-            - cargo clippy -- -D warnings
-            - cargo build --locked
-            - cargo test -j 2 --workspace --locked
+            - cargo clippy --features testnet-native -- -D warnings
+            - cargo build --features testnet-native --locked
+            - cargo test -j 2 --features testnet-native --workspace --locked
 #            - cargo test -j 2 --workspace --features "runtime-benchmarks" --locked
 
   custom:
@@ -56,7 +56,7 @@ pipelines:
             - rustup target add wasm32-unknown-unknown
             - export RUSTFLAGS="-C strip=debuginfo"
             - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
-            - cargo test -j 2 --workspace --locked
+            - cargo test -j 2 --features testnet-native --workspace --locked
 
   branches:   
     develop:
@@ -75,9 +75,9 @@ pipelines:
                   - export RUSTFLAGS="-C strip=debuginfo"
                   - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
                   - cargo fmt -- --check
-                  - cargo clippy -- -D warnings
-                  - cargo build --features "fast-runtime" --locked
-                  - cargo test -j 2 --workspace --locked
+                  - cargo clippy --features testnet-native -- -D warnings
+                  - cargo build --features testnet-native --locked
+                  - cargo test -j 2 --features testnet-native --workspace --locked
 
     stagenet:
       - step:
@@ -95,9 +95,9 @@ pipelines:
                   - export RUSTFLAGS="-C strip=debuginfo"
                   - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
                   - cargo fmt -- --check
-                  - cargo clippy -- -D warnings
-                  - cargo build --locked
-                  - cargo test -j 2 --workspace --locked
+                  - cargo clippy --features mainnet-native -- -D warnings
+                  - cargo build --features mainnet-native --locked
+                  - cargo test -j 2 --features mainnet-native --workspace --locked
 
             - step:
                 name: inno STAGEnet bootnode
@@ -156,11 +156,11 @@ pipelines:
                   - rustup target add wasm32-unknown-unknown
                   - export RUSTFLAGS="-C strip=debuginfo"
                   - apt-get update && apt-get install -y cmake build-essential clang libclang-dev protobuf-compiler pkg-config libssl-dev libpq-dev gcc llvm jq 
-                  - cargo build --locked
-                  - cargo test -j 2 --workspace --locked
+                  - cargo build --features testnet-native --locked
+                  - cargo test -j 2 --features testnet-native --workspace --locked
 #                  - cargo test -j 2 --workspace --features "runtime-benchmarks" --locked
                   - cargo fmt -- --check
-                  - cargo clippy -- -D warnings
+                  - cargo clippy --features testnet-native -- -D warnings
 
             - step:
                 name: inno testnet bootnode
