@@ -44,6 +44,17 @@ substrate-build-script-utils = { workspace = true, default-features = true }
 
 [features]
 default = ["with-rocksdb-weights", "rocksdb", "sql", "txpool"]
+
+# Configure the native runtimes to use.
+mainnet-native = [
+    "vitreus-cli/mainnet-native",
+    "vitreus-service/mainnet-native",
+]
+testnet-native = [
+    "vitreus-cli/testnet-native",
+    "vitreus-service/testnet-native",
+]
+
 with-rocksdb-weights = ["vitreus-service/with-rocksdb-weights"]
 with-paritydb-weights = ["vitreus-service/with-paritydb-weights"]
 rocksdb = [

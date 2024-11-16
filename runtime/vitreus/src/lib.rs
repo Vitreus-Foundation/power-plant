@@ -5,8 +5,10 @@
 // #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
 // Make the WASM binary available.
-#[cfg(feature = "std")]
-include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+#[cfg(all(feature = "std", feature = "mainnet-runtime"))]
+include!(concat!(env!("OUT_DIR"), "/vitreus_power_plant_mainnet_runtime"));
+#[cfg(all(feature = "std", feature = "testnet-runtime"))]
+include!(concat!(env!("OUT_DIR"), "/vitreus_power_plant_testnet_runtime"));
 
 use frame_support::{
     genesis_builder_helper::{build_state, get_preset},

@@ -1,4 +1,4 @@
-#![allow(clippy::type_complexity, clippy::identity_op)]
+#![allow(dead_code, unused_imports, clippy::type_complexity, clippy::identity_op)]
 
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
@@ -59,6 +59,7 @@ const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 const MIN_COOPERATOR_BOND: Balance = 1_000_000_000_000_000_000;
 const ENERGY_PER_STAKE_CURRENCY: Balance = 19_909_091_036_891;
 
+#[cfg(feature = "testnet-native")]
 pub fn development_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
@@ -97,6 +98,7 @@ pub fn development_config() -> ChainSpec {
         .build()
 }
 
+#[cfg(feature = "testnet-native")]
 pub fn devnet_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
@@ -134,6 +136,7 @@ pub fn devnet_config() -> ChainSpec {
         .build()
 }
 
+#[cfg(feature = "testnet-native")]
 pub fn localnet_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
@@ -171,6 +174,7 @@ pub fn localnet_config() -> ChainSpec {
         .build()
 }
 
+#[cfg(feature = "testnet-native")]
 pub fn testnet_config() -> ChainSpec {
     use testnet_keys::*;
 
@@ -198,6 +202,7 @@ pub fn testnet_config() -> ChainSpec {
         .build()
 }
 
+#[cfg(feature = "mainnet-native")]
 pub fn stagenet_config() -> ChainSpec {
     use testnet_keys::*;
 
@@ -226,6 +231,7 @@ pub fn stagenet_config() -> ChainSpec {
         .build()
 }
 
+#[cfg(feature = "mainnet-native")]
 pub fn mainnet_config() -> ChainSpec {
     use mainnet_keys::*;
 
@@ -258,6 +264,7 @@ pub fn mainnet_config() -> ChainSpec {
 }
 
 /// Configure initial storage state for FRAME modules.
+#[cfg(feature = "testnet-native")]
 pub fn testnet_genesis(
     _wasm_binary: &[u8],
     root_key: AccountId,
@@ -429,6 +436,7 @@ pub fn testnet_genesis(
 }
 
 /// Configure initial storage state for FRAME modules.
+#[cfg(feature = "mainnet-native")]
 fn mainnet_genesis(
     _wasm_binary: &[u8],
     root_key: AccountId,

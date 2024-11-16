@@ -61,5 +61,15 @@ try-runtime = ["vitreus-service/try-runtime"]
 fast-runtime = ["vitreus-service/fast-runtime"]
 pyroscope = ["dep:pyroscope", "pyroscope_pprofrs"]
 
+# Configure the native runtimes to use.
+mainnet-native = [
+    "chain-spec/mainnet-native",
+    "vitreus-service/mainnet-native",
+]
+testnet-native = [
+    "chain-spec/testnet-native",
+    "vitreus-service/testnet-native",
+]
+
 malus = ["full-node", "vitreus-service/malus"]
 runtime-metrics = ["polkadot-node-metrics/runtime-metrics"]

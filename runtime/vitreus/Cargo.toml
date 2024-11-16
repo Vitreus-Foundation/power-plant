@@ -131,6 +131,8 @@ substrate-wasm-builder = { workspace = true, optional = true }
 
 [features]
 default = ["std", "with-rocksdb-weights"]
+mainnet-runtime = []
+testnet-runtime = ["fast-runtime"]
 with-rocksdb-weights = []
 with-paritydb-weights = []
 try-runtime = [
