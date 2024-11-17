@@ -111,6 +111,7 @@ pallet-claiming = { workspace = true }
 pallet-energy-broker = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-energy-generation = { workspace = true }
+pallet-faucet = { workspace = true }
 pallet-nac-managing = { workspace = true }
 pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
@@ -131,6 +132,8 @@ substrate-wasm-builder = { workspace = true, optional = true }
 
 [features]
 default = ["std", "with-rocksdb-weights"]
+mainnet-runtime = []
+testnet-runtime = ["fast-runtime"]
 with-rocksdb-weights = []
 with-paritydb-weights = []
 try-runtime = [
@@ -159,6 +162,7 @@ try-runtime = [
     "pallet-ethereum/try-runtime",
     "pallet-evm-chain-id/try-runtime",
     "pallet-evm/try-runtime",
+    "pallet-faucet/try-runtime",
     "pallet-grandpa/try-runtime",
     "pallet-hotfix-sufficients/try-runtime",
     "pallet-im-online/try-runtime",
@@ -276,6 +280,7 @@ std = [
     "pallet-energy-broker/std",
     "pallet-energy-fee/std",
     "pallet-energy-generation/std",
+    "pallet-faucet/std",
     "pallet-nac-managing/std",
     "pallet-privileges/std",
     "pallet-reputation/std",
@@ -295,6 +300,7 @@ runtime-benchmarks = [
     "pallet-energy-broker/runtime-benchmarks",
     "pallet-energy-fee/runtime-benchmarks",
     "pallet-ethereum/runtime-benchmarks",
+    "pallet-faucet/runtime-benchmarks",
     "pallet-hotfix-sufficients/runtime-benchmarks",
     "pallet-nfts/runtime-benchmarks",
     "pallet-treasury-extension/runtime-benchmarks",

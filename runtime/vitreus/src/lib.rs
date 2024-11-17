@@ -5,8 +5,10 @@
 // #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
 // Make the WASM binary available.
-#[cfg(feature = "std")]
-include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
+#[cfg(all(feature = "std", feature = "mainnet-runtime"))]
+include!(concat!(env!("OUT_DIR"), "/vitreus_power_plant_mainnet_runtime"));
+#[cfg(all(feature = "std", feature = "testnet-runtime"))]
+include!(concat!(env!("OUT_DIR"), "/vitreus_power_plant_testnet_runtime"));
 
 use frame_support::{
     genesis_builder_helper::{build_state, get_preset},
@@ -153,10 +155,11 @@ mod helpers {
 }
 pub mod areas;
 pub mod migrations;
-#[cfg(test)]
-mod tests;
 mod weights;
 mod xcm_config;
+
+#[cfg(all(test, feature = "testnet-runtime"))]
+mod tests;
 
 use precompiles::VitreusPrecompiles;
 
@@ -246,7 +249,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 201,
+    spec_version: 202,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 2,
@@ -1604,6 +1607,19 @@ impl auctions::Config for Runtime {
     type WeightInfo = weights::runtime_common_auctions::WeightInfo<Runtime>;
 }
 
+parameter_types! {
+    pub const FaucetMaxAmount: Balance = 1000 * UNITS;
+    pub const FaucetAccumulationPeriod: BlockNumber = 1 * DAYS;
+}
+
+#[cfg(feature = "testnet-runtime")]
+impl pallet_faucet::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type MaxAmount = FaucetMaxAmount;
+    type AccumulationPeriod = FaucetAccumulationPeriod;
+    type WeightInfo = pallet_faucet::weights::SubstrateWeight<Runtime>;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -1690,6 +1706,9 @@ construct_runtime!(
         // refer to block<N>. See https://github.com/polkadot-fellows/runtimes/issues/160 for details.
         Mmr: pallet_mmr = 201,
         MmrLeaf: pallet_beefy_mmr = 202,
+
+        #[cfg(feature = "testnet-runtime")]
+        Faucet: pallet_faucet = 240,
     }
 );
 

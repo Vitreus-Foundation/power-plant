@@ -65,12 +65,18 @@ impl SubstrateCli for Cli {
 
     fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
         Ok(match id {
-            "dev" => Box::new(chain_spec::development_config()),
-            "devnet" => Box::new(chain_spec::devnet_config()),
-            "stagenet" => Box::new(chain_spec::stagenet_config()),
-            "" | "localnet" => Box::new(chain_spec::localnet_config()),
-            "testnet" => Box::new(chain_spec::testnet_config()),
+            #[cfg(feature = "mainnet-native")]
             "mainnet" => Box::new(chain_spec::mainnet_config()),
+            #[cfg(feature = "mainnet-native")]
+            "stagenet" => Box::new(chain_spec::stagenet_config()),
+            #[cfg(feature = "testnet-native")]
+            "testnet" => Box::new(chain_spec::testnet_config()),
+            #[cfg(feature = "testnet-native")]
+            "dev" => Box::new(chain_spec::development_config()),
+            #[cfg(feature = "testnet-native")]
+            "devnet" => Box::new(chain_spec::devnet_config()),
+            #[cfg(feature = "testnet-native")]
+            "" | "localnet" => Box::new(chain_spec::localnet_config()),
             path => {
                 Box::new(chain_spec::ChainSpec::from_json_file(std::path::PathBuf::from(path))?)
             },
