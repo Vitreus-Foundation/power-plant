@@ -30,3 +30,8 @@ vitreus-power-plant-runtime = { workspace = true, default-features = true }
 [build-dependencies]
 hex-literal = { workspace = true, default-features = true }
 csv = { workspace = true, default-features = true }
+
+[features]
+# Configure the native runtimes to use.
+mainnet-native = ["vitreus-power-plant-runtime/mainnet-runtime"]
+testnet-native = ["vitreus-power-plant-runtime/testnet-runtime"]

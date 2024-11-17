@@ -131,6 +131,10 @@ full-node = [
     "parity-db",
 ]
 
+# Configure the native runtimes to use.
+mainnet-native = ["vitreus-power-plant-runtime/mainnet-runtime"]
+testnet-native = ["vitreus-power-plant-runtime/testnet-runtime"]
+
 runtime-benchmarks = ["sc-service/runtime-benchmarks"]
 try-runtime = ["vitreus-power-plant-runtime/try-runtime"]
 fast-runtime = ["vitreus-power-plant-runtime/fast-runtime"]
