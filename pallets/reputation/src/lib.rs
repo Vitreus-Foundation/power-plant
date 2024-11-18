@@ -70,11 +70,11 @@ pub const REPUTATION_POINTS_PER_BLOCK: ReputationPoint = ReputationPoint(24);
 pub const REPUTATION_POINTS_PER_DAY: ReputationPoint =
     ReputationPoint(REPUTATION_POINTS_PER_BLOCK.0 * 10 * 60 * 24);
 
-/// The number of repputation points per 30 days.
+/// The number of reputation points per 30 days.
 pub const REPUTATION_POINTS_PER_MONTH: ReputationPoint =
     ReputationPoint(REPUTATION_POINTS_PER_DAY.0 * 30);
 
-/// The number of repputation points per 12 months.
+/// The number of reputation points per 12 months.
 pub const REPUTATION_POINTS_PER_YEAR: ReputationPoint =
     ReputationPoint(REPUTATION_POINTS_PER_MONTH.0 * 12);
 

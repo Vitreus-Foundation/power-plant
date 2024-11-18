@@ -1,34 +1,3 @@
-//! Unit Tests for Reputation Pallet
-//!
-//! This module provides unit tests for the Reputation pallet, ensuring that all functions behave as expected in different scenarios.
-//! It uses the mock runtime defined in `mock.rs` to simulate blockchain behavior and validate the functionality of reputation-related operations.
-//!
-//! # Features
-//! - Tests various aspects of the Reputation pallet, including point updates, reputation tier management, and error handling.
-//! - Uses `assert_ok` and `assert_noop` macros to verify expected results and ensure that invalid operations are properly restricted.
-//!
-//! # Structure
-//! - Imports the mock runtime and all relevant pallet components, such as `Reputation`, `ReputationPoint`, and `ReputationTier`.
-//! - Contains multiple unit tests that exercise different parts of the pallet's logic, focusing on both success and failure cases.
-//!
-//! # Tests Overview
-//! - **can_set_points_forcefully**: Tests the ability to forcefully set reputation points for an account at a specific block number.
-//! - **other tests**: Additional tests can be added to validate different functionalities, including updating reputation over time, managing ranks, and handling improper operations.
-//!
-//! # Usage
-//! - Use these tests to ensure that changes to the Reputation pallet do not introduce regressions or unintended behaviors.
-//! - Run the tests using `cargo test` in the Substrate environment.
-//!
-//! # Dependencies
-//! - Relies on `frame_support` for test utilities like `assert_ok` and `assert_noop`.
-//! - Uses the mock runtime from `mock.rs` to provide an isolated environment for testing.
-//! - Imports pallet constants such as `RANKS_PER_TIER` and `REPUTATION_POINTS_PER_BLOCK` to verify their correct implementation.
-//!
-//! # Important Notes
-//! - Ensure the mock runtime is correctly configured before running the tests to avoid misleading results.
-//! - Expand the unit tests as new functionality is added to the Reputation pallet to maintain robust test coverage.
-
-
 use crate::{
     mock::*, Error, Event, Reputation, ReputationPoint, ReputationRecord, ReputationTier,
     RANKS_PER_TIER, REPUTATION_POINTS_PER_BLOCK,

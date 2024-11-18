@@ -15,48 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Claims Pallet Tests
-//!
-//! Comprehensive test suite for the claims pallet functionality, covering core operations,
-//! edge cases, and security scenarios.
-//!
-//! ## Test Categories
-//!
-//! ### Core Functionality
-//! - Token minting for claims pool
-//! - Basic claim operations
-//! - Genesis configuration validation
-//! - Vesting schedule integration
-//!
-//! ### Security Tests
-//! - Double-claim prevention
-//! - Invalid signature rejection
-//! - Unauthorized minting prevention
-//! - Claims exceeding available balance
-//! - Vesting schedule conflicts
-//!
-//! ### Signature Validation
-//! - Standard Ethereum signature verification
-//! - Cross-account signature attempts
-//! - Real Ethereum signature validation
-//!
-//! ### Administrative Functions
-//! - Claim creation and management
-//! - Token pool management
-//! - Adding claims to existing accounts
-//!
-//! ## Test Data
-//! Uses pre-configured accounts from mock.rs with various claim amounts
-//! and vesting schedules to validate different scenarios.
-//!
-//! ## Coverage
-//! Tests ensure:
-//! - All primary operations work as intended
-//! - Error conditions are properly handled
-//! - Security invariants are maintained
-//! - Edge cases are properly managed
-//! - Real-world signature validation works
-
 use crate::mock::*;
 use crate::secp_utils::*;
 use crate::{to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};

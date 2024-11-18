@@ -1,32 +1,3 @@
-//! Mock Runtime for Reputation Pallet Testing
-//!
-//! This module provides a mock runtime environment for testing the Reputation pallet.
-//! It includes the necessary configurations, types, and dependencies required to simulate a Substrate-based blockchain runtime, enabling developers to write unit tests for the pallet.
-//!
-//! # Features
-//! - Defines a mock runtime using the `construct_runtime!` macro for testing purposes.
-//! - Includes core components like the System pallet to enable a functional blockchain environment.
-//! - Uses type aliases to simplify key elements such as blocks and transaction indexes (Nonces).
-//!
-//! # Structure
-//! - Configures the `Test` runtime that includes `System` and `ReputationPallet`.
-//! - Defines the necessary constants and traits for the mock runtime, ensuring it behaves consistently with expected blockchain logic.
-//! - Utilizes `BlakeTwo256` as the hashing algorithm and `IdentityLookup` for account resolution.
-//!
-//! # Usage
-//! - Import this mock runtime to test the behavior of the Reputation pallet in isolation.
-//! - Write unit tests that target the `Test` runtime to validate the pallet's functionality and ensure it handles different scenarios correctly.
-//!
-//! # Dependencies
-//! - Relies on FRAME support for system-level configuration, including `frame_system` and other fundamental pallets.
-//! - Uses `sp_runtime` and `sp_core` for essential runtime traits and hashing utilities.
-//! - Defines constants like `ConstU16` and `ConstU64` to configure runtime parameters.
-//!
-//! # Important Notes
-//! - The mock runtime is designed specifically for testing and should not be used in production.
-//! - Ensure to expand or modify the mock configuration if additional pallets or functionality need to be tested.
-
-
 use crate as pallet_reputation;
 use frame_support::{
     derive_impl,

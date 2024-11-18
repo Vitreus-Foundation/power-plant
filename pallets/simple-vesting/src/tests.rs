@@ -1,36 +1,3 @@
-//! Unit Tests for Simple Vesting Pallet
-//!
-//! This module provides unit tests for the Simple Vesting pallet, verifying the functionality of vesting-related operations.
-//! It utilizes the mock runtime from `mock.rs` to simulate blockchain behavior and ensure that the vesting logic works as intended.
-//!
-//! # Features
-//! - Tests various scenarios for the vesting pallet, such as successful vesting transfers, balance checks, and error conditions.
-//! - Uses `assert_ok` and `assert_noop` macros to validate both valid and invalid operations.
-//! - Ensures that the pallet correctly manages the locked balances over time based on the vesting schedule.
-//!
-//! # Structure
-//! - Imports the mock runtime and other pallet components including `VestingInfo`, `Error`, and relevant events.
-//! - Contains multiple unit tests that exercise key functionalities, focusing on both success paths and error handling.
-//! - Uses the `Currency` trait to manipulate balances directly, providing a realistic testing scenario for funds management.
-//!
-//! # Tests Overview
-//! - **vest_works**: Tests the basic vesting functionality where `BOB` receives a vested transfer from `ALICE` and checks the expected balance changes.
-//! - **other tests**: Additional tests should cover various vesting-related scenarios, such as edge cases for insufficient balances, incorrect vesting parameters, and vesting expiration.
-//!
-//! # Usage
-//! - Use these tests to verify the correctness of the Simple Vesting pallet, especially after changes or updates to the vesting logic.
-//! - Run the tests using `cargo test` in the Substrate development environment.
-//!
-//! # Dependencies
-//! - Uses `frame_support` for testing utilities, including `assert_ok` and `assert_noop`.
-//! - Relies on `sp_runtime` for handling errors and dispatch results.
-//! - Imports pallet constants and types, such as `VestingInfo`, to ensure consistency with the pallet's implementation.
-//!
-//! # Important Notes
-//! - Ensure that the mock runtime is properly configured before running the tests to avoid misleading outcomes.
-//! - Expand the unit tests to include more comprehensive coverage as additional features are added to the vesting pallet.
-
-
 use crate::{mock::*, Error, Event, VestingInfo};
 use frame_support::traits::Currency;
 use frame_support::{assert_noop, assert_ok};

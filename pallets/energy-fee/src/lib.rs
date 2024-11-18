@@ -46,17 +46,6 @@
 //! - `MainTokenBalanced`: Main token (VTRS) operations
 //! - `EnergyExchange`: Token exchange mechanism
 //!
-//! # Examples
-//!
-//! ```rust
-//! # use frame_support::assert_ok;
-//! # use pallet_energy_fee::{Pallet, Config};
-//! # fn example<T: Config>(origin: T::RuntimeOrigin, new_threshold: T::Balance) {
-//! // Update burned energy threshold
-//! assert_ok!(Pallet::<T>::update_burned_energy_threshold(origin, new_threshold));
-//! # }
-//! ```
-//!
 //! # Warning
 //!
 //! Modifying fee parameters can significantly impact network economics and security.

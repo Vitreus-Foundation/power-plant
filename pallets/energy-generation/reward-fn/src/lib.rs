@@ -17,67 +17,6 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
-//! Cooperative Proof of Stake Inflation Calculator
-//!
-//! This module implements the Web3 Foundation's inflation model for cooperated proof of stake
-//! systems. The model incentivizes an ideal staking rate while maintaining network security.
-//!
-//! # Mathematical Model
-//!
-//! The inflation rate I(x) is calculated as:
-//! ```text
-//! I(x) = {
-//!     x / x_ideal                     for x ∈ [0, x_ideal]
-//!     2^((x_ideal - x) / d)          for x ∈ [x_ideal, 1]
-//! }
-//! ```
-//! where:
-//! - x: Current stake rate (fraction of tokens staked)
-//! - x_ideal: Target stake rate
-//! - d: Decay rate (falloff parameter)
-//!
-//! # Implementation Details
-//!
-//! ## Core Components
-//!
-//! 1. Inflation Computation
-//!    - Handles both linear and exponential regions
-//!    - Uses Taylor series for exponential calculation
-//!    - Implements safe arithmetic with BigUint
-//!
-//! 2. Numerical Methods
-//!    - Taylor series expansion for 2^x
-//!    - High-precision division operations
-//!    - Automatic term truncation
-//!
-//! ## Security Features
-//!
-//! - Bounds checking on all parameters
-//! - Falloff validation (minimum 1%)
-//! - Overflow protection in calculations
-//! - Graceful error handling
-//!
-//! # Usage Example
-//!
-//! ```rust
-//! # use sp_arithmetic::Perquintill;
-//! # use pallet_staking_reward_curve::compute_inflation;
-//! let stake_rate = Perquintill::from_percent(50);
-//! let ideal_stake = Perquintill::from_percent(60);
-//! let falloff = Perquintill::from_percent(5);
-//!
-//! let inflation_rate = compute_inflation(stake_rate, ideal_stake, falloff);
-//! ```
-//!
-//! # Notes
-//!
-//! - All calculations maintain precision using fixed-point arithmetic
-//! - Taylor series uses up to 300 terms for high accuracy
-//! - Performance is optimized for typical staking parameters
-//!
-//! # References
-//!
-//! [Web3 Foundation Research - Token Economics](https://research.web3.foundation/en/latest/polkadot/economics/1-token-economics.html#inflation-model-with-parachains)
 use sp_arithmetic::{
 	biguint::BigUint,
 	traits::{SaturatedConversion, Zero},

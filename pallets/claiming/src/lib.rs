@@ -45,6 +45,7 @@
 //! 3. Users sign messages with Ethereum keys
 //! 4. Users submit signatures to claim tokens
 //! 5. Optional vesting schedules are automatically applied
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]

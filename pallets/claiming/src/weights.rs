@@ -15,41 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-
-//! # Claims Pallet Weight Configuration
-//!
-//! Defines the computational and storage weights for claims pallet operations.
-//! These weights are crucial for blockchain resource management and fee calculation.
-//!
-//! ## Weight Calculations
-//! Each operation includes:
-//! - Base computational weight (in picoseconds)
-//! - Proof size weight
-//! - Database read operations
-//! - Database write operations
-//!
-//! ## Operations
-//! ### Mint Tokens to Claim
-//! - Computational: 15,273,000 ps
-//! - Storage: 1 read, 2 writes
-//! - Used when adding tokens to claiming pool
-//!
-//! ### Claim
-//! - Computational: 38,924,000 ps
-//! - Storage: 3 reads, 3 writes
-//! - Used for signature verification and token transfer
-//!
-//! ### Mint Claim
-//! - Computational: 38,924,000 ps
-//! - Storage: 3 reads, 3 writes
-//! - Used when creating new claims
-//!
-//! ## Implementations
-//! - SubstrateWeight<T>: Production implementation using runtime configuration
-//! - Unit implementation: Testing implementation using RocksDB weights
-//!
-//! These weights were benchmarked on reference hardware and include safety margins.
-
 #![cfg_attr(rustfmt, rustfmt_skip)]
 #![allow(unused_parens)]
 #![allow(unused_imports)]

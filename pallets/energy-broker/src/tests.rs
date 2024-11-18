@@ -15,49 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Asset Conversion Test Suite
-//!
-//! Comprehensive test suite validating core AMM functionality:
-//!
-//! ## Core Test Categories
-//!
-//! ### Pool Management
-//! - Pool creation validation
-//! - Liquidity provision/removal
-//! - Account collision checks
-//! - Pool setup fee handling
-//! - Error conditions
-//!
-//! ### Trading Functions
-//! - Price quote accuracy
-//! - Swap execution (exact in/out)
-//! - Slippage protection
-//! - Multi-hop routing
-//! - Edge case handling
-//!
-//! ### Security Tests
-//! - Access control validation
-//! - Minimum balance requirements
-//! - DoS attack prevention
-//! - Pool manipulation resistance
-//! - Reserve ratio maintenance
-//!
-//! ### Economic Tests
-//! - Fee calculation accuracy
-//! - Price impact assessment
-//! - Liquidity provider rewards
-//! - Realistic value scenarios
-//!
-//! ## Test Utilities
-//! - Balance checking helpers
-//! - Event validation
-//! - Asset creation shortcuts
-//! - Pool setup helpers
-//! - Path construction macros
-//!
-//! Tests ensure the AMM behaves correctly under all conditions while maintaining
-//! core invariants and security properties.
-
 use crate::{mock::*, *};
 use frame_support::{
     assert_noop, assert_ok,

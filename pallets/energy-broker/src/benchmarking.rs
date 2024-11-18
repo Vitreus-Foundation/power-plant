@@ -15,40 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Asset Conversion Pallet Benchmarking
-//!
-//! Performance benchmarking suite for core AMM operations to determine accurate weights.
-//!
-//! ## Benchmark Scenarios
-//!
-//! ### Pool Operations
-//! - Pool Creation: Creating new liquidity pools with initial setup
-//! - Liquidity Addition: Adding assets to existing pools with min/max checks
-//! - Liquidity Removal: Removing liquidity with fee calculations
-//!
-//! ### Helper Functions
-//! - LP Token Management: ID tracking and verification
-//! - Asset Creation: Test asset setup with initial balances
-//! - Pool Setup: Combined asset and pool initialization
-//! - Event Verification: Validating operation outcomes
-//!
-//! ## Test Configuration
-//! - Uses whitelisted test accounts
-//! - Initial asset balance of 1,000,000,000,000 units
-//! - Handles both native and custom assets
-//! - Verifies token minting/burning
-//! - Ensures proper fee collection
-//!
-//! ## Measurements
-//! Tests measure computational complexity of:
-//! - Storage operations
-//! - Balance transfers
-//! - LP token calculations
-//! - Fee processing
-//! - Multi-hop routing [TODO]
-//!
-//! This benchmarking module ensures gas costs accurately reflect real-world usage.
-
 use super::*;
 use frame_benchmarking::{benchmarks, whitelisted_caller};
 use frame_support::{

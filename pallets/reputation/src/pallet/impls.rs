@@ -1,25 +1,3 @@
-//! Implementations for Reputation Pallet (Non-Dispatchables)
-//!
-//! This module contains core implementations for the Reputation pallet, focusing on non-dispatchable functionality.
-//! It extends and complements the pallet by providing the logic needed for maintaining and modifying reputation records.
-//!
-//! # Features
-//! - Implements the `OnNewAccount` and `OnKilledAccount` traits from FRAME support, allowing reputation tracking on account creation and removal.
-//! - Provides core functions for managing and modifying reputation points and records.
-//! - Converts values using `SaturatedConversion` for safety.
-//!
-//! # Structure
-//! - Implements reputation-related functionality that is invoked internally within the pallet.
-//! - Defines how new accounts are initialized with reputation and how reputation is handled when accounts are removed.
-//!
-//! # Dependencies
-//! - Uses FRAME support traits such as `OnNewAccount` and `OnKilledAccount` for handling lifecycle events of accounts.
-//! - Relies on `frame_support::pallet_prelude` for prelude items to ensure consistent pallet interaction.
-//!
-//! # Usage
-//! This file should be used to define the core, non-user facing logic of the Reputation pallet.
-//! It is automatically utilized by the pallet during account lifecycle events and when updating reputation records.
-
 use crate::{ReputationPoint, ReputationRecord};
 
 use super::pallet::*;
@@ -31,7 +9,7 @@ use sp_runtime::SaturatedConversion;
 /// `frame_support`. If you want any account to have associated reputation with it, you need to
 /// specify `frame_system::Config` to use this pallet on `OnNewAccount`.
 ///
-/// `OnKilledAccount` is used to to remove orfan data from the store.
+/// `OnKilledAccount` is used to remove orfan data from the store.
 impl<T: Config> Pallet<T> {
     /// Updates the points for the time since the last time the account was updated.
     pub fn update_points_for_time() {
@@ -42,7 +20,7 @@ impl<T: Config> Pallet<T> {
         });
     }
 
-    /// Acturally do the slash.
+    /// Actually do the slash.
     pub fn do_slash(account: &T::AccountId, points: ReputationPoint) -> DispatchResult {
         let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
 
@@ -69,7 +47,7 @@ impl<T: Config> Pallet<T> {
         });
     }
 
-    /// Acturally increase points.
+    /// Actually increase points.
     pub fn do_increase_points(account: &T::AccountId, points: ReputationPoint) -> DispatchResult {
         <AccountReputation<T>>::try_mutate_exists(account, |value| {
             value

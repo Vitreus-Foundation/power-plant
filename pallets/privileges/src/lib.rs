@@ -1,7 +1,7 @@
 //!
 //! # Module Overview
 //!
-//! This module defines a pallet for managing VIP and VIPP (Very Important Person Protocol) membership
+//! This module defines a pallet for managing VIP and VIPP membership
 //! in a Substrate-based blockchain. The pallet provides mechanisms for managing VIP memberships,
 //! calculating loyalty points, updating membership information, handling penalties, and tracking
 //! contributions. The primary aim is to manage memberships based on contributions, energy generation,
@@ -16,7 +16,7 @@
 //!     - **`VippMembers`**: Stores details about VIPP members who qualify for a special status
 //!       due to their exceptional contributions or activity.
 //!
-//! - **Extrinsics and Core Functions**:
+//! - **Extrinsic and Core Functions**:
 //!   - **`add_new_vip_member()`**: Adds a new VIP member with initial details such as the stake,
 //!     contribution, and tax type. This extrinsic is available only to root users to ensure proper
 //!     control and security.
@@ -43,7 +43,7 @@
 //!
 //! # Access Control and Security
 //!
-//! - **Root-Only Access**: Certain extrinsics, such as adding a new VIP member, are restricted to
+//! - **Root-Only Access**: Certain extrinsic, such as adding a new VIP member, are restricted to
 //!   root users (`ensure_root`). This restriction ensures that only authorized users can add new
 //!   members to the VIP pool, providing an essential layer of access control.
 //! - **Verification and Error Handling**: Functions include verification steps to ensure that all
@@ -76,33 +76,6 @@
 //!   VIP membership status and recalculates their loyalty points. This ensures that claiming rewards
 //!   has a direct impact on the user's status, encouraging active participation.
 //!
-//! # Integration Considerations
-//!
-//! - **Energy Generation and Stake Management**: This pallet integrates with the `pallet_energy_generation`
-//!   to retrieve active stake information for VIP members. Developers should ensure that any changes
-//!   to the energy generation logic are reflected in this pallet to maintain consistency in stake
-//!   calculations and VIP membership management.
-//! - **Penalties and Free Periods**: The pallet includes logic to determine whether a member is in
-//!   a penalty-free period (`FREE_PENALTY_PERIOD_MONTH_NUMBER`). This consideration affects how
-//!   penalties are applied during certain months. Developers should test these scenarios to ensure
-//!   that penalties are only enforced when appropriate.
-//! - **Weight Management**: The weights associated with each extrinsic must be kept up-to-date to
-//!   reflect the actual computational cost of the operations. Developers should benchmark the pallet
-//!   periodically to ensure that the weight information remains accurate, especially after changes
-//!   to the logic or network infrastructure.
-//!
-//! # Example Scenario
-//!
-//! Suppose an admin wants to add a new VIP member who has been contributing significantly to the
-//! network. Using the `add_new_vip_member()` extrinsic, the admin sets up the member's initial
-//! active stake, contribution details, and tax type. Over time, the `update_quarter_info()` function
-//! is called to keep the member's information current, reflecting their ongoing contributions and
-//! updating their NAC level accordingly. When the member claims rewards, the `on_claim()` function
-//! updates their VIP status and recalculates loyalty points, ensuring they receive the appropriate
-//! recognition and benefits for their contributions.
-//!
-
-//! TODO: add description to this pallet (Privilege-pallet)
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
