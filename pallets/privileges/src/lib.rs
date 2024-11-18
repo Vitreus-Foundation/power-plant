@@ -1,5 +1,81 @@
-//! This pallet holds the VIP status of users.
-//! TODO: add description to this pallet (Privilege-pallet)
+//!
+//! # Module Overview
+//!
+//! This module defines a pallet for managing VIP and VIPP membership
+//! in a Substrate-based blockchain. The pallet provides mechanisms for managing VIP memberships,
+//! calculating loyalty points, updating membership information, handling penalties, and tracking
+//! contributions. The primary aim is to manage memberships based on contributions, energy generation,
+//! and reputation within the network.
+//!
+//! # Key Features and Components
+//!
+//! - **VIP Membership Management**:
+//!   - **Storage**:
+//!     - **`VipMembers`**: Tracks information related to VIP members, including active stake,
+//!       contribution information, and tax type.
+//!     - **`VippMembers`**: Stores details about VIPP members who qualify for a special status
+//!       due to their exceptional contributions or activity.
+//!
+//! - **Extrinsic and Core Functions**:
+//!   - **`add_new_vip_member()`**: Adds a new VIP member with initial details such as the stake,
+//!     contribution, and tax type. This extrinsic is available only to root users to ensure proper
+//!     control and security.
+//!   - **`update_quarter_info()`**: Updates the quarterly information for all VIP members, including
+//!     active stake and contribution points. This function helps ensure that each VIP's membership
+//!     information is up to date and reflects recent activity.
+//!   - **`on_claim()`**: Handles updates when users claim rewards, which affects their VIP status
+//!     and potentially increments their loyalty points.
+//!
+//! - **Membership Handling and Contributions**:
+//!   - **Tax Management**: Each VIP member has an associated `tax_type`, which determines the penalty
+//!     and reward system. Depending on the current quarter, the tax percentage may vary, and different
+//!     penalties or perks are applied based on the member's behavior and activity.
+//!   - **Stake-Based Calculations**: Calculations are performed based on the active stake of VIP members.
+//!     Functions like `calculate_points()` use stake information to calculate points that affect the
+//!     member's level and rewards.
+//!
+//! - **Quarter and Year Management**:
+//!   - **`check_correct_date()`**: Ensures that new date information is accurate and chronologically
+//!     correct, preventing any inconsistency in the progression of quarterly or yearly membership data.
+//!   - **Constants**: Constants such as `MAX_UPDATE_DAYS`, `FREE_PENALTY_PERIOD_MONTH_NUMBER`, and
+//!     `YEAR_FIRST_MONTH` are used to manage quarterly and yearly information effectively, ensuring
+//!     a consistent membership management cycle.
+//!
+//! # Access Control and Security
+//!
+//! - **Root-Only Access**: Certain extrinsic, such as adding a new VIP member, are restricted to
+//!   root users (`ensure_root`). This restriction ensures that only authorized users can add new
+//!   members to the VIP pool, providing an essential layer of access control.
+//! - **Verification and Error Handling**: Functions include verification steps to ensure that all
+//!   data is accurate, such as `check_correct_date()` to validate date progression. Errors are
+//!   handled via `ensure()` statements, maintaining the integrity of the system's state.
+//!
+//! # Developer Notes
+//!
+//! - **Integration with Other Pallets**: This pallet integrates closely with `pallet_energy_generation`
+//!   and `pallet_nac_managing`, leveraging energy generation data and NAC-level information to
+//!   determine VIP status and manage stake-based interactions.
+//! - **Weight Information**: Weights are defined for each extrinsic to represent the computational
+//!   cost of the operation. The weight implementation (`WeightInfo`) is used to ensure the efficient
+//!   and fair pricing of each operation based on its resource consumption.
+//! - **Time Management**: The pallet relies on `UnixTime` for computing durations like years and
+//!   quarters. This reliance helps ensure that the state updates are accurate and aligned with
+//!   real-world time, which is crucial for membership updates and loyalty point calculations.
+//!
+//! # Usage Scenarios
+//!
+//! - **VIP Membership Addition**: An administrator can add a new VIP member to the blockchain
+//!   using `add_new_vip_member()`, setting the initial parameters such as active stake, contribution
+//!   information, and associated tax type. This functionality allows rewarding users who have made
+//!   significant contributions to the network.
+//! - **Updating Stake and Contributions**: The quarterly update functionality (`update_quarter_info()`)
+//!   ensures that each VIP member’s contribution and stake are recalculated periodically. This feature
+//!   helps maintain an up-to-date record of each member’s activity, ensuring that rewards and penalties
+//!   are assigned fairly.
+//! - **Reward Claim Handling**: When users claim rewards, the `on_claim()` function updates their
+//!   VIP membership status and recalculates their loyalty points. This ensures that claiming rewards
+//!   has a direct impact on the user's status, encouraging active participation.
+//!
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
@@ -13,7 +89,6 @@ use frame_support::{
     pallet_prelude::{Decode, DispatchResult, TypeInfo},
     traits::{LockableCurrency, UnixTime},
     weights::Weight,
-    RuntimeDebug,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;

@@ -1,6 +1,6 @@
 // This file is part of Substrate.
 
-// Copyright (C) Parity Technologies (UK) Ltd.
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
 // SPDX-License-Identifier: Apache-2.0
 
 // Licensed under the Apache License, Version 2.0 (the "License");
@@ -22,7 +22,7 @@ use crate as pallet_claiming;
 
 use frame_support::traits::WithdrawReasons;
 use frame_support::{
-    construct_runtime, parameter_types,
+    construct_runtime, derive_impl, parameter_types,
     traits::{ConstU32, ConstU64},
 };
 use sp_core::H256;
@@ -44,6 +44,7 @@ construct_runtime!(
     }
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type BaseCallFilter = frame_support::traits::Everything;
@@ -70,6 +71,7 @@ impl frame_system::Config for Test {
     type MaxConsumers = ConstU32<16>;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -82,7 +84,6 @@ impl pallet_balances::Config for Test {
     type FreezeIdentifier = ();
     type MaxLocks = ();
     type MaxReserves = ConstU32<50>;
-    type MaxHolds = ();
     type MaxFreezes = ();
 }
 
@@ -99,6 +100,7 @@ impl pallet_vesting::Config for Test {
     type MinVestedTransfer = MinVestedTransfer;
     type WeightInfo = ();
     type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
+    type BlockNumberProvider = System;
     const MAX_VESTING_SCHEDULES: u32 = 28;
 }
 

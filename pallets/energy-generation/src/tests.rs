@@ -6,21 +6,21 @@ use crate::{
     testing_utils::perbill_signed_sub_abs,
 };
 use frame_support::{
-    assert_noop, assert_ok, assert_storage_noop, bounded_vec,
-    dispatch::{extract_actual_weight, Dispatchable, GetDispatchInfo, WithPostDispatchInfo},
+    assert_noop, assert_ok, assert_storage_noop,
+    dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
     pallet_prelude::*,
     traits::{Currency, Get, ReservableCurrency},
     weights::Weight,
 };
 use mock::*;
 use pallet_balances::Error as BalancesError;
-
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
-    assert_eq_error_rate, traits::BadOrigin, FixedPointNumber, FixedU128, Perbill, Percent,
-    TokenError,
+    assert_eq_error_rate, bounded_vec,
+    traits::{BadOrigin, Dispatchable},
+    FixedPointNumber, FixedU128, Perbill, Percent, TokenError,
 };
-use sp_staking::offence::{DisableStrategy, OffenceDetails};
+use sp_staking::offence::OffenceDetails;
 use sp_std::prelude::*;
 use std::ops::Deref;
 use substrate_test_utils::assert_eq_uvec;
@@ -2328,7 +2328,7 @@ fn era_is_always_same_length() {
 }
 
 #[test]
-fn offence_forces_new_era() {
+fn offence_doesnt_force_new_era() {
     ExtBuilder::default().build_and_execute(|| {
         on_offence_now(
             &[
@@ -2344,7 +2344,7 @@ fn offence_forces_new_era() {
             &[Perbill::from_percent(5), Perbill::from_percent(5)],
         );
 
-        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+        assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
     });
 }
 
@@ -2368,37 +2368,32 @@ fn offence_ensures_new_era_without_clobbering() {
 
 #[test]
 fn offence_deselects_validator_even_when_slash_is_zero() {
-    ExtBuilder::default().build_and_execute(|| {
-        assert!(Session::validators().contains(&11));
-        assert!(Session::validators().contains(&21));
-        assert!(<Validators<Test>>::contains_key(11));
-        assert!(<Validators<Test>>::contains_key(21));
+    ExtBuilder::default()
+        .validator_count(7)
+        .set_status(41, StakerStatus::Validator)
+        .set_status(51, StakerStatus::Validator)
+        .set_status(201, StakerStatus::Validator)
+        .set_status(202, StakerStatus::Validator)
+        .build_and_execute(|| {
+            assert!(Session::validators().contains(&11));
+            assert!(<Validators<Test>>::contains_key(11));
 
-        on_offence_now(
-            &[
-                OffenceDetails {
-                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+            on_offence_now(
+                &[OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
                     reporters: vec![],
-                },
-                OffenceDetails {
-                    offender: (21, PowerPlant::eras_stakers(active_era(), 11)),
-                    reporters: vec![],
-                },
-            ],
-            &[Perbill::from_percent(0), Perbill::from_percent(0)],
-        );
+                }],
+                &[Perbill::from_percent(0)],
+            );
 
-        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-        assert!(!<Validators<Test>>::contains_key(11));
-        assert!(!<Validators<Test>>::contains_key(21));
+            assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
+            assert!(is_disabled(10));
 
-        mock::start_active_era(1);
+            mock::start_active_era(1);
 
-        assert!(!Session::validators().contains(&11));
-        assert!(!Session::validators().contains(&21));
-        assert!(!<Validators<Test>>::contains_key(11));
-        assert!(!<Validators<Test>>::contains_key(21));
-    });
+            // The validator should be reenabled in the new era
+            assert!(!is_disabled(10));
+        });
 }
 
 #[test]
@@ -2437,116 +2432,76 @@ fn slashing_performed_according_exposure() {
 }
 
 #[test]
-fn slash_in_old_span_does_not_deselect() {
-    ExtBuilder::default().build_and_execute(|| {
-        // Mutate reputation of the stashes, so that they won't be chilled after 95% slash
-        let new_rep = Reputation::from(ReputationTier::Trailblazer(2));
-        pallet_reputation::AccountReputation::<Test>::mutate(11, |record| {
-            record.get_or_insert(ReputationRecord::with_blocknumber(0)).reputation =
-                new_rep.clone();
-        });
-        pallet_reputation::AccountReputation::<Test>::mutate(21, |record| {
-            record.get_or_insert(ReputationRecord::with_blocknumber(0)).reputation =
-                new_rep.clone();
-        });
+fn validator_is_not_disabled_for_an_offence_in_previous_era() {
+    ExtBuilder::default()
+        .validator_count(4)
+        .set_status(41, StakerStatus::Validator)
+        .build_and_execute(|| {
+            // Mutate reputation of the stash, so that it won't be chilled after 95% slash
+            let new_rep = Reputation::from(ReputationTier::Trailblazer(2));
+            pallet_reputation::AccountReputation::<Test>::mutate(11, |record| {
+                record.get_or_insert(ReputationRecord::with_blocknumber(0)).reputation = new_rep;
+            });
 
-        mock::start_active_era(1);
+            mock::start_active_era(1);
 
-        assert!(<Validators<Test>>::contains_key(11));
-        assert!(Session::validators().contains(&11));
-        assert!(<Validators<Test>>::contains_key(21));
-        assert!(Session::validators().contains(&21));
+            assert!(<Validators<Test>>::contains_key(11));
+            assert!(Session::validators().contains(&11));
 
-        on_offence_now(
-            &[
-                OffenceDetails {
+            on_offence_now(
+                &[OffenceDetails {
                     offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                     reporters: vec![],
-                },
-                OffenceDetails {
-                    offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
+                }],
+                &[Perbill::from_percent(0)],
+            );
+
+            assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
+            assert!(is_disabled(10));
+
+            mock::start_active_era(2);
+
+            // the validator is not disabled in the new era
+            PowerPlant::validate(RuntimeOrigin::signed(10), Default::default()).unwrap();
+            assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
+            assert!(<Validators<Test>>::contains_key(11));
+            assert!(Session::validators().contains(&11));
+
+            mock::start_active_era(3);
+
+            // an offence committed in era 1 is reported in era 3
+            on_offence_in_era(
+                &[OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                     reporters: vec![],
-                },
-            ],
-            &[Perbill::from_percent(0), Perbill::from_percent(0)],
-        );
+                }],
+                &[Perbill::from_percent(0)],
+                1,
+            );
 
-        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-        assert!(!<Validators<Test>>::contains_key(11));
-        assert!(!<Validators<Test>>::contains_key(21));
+            // the validator doesn't get disabled for an old offence
+            assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
+            assert!(!is_disabled(10));
 
-        mock::start_active_era(2);
+            // and we are not forcing a new era
+            assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
 
-        PowerPlant::validate(RuntimeOrigin::signed(10), Default::default()).unwrap();
-        PowerPlant::validate(RuntimeOrigin::signed(20), Default::default()).unwrap();
-        assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
-        assert!(<Validators<Test>>::contains_key(11));
-        assert!(!Session::validators().contains(&11));
-        assert!(<Validators<Test>>::contains_key(21));
-        assert!(!Session::validators().contains(&21));
+            on_offence_in_era(
+                &[OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                }],
+                // NOTE: A 100% slash here would clean up the account, causing de-registration.
+                &[Perbill::from_percent(95)],
+                1,
+            );
 
-        mock::start_active_era(3);
-
-        // this staker is in a new slashing span now, having re-registered after
-        // their prior slash.
-
-        on_offence_in_era(
-            &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-                reporters: vec![],
-            }],
-            &[Perbill::from_percent(0)],
-            1,
-            DisableStrategy::WhenSlashed,
-        );
-        on_offence_in_era(
-            &[OffenceDetails {
-                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
-                reporters: vec![],
-            }],
-            &[Perbill::from_percent(0)],
-            1,
-            DisableStrategy::WhenSlashed,
-        );
-
-        // the validator doesn't get chilled again
-        assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
-        assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 21));
-
-        // but we are still forcing a new era
-        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-
-        on_offence_in_era(
-            &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
-                reporters: vec![],
-            }],
-            // NOTE: A 100% slash here would clean up the account, causing de-registration.
-            &[Perbill::from_percent(95)],
-            1,
-            DisableStrategy::WhenSlashed,
-        );
-        on_offence_in_era(
-            &[OffenceDetails {
-                offender: (21, PowerPlant::eras_stakers(active_era(), 21)),
-                reporters: vec![],
-            }],
-            // NOTE: A 100% slash here would clean up the account, causing de-registration.
-            &[Perbill::from_percent(95)],
-            1,
-            DisableStrategy::WhenSlashed,
-        );
-
-        // the validator doesn't get chilled again
-        assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
-        assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 21));
-
-        // but it's disabled
-        assert!(is_disabled(10));
-        assert!(is_disabled(20));
-        // and we are still forcing a new era
-        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
-    });
+            // the validator doesn't get disabled again
+            assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
+            assert!(!is_disabled(10));
+            // and we are still not forcing a new era
+            assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
+        });
 }
 
 #[test]
@@ -2804,7 +2759,7 @@ fn dont_slash_if_fraction_is_zero() {
             ReputationPallet::reputation(21).unwrap().reputation.points(),
             initial_reptutation_21
         );
-        assert_eq!(PowerPlant::force_era(), Forcing::ForceNew);
+        assert_eq!(PowerPlant::force_era(), Forcing::NotForcing);
     });
 }
 
@@ -3241,7 +3196,6 @@ fn deferred_slashes_are_deferred() {
             assert!(matches!(
                 staking_events_since_last_call().as_slice(),
                 &[
-                    Event::Chilled { stash: 11 },
                     Event::SlashReported { validator: 11, slash_era: 1, .. },
                     Event::StakersElected,
                     ..,
@@ -3249,6 +3203,7 @@ fn deferred_slashes_are_deferred() {
                         staker: 11,
                         amount: SlashEntity { reputation: ReputationPoint(6798553,), stake: 100 }
                     },
+                    Event::Chilled { stash: 11 },
                     Event::Slashed {
                         staker: 101,
                         amount: SlashEntity { reputation: ReputationPoint(6798553,), stake: 20 }
@@ -3281,7 +3236,6 @@ fn retroactive_deferred_slashes_two_eras_before() {
                 &[OffenceDetails { offender: (11, exposure_11_at_era_1), reporters: vec![] }],
                 &[Perbill::from_percent(10)],
                 1, // should be deferred for two full eras, and applied at the beginning of era 4.
-                DisableStrategy::Never,
             );
 
             mock::start_active_era(4);
@@ -3289,13 +3243,13 @@ fn retroactive_deferred_slashes_two_eras_before() {
             assert!(matches!(
                 staking_events_since_last_call().as_slice(),
                 &[
-                    Event::Chilled { stash: 11 },
                     Event::SlashReported { validator: 11, slash_era: 1, .. },
                     ..,
                     Event::Slashed {
                         staker: 11,
                         amount: SlashEntity { reputation: ReputationPoint(6798625), stake: 100 }
                     },
+                    Event::Chilled { stash: 11 },
                     Event::Slashed {
                         staker: 101,
                         amount: SlashEntity { reputation: ReputationPoint(108), stake: 20 }
@@ -3327,7 +3281,6 @@ fn retroactive_deferred_slashes_one_before() {
             &[OffenceDetails { offender: (11, exposure_11_at_era_1), reporters: vec![] }],
             &[Perbill::from_percent(10)],
             2, // should be deferred for two full eras, and applied at the beginning of era 5.
-            DisableStrategy::Never,
         );
 
         mock::start_active_era(4);
@@ -3544,7 +3497,6 @@ fn remove_deferred() {
             &[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
             &[Perbill::from_percent(15)],
             1,
-            DisableStrategy::WhenSlashed,
         );
 
         // fails if empty
@@ -3596,6 +3548,7 @@ fn remove_deferred() {
                     staker: 11,
                     amount: SlashEntity { reputation: ReputationPoint(3399331), stake: 50 }
                 },
+                Event::Chilled { stash: 11 },
                 Event::Slashed {
                     staker: 101,
                     amount: SlashEntity { reputation: ReputationPoint(3399295), stake: 10 }
@@ -3695,217 +3648,228 @@ fn remove_multi_deferred() {
 
 #[test]
 fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_validator() {
-    ExtBuilder::default().validator_count(3).build_and_execute(|| {
-        mock::start_active_era(1);
-        assert_eq_uvec!(Session::validators(), [31, 21, 11]);
+    ExtBuilder::default()
+        .validator_count(4)
+        .set_status(41, StakerStatus::Validator)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+            assert_eq_uvec!(Session::validators(), [41, 31, 21, 11]);
 
-        let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
-        let initial_reputation_101 = initial_reputation_11;
-        assert_ok!(ReputationPallet::force_set_points(
-            RuntimeOrigin::root(),
-            101,
-            initial_reputation_101.into()
-        ));
+            let initial_reputation_11 =
+                *ReputationPallet::reputation(11).unwrap().reputation.points();
+            let initial_reputation_101 = initial_reputation_11;
+            assert_ok!(ReputationPallet::force_set_points(
+                RuntimeOrigin::root(),
+                101,
+                initial_reputation_101.into()
+            ));
 
-        // 100 has approval for 11 as of now
-        assert!(PowerPlant::cooperators(101).unwrap().targets.contains_key(&11));
+            // 100 has approval for 11 as of now
+            assert!(PowerPlant::cooperators(101).unwrap().targets.contains_key(&11));
 
-        // 11 and 21 both have the support of 100
-        let exposure_11 = PowerPlant::eras_stakers(active_era(), 11);
-        let exposure_21 = PowerPlant::eras_stakers(active_era(), 21);
+            // 11 and 21 both have the support of 100
+            let exposure_11 = PowerPlant::eras_stakers(active_era(), 11);
+            let exposure_21 = PowerPlant::eras_stakers(active_era(), 21);
 
-        assert_eq!(exposure_11.total, 1000 + 200);
-        assert_eq!(exposure_21.total, 1000 + 300);
+            assert_eq!(exposure_11.total, 1000 + 200);
+            assert_eq!(exposure_21.total, 1000 + 300);
 
-        // pre-slash balance
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+            // pre-slash balance
+            assert_eq!(Balances::free_balance(11), 1000);
+            assert_eq!(Balances::free_balance(101), 2000);
 
-        // 100 has approval for 11 as of now
-        assert!(PowerPlant::cooperators(101).unwrap().targets.contains_key(&11));
+            // 100 has approval for 11 as of now
+            assert!(PowerPlant::cooperators(101).unwrap().targets.contains_key(&11));
 
-        on_offence_now(
-            &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-            &[Perbill::from_percent(10)],
-        );
+            on_offence_now(
+                &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+                &[Perbill::from_percent(10)],
+            );
 
-        assert!(matches!(
-            staking_events_since_last_call().as_slice(),
-            &[
-                ..,
-                Event::Chilled { stash: 11 },
-                Event::SlashReported { validator: 11, slash_era: 1, .. },
-                Event::Slashed {
-                    staker: 11,
-                    amount: SlashEntity { reputation: ReputationPoint(6798553), stake: 100 }
-                },
-                Event::Slashed {
-                    staker: 101,
-                    amount: SlashEntity { reputation: ReputationPoint(6798553), stake: 20 }
-                },
-            ]
-        ));
+            assert!(matches!(
+                staking_events_since_last_call().as_slice(),
+                &[
+                    ..,
+                    Event::SlashReported { validator: 11, slash_era: 1, .. },
+                    Event::Slashed {
+                        staker: 11,
+                        amount: SlashEntity { reputation: ReputationPoint(6798553), stake: 100 }
+                    },
+                    Event::Chilled { stash: 11 },
+                    Event::Slashed {
+                        staker: 101,
+                        amount: SlashEntity { reputation: ReputationPoint(6798553), stake: 20 }
+                    },
+                ]
+            ));
 
-        // post-slash balance
-        let cooperator_slash_amount_11 = 200 / 10;
-        assert_eq!(Balances::free_balance(11), 900);
-        assert_eq!(Balances::free_balance(101), 2000 - cooperator_slash_amount_11);
+            // post-slash balance
+            let cooperator_slash_amount_11 = 200 / 10;
+            assert_eq!(Balances::free_balance(11), 900);
+            assert_eq!(Balances::free_balance(101), 2000 - cooperator_slash_amount_11);
 
-        let slash_11 = SlashEntity::max_slash_amount(&initial_reputation_11.into(), 0)
-            .reputation
-            .deref()
-            / 10;
-        assert_eq_error_rate!(
-            *ReputationPallet::reputation(11).unwrap().reputation.points(),
-            initial_reputation_11 - slash_11,
-            2
-        );
-        let slash_101 = SlashEntity::max_slash_amount(&initial_reputation_101.into(), 0)
-            .reputation
-            .deref()
-            / 10;
-        assert_eq_error_rate!(
-            *ReputationPallet::reputation(101).unwrap().reputation.points(),
-            initial_reputation_101 - slash_101,
-            2
-        );
+            let slash_11 = SlashEntity::max_slash_amount(&initial_reputation_11.into(), 0)
+                .reputation
+                .deref()
+                / 10;
+            assert_eq_error_rate!(
+                *ReputationPallet::reputation(11).unwrap().reputation.points(),
+                initial_reputation_11 - slash_11,
+                2
+            );
+            let slash_101 = SlashEntity::max_slash_amount(&initial_reputation_101.into(), 0)
+                .reputation
+                .deref()
+                / 10;
+            assert_eq_error_rate!(
+                *ReputationPallet::reputation(101).unwrap().reputation.points(),
+                initial_reputation_101 - slash_101,
+                2
+            );
 
-        // check that validator was chilled.
-        assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
+            // check that validator was disabled.
+            assert!(is_disabled(10));
 
-        // actually re-bond the slashed validator
-        assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(10), Default::default()));
-    });
+            // check that validator was chilled.
+            assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
+
+            // actually re-bond the slashed validator
+            assert_ok!(PowerPlant::validate(RuntimeOrigin::signed(10), Default::default()));
+        });
 }
 
 #[test]
-fn non_slashable_offence_doesnt_disable_validator() {
-    ExtBuilder::default().validator_count(3).build_and_execute(|| {
-        mock::start_active_era(1);
-        assert_eq_uvec!(Session::validators(), [31, 21, 11]);
+fn non_slashable_offence_disables_validator() {
+    ExtBuilder::default()
+        .validator_count(7)
+        .set_status(41, StakerStatus::Validator)
+        .set_status(51, StakerStatus::Validator)
+        .set_status(201, StakerStatus::Validator)
+        .set_status(202, StakerStatus::Validator)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+            assert_eq_uvec!(Session::validators(), vec![11, 21, 31, 41, 51, 201, 202]);
 
-        let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
-        let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
+            let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
+            let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
 
-        // offence with no slash associated
-        on_offence_now(
-            &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-            &[Perbill::zero()],
-        );
+            // offence with no slash associated
+            on_offence_now(
+                &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+                &[Perbill::zero()],
+            );
 
-        // it does NOT affect the cooperator.
-        assert_eq!(
-            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
-            vec![&11, &21]
-        );
+            // it does NOT affect the cooperator.
+            assert_eq!(
+                PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+                vec![&11, &21]
+            );
 
-        // offence that slashes 25% of reputation
-        on_offence_now(
-            &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-            &[Perbill::from_percent(25)],
-        );
+            // offence that slashes 25% of reputation
+            on_offence_now(
+                &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+                &[Perbill::from_percent(25)],
+            );
 
-        // it DOES NOT affect the cooperator.
-        assert_eq!(
-            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
-            vec![&11, &21]
-        );
+            // it DOES NOT affect the cooperator.
+            assert_eq!(
+                PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+                vec![&11, &21]
+            );
 
-        assert!(matches!(
-            staking_events_since_last_call().as_slice(),
-            &[
-                ..,
-                Event::Chilled { stash: 11 },
-                Event::SlashReported { validator: 11, slash_era: 1, .. },
-                Event::Chilled { stash: 21 },
-                Event::ForceEra { mode: Forcing::ForceNew },
-                Event::SlashReported { validator: 21, slash_era: 1, .. },
-                Event::Slashed {
-                    staker: 21,
-                    amount: SlashEntity { reputation: ReputationPoint(16996383), stake: 250 }
-                },
-                Event::Slashed {
-                    staker: 101,
-                    amount: SlashEntity { reputation: ReputationPoint(90), stake: 75 }
-                },
-            ]
-        ));
+            assert!(matches!(
+                staking_events_since_last_call().as_slice(),
+                &[
+                    ..,
+                    Event::SlashReported { validator: 11, slash_era: 1, .. },
+                    Event::SlashReported { validator: 21, slash_era: 1, .. },
+                    Event::Slashed {
+                        staker: 21,
+                        amount: SlashEntity { reputation: ReputationPoint(16996383), stake: 250 }
+                    },
+                    Event::Chilled { stash: 21 },
+                    Event::Slashed {
+                        staker: 101,
+                        amount: SlashEntity { reputation: ReputationPoint(90), stake: 75 }
+                    },
+                ]
+            ));
 
-        // the offence for validator 10 wasn't slashable so it wasn't disabled
-        assert!(!is_disabled(10));
-        // whereas validator 20 gets disabled
-        assert!(is_disabled(20));
-    });
+            // the offence for validator 10 wasn't slashable but it is disabled
+            assert!(is_disabled(10));
+            // validator 20 gets disabled too
+            assert!(is_disabled(20));
+        });
 }
 
 #[test]
 fn slashing_independent_of_disabling_validator() {
-    ExtBuilder::default().validator_count(3).build_and_execute(|| {
-        mock::start_active_era(1);
-        assert_eq_uvec!(Session::validators(), [31, 21, 11]);
+    ExtBuilder::default()
+        .validator_count(5)
+        .set_status(41, StakerStatus::Validator)
+        .set_status(51, StakerStatus::Validator)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+            assert_eq_uvec!(Session::validators(), [11, 21, 31, 41, 51]);
 
-        let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
-        let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
+            let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
+            let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
 
-        let now = PowerPlant::active_era().unwrap().index;
+            let now = PowerPlant::active_era().unwrap().index;
 
-        // offence with no slash associated, BUT disabling
-        on_offence_in_era(
-            &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-            &[Perbill::zero()],
-            now,
-            DisableStrategy::Always,
-        );
+            // offence with no slash associated
+            on_offence_in_era(
+                &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
+                &[Perbill::zero()],
+                now,
+            );
 
-        // cooperation remains untouched.
-        assert_eq!(
-            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
-            vec![&11, &21]
-        );
+            // cooperation remains untouched.
+            assert_eq!(
+                PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+                vec![&11, &21]
+            );
 
-        // offence that slashes 25% of the bond, BUT not disabling
-        on_offence_in_era(
-            &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
-            &[Perbill::from_percent(25)],
-            now,
-            DisableStrategy::Never,
-        );
+            // offence that slashes 25% of the bond
+            on_offence_in_era(
+                &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
+                &[Perbill::from_percent(25)],
+                now,
+            );
 
-        // cooperation remains untouched.
-        assert_eq!(
-            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
-            vec![&11, &21]
-        );
+            // cooperation remains untouched.
+            assert_eq!(
+                PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+                vec![&11, &21]
+            );
 
-        assert!(matches!(
-            staking_events_since_last_call().as_slice(),
-            &[
-                ..,
-                Event::Chilled { stash: 11 },
-                Event::SlashReported { validator: 11, slash_era: 1, .. },
-                Event::Chilled { stash: 21 },
-                Event::ForceEra { mode: Forcing::ForceNew },
-                Event::SlashReported { validator: 21, slash_era: 1, .. },
-                Event::Slashed {
-                    staker: 21,
-                    amount: SlashEntity { reputation: ReputationPoint(16996383), stake: 250 }
-                },
-                Event::Slashed {
-                    staker: 101,
-                    amount: SlashEntity { reputation: ReputationPoint(90), stake: 75 }
-                },
-            ]
-        ));
+            assert!(matches!(
+                staking_events_since_last_call().as_slice(),
+                &[
+                    ..,
+                    Event::SlashReported { validator: 11, slash_era: 1, .. },
+                    Event::SlashReported { validator: 21, slash_era: 1, .. },
+                    Event::Slashed {
+                        staker: 21,
+                        amount: SlashEntity { reputation: ReputationPoint(16996383), stake: 250 }
+                    },
+                    Event::Chilled { stash: 21 },
+                    Event::Slashed {
+                        staker: 101,
+                        amount: SlashEntity { reputation: ReputationPoint(90), stake: 75 }
+                    },
+                ]
+            ));
 
-        // the offence for validator 10 was explicitly disabled
-        assert!(is_disabled(10));
-        // whereas validator 20 is explicitly not disabled
-        assert!(!is_disabled(20));
-    });
+            // first validator is disabled but not slashed
+            assert!(is_disabled(10));
+            // second validator is slashed but not disabled
+            assert!(!is_disabled(20));
+        });
 }
 
 #[test]
-fn offence_threshold_triggers_new_era() {
+fn offence_threshold_doesnt_trigger_new_era() {
     ExtBuilder::default()
         .validator_count(4)
         .set_status(41, StakerStatus::Validator)
@@ -3914,12 +3878,14 @@ fn offence_threshold_triggers_new_era() {
             assert_eq_uvec!(Session::validators(), [41, 31, 21, 11]);
 
             assert_eq!(
-                <Test as Config>::OffendingValidatorsThreshold::get(),
-                Perbill::from_percent(75),
+                UpToLimitDisablingStrategy::<DISABLING_LIMIT_FACTOR>::disable_limit(
+                    Session::validators().len()
+                ),
+                1
             );
 
-            // we have 4 validators and an offending validator threshold of 75%,
-            // once the third validator commits an offence a new era should be forced
+            // we have 4 validators and an offending validator threshold of 1/3,
+            // even if the third validator commits an offence a new era should not be forced
 
             let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
             let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
@@ -3930,12 +3896,19 @@ fn offence_threshold_triggers_new_era() {
                 &[Perbill::zero()],
             );
 
+            // 10 should be disabled because the byzantine threshold is 1
+            assert!(is_disabled(10));
+
             assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 
             on_offence_now(
                 &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
                 &[Perbill::zero()],
             );
+
+            // 20 should not be disabled because the number of disabled validators will be above the
+            // byzantine threshold
+            assert!(!is_disabled(20));
 
             assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
 
@@ -3944,27 +3917,28 @@ fn offence_threshold_triggers_new_era() {
                 &[Perbill::zero()],
             );
 
-            assert_eq!(ForceEra::<Test>::get(), Forcing::ForceNew);
+            // same for 30
+            assert!(!is_disabled(30));
+
+            assert_eq!(ForceEra::<Test>::get(), Forcing::NotForcing);
         });
 }
 
 #[test]
 fn disabled_validators_are_kept_disabled_for_whole_era() {
     ExtBuilder::default()
-        .validator_count(4)
+        .validator_count(7)
         .set_status(41, StakerStatus::Validator)
+        .set_status(51, StakerStatus::Validator)
+        .set_status(201, StakerStatus::Validator)
+        .set_status(202, StakerStatus::Validator)
         .build_and_execute(|| {
             mock::start_active_era(1);
-            assert_eq_uvec!(Session::validators(), [41, 31, 21, 11]);
+            assert_eq_uvec!(Session::validators(), [11, 21, 31, 41, 51, 201, 202]);
             assert_eq!(<Test as Config>::SessionsPerEra::get(), 3);
 
             let exposure_11 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 11);
             let exposure_21 = PowerPlant::eras_stakers(PowerPlant::active_era().unwrap().index, 21);
-
-            on_offence_now(
-                &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
-                &[Perbill::zero()],
-            );
 
             on_offence_now(
                 &[OffenceDetails { offender: (21, exposure_21.clone()), reporters: vec![] }],
@@ -3977,18 +3951,15 @@ fn disabled_validators_are_kept_disabled_for_whole_era() {
                 vec![&11, &21]
             );
 
-            // validator 10 should not be disabled since the offence wasn't slashable
-            assert!(!is_disabled(10));
             // validator 20 gets disabled since it got slashed
             assert!(is_disabled(20));
 
             advance_session();
 
             // disabled validators should carry-on through all sessions in the era
-            assert!(!is_disabled(10));
             assert!(is_disabled(20));
 
-            // validator 10 should now get disabled
+            // validator 10 commits an offence
             on_offence_now(
                 &[OffenceDetails { offender: (11, exposure_11.clone()), reporters: vec![] }],
                 &[Perbill::from_percent(25)],
@@ -4062,27 +4033,34 @@ fn claim_reward_at_the_last_era_and_no_double_claim_and_invalid_claim() {
 
 #[test]
 fn zero_slash_keeps_cooperators() {
-    ExtBuilder::default().build_and_execute(|| {
-        mock::start_active_era(1);
+    ExtBuilder::default()
+        .validator_count(7)
+        .set_status(41, StakerStatus::Validator)
+        .set_status(51, StakerStatus::Validator)
+        .set_status(201, StakerStatus::Validator)
+        .set_status(202, StakerStatus::Validator)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
 
-        assert_eq!(Balances::free_balance(11), 1000);
+            assert_eq!(Balances::free_balance(11), 1000);
 
-        let exposure = PowerPlant::eras_stakers(active_era(), 11);
-        assert_eq!(Balances::free_balance(101), 2000);
+            let exposure = PowerPlant::eras_stakers(active_era(), 11);
+            assert_eq!(Balances::free_balance(101), 2000);
 
-        on_offence_now(
-            &[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
-            &[Perbill::from_percent(0)],
-        );
+            on_offence_now(
+                &[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
+                &[Perbill::from_percent(0)],
+            );
 
-        // 11 is still removed..
-        assert!(Validators::<Test>::iter().all(|(stash, _)| stash != 11));
-        // but their cooperations are kept.
-        assert_eq!(
-            PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
-            vec![&11, &21]
-        );
-    });
+            // 11 is not removed but disabled
+            assert!(Validators::<Test>::iter().any(|(stash, _)| stash == 11));
+            assert!(is_disabled(10));
+            // and their nominations are kept.
+            assert_eq!(
+                PowerPlant::cooperators(101).unwrap().targets.keys().collect::<Vec<_>>(),
+                vec![&11, &21]
+            );
+        });
 }
 
 #[test]
@@ -5890,4 +5868,70 @@ fn set_min_commission_works_with_admin_origin() {
             }
         ));
     })
+}
+
+mod byzantine_threshold_disabling_strategy {
+    use crate::{
+        tests::Test, ActiveEra, ActiveEraInfo, DisablingStrategy, UpToLimitDisablingStrategy,
+    };
+    use sp_staking::EraIndex;
+
+    // Common test data - the stash of the offending validator, the era of the offence and the
+    // active set
+    const OFFENDER_ID: <Test as frame_system::Config>::AccountId = 7;
+    const SLASH_ERA: EraIndex = 1;
+    const ACTIVE_SET: [<Test as pallet_session::Config>::ValidatorId; 7] = [1, 2, 3, 4, 5, 6, 7];
+    const OFFENDER_VALIDATOR_IDX: u32 = 6; // the offender is with index 6 in the active set
+
+    #[test]
+    fn dont_disable_for_ancient_offence() {
+        sp_io::TestExternalities::default().execute_with(|| {
+            let initially_disabled = vec![];
+            pallet_session::Validators::<Test>::put(ACTIVE_SET.to_vec());
+            ActiveEra::<Test>::put(ActiveEraInfo { index: 2, start: None });
+
+            let disable_offender =
+                <UpToLimitDisablingStrategy as DisablingStrategy<Test>>::decision(
+                    &OFFENDER_ID,
+                    SLASH_ERA,
+                    &initially_disabled,
+                );
+
+            assert!(disable_offender.is_none());
+        });
+    }
+
+    #[test]
+    fn dont_disable_beyond_byzantine_threshold() {
+        sp_io::TestExternalities::default().execute_with(|| {
+            let initially_disabled = vec![1, 2];
+            pallet_session::Validators::<Test>::put(ACTIVE_SET.to_vec());
+
+            let disable_offender =
+                <UpToLimitDisablingStrategy as DisablingStrategy<Test>>::decision(
+                    &OFFENDER_ID,
+                    SLASH_ERA,
+                    &initially_disabled,
+                );
+
+            assert!(disable_offender.is_none());
+        });
+    }
+
+    #[test]
+    fn disable_when_below_byzantine_threshold() {
+        sp_io::TestExternalities::default().execute_with(|| {
+            let initially_disabled = vec![1];
+            pallet_session::Validators::<Test>::put(ACTIVE_SET.to_vec());
+
+            let disable_offender =
+                <UpToLimitDisablingStrategy as DisablingStrategy<Test>>::decision(
+                    &OFFENDER_ID,
+                    SLASH_ERA,
+                    &initially_disabled,
+                );
+
+            assert_eq!(disable_offender, Some(OFFENDER_VALIDATOR_IDX));
+        });
+    }
 }

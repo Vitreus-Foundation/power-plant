@@ -16,269 +16,108 @@
 // limitations under the License.
 #![warn(clippy::all)]
 
-//! # Staking Pallet
 //!
-//! The Staking pallet is used to manage funds at stake by network maintainers.
+//! # Module Overview
+//!
+//! This module implements several key functionalities for managing staking operations in a
+//! Substrate-based blockchain. It includes logic for handling rebonding of stakes, proportional
+//! slashing of stakers, and strategies for disabling validators that violate network rules.
+//! These functionalities play a critical role in maintaining network security, ensuring fairness,
+//! and enforcing network policies regarding stakers and validators.
+//!
+//! # Key Features and Functions
+//!
+//! - **Rebonding of Stakes**:
+//!   - `rebond(value: StakeOf<T>) -> (Self, StakeOf<T>)`: This function allows stakers to
+//!     reallocate part or all of their unlocking funds back into the active balance. It updates
+//!     the ledger with the new active balance and the remaining unlocking chunks. This provides
+//!     flexibility for stakers who wish to adjust their staking strategy after initiating
+//!     withdrawal.
+//!
+//! - **Proportional Slashing**:
+//!   - `slash_stake(slash_amount: StakeOf<T>, slash_era: EraIndex) -> StakeOf<T>`: Implements a
+//!     proportional slashing mechanism where a specified amount of stake is deducted from the
+//!     staker’s active and/or unlocking balance. Depending on the existence and timing of
+//!     unlocking chunks, the function distributes the slash across both active and unlocking
+//!     stakes, ensuring that slashing is as fair as possible while covering the entire
+//!     penalty amount.
+//!
+//! - **Validator Disabling Strategy**:
+//!   - `disable_limit(validators_len: usize) -> usize`: Computes the maximum number of validators
+//!     that can be disabled based on the total active set and a defined disabling factor. This
+//!     limit prevents too many validators from being disabled at once, ensuring network stability.
+//!   - `decision(offender_stash: &T::AccountId, slash_era: EraIndex, currently_disabled: &[u32]) -> Option<u32>`:
+//!     Decides whether a validator should be disabled based on various conditions, including whether
+//!     the current disabling limit has been reached and whether the offence occurred in the current
+//!     era. This ensures that only current and relevant violations lead to disabling actions.
+//!
+//! # Access Control and Security
+//!
+//! - **Controlled Validator Actions**: Disabling validators and slashing stakes are both sensitive
+//!   actions that have significant implications for network security and staker confidence. This
+//!   module implements checks to ensure these actions are taken only when justified, such as
+//!   ensuring offences occurred in the current era and limiting the number of validators that can be
+//!   disabled.
+//! - **Proportional Slashing**: The `slash_stake` function employs a proportional mechanism to
+//!   distribute the penalty across active and unlocking funds. This approach ensures fairness while
+//!   minimizing unintended side effects, such as leaving stakers with an unusable "dusted" amount
+//!   in their balances.
+//!
+//! # Developer Notes
+//!
+//! - **Defensive Programming**: Several functions use defensive programming techniques, such as
+//!   `unwrap_or_else` with logging, to prevent unexpected states, like a zero disabling limit or
+//!   invalid indices. This ensures robustness and reliability, even when the underlying data might
+//!   contain inconsistencies.
+//! - **Logging for Transparency**: Throughout the disabling logic, extensive logging is used to
+//!   document decisions on validator disabling, including whether the offending validator is in the
+//!   active set or if a limit has been reached. These logs are critical for tracing the reasons
+//!   behind disabling decisions, which can be useful during governance reviews or audits.
+//! - **Conditional Benchmarking**: The module includes benchmarking support functions that allow
+//!   developers to test and optimize the staking and disabling mechanisms. These functions are
+//!   conditionally compiled (`#[cfg(feature = "runtime-benchmarks")]`) to ensure they do not
+//!   impact the production runtime.
+//!
+//! # Usage Scenarios
+//!
+//! - **Rebonding Unlocking Funds**: A staker who has previously initiated withdrawal can use the
+//!   `rebond` function to move part or all of their unlocking balance back into the active stake,
+//!   thereby continuing to participate in staking rewards. This allows for flexible staking
+//!   management based on market conditions or changes in personal strategy.
+//! - **Validator Accountability**: When a validator commits an offence, the `slash_stake` function
+//!   is used to impose a penalty. This penalty can be applied to both active and unlocking stakes,
+//!   depending on the availability of funds and the era in which the offence occurred. The `decision`
+//!   function in the disabling strategy further ensures that misbehaving validators are appropriately
+//!   disabled from the active set.
+//! - **Enforcing Disabling Limits**: The `disable_limit` function prevents too many validators from
+//!   being disabled at once, which could jeopardize network operations. This is especially important
+//!   in cases where multiple validators are found to be violating network policies in quick
+//!   succession.
+//!
+//! # Integration Considerations
+//!
+//! - **Economic Model**: The slashing and rebonding mechanisms defined in this module are integral
+//!   to the blockchain's economic model. Developers must carefully consider the impact of slashing
+//!   and rebonding on overall token supply, staking incentives, and validator behavior. Misaligned
+//!   penalties could lead to excessive validator exits or reduced participation.
+//! - **Customizing Disabling Strategies**: The disabling strategy can be customized by adjusting
+//!   the `DISABLING_LIMIT_FACTOR` to change how many validators can be disabled relative to the
+//!   active set size. This flexibility allows different networks to enforce validator accountability
+//!   according to their governance models and risk tolerance.
+//! - **Logging and Monitoring**: Logs generated by disabling decisions and slashing operations should
+//!   be monitored by network operators to ensure that validator penalties are being applied fairly
+//!   and in accordance with network rules. Misuse or errors in these operations could undermine
+//!   confidence in the staking process and lead to governance interventions.
+//!
+//! # Example Scenario
+//!
+//! Suppose a validator violates network policies and is identified during the current era. The
+//! `slash_stake` function is used to penalize the validator by slashing a specified amount from both
+//! their active and unlocking balances. After the penalty is applied, the disabling strategy (`decision`)
+//! determines whether the validator should be removed from the active set based on the current disabling
+//! limit and the era of the offence. This ensures that the validator is appropriately penalized and
+//! potentially disabled if their actions pose a risk to network security and stability.
 //!
-//! - [`Config`]
-//! - [`Call`]
-//! - [`Pallet`]
-//!
-//! ## Overview
-//!
-//! The Staking pallet is the means by which a set of network maintainers (known as _authorities_ in
-//! some contexts and _validators_ in others) are chosen based upon those who voluntarily place
-//! funds under deposit. Under deposit, those funds are rewarded under normal operation but are held
-//! at pain of _slash_ (expropriation) should the staked maintainer be found not to be discharging
-//! its duties properly.
-//!
-//! ### Terminology
-//! <!-- Original author of paragraph: @gavofyork -->
-//!
-//! - Staking: The process of locking up funds for some time, placing them at risk of slashing
-//!   (loss) in order to become a rewarded maintainer of the network.
-//! - Validating: The process of running a node to actively maintain the network, either by
-//!   producing blocks or guaranteeing finality of the chain.
-//! - Cooperating: The process of placing staked funds behind one or more validators in order to
-//!   share in any reward, and punishment, they take.
-//! - Stash account: The account holding an owner's funds used for staking.
-//! - Controller account: The account that controls an owner's funds for staking.
-//! - Era: A (whole) number of sessions, which is the period that the validator set (and each
-//!   validator's active cooperator set) is recalculated and where rewards are paid out.
-//! - Slash: The punishment of a staker by reducing its funds.
-//!
-//! ### Goals
-//! <!-- Original author of paragraph: @gavofyork -->
-//!
-//! The staking system in Substrate NPoS is designed to make the following possible:
-//!
-//! - Stake funds that are controlled by a cold wallet.
-//! - Withdraw some, or deposit more, funds without interrupting the role of an entity.
-//! - Switch between roles (cooperator, validator, idle) with minimal overhead.
-//!
-//! ### Scenarios
-//!
-//! #### Staking
-//!
-//! Almost any interaction with the Staking pallet requires a process of _**bonding**_ (also known
-//! as being a _staker_). To become *bonded*, a fund-holding register known as the _stash account_,
-//! which holds some or all of the funds that become frozen in place as part of the staking process,
-//! is paired with an active **controller** account, which issues instructions on how they shall be
-//! used.
-//!
-//! An account pair can become bonded using the [`bond`](Call::bond) call.
-//!
-//! Stash accounts can change their associated controller using the
-//! [`set_controller`](Call::set_controller) call.
-//!
-//! There are three possible roles that any staked account pair can be in: `Validator`, `Cooperator`
-//! and `Idle` (defined in [`StakerStatus`]). There are three
-//! corresponding instructions to change between roles, namely:
-//! [`validate`](Call::validate),
-//! [`cooperate`](Call::cooperate), and [`chill`](Call::chill).
-//!
-//! #### Validating
-//!
-//! A **validator** takes the role of either validating blocks or ensuring their finality,
-//! maintaining the veracity of the network. A validator should avoid both any sort of malicious
-//! misbehavior and going offline. Bonded accounts that state interest in being a validator do NOT
-//! get immediately chosen as a validator. Instead, they are declared as a _candidate_ and they
-//! _might_ get elected at the _next era_ as a validator. The result of the election is determined
-//! by cooperators and their votes.
-//!
-//! An account can become a validator candidate via the
-//! [`validate`](Call::validate) call.
-//!
-//! #### Cooperation
-//!
-//! A **cooperator** does not take any _direct_ role in maintaining the network, instead, it votes on
-//! a set of validators  to be elected. Once interest in cooperation is stated by an account, it
-//! takes effect at the next election round. The funds in the cooperator's stash account indicate the
-//! _weight_ of its vote. Both the rewards and any punishment that a validator earns are shared
-//! between the validator and its cooperators. This rule incentivizes the cooperators to NOT vote for
-//! the misbehaving/offline validators as much as possible, simply because the cooperators will also
-//! lose funds if they vote poorly.
-//!
-//! An account can become a cooperator via the [`cooperate`](Call::cooperate) call.
-//!
-//! #### Voting
-//!
-//! Staking is closely related to elections; actual validators are chosen from among all potential
-//! validators via election by the potential validators and cooperators. To reduce use of the phrase
-//! "potential validators and cooperators", we often use the term **voters**, who are simply
-//! the union of potential validators and cooperators.
-//!
-//! #### Rewards and Slash
-//!
-//! The **reward and slashing** procedure is the core of the Staking pallet, attempting to _embrace
-//! valid behavior_ while _punishing any misbehavior or lack of availability_.
-//!
-//! Rewards must be claimed for each era before it gets too old by `$HISTORY_DEPTH` using the
-//! `payout_stakers` call. Any account can call `payout_stakers`, which pays the reward to the
-//! validator as well as its cooperators. Only the [`Config::MaxCooperatorRewardedPerValidator`]
-//! biggest stakers can claim their reward. This is to limit the i/o cost to mutate storage for each
-//! cooperator's account.
-//!
-//! Slashing can occur at any point in time, once misbehavior is reported. Once slashing is
-//! determined, a value is deducted from the balance of the validator and all the cooperators who
-//! voted for this validator (values are deducted from the _stash_ account of the slashed entity).
-//!
-//! Slashing logic is further described in the documentation of the `slashing` pallet.
-//!
-//! Similar to slashing, rewards are also shared among a validator and its associated cooperators.
-//! Yet, the reward funds are not always transferred to the stash account and can be configured. See
-//! [Reward Calculation](#reward-calculation) for more details.
-//!
-//! #### Chilling
-//!
-//! Finally, any of the roles above can choose to step back temporarily and just chill for a while.
-//! This means that if they are a cooperator, they will not be considered as voters anymore and if
-//! they are validators, they will no longer be a candidate for the next election.
-//!
-//! An account can step back via the [`chill`](Call::chill) call.
-//!
-//! ### Session managing
-//!
-//! The pallet implement the trait `SessionManager`. Which is the only API to query new validator
-//! set and allowing these validator set to be rewarded once their era is ended.
-//!
-//! ## Interface
-//!
-//! ### Dispatchable Functions
-//!
-//! The dispatchable functions of the Staking pallet enable the steps needed for entities to accept
-//! and change their role, alongside some helper functions to get/set the metadata of the pallet.
-//!
-//! ### Public Functions
-//!
-//! The Staking pallet contains many public storage items and (im)mutable functions.
-//!
-//! ## Usage
-//!
-//! ### Example: Rewarding a validator by id.
-//!
-//! ```
-//! use pallet_energy_generation::{self as staking};
-//!
-//! #[frame_support::pallet]
-//! pub mod pallet {
-//!     use super::*;
-//!     use frame_support::pallet_prelude::*;
-//!     use frame_system::pallet_prelude::*;
-//!
-//!     #[pallet::pallet]
-//!     pub struct Pallet<T>(_);
-//!
-//!     #[pallet::config]
-//!     pub trait Config: frame_system::Config + staking::Config {}
-//!
-//!     #[pallet::call]
-//!     impl<T: Config> Pallet<T> {
-//!         /// Reward a validator.
-//!         #[pallet::weight(0)]
-//!         pub fn reward_myself(origin: OriginFor<T>) -> DispatchResult {
-//!             let reported = ensure_signed(origin)?;
-//!             <staking::Pallet<T>>::reward_by_ids(vec![(reported, 10.into())]);
-//!             Ok(())
-//!         }
-//!     }
-//! }
-//! # fn main() { }
-//! ```
-//!
-//! ## Implementation Details
-//!
-//! ### Era payout
-//!
-//! The era payout is computed using yearly inflation curve defined at
-//! [`Config::EraPayout`] as such:
-//!
-//! ```nocompile
-//! staker_payout = yearly_inflation(npos_token_staked / total_tokens) * total_tokens / era_per_year
-//! ```
-//! This payout is used to reward stakers as defined in next section
-//!
-//! ```nocompile
-//! remaining_payout = max_yearly_inflation * total_tokens / era_per_year - staker_payout
-//! ```
-//! The remaining reward is send to the configurable end-point
-//! [`Config::RewardRemainder`].
-//!
-//! ### Reward Calculation
-//!
-//! Validators and cooperators are rewarded at the end of each era. The total reward of an era is
-//! calculated using the era duration and the staking rate (the total amount of tokens staked by
-//! cooperators and validators, divided by the total token supply). It aims to incentivize toward a
-//! defined staking rate. The full specification can be found
-//! [here](https://research.web3.foundation/en/latest/polkadot/Token%20Economics.html#inflation-model).
-//!
-//! Total reward is split among validators and their cooperators depending on the number of points
-//! they received during the era. Points are added to a validator using
-//! [`reward_by_ids`](Pallet::reward_by_ids).
-//!
-//! [`Pallet`] implements
-//! [`pallet_authorship::EventHandler`] to add reward
-//! points to block producer and block producer of referenced uncles.
-//!
-//! The validator and its cooperator split their reward as following:
-//!
-//! The validator can declare an amount, named [`commission`](ValidatorPrefs::commission), that does
-//! not get shared with the cooperators at each reward payout through its [`ValidatorPrefs`]. This
-//! value gets deducted from the total reward that is paid to the validator and its cooperators. The
-//! remaining portion is split pro rata among the validator and the top
-//! [`Config::MaxCooperatorRewardedPerValidator`] cooperators that cooperated the validator,
-//! proportional to the value staked behind the validator (_i.e._ dividing the
-//! [`own`](Exposure::own) or [`others`](Exposure::others) by [`total`](Exposure::total) in
-//! [`Exposure`]). Note that the pro rata division of rewards uses the total exposure behind the
-//! validator, *not* just the exposure of the validator and the top
-//! [`Config::MaxCooperatorRewardedPerValidator`] cooperators.
-//!
-//! All entities who receive a reward have the option to choose their reward destination through the
-//! [`Payee`] storage item (see
-//! [`set_payee`](Call::set_payee)), to be one of the following:
-//!
-//! - Controller account, (obviously) not increasing the staked value.
-//! - Stash account, not increasing the staked value.
-//! - Stash account, also increasing the staked value.
-//!
-//! ### Additional Fund Management Operations
-//!
-//! Any funds already placed into stash can be the target of the following operations:
-//!
-//! The controller account can free a portion (or all) of the funds using the
-//! [`unbond`](Call::unbond) call. Note that the funds are not immediately
-//! accessible. Instead, a duration denoted by
-//! [`Config::BondingDuration`] (in number of eras) must
-//! pass until the funds can actually be removed. Once the `BondingDuration` is over, the
-//! [`withdraw_unbonded`](Call::withdraw_unbonded) call can be used to actually
-//! withdraw the funds.
-//!
-//! Note that there is a limitation to the number of fund-chunks that can be scheduled to be
-//! unlocked in the future via [`unbond`](Call::unbond). In case this maximum
-//! (`MAX_UNLOCKING_CHUNKS`) is reached, the bonded account _must_ first wait until a successful
-//! call to `withdraw_unbonded` to remove some of the chunks.
-//!
-//! ### Election Algorithm
-//!
-//! The current election algorithm is implemented based on Phragmén. The reference implementation
-//! can be found [here](https://github.com/w3f/consensus/tree/master/NPoS).
-//!
-//! The election algorithm, aside from electing the validators with the most stake value and votes,
-//! tries to divide the cooperator votes among candidates in an equal manner. To further assure this,
-//! an optional post-processing can be applied that iteratively normalizes the cooperator staked
-//! values until the total difference among votes of a particular cooperator are less than a
-//! threshold.
-//!
-//! ## GenesisConfig
-//!
-//! The Staking pallet depends on the [`GenesisConfig`]. The
-//! `GenesisConfig` is optional and allow to set some initial stakers.
-//!
-//! ## Related Modules
-//!
-//! - [Balances](../pallet_balances/index.html): Used to manage values at stake.
-//! - [Session](../pallet_session/index.html): Used to manage sessions. Also, a list of new
-//!   validators is stored in the Session pallet's `Validators` at the end of each era.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::all)]
@@ -303,6 +142,7 @@ pub mod weights;
 mod pallet;
 
 use frame_support::{
+    defensive,
     traits::{tokens::fungibles::Debt, Currency, Defensive, Get},
     BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
@@ -681,8 +521,14 @@ impl<T: Config> StakingLedger<T> {
         // clean unlocking chunks that are set to zero.
         self.unlocking.retain(|c| !c.value.is_zero());
 
-        T::EventListeners::on_slash(&self.stash, self.active, &slashed_unlocking);
-        pre_slash_total.saturating_sub(self.total)
+        let final_slashed_amount = pre_slash_total.saturating_sub(self.total);
+        T::EventListeners::on_slash(
+            &self.stash,
+            self.active,
+            &slashed_unlocking,
+            final_slashed_amount,
+        );
+        final_slashed_amount
     }
 }
 
@@ -954,4 +800,80 @@ pub struct TestBenchmarkingConfig;
 impl BenchmarkingConfig for TestBenchmarkingConfig {
     type MaxValidators = frame_support::traits::ConstU32<100>;
     type MaxCooperators = frame_support::traits::ConstU32<100>;
+}
+
+/// Controls validator disabling
+pub trait DisablingStrategy<T: Config> {
+    /// Make a disabling decision. Returns the index of the validator to disable or `None` if no new
+    /// validator should be disabled.
+    fn decision(
+        offender_stash: &T::AccountId,
+        slash_era: EraIndex,
+        currently_disabled: &[u32],
+    ) -> Option<u32>;
+}
+
+/// Implementation of [`DisablingStrategy`] which disables validators from the active set up to a
+/// threshold. `DISABLING_LIMIT_FACTOR` is the factor of the maximum disabled validators in the
+/// active set. E.g. setting this value to `3` means no more than 1/3 of the validators in the
+/// active set can be disabled in an era.
+/// By default a factor of 3 is used which is the byzantine threshold.
+pub struct UpToLimitDisablingStrategy<const DISABLING_LIMIT_FACTOR: usize = 3>;
+
+impl<const DISABLING_LIMIT_FACTOR: usize> UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR> {
+    /// Disabling limit calculated from the total number of validators in the active set. When
+    /// reached no more validators will be disabled.
+    pub fn disable_limit(validators_len: usize) -> usize {
+        validators_len
+            .saturating_sub(1)
+            .checked_div(DISABLING_LIMIT_FACTOR)
+            .unwrap_or_else(|| {
+                defensive!("DISABLING_LIMIT_FACTOR should not be 0");
+                0
+            })
+    }
+}
+
+impl<T: Config, const DISABLING_LIMIT_FACTOR: usize> DisablingStrategy<T>
+    for UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR>
+{
+    fn decision(
+        offender_stash: &T::AccountId,
+        slash_era: EraIndex,
+        currently_disabled: &[u32],
+    ) -> Option<u32> {
+        let active_set = T::SessionInterface::validators();
+
+        // We don't disable more than the limit
+        if currently_disabled.len() >= Self::disable_limit(active_set.len()) {
+            log!(
+                debug,
+                "Won't disable: reached disabling limit {:?}",
+                Self::disable_limit(active_set.len())
+            );
+            return None;
+        }
+
+        // We don't disable for offences in previous eras
+        if ActiveEra::<T>::get().map(|e| e.index).unwrap_or_default() > slash_era {
+            log!(
+                debug,
+                "Won't disable: current_era {:?} > slash_era {:?}",
+                Pallet::<T>::current_era().unwrap_or_default(),
+                slash_era
+            );
+            return None;
+        }
+
+        let offender_idx = if let Some(idx) = active_set.iter().position(|i| i == offender_stash) {
+            idx as u32
+        } else {
+            log!(debug, "Won't disable: offender not in active set",);
+            return None;
+        };
+
+        log!(debug, "Will disable {:?}", offender_idx);
+
+        Some(offender_idx)
+    }
 }

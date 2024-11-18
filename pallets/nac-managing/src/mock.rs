@@ -20,7 +20,7 @@
 use crate::{self as pallet_nac_managing, *};
 
 use frame_support::{
-    parameter_types,
+    derive_impl, parameter_types,
     traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
     weights::constants::RocksDbWeight,
 };
@@ -59,6 +59,7 @@ frame_support::construct_runtime!(
     }
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type BaseCallFilter = frame_support::traits::Everything;
@@ -181,6 +182,7 @@ impl pallet_reputation::Config for Test {
     type WeightInfo = ();
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -193,7 +195,6 @@ impl pallet_balances::Config for Test {
     type FreezeIdentifier = ();
     type MaxLocks = ();
     type MaxReserves = ();
-    type MaxHolds = ();
     type MaxFreezes = ();
 }
 

@@ -4,8 +4,12 @@
   "chainType": {
     "Custom": "Stagenet"
   },
-  "bootNodes": [],
-  "telemetryEndpoints": null,
+  "bootNodes": [
+    "/ip4/45.77.147.229/tcp/30333/p2p/12D3KooWConBK7xN5BJycV2ZiupKHH6x8MfzPr3E2mJrVoYAk3XP"
+  ],
+  "telemetryEndpoints": [
+     ["wss://telemetry-dev.compliq.io/submit/", 1]
+  ],
   "protocolId": null,
   "properties": {
     "ss58Format": 1943,

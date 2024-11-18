@@ -11,6 +11,7 @@ use frame_support::traits::tokens::imbalance::SplitTwoWays;
 use frame_support::traits::{Currency, OnUnbalanced};
 use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
+    derive_impl,
     pallet_prelude::Weight,
     parameter_types,
     traits::{AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything},
@@ -89,6 +90,7 @@ parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
 }
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type BaseCallFilter = Everything;
     type BlockWeights = BlockWeights;
@@ -115,6 +117,7 @@ impl frame_system::Config for Test {
     type MaxConsumers = ConstU32<16>;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type MaxLocks = ConstU32<1024>;
     type MaxReserves = ConstU32<1>;
@@ -127,7 +130,6 @@ impl pallet_balances::Config for Test {
     type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ConstU32<1>;
-    type MaxHolds = ();
     type RuntimeHoldReason = ();
 }
 
@@ -136,9 +138,8 @@ impl pallet_asset_rate::Config for Test {
     type CreateOrigin = EnsureRoot<AccountId>;
     type RemoveOrigin = EnsureRoot<AccountId>;
     type UpdateOrigin = EnsureRoot<AccountId>;
-    type AssetId = AssetId;
+    type AssetKind = AssetId;
     type Currency = BalancesVTRS;
-    type Balance = Balance;
     type WeightInfo = ();
 }
 
@@ -249,6 +250,7 @@ impl pallet_evm::Config for Test {
     type PrecompilesType = ();
     type PrecompilesValue = GetPrecompilesValue;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Test>;
+    type SuicideQuickClearLimit = ();
 }
 
 impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
@@ -362,6 +364,7 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
         accounts: vec![(GetVNRG::get(), BOB, 1000)].into_iter().chain(alice_account).collect(),
         assets: vec![(GetVNRG::get(), BOB, false, 1)],
         metadata: vec![(GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
+        next_asset_id: None,
     }
     .assimilate_storage(&mut t)
     .unwrap();

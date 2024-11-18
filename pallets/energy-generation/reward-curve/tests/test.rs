@@ -15,9 +15,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! Test crate for pallet-staking-reward-curve. Allows to test for procedural macro.
-//! See tests directory.
-
 mod test_small_falloff {
 	pallet_staking_reward_curve::build! {
 		const REWARD_CURVE: sp_runtime::curve::PiecewiseLinear<'static> = curve!(

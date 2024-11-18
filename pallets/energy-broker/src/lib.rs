@@ -15,42 +15,59 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-//! # Substrate Asset Conversion pallet
+//! # Asset Conversion (AMM) Pallet
 //!
-//! Substrate Asset Conversion pallet based on the [Uniswap V2](https://github.com/Uniswap/v2-core) logic.
+//! A Substrate implementation of an Automated Market Maker (AMM) based on Uniswap V2 mechanics.
 //!
-//! ## Overview
+//! ## Core Features
 //!
-//! This pallet allows you to:
+//! ### Pool Management
+//! - Create liquidity pools for asset pairs
+//! - Add/remove liquidity with slippage protection
+//! - LP token minting/burning
+//! - Pool fee collection
+//! - Minimum liquidity requirements
 //!
-//!  - [create a liquidity pool](`Pallet::create_pool()`) for 2 assets
-//!  - [provide the liquidity](`Pallet::add_liquidity()`) and receive back an LP token
-//!  - [exchange the LP token back to assets](`Pallet::remove_liquidity()`)
-//!  - [swap a specific amount of assets for another](`Pallet::swap_exact_tokens_for_tokens()`) if
-//!    there is a pool created, or
-//!  - [swap some assets for a specific amount of
-//!    another](`Pallet::swap_tokens_for_exact_tokens()`).
-//!  - [query for an exchange price](`AssetConversionApi::quote_price_exact_tokens_for_tokens`) via
-//!    a runtime call endpoint
-//!  - [query the size of a liquidity pool](`AssetConversionApi::get_reserves`) via a runtime api
-//!    endpoint.
+//! ### Trading Functions
+//! - Exact input swaps
+//! - Exact output swaps
+//! - Multi-hop routing
+//! - Price quoting
+//! - Native asset integration
 //!
-//! The `quote_price_exact_tokens_for_tokens` and `quote_price_tokens_for_exact_tokens` functions
-//! both take a path parameter of the route to take. If you want to swap from native asset to
-//! non-native asset 1, you would pass in a path of `[DOT, 1]` or `[1, DOT]`. If you want to swap
-//! from non-native asset 1 to non-native asset 2, you would pass in a path of `[1, DOT, 2]`.
+//! ### Security Features
+//! - Slippage protection
+//! - Minimum liquidity requirements
+//! - Pool setup fees
+//! - Withdrawal fees
+//! - Keep-alive checks
 //!
-//! (For an example of configuring this pallet to use `MultiLocation` as an asset id, see the
-//! cumulus repo).
+//! ## Technical Design
 //!
-//! Here is an example `state_call` that asks for a quote of a pool of native versus asset 1:
+//! ### Formula Implementation
+//! Uses constant product formula (x * y = k) for:
+//! - Price calculation
+//! - Liquidity provision
+//! - Swap execution
 //!
-//! ```text
-//! curl -sS -H "Content-Type: application/json" -d \
-//! '{"id":1, "jsonrpc":"2.0", "method": "state_call", "params": ["AssetConversionApi_quote_price_tokens_for_exact_tokens", "0x0101000000000000000000000011000000000000000000"]}' \
-//! http://localhost:9933/
-//! ```
-//! (This can be run against the kitchen sync node in the `node` folder of this repo.)
+//! ### Asset Handling
+//! - Supports both native and non-native assets
+//! - Multi-asset pool configurations
+//! - Automatic LP token management
+//!
+//! ### Runtime APIs
+//! - Pool reserve queries
+//! - Price quotes for swaps
+//! - Path-based routing support
+//!
+//! ## Configuration
+//! Key parameters include:
+//! - LP fees
+//! - Pool setup costs
+//! - Withdrawal fees
+//! - Min liquidity thresholds
+//! - Max swap path length
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![allow(clippy::result_unit_err, clippy::too_many_arguments)]
@@ -364,6 +381,8 @@ pub mod pallet {
         /// with another. For example, an array of assets constituting a `path` should have a
         /// corresponding array of `amounts` along the path.
         CorrespondenceError,
+        /// It was not possible to get or increment the Id of the pool.
+        IncorrectPoolAssetId,
     }
 
     #[pallet::hooks]
@@ -418,21 +437,23 @@ pub mod pallet {
 
             if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset1) {
                 if !T::Assets::contains(&asset, &pool_account) {
-                    T::Assets::touch(asset, pool_account.clone(), depositor.clone())?;
+                    T::Assets::touch(asset, &pool_account, &depositor)?;
                 }
             }
             if let Ok(asset) = T::MultiAssetIdConverter::try_convert(&asset2) {
                 if !T::Assets::contains(&asset, &pool_account) {
-                    T::Assets::touch(asset, pool_account.clone(), depositor.clone())?;
+                    T::Assets::touch(asset, &pool_account, &depositor)?;
                 }
             }
 
-            let lp_token = NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value());
-            let next_lp_token_id = lp_token.increment();
+            let lp_token = NextPoolAssetId::<T>::get()
+                .or(T::PoolAssetId::initial_value())
+                .ok_or(Error::<T>::IncorrectPoolAssetId)?;
+            let next_lp_token_id = lp_token.increment().ok_or(Error::<T>::IncorrectPoolAssetId)?;
             NextPoolAssetId::<T>::set(Some(next_lp_token_id));
 
             T::PoolAssets::create(lp_token.clone(), pool_account.clone(), false, 1u32.into())?;
-            T::PoolAssets::touch(lp_token.clone(), pool_account.clone(), depositor.clone())?;
+            T::PoolAssets::touch(lp_token.clone(), &pool_account, &depositor)?;
 
             let pool_info = PoolInfo { lp_token: lp_token.clone() };
             Pools::<T>::insert(pool_id.clone(), pool_info);
@@ -537,7 +558,14 @@ pub mod pallet {
                 .map_err(|_| Error::<T>::ReserveLeftLessThanMinimal)?;
 
             // burn the provided lp token amount that includes the fee
-            T::PoolAssets::burn_from(pool.lp_token.clone(), &sender, lp_token_burn, Exact, Polite)?;
+            T::PoolAssets::burn_from(
+                pool.lp_token.clone(),
+                &sender,
+                lp_token_burn,
+                Expendable,
+                Exact,
+                Polite,
+            )?;
 
             Self::transfer(&asset1, &pool_account, &withdraw_to, amount1, false)?;
             Self::transfer(&asset2, &pool_account, &withdraw_to, amount2, false)?;
@@ -1115,69 +1143,20 @@ pub mod pallet {
         /// Returns the next pool asset id for benchmark purposes only.
         #[cfg(any(test, feature = "runtime-benchmarks"))]
         pub fn get_next_pool_asset_id() -> T::PoolAssetId {
-            NextPoolAssetId::<T>::get().unwrap_or(T::PoolAssetId::initial_value())
+            NextPoolAssetId::<T>::get()
+                .or(T::PoolAssetId::initial_value())
+                .expect("Next pool asset ID can not be None")
         }
     }
 }
 
-impl<T: Config>
-    frame_support::traits::tokens::fungibles::SwapNative<
-        T::RuntimeOrigin,
-        T::AccountId,
-        T::Balance,
-        T::AssetBalance,
-        T::AssetId,
-    > for Pallet<T>
-where
-    <T as pallet::Config>::Currency:
-        frame_support::traits::tokens::fungible::Inspect<<T as frame_system::Config>::AccountId>,
-{
-    /// Take an `asset_id` and swap some amount for `amount_out` of the chain's native asset. If an
-    /// `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
-    /// too costly.
-    ///
-    /// If successful returns the amount of the `asset_id` taken to provide `amount_out`.
-    fn swap_tokens_for_exact_native(
-        sender: T::AccountId,
-        asset_id: T::AssetId,
-        amount_out: T::Balance,
-        amount_in_max: Option<T::AssetBalance>,
-        send_to: T::AccountId,
-        keep_alive: bool,
-    ) -> Result<T::AssetBalance, DispatchError> {
-        ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
-        if let Some(amount_in_max) = amount_in_max {
-            ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
-        }
-
-        let path = vec![
-            T::MultiAssetIdConverter::into_multiasset_id(&asset_id),
-            T::MultiAssetIdConverter::get_native(),
-        ]
-        .try_into()
-        .unwrap();
-
-        // convert `amount_out` from native balance type, to asset balance type
-        let amount_out = Self::convert_native_balance_to_asset_balance(amount_out)?;
-
-        // calculate the amount we need to provide
-        let amounts = Self::get_amounts_in(&amount_out, &path)?;
-        let amount_in =
-            *amounts.first().defensive_ok_or("get_amounts_in() returned an empty result")?;
-        if let Some(amount_in_max) = amount_in_max {
-            ensure!(amount_in <= amount_in_max, Error::<T>::ProvidedMaximumNotSufficientForSwap);
-        }
-
-        Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
-        Ok(amount_in)
-    }
-
+impl<T: Config> Pallet<T> {
     /// Take an `asset_id` and swap `amount_in` of the chain's native asset for it. If an
     /// `amount_out_min` is specified, it will return an error if it is unable to acquire the amount
     /// desired.
     ///
     /// If successful, returns the amount of `asset_id` acquired for the `amount_in`.
-    fn swap_exact_native_for_tokens(
+    pub fn swap_exact_native_for_tokens(
         sender: T::AccountId,
         asset_id: T::AssetId,
         amount_in: T::Balance,
@@ -1211,9 +1190,6 @@ where
         Self::do_swap(sender, &amounts, path, send_to, keep_alive)?;
         Ok(amount_out)
     }
-}
-
-impl<T: Config> Pallet<T> {
     /// Take an `asset_id` and swap some amount of the chain's native asset for `amount_out` of it.
     /// If an `amount_in_max` is specified, it will return an error if acquiring `amount_out` would be
     /// too costly.

@@ -1,5 +1,8 @@
 use crate as pallet_simple_vesting;
-use frame_support::traits::{ConstU16, ConstU32, ConstU64, Everything};
+use frame_support::{
+    derive_impl,
+    traits::{ConstU16, ConstU32, ConstU64, Everything},
+};
 use sp_core::H256;
 use sp_runtime::traits::Identity;
 use sp_runtime::{
@@ -26,6 +29,7 @@ frame_support::construct_runtime!(
     }
 );
 
+#[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type BaseCallFilter = Everything;
@@ -52,6 +56,7 @@ impl frame_system::Config for Test {
     type MaxConsumers = ConstU32<16>;
 }
 
+#[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
@@ -64,7 +69,6 @@ impl pallet_balances::Config for Test {
     type FreezeIdentifier = ();
     type MaxLocks = ConstU32<1024>;
     type MaxReserves = ConstU32<1024>;
-    type MaxHolds = ();
     type MaxFreezes = ();
 }
 
