@@ -282,6 +282,8 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 pub const WEEKS: BlockNumber = DAYS * 7;
+pub const MONTHS: BlockNumber = YEARS / 12;
+pub const YEARS: BlockNumber = 36525 * (DAYS / 100);
 
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]

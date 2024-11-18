@@ -1091,10 +1091,7 @@ mod genesis {
     use super::*;
     use tech_addresses::*;
 
-    use vitreus_power_plant_runtime::{BlockNumber, DAYS, MILLI_VTRS};
-
-    const YEARS: BlockNumber = 36525 * (DAYS / 100);
-    const MONTHS: BlockNumber = YEARS / 12;
+    use vitreus_power_plant_runtime::{BlockNumber, DAYS, MILLI_VTRS, MONTHS, YEARS};
 
     pub(super) fn tech_allocation() -> Vec<(AccountId, Balance)> {
         const INITIAL_TREASURY_ALLOCATION: Balance = 68_364_887_120 * MILLI_VTRS;
