@@ -2,7 +2,7 @@ use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council,
     MoreThanHalfCouncil, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent,
     RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee, Treasury, TreasuryExtension,
-    DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, NANO_VTRS, PICO_VTRS, UNITS,
+    DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, UNITS,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
@@ -70,7 +70,7 @@ parameter_types! {
     pub const VotingBondFactor: Balance = deposit(0, 32);
     pub const DesiredMembers: u32 = 7;
     pub const DesiredRunnersUp: u32 = 7;
-    pub const TermDuration: BlockNumber = prod_or_fast!(182 * DAYS, 10 * MINUTES);
+    pub const TermDuration: BlockNumber = prod_or_fast!(6 * MONTHS, 10 * MINUTES);
     pub const MaxCandidates: u32 = 64;
     pub const MaxVoters: u32 = 512;
     pub const MaxVotesPerVoter: u32 = 16;
