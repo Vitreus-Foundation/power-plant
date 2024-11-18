@@ -3,7 +3,6 @@
 import { Keyring } from "@polkadot/keyring";
 import crypto from "@polkadot/util-crypto";
 
-// TODO: simplify this using crypto primitives
 const KEYRING_ETH = new Keyring({ type: "ethereum" });
 
 await (async function() {

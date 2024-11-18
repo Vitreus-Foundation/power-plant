@@ -144,8 +144,6 @@ parameter_types! {
     pub const Burn: Permill = Permill::from_percent(0);
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const PayoutSpendPeriod: BlockNumber = 30 * DAYS;
-
-    // TODO: reconsider
     pub const DataDepositPerByte: Balance = 100 * PICO_VTRS;
     pub const MaxApprovals: u32 = 100;
     pub const MaxAuthorities: u32 = 100_000;
