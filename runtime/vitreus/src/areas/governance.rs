@@ -2,7 +2,7 @@ use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council,
     MoreThanHalfCouncil, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent,
     RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee, Treasury, TreasuryExtension,
-    DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, NANO_VTRS, PICO_VTRS, UNITS,
+    DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, UNITS,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
@@ -63,14 +63,14 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 }
 
 parameter_types! {
-    pub const CandidacyBond: Balance = 100 * UNITS;
+    pub const CandidacyBond: Balance = 1 * UNITS;
     // 1 storage item created, key size is 32 bytes, value size is 16+16.
     pub const VotingBondBase: Balance = deposit(1, 64);
     // additional data per vote is 32 bytes (account id).
     pub const VotingBondFactor: Balance = deposit(0, 32);
-    pub const DesiredMembers: u32 = 13;
+    pub const DesiredMembers: u32 = 7;
     pub const DesiredRunnersUp: u32 = 7;
-    pub const TermDuration: BlockNumber = prod_or_fast!(7 * DAYS, 5 * MINUTES);
+    pub const TermDuration: BlockNumber = prod_or_fast!(6 * MONTHS, 10 * MINUTES);
     pub const MaxCandidates: u32 = 64;
     pub const MaxVoters: u32 = 512;
     pub const MaxVotesPerVoter: u32 = 16;
@@ -144,8 +144,6 @@ parameter_types! {
     pub const Burn: Permill = Permill::from_percent(0);
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const PayoutSpendPeriod: BlockNumber = 30 * DAYS;
-
-    // TODO: reconsider
     pub const DataDepositPerByte: Balance = 100 * PICO_VTRS;
     pub const MaxApprovals: u32 = 100;
     pub const MaxAuthorities: u32 = 100_000;

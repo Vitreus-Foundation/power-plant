@@ -99,7 +99,7 @@ use frame_support::{
         constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter, WeightToFee,
     },
 };
-use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
+use frame_system::{EnsureNever, EnsureRoot, EnsureSignedBy};
 use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_energy_fee::{traits::AssetsBalancesConverter, CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
@@ -249,7 +249,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 202,
+    spec_version: 203,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 2,
@@ -282,6 +282,8 @@ pub const MINUTES: BlockNumber = 60_000 / (MILLISECS_PER_BLOCK as BlockNumber);
 pub const HOURS: BlockNumber = MINUTES * 60;
 pub const DAYS: BlockNumber = HOURS * 24;
 pub const WEEKS: BlockNumber = DAYS * 7;
+pub const MONTHS: BlockNumber = YEARS / 12;
+pub const YEARS: BlockNumber = 36525 * (DAYS / 100);
 
 /// The version information used to identify this runtime when compiled natively.
 #[cfg(feature = "std")]
@@ -414,7 +416,6 @@ impl pallet_grandpa::Config for Runtime {
 
 parameter_types! {
     pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
-    pub storage EnableManualSeal: bool = false;
 }
 
 impl pallet_timestamp::Config for Runtime {
@@ -471,7 +472,7 @@ impl pallet_assets::Config for Runtime {
     type AssetId = AssetId;
     type AssetIdParameter = Compact<AssetId>;
     type Currency = Balances;
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type CreateOrigin = EnsureNever<AccountId>;
     type ForceOrigin = EnsureRoot<AccountId>;
     type AssetDeposit = AssetDeposit;
     type AssetAccountDeposit = AssetAccountDeposit;
@@ -833,8 +834,8 @@ impl pallet_nfts::Config for Runtime {
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type CreateOrigin = EnsureNever<AccountId>;
     type Locker = ();
     type CollectionDeposit = CollectionDeposit;
     type ItemDeposit = ItemDeposit;

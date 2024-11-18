@@ -1,4 +1,29 @@
-//! The pallet provides a simple vesting mechanism using "Reserved" balance.
+//! This pallet provides a straightforward mechanism for implementing vesting schedules using the "Reserved" balance functionality.
+//! It allows funds to be gradually unlocked over time according to a predefined schedule, making it useful for token distributions that require delayed access.
+//!
+//! # Features
+//! - Supports vesting through "Reserved" balances, ensuring the funds are separated and not freely spendable until vested.
+//! - Implements core traits like `Currency`, `ExistenceRequirement`, and `NamedReservableCurrency` for flexibility in handling balances.
+//! - Provides functions for setting up vesting schedules, modifying existing schedules, and tracking progress.
+//!
+//! # Structure
+//! - The pallet defines various data types and traits to manage vesting, including encoding and decoding of schedules.
+//! - Uses FRAME support for dispatchable functions and balance management.
+//! - Defines the vesting schedule parameters, allowing users to customize the length and frequency of their vesting plans.
+//!
+//! # Usage
+//! - Include this pallet in your runtime to manage the vesting of tokens for stakeholders, team members, or investors.
+//! - Use dispatchable functions to initiate vesting schedules, which will gradually unlock reserved tokens over a specified duration.
+//!
+//! # Dependencies
+//! - Uses `frame_support` for dispatch and balance management utilities.
+//! - Relies on `sp_runtime` traits for working with numeric types and managing runtime-specific operations.
+//! - Includes compatibility for both `std` and `no_std` environments.
+//!
+//! # Important Notes
+//! - This pallet provides a simple implementation suitable for basic vesting needs; for more complex scenarios, consider extending its functionality.
+//! - Careful management of schedules is required to ensure balances are vested as intended without exceeding reserve limits.
+//! - Always test the vesting logic thoroughly before deploying to a production environment to prevent unintended fund locks or early releases.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::all)]

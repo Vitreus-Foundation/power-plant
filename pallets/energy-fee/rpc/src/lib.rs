@@ -1,3 +1,40 @@
+//! # Energy Fee RPC Implementation
+//!
+//! JSON-RPC interface for querying energy fees and exchange rates.
+//!
+//! ## RPC Methods
+//!
+//! ### Gas Estimation
+//! - `energyFee_estimateGas`: Estimates gas cost for a transaction
+//! - Parameters:
+//!   - Call request details
+//!   - Optional block hash
+//! - Returns: Estimated gas in U256
+//!
+//! ### Fee Estimation
+//! - `energyFee_estimateCallFee`: Estimates total fee for a runtime call
+//! - Parameters:
+//!   - Account ID
+//!   - Encoded call data
+//!   - Optional block hash
+//! - Returns: Fee details including breakdown
+//!
+//! ### Exchange Rate
+//! - `energyFee_vtrsToVnrgSwapRate`: Gets current VTRS/VNRG exchange rate
+//! - Parameters:
+//!   - Optional block hash
+//! - Returns: Exchange rate as u128
+//!
+//! ## Implementation Details
+//! - Uses runtime API to perform calculations
+//! - Falls back to best block if hash not specified
+//! - Handles encoding/decoding of parameters
+//! - Provides detailed error information
+//! - Thread-safe client access
+//!
+//! The RPC interface enables external systems to estimate fees
+//! and exchange rates without submitting transactions.
+
 use ethereum_types::U256;
 use jsonrpsee::{
     core::RpcResult,
