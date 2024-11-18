@@ -80,7 +80,7 @@ Vitreus consists of several specialized pallets working in harmony:
 
 1. Clone the repository:
 ```bash
-git clone https://github.com/your-org/vitreus-power-plant
+git clone https://github.com/Vitreus-Foundation/vitreus-power-plant
 cd vitreus-power-plant
 ```
 
