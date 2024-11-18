@@ -17,6 +17,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 
+//! Useful function for inflation for cooperated proof of stake.
+
 use sp_arithmetic::{
 	biguint::BigUint,
 	traits::{SaturatedConversion, Zero},

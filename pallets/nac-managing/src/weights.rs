@@ -23,6 +23,7 @@
 use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 use core::marker::PhantomData;
 
+/// Weight functions needed for `pallet-nac-managing`.
 pub trait WeightInfo {
     fn mint() -> Weight;
     fn update_nft() -> Weight;

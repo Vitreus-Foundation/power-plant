@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Test environment for 'pallet-nac-managing'.
+
 use crate::{self as pallet_nac_managing, *};
 
 use frame_support::{

@@ -15,6 +15,9 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Testing utils for staking. Provides some common functions to setup staking state, such as
+//! bonding validators, cooperators, and generating different types of solutions.
+
 use crate::{Pallet as Staking, *};
 use frame_benchmarking::account;
 use frame_system::RawOrigin;

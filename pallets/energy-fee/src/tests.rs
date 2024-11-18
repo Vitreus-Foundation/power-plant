@@ -1,3 +1,5 @@
+//! Tests for the module.
+
 use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event, TokenExchange};
 use frame_support::{
     dispatch::{DispatchInfo, GetDispatchInfo},

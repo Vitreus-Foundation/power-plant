@@ -1,3 +1,5 @@
+//! Implementations for the Staking FRAME Pallet.
+
 use core::cmp::Ordering;
 
 use frame_support::traits::Imbalance;

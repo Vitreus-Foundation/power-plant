@@ -1,3 +1,4 @@
+//! Implementations for the Reputation pallet (non-dispatchables).
 use crate::{ReputationPoint, ReputationRecord};
 
 use super::pallet::*;

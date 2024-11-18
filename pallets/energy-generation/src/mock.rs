@@ -1,3 +1,5 @@
+//! Test utilities
+
 #![allow(unused_imports)]
 
 use crate::{self as pallet_energy_generation, *};

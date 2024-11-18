@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Proc macro to generate the reward curve functions and tests.
+
 mod log;
 
 use log::log2;

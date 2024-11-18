@@ -1,3 +1,4 @@
+//! Pallet implementation (dispatchables and storages).
 use crate::weights::*;
 use crate::{ReputationPoint, ReputationRecord, ReputationTier};
 pub use impls::*;

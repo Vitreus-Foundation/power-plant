@@ -1,3 +1,4 @@
+//! Benchmarking setup for pallet-energy-fee
 #![cfg(feature = "runtime-benchmarks")]
 use super::*;
 

@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Test environment for 'pallet-claiming'.
+
 use super::secp_utils::eth;
 use crate as pallet_claiming;
 

@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Staking pallet benchmarking.
+
 use super::*;
 use crate::{ConfigOp, Pallet as Staking};
 use testing_utils::*;

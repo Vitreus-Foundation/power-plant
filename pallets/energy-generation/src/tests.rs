@@ -1,3 +1,5 @@
+//! Tests for the module.
+
 use super::{ConfigOp, Event, *};
 use crate::{
     slashing::{SlashEntity, SlashEntityOf},

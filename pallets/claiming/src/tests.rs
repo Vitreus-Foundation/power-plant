@@ -15,6 +15,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+//! Tests for claiming pallet.
+
 use crate::mock::*;
 use crate::secp_utils::*;
 use crate::{to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};
