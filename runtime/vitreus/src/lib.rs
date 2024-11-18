@@ -99,7 +99,7 @@ use frame_support::{
         constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter, WeightToFee,
     },
 };
-use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
+use frame_system::{EnsureNever, EnsureRoot, EnsureSignedBy};
 use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
 use pallet_energy_fee::{traits::AssetsBalancesConverter, CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
@@ -473,7 +473,7 @@ impl pallet_assets::Config for Runtime {
     type AssetId = AssetId;
     type AssetIdParameter = Compact<AssetId>;
     type Currency = Balances;
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type CreateOrigin = EnsureNever<AccountId>;
     type ForceOrigin = EnsureRoot<AccountId>;
     type AssetDeposit = AssetDeposit;
     type AssetAccountDeposit = AssetAccountDeposit;
@@ -835,8 +835,8 @@ impl pallet_nfts::Config for Runtime {
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<AccountId>;
-    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type CreateOrigin = EnsureNever<AccountId>;
     type Locker = ();
     type CollectionDeposit = CollectionDeposit;
     type ItemDeposit = ItemDeposit;
