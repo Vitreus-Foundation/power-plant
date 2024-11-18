@@ -1,1 +1,0 @@
-# NAC managing pallet

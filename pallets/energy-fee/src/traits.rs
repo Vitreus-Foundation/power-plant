@@ -11,7 +11,7 @@ use sp_runtime::{DispatchError, FixedPointNumber, FixedPointOperand, TokenError}
 use sp_std::marker::PhantomData;
 
 type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-type AssetIdOf<T> = <T as AssetRateConfig>::AssetId;
+type AssetIdOf<T> = <T as AssetRateConfig>::AssetKind;
 type BalanceOf<T> = <<T as AssetRateConfig>::Currency as Inspect<AccountIdOf<T>>>::Balance;
 /// Custom fee calculation for specified scenarios
 pub trait CustomFee<RuntimeCall, DispatchInfo, Balance, ConstantFee>
@@ -138,7 +138,7 @@ where
         asset_id: AssetIdOf<T>,
     ) -> Result<BalanceOf<T>, Self::Error> {
         let rate = pallet_asset_rate::ConversionRateToNative::<T>::get(asset_id)
-            .ok_or::<Self::Error>(AssetRateError::<T>::UnknownAssetId.into())?;
+            .ok_or::<Self::Error>(AssetRateError::<T>::UnknownAssetKind.into())?;
         let result = rate
             .reciprocal()
             .ok_or(DispatchError::Other("Asset rate too low"))?

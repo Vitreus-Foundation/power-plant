@@ -1,8 +1,100 @@
-//! This pallet holds the NAC - NFTs with granted access level of the user.
-//! It uses `pallet_nfts` under the hood.
 //!
-//! It's supposed there is a single collection holding all the NACs. The level is a `u8` value
-//! stored in the NAC's metadata and in the NFT's attribute.
+//! # Module Overview
+//!
+//! This Rust module defines a pallet for managing NFTs and VIPP (Very Important Person Protocol) NFTs
+//! on a Substrate-based blockchain. The pallet allows minting NFTs, updating their attributes, managing
+//! NAC (Nonfungible Asset Certificate) levels, and minting special VIPP NFTs. The primary aim is to
+//! provide a mechanism for creating and managing user-owned NFTs, including the issuance of special
+//! status tokens (VIPP NFTs) based on specific actions.
+//!
+//! # Key Features and Components
+//!
+//! - **NFT Minting and Management**:
+//!   - The pallet allows for minting NFTs (`mint()`) for users with specified NAC levels and supports
+//!     updating existing NFTs to reflect changes in their attributes, such as increasing the NAC level.
+//!     The minting process is managed by an authorized origin (typically an admin).
+//!   - **NAC Level Management**: Each user-owned NFT is associated with a NAC level (`u8`). This level
+//!     is used to manage and track different tiers or benefits for NFT holders.
+//!
+//! - **VIPP NFT Minting**:
+//!   - VIPP NFTs are special tokens issued to users when specific conditions are met (e.g., upon
+//!     claiming rewards). The pallet includes a `mint_vipp_nft()` function that is triggered during
+//!     certain operations, providing an additional level of recognition to users.
+//!
+//! - **Storage Items**:
+//!   - **`UsersNft`**: Tracks the NFT details for each user, including their NAC level.
+//!   - **Events**: Several events are defined, such as `NftMinted`, `NftUpdated`, and `VippNftMinted`,
+//!     which provide information about the actions taken within the pallet, such as minting or updating
+//!     NFTs.
+//!
+//! - **Extrinsics**:
+//!   - **`mint()`**: Allows an admin to mint an NFT for a user, specifying the NAC level and owner.
+//!     This function ensures that the user meets the requirements and that the NFT is not already
+//!     minted for that user.
+//!   - **On-Chain Attribute Updates**: The `on_claim()` function allows updating the NFT's attributes
+//!     based on user actions, such as claims, which may lead to minting a VIPP NFT.
+//!
+//! # Access Control and Security
+//!
+//! - **Admin Origin Requirement**: The `mint()` extrinsic can only be called by an authorized origin
+//!   (`T::AdminOrigin::ensure_origin(origin)`), ensuring that only authorized accounts can mint NFTs.
+//! - **Error Handling**: The pallet includes custom error types (`Error<T>`) for scenarios such as
+//!   attempting to mint an already existing NFT (`NftAlreadyExist`) or updating an invalid NAC level
+//!   (`NacLevelIsIncorrect`). This helps maintain the integrity of the pallet's operations.
+//! - **Controlled Attribute Changes**: The attribute change process for NFTs is controlled through
+//!   the on-chain storage and verified by events, ensuring consistency and preventing unauthorized
+//!   modifications.
+//!
+//! # Developer Notes
+//!
+//! - **Default NAC Level**: A default NAC level (`DEFAULT_NAC_LEVEL`) is assigned to newly minted NFTs.
+//!   This ensures that all NFTs start with a baseline value that can be incremented as needed through
+//!   the pallet's functions.
+//! - **Flexible NFT Handling**: The pallet allows for multiple interactions with NFTs, including minting,
+//!   updating, and minting VIPP NFTs based on user actions. Developers can extend these functionalities
+//!   to suit specific business requirements or add new NFT attributes as needed.
+//! - **Hooks for Claims and Withdrawals**: The pallet integrates hooks (`on_claim()` and `on_withdraw_fee()`)
+//!   that allow for seamless interaction with other pallets or components of the blockchain. For example,
+//!   the `on_claim()` function allows minting VIPP NFTs upon a user's successful claim, integrating
+//!   additional utility into the existing reward or staking system.
+//!
+//! # Usage Scenarios
+//!
+//! - **Minting NFTs for Special Users**: The `mint()` extrinsic is used by an admin to issue NFTs to
+//!   specific users, assigning an initial NAC level. This can be used in scenarios such as rewarding
+//!   early adopters or providing exclusive access to certain features of the network.
+//! - **NAC Level Upgrades**: Users with existing NFTs can have their NAC levels updated based on
+//!   specific achievements or milestones. This can be achieved through on-chain functions that
+//!   validate user actions and update the NFT's attributes accordingly.
+//! - **VIPP Recognition**: Users who meet specific conditions, such as reaching a certain claim amount,
+//!   may be rewarded with a VIPP NFT. This helps create an additional incentive for user engagement
+//!   and can be used as a status symbol within the community.
+//!
+//! # Integration Considerations
+//!
+//! - **Event-Driven Architecture**: The pallet emits several events (`NftMinted`, `NftUpdated`, `VippNftMinted`)
+//!   that can be listened to by other modules or off-chain systems. These events are crucial for
+//!   creating an event-driven system that reacts to user actions and provides real-time feedback to
+//!   the blockchain users.
+//! - **OnChain Attribute Integration**: Developers integrating this pallet should consider how the
+//!   on-chain attributes (`CLAIM_AMOUNT_ATTRIBUTE_KEY`) interact with the broader system, particularly
+//!   when managing rewards, claims, or other actions that may affect NFT ownership or status.
+//! - **Administrative Control**: The pallet assumes administrative control for minting NFTs, which means
+//!   that the governance model should clearly define who has the authority to execute these functions.
+//!   Proper role assignment and verification mechanisms should be in place to avoid misuse or
+//!   unauthorized minting of NFTs.
+//!
+//! # Example Scenario
+//!
+//! Suppose an admin wants to reward active users of the blockchain by minting special NFTs for them.
+//! The admin uses the `mint()` function to issue NFTs, setting an initial NAC level based on each user's
+//! engagement. Users can then increase their NAC levels by participating in network activities, such as
+//! staking or claiming rewards. When a user's claim amount exceeds a certain threshold, a VIPP NFT is
+//! minted for them, recognizing their contributions. The pallet tracks each of these actions, and events
+//! like `NftMinted` and `VippNftMinted` are emitted, allowing other network participants to see the
+//! status and actions of their peers.
+//!
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -257,7 +349,8 @@ pub mod pallet {
                 Pallet::<T>::create_collection(owner).expect("Cannot create a collection");
 
                 // Get collection Id.
-                let collection_id: T::CollectionId = T::CollectionId::initial_value();
+                let collection_id: T::CollectionId =
+                    T::CollectionId::initial_value().unwrap_or_default();
 
                 for (n, (account, level)) in self.accounts.iter().enumerate() {
                     Pallet::<T>::do_mint((n as u32).into(), account.clone())
@@ -361,7 +454,7 @@ impl<T: Config> Pallet<T> {
             let item_id = key;
             // Get NAC by NFT attribute key.
             let nac_level =
-                T::Nfts::system_attribute(&collection_id, &item_id, &NAC_LEVEL_ATTRIBUTE_KEY);
+                T::Nfts::system_attribute(&collection_id, Some(&item_id), &NAC_LEVEL_ATTRIBUTE_KEY);
 
             return match nac_level {
                 Some(bytes) => Some((bytes[0], item_id)),
@@ -418,7 +511,7 @@ impl<T: Config> Pallet<T> {
         if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account).next() {
             let item_id = key;
             let vipp_status_exist =
-                T::Nfts::system_attribute(&collection_id, &item_id, &VIPP_STATUS_EXIST);
+                T::Nfts::system_attribute(&collection_id, Some(&item_id), &VIPP_STATUS_EXIST);
 
             return match vipp_status_exist {
                 Some(_) => None,
@@ -444,8 +537,11 @@ impl<T: Config> Pallet<T> {
         if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account_id).next() {
             let item_id = key;
             // Get claim amount by NFT attribute key.
-            let claim_balance =
-                T::Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY);
+            let claim_balance = T::Nfts::system_attribute(
+                &collection_id,
+                Some(&item_id),
+                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            );
 
             return match claim_balance {
                 Some(bytes) => match T::Balance::decode(&mut bytes.as_slice()) {
@@ -497,9 +593,11 @@ impl<T: Config> Pallet<T> {
         for key in T::Nfts::owned_in_collection(&collection_id, account) {
             let item_id = key;
 
-            if let Some(claim_value) =
-                T::Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-            {
+            if let Some(claim_value) = T::Nfts::system_attribute(
+                &collection_id,
+                Some(&item_id),
+                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            ) {
                 match lowest_claim_value {
                     Some((min_claim, _)) if claim_value < min_claim => {
                         lowest_claim_value = Some((claim_value, item_id))
@@ -553,7 +651,7 @@ impl<T: Config> Pallet<T> {
             .ok_or(Error::<T>::NftNotFound)?;
 
         let claimed_raw =
-            T::Nfts::system_attribute(&collection, &item, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
+            T::Nfts::system_attribute(&collection, Some(&item), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
                 .unwrap_or(vec![]);
         let currently_claimed =
             T::Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(T::Balance::zero());
@@ -576,9 +674,11 @@ impl<T: Config> Pallet<T> {
         for key in T::Nfts::owned_in_collection(&collection_id, account) {
             let item_id = key;
 
-            if let Some(claim_value_bytes) =
-                T::Nfts::system_attribute(&collection_id, &item_id, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-            {
+            if let Some(claim_value_bytes) = T::Nfts::system_attribute(
+                &collection_id,
+                Some(&item_id),
+                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            ) {
                 if let Ok(claim_value) = T::Balance::decode(&mut &claim_value_bytes[..]) {
                     total_sum += claim_value;
                 }
@@ -625,7 +725,7 @@ where
             .ok_or(Error::<T>::NftNotFound)?;
 
         let claimed_raw =
-            T::Nfts::system_attribute(&collection, &item, &CLAIM_AMOUNT_ATTRIBUTE_KEY)
+            T::Nfts::system_attribute(&collection, Some(&item), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
                 .unwrap_or(vec![]);
         let currently_claimed =
             Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(Balance::zero());

@@ -23,15 +23,14 @@ use super::{
     CouncilCollective, Dmp, ParaId, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
     TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet,
 };
-use frame_support::weights::ConstantMultiplier;
 use frame_support::{
-    match_types, parameter_types,
-    traits::{Contains, Everything, IsInVec, Nothing},
-    weights::Weight,
+    parameter_types,
+    traits::{tokens::imbalance::ResolveTo, Contains, Equals, Everything, Nothing},
+    weights::{ConstantMultiplier, Weight},
 };
 use frame_system::EnsureRoot;
 use origin_conversion::SignedToAccountKey20;
-use runtime_common::{
+use polkadot_runtime_common::{
     paras_registrar, prod_or_fast,
     xcm_sender::{ChildParachainRouter, ExponentialPrice},
 };
@@ -41,11 +40,11 @@ use xcm::latest::prelude::*;
 use xcm_builder::{
     AccountKey20Aliases, AllowExplicitUnpaidExecutionFrom, AllowKnownQueryResponses,
     AllowSubscriptionsFrom, AllowTopLevelPaidExecutionFrom, AsPrefixedGeneralIndex,
-    BackingToPlurality, ChildParachainAsNative, ChildParachainConvertsVia,
-    CurrencyAdapter as XcmCurrencyAdapter, FixedWeightBounds, FungiblesAdapter,
-    IsChildSystemParachain, IsConcrete, MatchedConvertedConcreteId, MintLocation, NoChecking,
-    SignedAccountKey20AsNative, SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId,
-    UsingComponents, WithComputedOrigin, WithUniqueTopic,
+    BackingToPlurality, ChildParachainAsNative, ChildParachainConvertsVia, FixedWeightBounds,
+    FrameTransactionalProcessor, FungiblesAdapter, IsChildSystemParachain, IsConcrete,
+    MatchedConvertedConcreteId, MintLocation, NoChecking, SignedAccountKey20AsNative,
+    SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId, UsingComponents,
+    WithComputedOrigin, WithUniqueTopic, XcmFeeManagerFromComponents,
 };
 use xcm_executor::{traits::WithOriginFilter, XcmExecutor};
 
@@ -70,26 +69,29 @@ pub const ASSETS_PALLET_ID: u8 = 5;
 pub const VNRG_ASSET_ID: u128 = 1;
 
 parameter_types! {
-    pub const TokenLocation: MultiLocation = Here.into_location();
-    pub const WrappedTokenLocation: MultiLocation = MultiLocation {
-        parents: 1,
-        interior: X2(
-            GlobalConsensus(ETHEREUM_NETWORK),
-            AccountKey20 { network: None, key: ETHEREUM_VTRS_ADDRESS },
-        ),
-    };
-    pub const EnergyTokenLocation: MultiLocation = MultiLocation {
-        parents: 0,
-        interior: X2(
-            PalletInstance(ASSETS_PALLET_ID),
-            GeneralIndex(VNRG_ASSET_ID),
-        ),
-    };
+    pub const TokenLocation: Location = Here.into_location();
     pub const ThisNetwork: NetworkId = RELAY_NETWORK;
-    pub UniversalLocation: InteriorMultiLocation = ThisNetwork::get().into();
+    pub UniversalLocation: InteriorLocation = ThisNetwork::get().into();
     pub CheckAccount: AccountId = XcmPallet::check_account();
     pub TreasuryAccount: AccountId = Treasury::account_id();
     pub LocalCheckAccount: (AccountId, MintLocation) = (CheckAccount::get(), MintLocation::Local);
+}
+
+parameter_types! {
+    pub WrappedTokenLocation: Location = Location::new(
+        1,
+        [
+            GlobalConsensus(ETHEREUM_NETWORK),
+            AccountKey20 { network: None, key: ETHEREUM_VTRS_ADDRESS }
+        ]
+    );
+    pub EnergyTokenLocation: Location = Location::new(
+        0,
+        [
+            PalletInstance(ASSETS_PALLET_ID),
+            GeneralIndex(VNRG_ASSET_ID),
+        ]
+    );
 }
 
 pub type LocationConverter = (
@@ -100,15 +102,16 @@ pub type LocationConverter = (
 );
 
 /// Our asset transactor. This is what allows us to interest with the runtime facilities from the point of
-/// view of XCM-only concepts like `MultiLocation` and `MultiAsset`.
+/// view of XCM-only concepts like `Location` and `Asset`.
 ///
 /// Ours is only aware of the Balances pallet, which is mapped to `TokenLocation`.
-pub type LocalAssetTransactor = XcmCurrencyAdapter<
+#[allow(deprecated)]
+pub type LocalAssetTransactor = xcm_builder::CurrencyAdapter<
     // Use this currency:
     Balances,
     // Use this currency when it is a fungible asset matching the given location or name:
     IsConcrete<TokenLocation>,
-    // We can convert the MultiLocations with our converter above:
+    // We can convert the Locations with our converter above:
     LocationConverter,
     // Our chain's account ID type (we can't get away without mentioning it explicitly):
     AccountId,
@@ -130,7 +133,7 @@ pub type WrappedTokenTransactor = currency_adapter::CurrencyAdapterWithFee<
     Balances,
     // Use this currency when it is a fungible asset matching the given location or name:
     IsConcrete<WrappedTokenLocation>,
-    // We can convert the MultiLocations with our converter above:
+    // We can convert the Locations with our converter above:
     LocationConverter,
     // Our chain's account ID type (we can't get away without mentioning it explicitly):
     AccountId,
@@ -145,14 +148,13 @@ pub type WrappedTokenTransactor = currency_adapter::CurrencyAdapterWithFee<
 >;
 
 parameter_types! {
-    pub AssetsPalletLocation: MultiLocation = PalletInstance(ASSETS_PALLET_ID).into();
-    pub EnergyTokenLocationVec: sp_std::vec::Vec<MultiLocation> = [EnergyTokenLocation::get()].into();
+    pub AssetsPalletLocation: Location = PalletInstance(ASSETS_PALLET_ID).into();
 }
 
 pub type EnergyTokenConcreteId = MatchedConvertedConcreteId<
     super::AssetId,
     Balance,
-    IsInVec<EnergyTokenLocationVec>,
+    Equals<EnergyTokenLocation>,
     AsPrefixedGeneralIndex<AssetsPalletLocation, super::AssetId, TryConvertInto>,
     TryConvertInto,
 >;
@@ -193,7 +195,7 @@ parameter_types! {
     /// calculations getting too crazy.
     pub const MaxInstructions: u32 = 100;
     /// The asset ID for the asset that we use to pay for message delivery fees.
-    pub FeeAssetId: AssetId = Concrete(TokenLocation::get());
+    pub FeeAssetId: AssetId = AssetId(TokenLocation::get());
     /// The base fee for the message delivery fees.
     pub const BaseDeliveryFee: u128 = 1_000_000_000;
 }
@@ -209,13 +211,13 @@ pub type XcmRouter = WithUniqueTopic<
 >;
 
 parameter_types! {
-    pub const Vtrs: MultiAssetFilter = Wild(AllOf { fun: WildFungible, id: Concrete(TokenLocation::get()) });
-    pub const WrappedVtrs: MultiAssetFilter = Wild(AllOf { fun: WildFungible, id: Concrete(WrappedTokenLocation::get()) });
-    pub AssetHub: MultiLocation = Parachain(ASSET_HUB_ID).into_location();
-    pub BridgeHub: MultiLocation = Parachain(BRIDGE_HUB_ID).into_location();
-    pub VtrsForAssetHub: (MultiAssetFilter, MultiLocation) = (Vtrs::get(), AssetHub::get());
-    pub VtrsForBridgeHub: (MultiAssetFilter, MultiLocation) = (Vtrs::get(), BridgeHub::get());
-    pub WrappedVtrsForAssetHub: (MultiAssetFilter, MultiLocation) = (WrappedVtrs::get(), AssetHub::get());
+    pub const Vtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(TokenLocation::get()) });
+    pub WrappedVtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(WrappedTokenLocation::get()) });
+    pub AssetHub: Location = Parachain(ASSET_HUB_ID).into_location();
+    pub BridgeHub: Location = Parachain(BRIDGE_HUB_ID).into_location();
+    pub VtrsForAssetHub: (AssetFilter, Location) = (Vtrs::get(), AssetHub::get());
+    pub VtrsForBridgeHub: (AssetFilter, Location) = (Vtrs::get(), BridgeHub::get());
+    pub WrappedVtrsForAssetHub: (AssetFilter, Location) = (WrappedVtrs::get(), AssetHub::get());
     pub const MaxAssetsIntoHolding: u32 = 64;
 }
 pub type TrustedTeleporters = (
@@ -224,10 +226,11 @@ pub type TrustedTeleporters = (
     xcm_builder::Case<WrappedVtrsForAssetHub>,
 );
 
-match_types! {
-    pub type OnlyParachains: impl Contains<MultiLocation> = {
-        MultiLocation { parents: 0, interior: X1(Parachain(_)) }
-    };
+pub struct OnlyParachains;
+impl Contains<Location> for OnlyParachains {
+    fn contains(loc: &Location) -> bool {
+        matches!(loc.unpack(), (0, [Parachain(_)]))
+    }
 }
 
 /// The barriers one of which must be passed for an XCM message to be executed.
@@ -340,6 +343,10 @@ impl Contains<RuntimeCall> for SafeCallFilter {
     }
 }
 
+/// Locations that will not be charged fees in the executor, neither for execution nor delivery.
+pub type WaivedLocations = ();
+pub type WeightToFee = ConstantMultiplier<Balance, TransactionPicosecondFee>;
+
 pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
@@ -352,11 +359,11 @@ impl xcm_executor::Config for XcmConfig {
     type Barrier = Barrier;
     type Weigher = FixedWeightBounds<FixedXcmWeight, RuntimeCall, MaxInstructions>;
     type Trader = UsingComponents<
-        ConstantMultiplier<Balance, TransactionPicosecondFee>,
+        WeightToFee,
         TokenLocation,
         AccountId,
         Balances,
-        Treasury,
+        ResolveTo<TreasuryAccount, Balances>,
     >;
     type ResponseHandler = XcmPallet;
     type AssetTrap = XcmPallet;
@@ -366,12 +373,20 @@ impl xcm_executor::Config for XcmConfig {
     type SubscriptionService = XcmPallet;
     type PalletInstancesInfo = AllPalletsWithSystem;
     type MaxAssetsIntoHolding = MaxAssetsIntoHolding;
-    type FeeManager = ();
+    type FeeManager = XcmFeeManagerFromComponents<
+        WaivedLocations,
+        fee_handler::XcmFeeToAccount<Self::AssetTransactor, AccountId, TreasuryAccount>,
+    >;
     type MessageExporter = ();
     type UniversalAliases = Nothing;
     type CallDispatcher = WithOriginFilter<SafeCallFilter>;
     type SafeCallFilter = SafeCallFilter;
     type Aliasers = Nothing;
+    type TransactionalProcessor = FrameTransactionalProcessor;
+    type HrmpNewChannelOpenRequestHandler = ();
+    type HrmpChannelAcceptedHandler = ();
+    type HrmpChannelClosingHandler = ();
+    type XcmRecorder = XcmPallet;
 }
 
 parameter_types! {
@@ -380,17 +395,17 @@ parameter_types! {
 
 #[cfg(feature = "runtime-benchmarks")]
 parameter_types! {
-    pub ReachableDest: Option<MultiLocation> = Some(Parachain(1000).into());
+    pub ReachableDest: Option<Location> = Some(Parachain(1000).into());
 }
 
-/// Type to convert the council origin to a Plurality `MultiLocation` value.
+/// Type to convert the council origin to a Plurality `Location` value.
 pub type CouncilToPlurality = BackingToPlurality<
     RuntimeOrigin,
     pallet_collective::Origin<Runtime, CouncilCollective>,
     CouncilBodyId,
 >;
 
-/// Type to convert an `Origin` type value into a `MultiLocation` value which represents an interior location
+/// Type to convert an `Origin` type value into a `Location` value which represents an interior location
 /// of this chain.
 pub type LocalOriginToLocation = (
     // We allow an origin from the Collective pallet to be used in XCM as a corresponding Plurality of the
@@ -444,13 +459,13 @@ mod origin_conversion {
             RuntimeOrigin: OriginTrait + Clone,
             AccountId: Into<[u8; 20]>,
             Network: Get<Option<NetworkId>>,
-        > TryConvert<RuntimeOrigin, MultiLocation>
+        > TryConvert<RuntimeOrigin, Location>
         for SignedToAccountKey20<RuntimeOrigin, AccountId, Network>
     where
         RuntimeOrigin::PalletsOrigin: From<RawOrigin<AccountId>>
             + TryInto<RawOrigin<AccountId>, Error = RuntimeOrigin::PalletsOrigin>,
     {
-        fn try_convert(o: RuntimeOrigin) -> Result<MultiLocation, RuntimeOrigin> {
+        fn try_convert(o: RuntimeOrigin) -> Result<Location, RuntimeOrigin> {
             o.try_with_caller(|caller| match caller.try_into() {
                 Ok(RawOrigin::Signed(who)) => {
                     Ok(Junction::AccountKey20 { network: Network::get(), key: who.into() }.into())
@@ -462,22 +477,24 @@ mod origin_conversion {
     }
 }
 
+#[allow(deprecated)]
 mod currency_adapter {
-    use frame_support::traits::ExistenceRequirement::KeepAlive;
-    use frame_support::traits::{Get, WithdrawReasons};
-    use sp_runtime::traits::CheckedSub;
-    use sp_runtime::{Percent, Saturating};
+    use super::*;
+    use frame_support::traits::{ExistenceRequirement::KeepAlive, Get, WithdrawReasons};
+    use sp_runtime::{traits::CheckedSub, Percent, Saturating};
     use sp_std::marker::PhantomData;
-    use xcm::latest::{Error as XcmError, MultiAsset, MultiLocation, Result, XcmContext};
-    use xcm_builder::{CurrencyAdapter, MintLocation};
-    use xcm_executor::traits::{ConvertLocation, MatchesFungible, TransactAsset};
-    use xcm_executor::Assets;
+    use xcm::latest::Result as XcmResult;
+    use xcm_builder::CurrencyAdapter;
+    use xcm_executor::{
+        traits::{ConvertLocation, MatchesFungible, TransactAsset},
+        AssetsInHolding,
+    };
 
     /// Asset transaction errors.
     enum Error {
         /// The given asset is not handled. (According to [`XcmError::AssetNotFound`])
         AssetNotHandled,
-        /// `MultiLocation` to `AccountId` conversion failed.
+        /// `Location` to `AccountId` conversion failed.
         AccountIdConversionFailed,
     }
 
@@ -536,7 +553,7 @@ mod currency_adapter {
             FeeReceiverAccount,
         >
     {
-        fn can_check_in(origin: &MultiLocation, what: &MultiAsset, context: &XcmContext) -> Result {
+        fn can_check_in(origin: &Location, what: &Asset, context: &XcmContext) -> XcmResult {
             CurrencyAdapter::<
                 Currency,
                 Matcher,
@@ -546,7 +563,7 @@ mod currency_adapter {
             >::can_check_in(origin, what, context)
         }
 
-        fn check_in(origin: &MultiLocation, what: &MultiAsset, context: &XcmContext) {
+        fn check_in(origin: &Location, what: &Asset, context: &XcmContext) {
             CurrencyAdapter::<
                 Currency,
                 Matcher,
@@ -556,7 +573,7 @@ mod currency_adapter {
             >::check_in(origin, what, context)
         }
 
-        fn can_check_out(dest: &MultiLocation, what: &MultiAsset, context: &XcmContext) -> Result {
+        fn can_check_out(dest: &Location, what: &Asset, context: &XcmContext) -> XcmResult {
             CurrencyAdapter::<
                 Currency,
                 Matcher,
@@ -566,7 +583,7 @@ mod currency_adapter {
             >::can_check_out(dest, what, context)
         }
 
-        fn check_out(dest: &MultiLocation, what: &MultiAsset, context: &XcmContext) {
+        fn check_out(dest: &Location, what: &Asset, context: &XcmContext) {
             CurrencyAdapter::<
                 Currency,
                 Matcher,
@@ -576,7 +593,7 @@ mod currency_adapter {
             >::check_out(dest, what, context)
         }
 
-        fn deposit_asset(what: &MultiAsset, who: &MultiLocation, _context: &XcmContext) -> Result {
+        fn deposit_asset(what: &Asset, who: &Location, _context: Option<&XcmContext>) -> XcmResult {
             log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset what: {:?}, who: {:?}", what, who);
             // Check we handle this asset.
             let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
@@ -594,10 +611,10 @@ mod currency_adapter {
         }
 
         fn withdraw_asset(
-            what: &MultiAsset,
-            who: &MultiLocation,
+            what: &Asset,
+            who: &Location,
             _maybe_context: Option<&XcmContext>,
-        ) -> sp_std::result::Result<Assets, XcmError> {
+        ) -> Result<AssetsInHolding, XcmError> {
             log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset what: {:?}, who: {:?}", what, who);
             // Check we handle this asset.
             let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
@@ -630,11 +647,11 @@ mod currency_adapter {
         }
 
         fn internal_transfer_asset(
-            asset: &MultiAsset,
-            from: &MultiLocation,
-            to: &MultiLocation,
+            asset: &Asset,
+            from: &Location,
+            to: &Location,
             context: &XcmContext,
-        ) -> sp_std::result::Result<Assets, XcmError> {
+        ) -> Result<AssetsInHolding, XcmError> {
             CurrencyAdapter::<
                 Currency,
                 Matcher,
@@ -642,6 +659,41 @@ mod currency_adapter {
                 AccountId,
                 CheckedAccount,
             >::internal_transfer_asset(asset, from, to, context)
+        }
+    }
+}
+
+mod fee_handler {
+    use super::*;
+    use frame_support::traits::Get;
+    use sp_std::marker::PhantomData;
+    use xcm::latest::Assets;
+    use xcm_builder::HandleFee;
+    use xcm_executor::traits::{FeeReason, TransactAsset};
+
+    pub struct XcmFeeToAccount<AssetTransactor, AccountId, ReceiverAccount>(
+        PhantomData<(AssetTransactor, AccountId, ReceiverAccount)>,
+    );
+
+    impl<
+            AssetTransactor: TransactAsset,
+            AccountId: Clone + Into<[u8; 20]>,
+            ReceiverAccount: Get<AccountId>,
+        > HandleFee for XcmFeeToAccount<AssetTransactor, AccountId, ReceiverAccount>
+    {
+        fn handle_fee(fee: Assets, context: Option<&XcmContext>, _reason: FeeReason) -> Assets {
+            let dest = AccountKey20 { network: None, key: ReceiverAccount::get().into() }.into();
+            for asset in fee.into_inner() {
+                if let Err(e) = AssetTransactor::deposit_asset(&asset, &dest, context) {
+                    log::trace!(
+                        target: "xcm::fees",
+                        "`AssetTransactor::deposit_asset` returned error: {:?}. Burning fee: {:?}. \
+                        They might be burned.",
+                        e, asset,
+                    );
+                }
+            }
+            Assets::new()
         }
     }
 }

@@ -1,6 +1,51 @@
-//! The pallet provides a simple claiming mechanism.
-//! Allows claiming tokens immediately on the user's account without additional confirmations.
-//! The origin should be signed.
+// This file is part of Substrate.
+
+// Copyright (C) 2022 Parity Technologies (UK) Ltd.
+// SPDX-License-Identifier: Apache-2.0
+
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+// 	http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+//! # Claims Pallet
+//!
+//! A secure token claiming system that enables users to claim tokens using Ethereum-style signatures.
+//!
+//! ## Overview
+//! This pallet enables:
+//! - Claiming tokens with cryptographic proof of ownership
+//! - Vesting schedule support for claimed tokens
+//! - Root-level management of claimable token supply
+//! - Integration with existing balance and vesting systems
+//!
+//! ## Security Model
+//! - Uses secp256k1 ECDSA for signature verification
+//! - Single-use claims that are removed after successful processing
+//! - Protected token supply managed only by root
+//! - Vesting protection preventing claiming to accounts that already have schedules
+//!
+//! ## Components
+//! - `claim`: Main extrinsic for users to claim tokens with an Ethereum signature
+//! - `mint_tokens_to_claim`: Root operation to add tokens to the claiming pool
+//! - `mint_claim`: Root operation to create new claims
+//! - Claims are stored in a map of Ethereum addresses to balances
+//! - Optional vesting schedules can be configured per claim
+//!
+//! ## Usage
+//! 1. Root mints tokens to claims pool
+//! 2. Root creates claims for Ethereum addresses
+//! 3. Users sign messages with Ethereum keys
+//! 4. Users submit signatures to claim tokens
+//! 5. Optional vesting schedules are automatically applied
+
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
 #![warn(clippy::all)]
@@ -158,7 +203,7 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// Tokens was claimed.
+        /// Tokens were claimed.
         Claimed {
             /// To whom the tokens were claimed.
             account_id: T::AccountId,
@@ -166,7 +211,7 @@ pub mod pallet {
             amount: BalanceOf<T>,
         },
 
-        /// Tokens was minted to claim.
+        /// Tokens were minted to claim.
         TokenMintedToClaim(BalanceOf<T>),
     }
 
@@ -409,11 +454,13 @@ mod secp_utils {
     pub fn public(secret: &libsecp256k1::SecretKey) -> libsecp256k1::PublicKey {
         libsecp256k1::PublicKey::from_secret_key(secret)
     }
+
     pub fn eth(secret: &libsecp256k1::SecretKey) -> EthereumAddress {
         let mut res = EthereumAddress::default();
         res.0.copy_from_slice(&keccak_256(&public(secret).serialize()[1..65])[12..]);
         res
     }
+
     pub fn sig<T: Config>(
         secret: &libsecp256k1::SecretKey,
         what: &[u8],

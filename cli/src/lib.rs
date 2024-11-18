@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU General Public License
 // along with Polkadot.  If not, see <http://www.gnu.org/licenses/>.
 
-//! Polkadot CLI library.
+//! Vitreus CLI library.
 
 #![warn(missing_docs)]
 
@@ -28,10 +28,10 @@ mod error;
 mod host_perf_check;
 
 #[cfg(feature = "service")]
-pub use service::{self, Block, CoreApi, IdentifyVariant, ProvideRuntimeApi, TFullClient};
+pub use service::{self, Block, CoreApi, ProvideRuntimeApi, TFullClient};
 
 #[cfg(feature = "malus")]
-pub use service::overseer::prepared_overseer_builder;
+pub use vitreus_service::overseer::prepared_overseer_builder;
 
 #[cfg(feature = "cli")]
 pub use cli::*;

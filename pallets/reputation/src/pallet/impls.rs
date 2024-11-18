@@ -1,5 +1,4 @@
 //! Implementations for the Reputation pallet (non-dispatchables).
-
 use crate::{ReputationPoint, ReputationRecord};
 
 use super::pallet::*;
@@ -11,7 +10,7 @@ use sp_runtime::SaturatedConversion;
 /// `frame_support`. If you want any account to have associated reputation with it, you need to
 /// specify `frame_system::Config` to use this pallet on `OnNewAccount`.
 ///
-/// `OnKilledAccount` is used to to remove orfan data from the store.
+/// `OnKilledAccount` is used to remove orfan data from the store.
 impl<T: Config> Pallet<T> {
     /// Updates the points for the time since the last time the account was updated.
     pub fn update_points_for_time() {
@@ -22,7 +21,7 @@ impl<T: Config> Pallet<T> {
         });
     }
 
-    /// Acturally do the slash.
+    /// Actually do the slash.
     pub fn do_slash(account: &T::AccountId, points: ReputationPoint) -> DispatchResult {
         let updated = <frame_system::Pallet<T>>::block_number().saturated_into();
 
@@ -49,7 +48,7 @@ impl<T: Config> Pallet<T> {
         });
     }
 
-    /// Acturally increase points.
+    /// Actually increase points.
     pub fn do_increase_points(account: &T::AccountId, points: ReputationPoint) -> DispatchResult {
         <AccountReputation<T>>::try_mutate_exists(account, |value| {
             value

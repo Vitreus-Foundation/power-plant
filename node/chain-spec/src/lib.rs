@@ -1,4 +1,4 @@
-#![allow(clippy::type_complexity, clippy::identity_op)]
+#![allow(dead_code, unused_imports, clippy::type_complexity, clippy::identity_op)]
 
 use hex_literal::hex;
 use serde::{Deserialize, Serialize};
@@ -6,21 +6,23 @@ use serde::{Deserialize, Serialize};
 use polkadot_primitives::{AssignmentId, AuthorityDiscoveryId, ValidatorId};
 use sc_chain_spec::{ChainSpecExtension, ChainType, Properties};
 use sp_consensus_babe::AuthorityId as BabeId;
-use sp_consensus_beefy::crypto::AuthorityId as BeefyId;
+use sp_consensus_beefy::ecdsa_crypto::AuthorityId as BeefyId;
 use sp_consensus_grandpa::AuthorityId as GrandpaId;
 use sp_core::ecdsa;
-use sp_core::{storage::Storage, Pair, Public};
+use sp_core::{Pair, Public};
 use sp_runtime::traits::{IdentifyAccount, Verify};
 use sp_runtime::{FixedU128, Perbill};
-use sp_state_machine::BasicExternalities;
+
 // Frontier
+
+use crate::tech_addresses::treasury;
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
     BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
-    EnableManualSeal, EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId,
-    MaxCooperations, NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint,
-    RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus,
-    SudoConfig, SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
+    NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig,
+    SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig,
+    SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -42,10 +44,7 @@ pub struct Extensions {
 }
 
 /// Specialized `ChainSpec`. This is a specialization of the general Substrate ChainSpec type.
-pub type ChainSpec = sc_service::GenericChainSpec<RuntimeGenesisConfig, Extensions>;
-
-/// Specialized `ChainSpec` for development.
-pub type DevChainSpec = sc_service::GenericChainSpec<DevGenesisExt, Extensions>;
+pub type ChainSpec = sc_service::GenericChainSpec<Extensions>;
 
 const INITIAL_ENERGY_BALANCE: Balance = 100_000_000_000_000_000_000u128;
 /// 1 VTRS = 0.9 gVolt => 1.11111... VTRS = 1 gVolt
@@ -60,93 +59,59 @@ const MIN_TRUST_VALIDATOR_BOND: Balance = 1 * vtrs::UNITS;
 const MIN_COOPERATOR_BOND: Balance = 1_000_000_000_000_000_000;
 const ENERGY_PER_STAKE_CURRENCY: Balance = 19_909_091_036_891;
 
-/// Extension for the dev genesis config to support a custom changes to the genesis state.
-#[derive(Serialize, Deserialize)]
-pub struct DevGenesisExt {
-    /// Genesis config.
-    genesis_config: RuntimeGenesisConfig,
-    /// The flag that if enable manual-seal mode.
-    enable_manual_seal: Option<bool>,
-}
-
-impl sp_runtime::BuildStorage for DevGenesisExt {
-    fn assimilate_storage(&self, storage: &mut Storage) -> Result<(), String> {
-        BasicExternalities::execute_with_storage(storage, || {
-            if let Some(enable_manual_seal) = &self.enable_manual_seal {
-                EnableManualSeal::set(enable_manual_seal);
-            }
-        });
-        self.genesis_config.assimilate_storage(storage)
-    }
-}
-
-pub fn development_config(enable_manual_seal: Option<bool>) -> DevChainSpec {
+#[cfg(feature = "testnet-native")]
+pub fn development_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
-    DevChainSpec::from_genesis(
-        // Name
-        "Development",
-        // ID
-        "dev",
-        ChainType::Development,
-        move || {
-            DevGenesisExt {
-                genesis_config: testnet_genesis(
-                    wasm_binary,
-                    // Sudo account
+    ChainSpec::builder(wasm_binary, Default::default())
+        .with_name("Development")
+        .with_id("dev")
+        .with_chain_type(ChainType::Development)
+        .with_properties(properties())
+        .with_genesis_config(
+            serde_json::to_value(testnet_genesis(
+                wasm_binary,
+                // Sudo account
+                alith(),
+                // Pre-funded accounts
+                vec![
                     alith(),
-                    // Pre-funded accounts
-                    vec![
-                        alith(),
-                        baltathar(),
-                        charleth(),
-                        dorothy(),
-                        ethan(),
-                        faith(),
-                        goliath(),
-                        treasury(),
-                    ],
-                    // Initial Validators
-                    vec![authority_keys_from_seed("Alice")],
-                    vec![],
-                    // Ethereum chain ID
-                    SS58Prefix::get() as u64,
-                ),
-                enable_manual_seal,
-            }
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        None,
-        // Protocol ID
-        None,
-        // Fork ID
-        None,
-        // Properties
-        Some(properties()),
-        // Extensions
-        Default::default(),
-    )
+                    baltathar(),
+                    charleth(),
+                    dorothy(),
+                    ethan(),
+                    faith(),
+                    goliath(),
+                    treasury(),
+                ],
+                // Initial Validators
+                vec![authority_keys_from_seed("Alice")],
+                vec![],
+                // Ethereum chain ID
+                SS58Prefix::get() as u64,
+            ))
+            .expect("Invalid genesis config"),
+        )
+        .build()
 }
 
+#[cfg(feature = "testnet-native")]
 pub fn devnet_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
-    ChainSpec::from_genesis(
-        // Name
-        "Devnet",
-        // ID
-        "devnet",
-        ChainType::Custom("Devnet".to_string()),
-        move || {
-            testnet_genesis(
+    ChainSpec::builder(wasm_binary, Default::default())
+        .with_name("Devnet")
+        .with_id("devnet")
+        .with_chain_type(ChainType::Custom("Devnet".to_string()))
+        .with_properties(properties())
+        .with_genesis_config(
+            serde_json::to_value(testnet_genesis(
                 wasm_binary,
                 // Sudo account
                 alith(),
@@ -165,36 +130,26 @@ pub fn devnet_config() -> ChainSpec {
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
                 SS58Prefix::get() as u64,
-            )
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        None,
-        // Protocol ID
-        None,
-        None,
-        // Properties
-        Some(properties()),
-        // Extensions
-        Default::default(),
-    )
+            ))
+            .unwrap(),
+        )
+        .build()
 }
 
+#[cfg(feature = "testnet-native")]
 pub fn localnet_config() -> ChainSpec {
     use devnet_keys::*;
     use tech_addresses::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
-    ChainSpec::from_genesis(
-        // Name
-        "Localnet",
-        // ID
-        "localnet",
-        ChainType::Local,
-        move || {
-            testnet_genesis(
+    ChainSpec::builder(wasm_binary, Default::default())
+        .with_name("Localnet")
+        .with_id("localnet")
+        .with_chain_type(ChainType::Local)
+        .with_properties(properties())
+        .with_genesis_config(
+            serde_json::to_value(testnet_genesis(
                 wasm_binary,
                 // Sudo account
                 alith(),
@@ -213,35 +168,25 @@ pub fn localnet_config() -> ChainSpec {
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
                 SS58Prefix::get() as u64,
-            )
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        None,
-        // Protocol ID
-        None,
-        None,
-        // Properties
-        Some(properties()),
-        // Extensions
-        Default::default(),
-    )
+            ))
+            .unwrap(),
+        )
+        .build()
 }
 
+#[cfg(feature = "testnet-native")]
 pub fn testnet_config() -> ChainSpec {
     use testnet_keys::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
-    ChainSpec::from_genesis(
-        // Name
-        "Testnet",
-        // ID
-        "testnet",
-        ChainType::Custom("Testnet".to_string()),
-        move || {
-            testnet_genesis(
+    ChainSpec::builder(wasm_binary, Default::default())
+        .with_name("Testnet")
+        .with_id("testnet")
+        .with_chain_type(ChainType::Custom("Testnet".to_string()))
+        .with_properties(properties())
+        .with_genesis_config(
+            serde_json::to_value(testnet_genesis(
                 wasm_binary,
                 // Sudo account
                 root(),
@@ -251,38 +196,28 @@ pub fn testnet_config() -> ChainSpec {
                 vec![validator_1_keys(), validator_2_keys(), validator_3_keys()],
                 vec![],
                 SS58Prefix::get() as u64,
-            )
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        None,
-        // Protocol ID
-        None,
-        None,
-        // Properties
-        Some(properties()),
-        // Extensions
-        Default::default(),
-    )
+            ))
+            .unwrap(),
+        )
+        .build()
 }
 
+#[cfg(feature = "mainnet-native")]
 pub fn stagenet_config() -> ChainSpec {
     use testnet_keys::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
-    ChainSpec::from_genesis(
-        // Name
-        "Stagenet",
-        // ID
-        "stagenet",
-        ChainType::Custom("Stagenet".to_string()),
-        move || {
-            let validators = vec![validator_1_keys(), validator_2_keys(), validator_3_keys()];
-            let invulnerables = validators.iter().map(|x| x.0).collect();
+    let validators = vec![validator_1_keys(), validator_2_keys(), validator_3_keys()];
+    let invulnerables = validators.iter().map(|x| x.0).collect();
 
-            mainnet_genesis(
+    ChainSpec::builder(wasm_binary, Default::default())
+        .with_name("Stagenet")
+        .with_id("stagenet")
+        .with_chain_type(ChainType::Custom("Stagenet".to_string()))
+        .with_properties(properties())
+        .with_genesis_config(
+            serde_json::to_value(mainnet_genesis(
                 wasm_binary,
                 // Sudo account
                 root(),
@@ -290,35 +225,25 @@ pub fn stagenet_config() -> ChainSpec {
                 validators,
                 // Invulnerables
                 invulnerables,
-            )
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        None,
-        // Protocol ID
-        None,
-        None,
-        // Properties
-        Some(properties()),
-        // Extensions
-        Default::default(),
-    )
+            ))
+            .expect("Invalid genesis config"),
+        )
+        .build()
 }
 
+#[cfg(feature = "mainnet-native")]
 pub fn mainnet_config() -> ChainSpec {
     use mainnet_keys::*;
 
     let wasm_binary = WASM_BINARY.expect("WASM not available");
 
-    ChainSpec::from_genesis(
-        // Name
-        "Mainnet",
-        // ID
-        "mainnet",
-        ChainType::Live,
-        move || {
-            mainnet_genesis(
+    ChainSpec::builder(wasm_binary, Default::default())
+        .with_name("Mainnet")
+        .with_id("mainnet")
+        .with_chain_type(ChainType::Live)
+        .with_properties(properties())
+        .with_genesis_config(
+            serde_json::to_value(mainnet_genesis(
                 wasm_binary,
                 // Sudo account
                 root(),
@@ -332,25 +257,16 @@ pub fn mainnet_config() -> ChainSpec {
                 ],
                 // Invulnerables
                 vec![],
-            )
-        },
-        // Bootnodes
-        vec![],
-        // Telemetry
-        None,
-        // Protocol ID
-        None,
-        None,
-        // Properties
-        Some(properties()),
-        // Extensions
-        Default::default(),
-    )
+            ))
+            .unwrap(),
+        )
+        .build()
 }
 
 /// Configure initial storage state for FRAME modules.
+#[cfg(feature = "testnet-native")]
 pub fn testnet_genesis(
-    wasm_binary: &[u8],
+    _wasm_binary: &[u8],
     root_key: AccountId,
     mut endowed_accounts: Vec<AccountId>,
     initial_validators: Vec<(
@@ -405,7 +321,7 @@ pub fn testnet_genesis(
         // System
         system: SystemConfig {
             // Add Wasm runtime to storage.
-            code: wasm_binary.to_vec(),
+            // code: wasm_binary.to_vec(),
             ..Default::default()
         },
         sudo: SudoConfig {
@@ -420,7 +336,7 @@ pub fn testnet_genesis(
         claiming: genesis::claiming_config(),
         vesting: Default::default(),
         simple_vesting: Default::default(),
-        babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
+        babe: BabeConfig { epoch_config: BABE_GENESIS_EPOCH_CONFIG, ..Default::default() },
         council: CouncilConfig {
             members: endowed_accounts.iter().cloned().take(3).collect(),
             ..Default::default()
@@ -450,6 +366,7 @@ pub fn testnet_genesis(
                 .cloned()
                 .map(|account| (VNRG::get(), account, INITIAL_ENERGY_BALANCE))
                 .collect(),
+            next_asset_id: Default::default(),
         },
         pool_assets: Default::default(),
         reputation: ReputationConfig {
@@ -494,6 +411,7 @@ pub fn testnet_genesis(
         },
         technical_membership: Default::default(),
         treasury: Default::default(),
+        elections: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: 125,
             minimum_validator_count: initial_validators.len() as u32,
@@ -518,8 +436,9 @@ pub fn testnet_genesis(
 }
 
 /// Configure initial storage state for FRAME modules.
+#[cfg(feature = "mainnet-native")]
 fn mainnet_genesis(
-    wasm_binary: &[u8],
+    _wasm_binary: &[u8],
     root_key: AccountId,
     initial_validators: Vec<(
         AccountId,
@@ -554,7 +473,7 @@ fn mainnet_genesis(
         // System
         system: SystemConfig {
             // Add Wasm runtime to storage.
-            code: wasm_binary.to_vec(),
+            // code: wasm_binary.to_vec(),
             ..Default::default()
         },
         sudo: SudoConfig {
@@ -576,7 +495,7 @@ fn mainnet_genesis(
         claiming: claiming_config,
         vesting: Default::default(),
         simple_vesting: genesis::simple_vesting_config(),
-        babe: BabeConfig { epoch_config: Some(BABE_GENESIS_EPOCH_CONFIG), ..Default::default() },
+        babe: BabeConfig { epoch_config: BABE_GENESIS_EPOCH_CONFIG, ..Default::default() },
         council: genesis::council_config(),
         democracy: Default::default(),
         grandpa: Default::default(),
@@ -599,6 +518,7 @@ fn mainnet_genesis(
                 18,
             )],
             accounts: vec![],
+            next_asset_id: Default::default(),
         },
         pool_assets: Default::default(),
         reputation: ReputationConfig {
@@ -645,6 +565,7 @@ fn mainnet_genesis(
         technical_committee: genesis::technical_committee_config(),
         technical_membership: Default::default(),
         treasury: Default::default(),
+        elections: Default::default(),
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32 - 1,
@@ -789,31 +710,31 @@ pub mod testnet_keys {
         (
             AccountId::from(hex!("784e69Feba8a2FCCc938A722D5a66E9EbfA3A14A")), // Stash
             validator_1(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "f29f3491dc2baf6ffeffd01702a1b5289519c00a229d41544edc357d0355db51"
             ))
             .into(),
-            sp_core::ed25519::Public(hex!(
+            sp_core::ed25519::Public::from_raw(hex!(
                 "275fad28e7f2904a0341b5baa66b40f8941b09a22739a8b141f99b91e0dd9458"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "408300338038bb359afc7f32a0622d3be520988b5a89c3af5af0272e6745de5e"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "f870a88d596c9207b9df17fbc7960ba9f7fa25296fc3d17a844bc7680287011e"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "164b92db1487c67254182e9e231823b662fb39ffdee4e1ffe73559f600bebd25"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "7297d91787b2ec39853efaf1a553b4a5b58f834161a11f03575116e0340ada62"
             ))
             .into(),
-            sp_core::ecdsa::Public(hex!(
+            sp_core::ecdsa::Public::from_raw(hex!(
                 "023a9999783ffc163ade9e2ac21a33c546b5bc7a4622641860f0f869a97f1e78d0"
             ))
             .into(),
@@ -834,31 +755,31 @@ pub mod testnet_keys {
         (
             AccountId::from(hex!("309753d1BAc45489B9C4BdDEf28963d862AdCb13")), // Stash
             validator_2(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "80b57a74ddb35163ada69d61022d518cdad36eb63f766a04f9d2db35da28052f"
             ))
             .into(),
-            sp_core::ed25519::Public(hex!(
+            sp_core::ed25519::Public::from_raw(hex!(
                 "a4e37cd11ee58c2a6d529f42b13195295179df0921bf20d9f634145d71e817f1"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "527844f460f369100ca67a1fa084b9a29b71d984cd90479ce5bcd7efb74bde1c"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "7aec7e56d3de6cf85d23d38fea64107523ffeb43e17e27de6899cac625199a3d"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "acc2c4d8acefa119eee9a88a880bc490895c0aeb2a661daeccf2b6fcba30da3f"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "d2d0a556d5526c8114e7312a9d7220869894db1ae01f3ef7696f9f784fc58a4f"
             ))
             .into(),
-            sp_core::ecdsa::Public(hex!(
+            sp_core::ecdsa::Public::from_raw(hex!(
                 "0247fc249f19a0a751d379c56e5f92be6f16942312f0b9fa8ecd09636e68c5d5e7"
             ))
             .into(),
@@ -879,31 +800,31 @@ pub mod testnet_keys {
         (
             AccountId::from(hex!("A6543B65DD9cFA7e324AF616A339D3c1a13fa685")), // Stash
             validator_3(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "c2335d394c89693254fb1a323dc74d9c1a14f43ad3292081b331930f9fa8d072"
             ))
             .into(),
-            sp_core::ed25519::Public(hex!(
+            sp_core::ed25519::Public::from_raw(hex!(
                 "281a3b47515392d492faca42d616fa09e609b5fbbaa98716293ebf5c6d4e6248"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "3e99fe54593eeaf568029ec4989106286fd3384fc9c7b723d0e60bc3c3c02479"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "1eb253fc5186d7ec1bf2d28cc8120d97431745ead18381aca1cff47ebae0a83c"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "0075191c5441c7a2134c234f3ab393866deded809f21a37c9a6025ce26884556"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "5425357e3002c6d2972e803362fe8648156837e70f3951929f13c0b9ba75c93b"
             ))
             .into(),
-            sp_core::ecdsa::Public(hex!(
+            sp_core::ecdsa::Public::from_raw(hex!(
                 "03117d68a11002855b405c67d164e41a7244bb5fb5eced2d081f8a04458e1ee11d"
             ))
             .into(),
@@ -932,31 +853,31 @@ pub mod mainnet_keys {
         (
             AccountId::from(hex!("f3612fF49FE440e46faAc08C71d141249D71ff12")), // Stash
             AccountId::from(hex!("03a6b4755F58f91731735d5B881054Fe6eCA7cc8")), // Validator
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "bc35dc7c4bb874005361848b08cc7b5cba87e10391f60f124cc04bf5d34c981c"
             ))
             .into(),
-            sp_core::ed25519::Public(hex!(
+            sp_core::ed25519::Public::from_raw(hex!(
                 "24c7ac8c11718f7056b01f6755c7da3d5d16423243334f22b2d560e658def8eb"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "4c2ff1cedac25109f367826a420e1bd74047ab37aa78132bb42fbf1dd689e876"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "0a803acb3451a91d84c27757c5af3a45b295741df3170853d9f6a8073e202300"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "84a974507ccea0dc46d5beb4287d71665a65d83d47bf9da40b1f62ddaa2b804c"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "864507801e50051b2bb691c7839b2eb66d288f4f6f5d070681f79f7aac8c613f"
             ))
             .into(),
-            sp_core::ecdsa::Public(hex!(
+            sp_core::ecdsa::Public::from_raw(hex!(
                 "03978bb6768a1f5c3d8e8d32f3922b103fc015b37703c3316d95dab985853809a8"
             ))
             .into(),
@@ -977,31 +898,31 @@ pub mod mainnet_keys {
         (
             AccountId::from(hex!("e9De3598e78Ac90d45de4f6B19666B280ec4886b")), // Stash
             AccountId::from(hex!("1d1D7cd4469c5997a665ce219fB3aE6B18FF5E52")), // Validator
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "74dcc8c2138cd579b8cc80d2de4cca3a37cdb6a4dde08a8b8dd309a0106b9c79"
             ))
             .into(),
-            sp_core::ed25519::Public(hex!(
+            sp_core::ed25519::Public::from_raw(hex!(
                 "370f55c79dab485740ef10881d92ec515332292652f0ad9ed61f3450edc13fc7"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "a25d0e79e61aeef2e7baa9814f1d4744afeecab9d8df9891307500b122752d74"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "2c46c1d5dcdfe94e5a8543ad749a235e3a2285f197798f534669e97140517b34"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "9e7d5d82b966eb206efe40e7e3e8d1b37b4fdb0764c651b32ae207b760ae4e74"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "c47aea1cf8270930ef66afd4a04f14c7baf003bc1993c76a2c17807c019c303d"
             ))
             .into(),
-            sp_core::ecdsa::Public(hex!(
+            sp_core::ecdsa::Public::from_raw(hex!(
                 "02937d3a749345420dd7465d0991b27a75b3be42317be211cd57a38da7d16dcb75"
             ))
             .into(),
@@ -1022,31 +943,31 @@ pub mod mainnet_keys {
         (
             AccountId::from(hex!("66c93481CbF5F1951C0D5E0685540D4e59C3C454")), // Stash
             AccountId::from(hex!("3Ff5AD852f15a22F5b39DF53C400314C8b8F8ACb")), // Validator
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "b2d683cc8c70417182d724244c284b22ad47ec61a872bd7873958c4ee757a966"
             ))
             .into(),
-            sp_core::ed25519::Public(hex!(
+            sp_core::ed25519::Public::from_raw(hex!(
                 "42fe4d0b5298eaf62062cef16143eb3458a1f0c7b66b92dfa3cbb21141c4681d"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "14958d70c481dc72925df4a8701743f3069241818bf6a725060bbcce008bea09"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "62c90e97adf3f99cad816b0585e8a64d1604929cc76ff7d23f5edcb825f0980e"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "ae5600a1039bd46927c0927673491df50e2e4787970bf2e948f4aefb65601768"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "e49adf172ddb764215d7ba5a4633dec04991fb3bd9d876f34740f10f439ebf0a"
             ))
             .into(),
-            sp_core::ecdsa::Public(hex!(
+            sp_core::ecdsa::Public::from_raw(hex!(
                 "03ac73cc8989b932ffab5f220d5733c63dfc241b75175581d4b31b231386c47412"
             ))
             .into(),
@@ -1067,31 +988,31 @@ pub mod mainnet_keys {
         (
             AccountId::from(hex!("29f8AE257C8Ab3607AB7F37215606b52a54849D1")), // Stash
             AccountId::from(hex!("1b2f4c7A4863587987e2083c8c7D023856996116")), // Validator
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "2ae1ee0f0df43aaa1f071bda8f8f58e849a1024f59bfbe35063bd06a5bd90d57"
             ))
             .into(),
-            sp_core::ed25519::Public(hex!(
+            sp_core::ed25519::Public::from_raw(hex!(
                 "f2a1fef4dc58a00843f38f792b4854ae4d35e641784577df018d1017f69098e4"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "eeb0fc7fcf71296f88a83ccf937fffa6752f7eb3da64a8bb4eab601488c43850"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "4010ccfaa632f6aa8d026174dec6a2b27bd4036d1dc4f92c4c66df78e7af1313"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "a6e02f71a4723f4e671cb4e67bbc60307cdf393406d2690c9a54c66f4e210b75"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "341a2e2fd269d9d56c8b1f5b4bf0de3bf05c3f1b7dab48a40f06e66818dd067e"
             ))
             .into(),
-            sp_core::ecdsa::Public(hex!(
+            sp_core::ecdsa::Public::from_raw(hex!(
                 "0272616c3ca4d1ddc05b091cb2b9086855674768e6798aae79ab35b4291e6f10a4"
             ))
             .into(),
@@ -1112,31 +1033,31 @@ pub mod mainnet_keys {
         (
             AccountId::from(hex!("8136A3A57a52bA0b8370E46D8c5e3B99f20b4c0a")), // Stash
             AccountId::from(hex!("D913FDf697CA06e3BDa32169C58C0e51d0E38db7")), // Validator
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "64676f9a84208fa8039ea15ab8235532a1ae11368d583f8ab12be5f2721e6b3b"
             ))
             .into(),
-            sp_core::ed25519::Public(hex!(
+            sp_core::ed25519::Public::from_raw(hex!(
                 "f2616ad5f85d65c2d67e85e3d555f05f1f5dd597d791f289eeb124fd1eaf57c7"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "d08221bccf384c180108c7fd0eccd4976f0306503da336950b7bd8a6f5c0d77e"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "929751cb0df5782a5800d133b1dbd72d6a30f22a4024b8968001fb8d4b896553"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "801067636cb11406d8ec953f0e57b9de3784537fb1f1fd425e27fe2d6e9f2a01"
             ))
             .into(),
-            sp_core::sr25519::Public(hex!(
+            sp_core::sr25519::Public::from_raw(hex!(
                 "60c50d14148a65996718014822b528ca2ad0e75a66cddd07e8b80ea78f223955"
             ))
             .into(),
-            sp_core::ecdsa::Public(hex!(
+            sp_core::ecdsa::Public::from_raw(hex!(
                 "036e09b9279fd790a9a9611cc28fbe5786813b6b818d3a3c7453b7c587104e64a6"
             ))
             .into(),
@@ -1170,10 +1091,7 @@ mod genesis {
     use super::*;
     use tech_addresses::*;
 
-    use vitreus_power_plant_runtime::{BlockNumber, DAYS, MILLI_VTRS};
-
-    const YEARS: BlockNumber = 36525 * (DAYS / 100);
-    const MONTHS: BlockNumber = YEARS / 12;
+    use vitreus_power_plant_runtime::{BlockNumber, DAYS, MILLI_VTRS, MONTHS, YEARS};
 
     pub(super) fn tech_allocation() -> Vec<(AccountId, Balance)> {
         const INITIAL_TREASURY_ALLOCATION: Balance = 68_364_887_120 * MILLI_VTRS;
@@ -1346,9 +1264,6 @@ fn default_parachains_host_configuration(
         max_code_size: MAX_CODE_SIZE,
         max_pov_size: MAX_POV_SIZE,
         max_head_data_size: 32 * 1024,
-        group_rotation_frequency: 20,
-        chain_availability_period: 4,
-        thread_availability_period: 4,
         max_upward_queue_count: 8,
         max_upward_queue_size: 1024 * 1024,
         max_downward_message_size: 1024 * 1024,
@@ -1359,10 +1274,8 @@ fn default_parachains_host_configuration(
         hrmp_channel_max_capacity: 8,
         hrmp_channel_max_total_size: 8 * 1024,
         hrmp_max_parachain_inbound_channels: 4,
-        hrmp_max_parathread_inbound_channels: 4,
         hrmp_channel_max_message_size: 1024 * 1024,
         hrmp_max_parachain_outbound_channels: 4,
-        hrmp_max_parathread_outbound_channels: 4,
         hrmp_max_message_num_per_candidate: 5,
         dispute_period: 6,
         no_show_slots: 2,

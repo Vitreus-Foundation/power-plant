@@ -1,10 +1,10 @@
 [package]
 name = "energy-fee-rpc"
 version = "0.1.0"
-edition = "2021"
+authors.workspace = true
+edition.workspace = true
 
 [dependencies]
-anyhow = { version = "1" }
 ethereum-types = { workspace = true }
 energy-fee-runtime-api = { workspace = true }
 parity-scale-codec = { workspace = true }

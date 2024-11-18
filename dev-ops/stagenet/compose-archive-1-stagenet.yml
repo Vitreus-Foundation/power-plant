@@ -16,14 +16,10 @@ services:
       --rpc-port 9944
       --rpc-external
       --prometheus-external
-      --node-key 3ab373e99b2ac7e5ed1e1ca3abd58f51a0e48040066472bdb919bc9dc5e3e123
-      --bootnodes /ip4/45.77.147.229/tcp/30333/p2p/12D3KooWKXt45GhWobDEzM9hP62JaYgNiZUvFTJ2HARBE2o5fV13
       --rpc-cors all
       --rpc-max-connections 5000
       --state-pruning archive
-      --telemetry-url "wss://telemetry-dev.compliq.io/submit/ 0"
       --enable-offchain-indexing true
-      --beefy
       -lwarn
 
     ports:
