@@ -2,8 +2,8 @@
 
 Vitreus is a  next-generation Layer 0 blockchain platform focused on decentralized energy trading and management, built using Substrate and featuring comprehensive EVM compatibility.
 
-[![Substrate version](https://img.shields.io/badge/Substrate-4.0.0-brightgreen?logo=Parity%20Substrate)](https://substrate.io)
-[![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![Substrate version](https://img.shields.io/badge/Substrate-stable2407-brightgreen?logo=Parity%20Substrate)](https://substrate.io)
+[![License](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
 
 ## Overview
 
@@ -66,7 +66,7 @@ Vitreus consists of several specialized pallets working in harmony:
 - **Privileges**: VIP membership management
 - **Simple Vesting**: Token lock mechanisms
 - **Treasury Extension**: Fund recycling and management
-- **Faucet**: Test network token distribution
+- **Faucet**: Token distribution (it's only supported in testnet)
 
 ## Getting Started
 
@@ -108,16 +108,13 @@ For connecting to the network:
 - Chain ID: 1943
 - Network Name: vitreus-power-plant
 - Currency Symbol: VTRS
-- RPC URL: http://localhost:9933/
+- RPC URL: http://localhost:9944/
 
 ## Development
 
 ### Building for Production
 
 ```bash
-# Build with all features
-cargo build --release --features=runtime-benchmarks
-
 # Build with specific DB backend
 cargo build --release --features=with-rocksdb-weights
 ```
@@ -130,17 +127,6 @@ cargo test
 
 # Run specific pallet tests
 cargo test -p pallet-energy-broker
-```
-
-### Benchmarking
-
-```bash
-# Run benchmarks for all pallets
-cargo run --release --features runtime-benchmarks \
-    benchmark pallet \
-    --chain dev \
-    --steps 50 \
-    --repeat 20
 ```
 
 ## Security Considerations
@@ -184,7 +170,7 @@ cargo run --release --features runtime-benchmarks \
 
 ## License
 
-This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) file for details.
 
 ## Support
 
@@ -197,4 +183,3 @@ This project is licensed under the Apache License 2.0 - see the [LICENSE](LICENS
 Built using:
 - [Substrate](https://substrate.io/)
 - [Frontier](https://github.com/paritytech/frontier)
-- [OpenZeppelin](https://openzeppelin.com/) (EVM contracts)
