@@ -163,10 +163,7 @@ cargo test -p pallet-energy-broker
 
 ## Documentation
 
-- [Pallet Documentation](./docs/PALLETS.md)
-- [API Reference](./docs/API.md)
-- [Security Guide](./docs/SECURITY.md)
-- [Contributing Guidelines](./CONTRIBUTING.md)
+- [Pallet Documentation](./pallets/ExtrinsicLib.md)
 
 ## License
 

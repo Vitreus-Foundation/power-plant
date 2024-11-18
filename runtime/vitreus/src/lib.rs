@@ -411,7 +411,6 @@ impl pallet_grandpa::Config for Runtime {
 
 parameter_types! {
     pub const MinimumPeriod: u64 = SLOT_DURATION / 2;
-    pub storage EnableManualSeal: bool = false;
 }
 
 impl pallet_timestamp::Config for Runtime {
