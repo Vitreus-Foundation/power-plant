@@ -32,7 +32,6 @@
 //! - Relies on Substrate FRAME macros and traits to build the pallet structure.
 //! - Uses types like `points` to quantify reputation, which are updated based on user activity and specific conditions.
 
-
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::all)]
 #![warn(missing_docs)]
