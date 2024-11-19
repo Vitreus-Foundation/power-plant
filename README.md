@@ -81,12 +81,12 @@ Vitreus consists of several specialized pallets working in harmony:
 1. Clone the repository:
 ```bash
 git clone https://github.com/Vitreus-Foundation/power-plant
-cd vitreus-power-plant
+cd power-plant
 ```
 
 2. Build the node:
 ```bash
-cargo build --release
+cargo build --release --features testnet-native
 ```
 
 3. Run the node:
@@ -115,15 +115,15 @@ For connecting to the network:
 ### Building for Production
 
 ```bash
-# Build with specific DB backend
-cargo build --release --features=with-rocksdb-weights
+# Build with mainnet runtime
+cargo build --release --features mainnet-native
 ```
 
 ### Running Tests
 
 ```bash
 # Run all tests
-cargo test
+cargo test --features testnet-native --workspace
 
 # Run specific pallet tests
 cargo test -p pallet-energy-broker
