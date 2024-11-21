@@ -46,9 +46,9 @@ use polkadot_runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult};
 use frame_support::traits::tokens::{
-    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, ConversionFromAssetBalance,
-    ConversionToAssetBalance, DepositConsequence, Fortitude, Preservation, Provenance,
-    WithdrawConsequence,
+    fungible::Inspect as FungibleInspect, imbalance::ResolveAssetTo, nonfungibles_v2::Inspect,
+    ConversionFromAssetBalance, ConversionToAssetBalance, DepositConsequence, Fortitude,
+    Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, ProcessMessage,
@@ -992,11 +992,12 @@ impl pallet_energy_broker::EnergyBalanceConverter<Balance, NativeOrAssetId> for 
 impl pallet_energy_broker::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
+    type HigherPrecisionBalance = sp_core::U256;
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
-    type HigherPrecisionBalance = sp_core::U256;
     type BalanceConverter = EnergyRate;
     type SwapFee = SwapFee;
+    type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
     type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
 }

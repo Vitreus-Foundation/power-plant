@@ -45,20 +45,19 @@ fn get_amount_works() {
 }
 
 #[test]
-fn can_buy_energy() {
+fn can_swap_native_for_exact_energy() {
     new_test_ext().execute_with(|| {
         let broker_account = EnergyBroker::account_id();
 
-        let alice_balance_before = balance(ALICE);
-        let broker_balance_before = balance(broker_account);
-        let total_balance = broker_balance_before + alice_balance_before;
+        let alice_balance = balance(ALICE);
+        let broker_balance = balance(broker_account);
 
-        let alice_energy_before = energy_balance(ALICE);
-        let broker_energy_before = energy_balance(broker_account);
-        let total_energy = broker_energy_before + alice_energy_before;
+        let alice_energy = energy_balance(ALICE);
+        let broker_energy = energy_balance(broker_account);
 
         let exchange_out = 1000;
-        let expect_in = 102; // 1000 / 10 + 2% fee
+        let expect_in = 100;
+        let expect_fee = 2;
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
@@ -68,56 +67,61 @@ fn can_buy_energy() {
             true,
         ));
 
-        assert_eq!(balance(ALICE), alice_balance_before - expect_in);
-        assert_eq!(balance(broker_account), broker_balance_before + expect_in);
+        assert_eq!(balance(ALICE), alice_balance - expect_in - expect_fee);
+        assert_eq!(balance(broker_account), broker_balance + expect_in);
+        assert_eq!(balance(FeeAccount::get()), get_ed() + expect_fee);
 
-        assert_eq!(energy_balance(ALICE), alice_energy_before + exchange_out);
-        assert_eq!(energy_balance(broker_account), broker_energy_before - exchange_out);
-
-        let alice_balance_before = balance(ALICE);
-        let broker_balance_before = balance(broker_account);
-
-        let alice_energy_before = energy_balance(ALICE);
-        let broker_energy_before = energy_balance(broker_account);
-
-        let exchange_in = 100;
-        let expect_out = 980; // (100 - 2% fee) * 10
-
-        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
-            RuntimeOrigin::signed(ALICE),
-            (NATIVE_TOKEN, ENERGY_TOKEN),
-            exchange_in,
-            None,
-            true,
-        ));
-
-        assert_eq!(balance(ALICE), alice_balance_before - exchange_in);
-        assert_eq!(balance(broker_account), broker_balance_before + exchange_in);
-
-        assert_eq!(energy_balance(ALICE), alice_energy_before + expect_out);
-        assert_eq!(energy_balance(broker_account), broker_energy_before - expect_out);
-
-        // native and energy totals should be preserved.
-        assert_eq!(total_balance, balance(broker_account) + balance(ALICE));
-        assert_eq!(total_energy, energy_balance(broker_account) + energy_balance(ALICE));
+        assert_eq!(energy_balance(ALICE), alice_energy + exchange_out);
+        assert_eq!(energy_balance(broker_account), broker_energy - exchange_out);
     });
 }
 
 #[test]
-fn can_sell_energy() {
+fn can_swap_exact_native_for_energy() {
     new_test_ext().execute_with(|| {
         let broker_account = EnergyBroker::account_id();
 
-        let alice_balance_before = balance(ALICE);
-        let broker_balance_before = balance(broker_account);
-        let total_balance = broker_balance_before + alice_balance_before;
+        let alice_balance = balance(ALICE);
+        let broker_balance = balance(broker_account);
 
-        let alice_energy_before = energy_balance(ALICE);
-        let broker_energy_before = energy_balance(broker_account);
-        let total_energy = broker_energy_before + alice_energy_before;
+        let alice_energy = energy_balance(ALICE);
+        let broker_energy = energy_balance(broker_account);
+
+        let exchange_in = 98;
+        let expect_out = 980;
+        let expect_fee = 2;
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            (NATIVE_TOKEN, ENERGY_TOKEN),
+            exchange_in + expect_fee,
+            None,
+            true,
+        ));
+
+        assert_eq!(balance(ALICE), alice_balance - exchange_in - expect_fee);
+        assert_eq!(balance(broker_account), broker_balance + exchange_in);
+        assert_eq!(balance(FeeAccount::get()), get_ed() + expect_fee);
+
+        assert_eq!(energy_balance(ALICE), alice_energy + expect_out);
+        assert_eq!(energy_balance(broker_account), broker_energy - expect_out);
+    });
+}
+
+#[test]
+fn can_swap_energy_for_exact_native() {
+    new_test_ext().execute_with(|| {
+        let broker_account = EnergyBroker::account_id();
+
+        let alice_balance = balance(ALICE);
+        let broker_balance = balance(broker_account);
+
+        let alice_energy = energy_balance(ALICE);
+        let broker_energy = energy_balance(broker_account);
 
         let exchange_out = 100;
-        let expect_in = 1020; // 100 * 10 + 2% fee
+        let expect_in = 1000;
+        let expect_fee = 20;
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
@@ -127,38 +131,44 @@ fn can_sell_energy() {
             true,
         ));
 
-        assert_eq!(balance(ALICE), alice_balance_before + exchange_out);
-        assert_eq!(balance(broker_account), broker_balance_before - exchange_out);
+        assert_eq!(balance(ALICE), alice_balance + exchange_out);
+        assert_eq!(balance(broker_account), broker_balance - exchange_out);
 
-        assert_eq!(energy_balance(ALICE), alice_energy_before - expect_in);
-        assert_eq!(energy_balance(broker_account), broker_energy_before + expect_in);
+        assert_eq!(energy_balance(ALICE), alice_energy - expect_in - expect_fee);
+        assert_eq!(energy_balance(broker_account), broker_energy + expect_in);
+        assert_eq!(energy_balance(FeeAccount::get()), get_energy_ed() + expect_fee);
+    });
+}
 
-        let alice_balance_before = balance(ALICE);
-        let broker_balance_before = balance(broker_account);
+#[test]
+fn can_swap_exact_energy_for_native() {
+    new_test_ext().execute_with(|| {
+        let broker_account = EnergyBroker::account_id();
 
-        let alice_energy_before = energy_balance(ALICE);
-        let broker_energy_before = energy_balance(broker_account);
+        let alice_balance = balance(ALICE);
+        let broker_balance = balance(broker_account);
 
-        let exchange_in = 1000;
-        let expect_out = 98; // (1000 - 2% fee) / 10
+        let alice_energy = energy_balance(ALICE);
+        let broker_energy = energy_balance(broker_account);
+
+        let exchange_in = 980;
+        let expect_out = 98;
+        let expect_fee = 20;
 
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
             (ENERGY_TOKEN, NATIVE_TOKEN),
-            exchange_in,
+            exchange_in + expect_fee,
             None,
             true,
         ));
 
-        assert_eq!(balance(ALICE), alice_balance_before + expect_out);
-        assert_eq!(balance(broker_account), broker_balance_before - expect_out);
+        assert_eq!(balance(ALICE), alice_balance + expect_out);
+        assert_eq!(balance(broker_account), broker_balance - expect_out);
 
-        assert_eq!(energy_balance(ALICE), alice_energy_before - exchange_in);
-        assert_eq!(energy_balance(broker_account), broker_energy_before + exchange_in);
-
-        // native and energy totals should be preserved.
-        assert_eq!(total_balance, balance(broker_account) + balance(ALICE));
-        assert_eq!(total_energy, energy_balance(broker_account) + energy_balance(ALICE));
+        assert_eq!(energy_balance(ALICE), alice_energy - exchange_in - expect_fee);
+        assert_eq!(energy_balance(broker_account), broker_energy + exchange_in);
+        assert_eq!(energy_balance(FeeAccount::get()), get_energy_ed() + expect_fee);
     });
 }
 

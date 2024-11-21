@@ -14,13 +14,14 @@ pub use pallet::*;
 
 use frame_support::{
     traits::{
-        fungibles::{Balanced, Inspect, Mutate},
+        fungibles::{Balanced, Credit, Inspect, Mutate},
         tokens::{
             Balance,
             Fortitude::Polite,
             Precision::Exact,
             Preservation::{self, Expendable, Preserve},
         },
+        OnUnbalanced,
     },
     PalletId,
 };
@@ -78,6 +79,9 @@ pub mod pallet {
         /// A % the energy broker will take of every swap. Represents 10ths of a percent.
         #[pallet::constant]
         type SwapFee: Get<u32>;
+
+        /// Handler for the [`Config::SwapFee`].
+        type SwapFeeTarget: OnUnbalanced<Credit<Self::AccountId, Self::Assets>>;
 
         /// Identifier of native asset.
         #[pallet::constant]
@@ -411,12 +415,16 @@ pub mod pallet {
             source: &T::AccountId,
             dest: &T::AccountId,
             amount: T::Balance,
-            _fee_part: T::Balance,
+            fee_part: T::Balance,
             preservation: Preservation,
         ) -> DispatchResult {
-            let credit = T::Assets::withdraw(asset, source, amount, Exact, preservation, Polite)?;
+            let mut credit =
+                T::Assets::withdraw(asset, source, amount, Exact, preservation, Polite)?;
+
+            let fee = credit.extract(fee_part);
 
             T::Assets::resolve(dest, credit).map_err(|_| Error::<T>::BelowMinimum)?;
+            T::SwapFeeTarget::on_unbalanced(fee);
 
             Ok(())
         }

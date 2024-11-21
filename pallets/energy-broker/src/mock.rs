@@ -5,7 +5,7 @@ use crate as pallet_energy_broker;
 
 use frame_support::{
     construct_runtime, derive_impl, parameter_types,
-    traits::{AsEnsureOriginWithArg, ConstU128, ConstU32},
+    traits::{tokens::imbalance::ResolveAssetTo, AsEnsureOriginWithArg, ConstU128, ConstU32},
 };
 use frame_system::EnsureSigned;
 use sp_arithmetic::{FixedPointNumber, FixedU128};
@@ -102,6 +102,7 @@ type NativeAndAssets = frame_support::traits::fungible::UnionOf<
 parameter_types! {
     pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
     pub const VNRG: u32 = 1;
+    pub const FeeAccount: u128 = 99;
 }
 
 impl Config for Test {
@@ -113,6 +114,7 @@ impl Config for Test {
     type BalanceConverter = AssetRate;
     // means 2%
     type SwapFee = ConstU32<20>;
+    type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
     type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
 }
@@ -121,7 +123,11 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
     pallet_balances::GenesisConfig::<Test> {
-        balances: vec![(EnergyBroker::account_id(), INITIAL_BALANCE), (ALICE, 1000)],
+        balances: vec![
+            (EnergyBroker::account_id(), INITIAL_BALANCE),
+            (FeeAccount::get(), 10),
+            (ALICE, 1000),
+        ],
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -130,6 +136,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
         assets: vec![(VNRG::get(), 42, false, 20)],
         accounts: vec![
             (VNRG::get(), EnergyBroker::account_id(), INITIAL_ENERGY_BALANCE),
+            (VNRG::get(), FeeAccount::get(), 20),
             (VNRG::get(), ALICE, 5000),
         ],
         ..Default::default()
