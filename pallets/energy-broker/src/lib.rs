@@ -18,7 +18,7 @@ use frame_support::{
         tokens::{
             Balance,
             Fortitude::Polite,
-            Precision::Exact,
+            Precision::{BestEffort, Exact},
             Preservation::{self, Expendable, Preserve},
         },
         OnUnbalanced,
@@ -76,12 +76,16 @@ pub mod pallet {
         /// A type used for conversion between an energy balance and an asset balance.
         type BalanceConverter: EnergyBalanceConverter<Self::Balance, Self::AssetKind>;
 
+        /// Handler for the [`Config::SwapFee`].
+        type SwapFeeTarget: OnUnbalanced<Credit<Self::AccountId, Self::Assets>>;
+
         /// A % the energy broker will take of every swap. Represents 10ths of a percent.
         #[pallet::constant]
         type SwapFee: Get<u32>;
 
-        /// Handler for the [`Config::SwapFee`].
-        type SwapFeeTarget: OnUnbalanced<Credit<Self::AccountId, Self::Assets>>;
+        /// The maximum amount of energy that the broker can store.
+        #[pallet::constant]
+        type EnergyCapacity: Get<Self::Balance>;
 
         /// Identifier of native asset.
         #[pallet::constant]
@@ -116,6 +120,11 @@ pub mod pallet {
             amount_in: T::Balance,
             /// The amount of the second asset that was received.
             amount_out: T::Balance,
+        },
+        /// Some energy was burned.
+        EnergyBurned {
+            /// The amount that was burned.
+            amount: T::Balance,
         },
     }
 
@@ -407,6 +416,10 @@ pub mod pallet {
                 Preserve,
             )?;
 
+            if asset_in == &T::EnergyAsset::get() {
+                Self::burn_surplus_energy(&broker_account);
+            }
+
             Ok(())
         }
 
@@ -451,6 +464,26 @@ pub mod pallet {
                 .ok_or(Error::<T>::Overflow)?
                 .try_into()
                 .map_err(|_| Error::<T>::Overflow)
+        }
+
+        fn burn_surplus_energy(broker_account: &T::AccountId) {
+            let burn_amount = T::Assets::balance(T::EnergyAsset::get(), broker_account)
+                .saturating_sub(T::EnergyCapacity::get());
+
+            if burn_amount > Zero::zero() {
+                let res = T::Assets::burn_from(
+                    T::EnergyAsset::get(),
+                    broker_account,
+                    burn_amount,
+                    Preserve,
+                    BestEffort,
+                    Polite,
+                );
+
+                if let Ok(amount) = res {
+                    Self::deposit_event(Event::EnergyBurned { amount });
+                }
+            }
         }
     }
 }

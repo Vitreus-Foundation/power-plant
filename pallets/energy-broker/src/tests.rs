@@ -24,6 +24,10 @@ fn get_energy_ed() -> u128 {
     <<Test as Config>::Assets>::minimum_balance(ENERGY_TOKEN)
 }
 
+fn get_energy_total_issuance() -> u128 {
+    <<Test as Config>::Assets>::total_issuance(ENERGY_TOKEN)
+}
+
 fn set_balances(who: u128, balance: u128, energy_balance: u128) {
     <Test as Config>::Assets::set_balance(NATIVE_TOKEN, &who, balance);
     <Test as Config>::Assets::set_balance(ENERGY_TOKEN, &who, energy_balance);
@@ -373,6 +377,49 @@ fn can_not_swap_zero_amount() {
             ),
             Error::<Test>::ZeroAmount
         );
+    });
+}
+
+#[test]
+fn burn_energy_beyond_capacity() {
+    new_test_ext().execute_with(|| {
+        let broker_account = EnergyBroker::account_id();
+        set_balances(broker_account, 1000, EnergyCapacity::get().saturating_sub(100));
+
+        let energy_issuance = get_energy_total_issuance();
+
+        let alice_balance = balance(ALICE);
+        let alice_energy = energy_balance(ALICE);
+
+        // the broker saves 100 energy and burns 880
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            (ENERGY_TOKEN, NATIVE_TOKEN),
+            1000,
+            None,
+            true
+        ));
+
+        assert_eq!(balance(ALICE), alice_balance + 98);
+        assert_eq!(energy_balance(ALICE), alice_energy - 1000);
+
+        assert_eq!(energy_balance(broker_account), EnergyCapacity::get());
+        assert_eq!(get_energy_total_issuance(), energy_issuance - 880);
+
+        // the broker is full, but an user can swap anyway
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            (ENERGY_TOKEN, NATIVE_TOKEN),
+            1000,
+            None,
+            true
+        ));
+
+        assert_eq!(balance(ALICE), alice_balance + 98 + 98);
+        assert_eq!(energy_balance(ALICE), alice_energy - 1000 - 1000);
+
+        assert_eq!(energy_balance(broker_account), EnergyCapacity::get());
+        assert_eq!(get_energy_total_issuance(), energy_issuance - 880 - 980);
     });
 }
 

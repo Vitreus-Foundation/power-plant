@@ -996,8 +996,9 @@ impl pallet_energy_broker::Config for Runtime {
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
     type BalanceConverter = EnergyRate;
-    type SwapFee = SwapFee;
     type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
+    type SwapFee = SwapFee;
+    type EnergyCapacity = ConstU128<{ u128::MAX }>;
     type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
 }

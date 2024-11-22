@@ -103,6 +103,7 @@ parameter_types! {
     pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
     pub const VNRG: u32 = 1;
     pub const FeeAccount: u128 = 99;
+    pub const EnergyCapacity: u128 = 2 * INITIAL_ENERGY_BALANCE;
 }
 
 impl Config for Test {
@@ -112,9 +113,10 @@ impl Config for Test {
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
     type BalanceConverter = AssetRate;
+    type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
     // means 2%
     type SwapFee = ConstU32<20>;
-    type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
+    type EnergyCapacity = EnergyCapacity;
     type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
 }
