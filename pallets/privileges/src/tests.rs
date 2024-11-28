@@ -318,7 +318,8 @@ fn test_year_end_data_saving_vipp_results() {
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(10),
+            RuntimeOrigin::none(),
+            10,
             sig::<Test>(&bob(), &10u64.encode(), &[][..])
         ));
         assert_eq!(Privileges::vip_members(10), None);
@@ -470,7 +471,8 @@ fn test_minting_vipp_nft() {
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(10),
+            RuntimeOrigin::none(),
+            10,
             sig::<Test>(&bob(), &10u64.encode(), &[][..])
         ));
         assert_eq!(Privileges::vip_members(10), None);
@@ -489,7 +491,8 @@ fn test_calculating_validator_vipp_points() {
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(10),
+            RuntimeOrigin::none(),
+            10,
             sig::<Test>(&bob(), &10u64.encode(), &[][..])
         ));
         assert_eq!(Privileges::vip_members(10), None);
@@ -527,7 +530,8 @@ fn test_calculating_cooperator_vipp_points() {
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 100));
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(100),
+            RuntimeOrigin::none(),
+            100,
             sig::<Test>(&bob(), &100u64.encode(), &[][..])
         ));
         assert_eq!(Privileges::vip_members(100), None);
@@ -575,7 +579,8 @@ fn test_burning_vipp_nft() {
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(10),
+            RuntimeOrigin::none(),
+            10,
             sig::<Test>(&bob(), &10u64.encode(), &[][..])
         ));
         assert_eq!(Privileges::vip_members(10), None);
@@ -601,7 +606,8 @@ fn test_from_validator_to_cooperator() {
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(10),
+            RuntimeOrigin::none(),
+            10,
             sig::<Test>(&bob(), &10u64.encode(), &[][..])
         ));
         assert_eq!(Privileges::vip_members(10), None);

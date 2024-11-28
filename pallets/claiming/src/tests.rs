@@ -58,7 +58,8 @@ fn claiming_works() {
 
         assert_eq!(Balances::free_balance(42), 0);
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(42),
+            RuntimeOrigin::none(),
+            42,
             sig::<Test>(&alice(), &42u64.encode(), &[][..])
         ));
         assert_eq!(Balances::free_balance(&42), 100);
@@ -79,14 +80,16 @@ fn add_claim_works() {
         assert_eq!(Balances::free_balance(42), 0);
         assert_noop!(
             Claiming::claim(
-                RuntimeOrigin::signed(69),
+                RuntimeOrigin::none(),
+                69,
                 sig::<Test>(&bob(), &69u64.encode(), &[][..])
             ),
             Error::<Test>::SignerHasNoClaim,
         );
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(69),
+            RuntimeOrigin::none(),
+            69,
             sig::<Test>(&bob(), &69u64.encode(), &[][..])
         ));
         assert_eq!(Balances::free_balance(&69), 200);
@@ -106,7 +109,8 @@ fn add_claim_to_existing_claim_works() {
         assert_eq!(Claiming::claims(&eth(&alice())), Some(150));
 
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(42),
+            RuntimeOrigin::none(),
+            42,
             sig::<Test>(&alice(), &42u64.encode(), &[][..])
         ));
         assert_eq!(Balances::free_balance(&42), 150);
@@ -123,7 +127,8 @@ fn claiming_more_than_available_doesnt_work() {
         assert_eq!(Balances::free_balance(42), 0);
         assert_noop!(
             Claiming::claim(
-                RuntimeOrigin::signed(42),
+                RuntimeOrigin::none(),
+                42,
                 sig::<Test>(&alice(), &42u64.encode(), &[][..])
             ),
             Error::<Test>::NotEnoughTokensForClaim
@@ -140,12 +145,14 @@ fn double_claiming_doesnt_work() {
 
         assert_eq!(Balances::free_balance(42), 0);
         assert_ok!(Claiming::claim(
-            RuntimeOrigin::signed(42),
+            RuntimeOrigin::none(),
+            42,
             sig::<Test>(&alice(), &42u64.encode(), &[][..])
         ));
         assert_noop!(
             Claiming::claim(
-                RuntimeOrigin::signed(42),
+                RuntimeOrigin::none(),
+                42,
                 sig::<Test>(&alice(), &42u64.encode(), &[][..])
             ),
             Error::<Test>::SignerHasNoClaim
@@ -166,7 +173,8 @@ fn claiming_while_vested_doesnt_work() {
         // They should not be able to claim
         assert_noop!(
             Claiming::claim(
-                RuntimeOrigin::signed(69),
+                RuntimeOrigin::none(),
+                69,
                 sig::<Test>(&alice(), &69u64.encode(), &[][..])
             ),
             Error::<Test>::VestedBalanceExists,
@@ -182,7 +190,8 @@ fn non_sender_sig_doesnt_work() {
         assert_eq!(Balances::free_balance(42), 0);
         assert_noop!(
             Claiming::claim(
-                RuntimeOrigin::signed(42),
+                RuntimeOrigin::none(),
+                42,
                 sig::<Test>(&alice(), &69u64.encode(), &[][..])
             ),
             Error::<Test>::SignerHasNoClaim
@@ -198,7 +207,8 @@ fn non_claimant_doesnt_work() {
         assert_eq!(Balances::free_balance(42), 0);
         assert_noop!(
             Claiming::claim(
-                RuntimeOrigin::signed(42),
+                RuntimeOrigin::none(),
+                42,
                 sig::<Test>(&bob(), &42u64.encode(), &[][..])
             ),
             Error::<Test>::SignerHasNoClaim

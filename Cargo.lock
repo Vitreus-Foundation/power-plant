@@ -6476,6 +6476,7 @@ dependencies = [
  "pallet-balances",
  "pallet-vesting",
  "parity-scale-codec",
+ "polkadot-primitives",
  "rustc-hex",
  "scale-info",
  "serde",
