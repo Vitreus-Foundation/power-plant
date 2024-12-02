@@ -39,6 +39,7 @@ std = [
     "sp-std/std",
     "scale-info/std",
     "frame-benchmarking/std",
+    "polkadot-primitives/std",
     "frame-support/std",
     "frame-system/std",
     "parity-scale-codec/std",

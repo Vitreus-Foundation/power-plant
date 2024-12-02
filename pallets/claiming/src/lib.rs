@@ -197,6 +197,18 @@ pub mod pallet {
     pub(super) type Vesting<T: Config> =
         StorageMap<_, Identity, EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>;
 
+    /// Storage map for NFTs that can be claimed by users.
+    /// This maps an Ethereum address to an NFT represented by its ID and level.
+    ///
+    /// Each entry consists of:
+    /// - `u8`: The unique ID of the NFT.
+    /// - `u32`: The level of the NFT, representing its rarity or attributes.
+    ///
+    /// This storage allows associating an Ethereum address with a specific NFT and its properties.
+    #[pallet::storage]
+    #[pallet::getter(fn nfts)]
+    pub(super) type Nfts<T: Config> = StorageMap<_, Identity, EthereumAddress, (u8, u32)>;
+
     #[pallet::storage]
     #[pallet::getter(fn total)]
     pub(super) type Total<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
@@ -291,19 +303,53 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Mint a new claim to collect VTRS.
+        /// Mint a new claim to collect VTRS tokens and optionally assign an NFT with its level.
+        ///
+        /// The dispatch origin for this call must be _Root_.
+        ///
+        /// Parameters:
+        /// - `who`: The Ethereum address eligible to collect this claim.
+        /// - `value`: The amount of VTRS tokens that will be claimable.
+        /// - `vesting_schedule`: An optional vesting schedule for these tokens,
+        ///   consisting of:
+        ///   - `BalanceOf<T>`: Total amount to be vested.
+        ///   - `BalanceOf<T>`: Per-block unlock amount.
+        ///   - `BlockNumberFor<T>`: The starting block of the vesting period.
+        /// - `nft_info`: Optional information about an NFT to be assigned to this claim:
+        ///   - `u8`: The unique ID of the NFT.
+        ///   - `u32`: The level of the NFT, representing its attributes or rarity.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// We assume the worst case where both vesting and NFT information are being inserted.
+        ///
+        /// Total Complexity: O(1)
+        /// </weight>
         #[pallet::call_index(2)]
         #[pallet::weight(<T as Config>::WeightInfo::mint_claim())]
         pub fn mint_claim(
             origin: OriginFor<T>,
             who: EthereumAddress,
             value: BalanceOf<T>,
+            vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
+            nft_info: Option<(u8, u32)>,
         ) -> DispatchResult {
             ensure_root(origin)?;
 
+            // Update the claims storage to include the new value.
             <Claims<T>>::mutate(who, |amount| {
                 *amount = Some(amount.unwrap_or_default().saturating_add(value))
             });
+
+            // Insert the vesting schedule if provided.
+            if let Some(vs) = vesting_schedule {
+                <Vesting<T>>::insert(who, vs);
+            }
+
+            // Insert the NFT information if provided.
+            if let Some(nft) = nft_info {
+                <Nfts<T>>::insert(who, nft);
+            }
 
             Ok(())
         }

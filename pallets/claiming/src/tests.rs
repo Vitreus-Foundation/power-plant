@@ -74,7 +74,7 @@ fn add_claim_works() {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 250));
 
         assert_noop!(
-            Claiming::mint_claim(RuntimeOrigin::signed(42), eth(&bob()), 200),
+            Claiming::mint_claim(RuntimeOrigin::signed(42), eth(&bob()), 200, None, None),
             sp_runtime::traits::BadOrigin,
         );
         assert_eq!(Balances::free_balance(42), 0);
@@ -86,7 +86,7 @@ fn add_claim_works() {
             ),
             Error::<Test>::SignerHasNoClaim,
         );
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, None, None));
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             69,
@@ -105,7 +105,7 @@ fn add_claim_to_existing_claim_works() {
 
         assert_eq!(Claiming::claims(&eth(&alice())), Some(100));
 
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, None));
         assert_eq!(Claiming::claims(&eth(&alice())), Some(150));
 
         assert_ok!(Claiming::claim(
