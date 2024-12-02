@@ -20,11 +20,12 @@
 use crate::mock::*;
 use crate::secp_utils::*;
 use crate::{to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};
-use frame_support::traits::{Currency, VestingSchedule};
+use frame_support::traits::{Currency, ExistenceRequirement, VestingSchedule};
 use frame_support::{assert_err, assert_noop, assert_ok};
 use hex_literal::hex;
 use parity_scale_codec::Encode;
 use sp_runtime::DispatchError::BadOrigin;
+use sp_runtime::TokenError;
 
 #[test]
 fn mint_tokens_to_claim() {
@@ -225,5 +226,133 @@ fn real_eth_sig_works() {
         let who = 42u64.using_encoded(to_ascii_hex);
         let signer = Claiming::eth_recover(&sig, &who, &[][..]).unwrap();
         assert_eq!(signer.0, hex!["6d31165d5d932d571f3b44695653b46dcc327e84"]);
+    });
+}
+
+#[test]
+fn mint_claim_with_vesting_works() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 100));
+
+        assert_eq!(Claiming::vesting(&eth(&bob())), None);
+
+        // Создаём клейм с вестингом
+        let vesting_schedule = Some((100, 10, 1));
+        assert_ok!(Claiming::mint_claim(
+            RuntimeOrigin::root(),
+            eth(&bob()),
+            100,
+            vesting_schedule,
+            None
+        ));
+
+        assert_eq!(Claiming::vesting(&eth(&bob())), vesting_schedule);
+    });
+}
+
+#[test]
+fn mint_claim_with_nft_works() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 50));
+
+        assert_eq!(Claiming::nfts(&eth(&alice())), None);
+
+        let nft_info = Some((1u32.into(), 5));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, nft_info));
+
+        assert_eq!(Claiming::nfts(&eth(&alice())), nft_info);
+    });
+}
+
+#[test]
+fn mint_claim_with_vesting_and_nft_works() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
+
+        assert_eq!(Claiming::vesting(&eth(&eve())), None);
+        assert_eq!(Claiming::nfts(&eth(&eve())), None);
+
+        let vesting_schedule = Some((100, 20, 1));
+        let nft_info = Some((2u32.into(), 10));
+        assert_ok!(Claiming::mint_claim(
+            RuntimeOrigin::root(),
+            eth(&eve()),
+            100,
+            vesting_schedule,
+            nft_info
+        ));
+
+        assert_eq!(Claiming::vesting(&eth(&eve())), vesting_schedule);
+        assert_eq!(Claiming::nfts(&eth(&eve())), nft_info);
+    });
+}
+
+#[test]
+fn add_claim_with_vesting_works() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 300));
+
+        assert_noop!(
+            Claiming::mint_claim(
+                RuntimeOrigin::signed(42),
+                eth(&bob()),
+                200,
+                Some((50, 10, 1)),
+                None
+            ),
+            sp_runtime::traits::BadOrigin,
+        );
+        assert_eq!(Balances::free_balance(42), 0);
+        assert_noop!(
+            Claiming::claim(
+                RuntimeOrigin::none(),
+                69,
+                sig::<Test>(&bob(), &69u64.encode(), &[][..])
+            ),
+            Error::<Test>::SignerHasNoClaim,
+        );
+        assert_ok!(Claiming::mint_claim(
+            RuntimeOrigin::root(),
+            eth(&bob()),
+            200,
+            Some((50, 10, 1)),
+            None
+        ));
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::none(),
+            69,
+            sig::<Test>(&bob(), &69u64.encode(), &[][..])
+        ));
+        assert_eq!(Balances::free_balance(&69), 200);
+        assert_eq!(Vesting::vesting_balance(&69), Some(50));
+
+        // Make sure we can not transfer the vested balance.
+        assert_err!(
+            <Balances as Currency<_>>::transfer(&69, &80, 180, ExistenceRequirement::AllowDeath),
+            TokenError::Frozen,
+        );
+    });
+}
+
+#[test]
+fn claim_with_nft_should_work() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 300));
+
+        assert_eq!(Claiming::nfts(&eth(&eve())), None);
+
+        let nft_info = Some((3u32.into(), 10));
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&eve()), 100, None, nft_info));
+
+        assert_eq!(Claiming::nfts(&eth(&eve())), nft_info);
+        assert_noop!(
+            Claiming::claim(
+                RuntimeOrigin::none(),
+                42,
+                sig::<Test>(&eve(), &69u64.encode(), &[][..])
+            ),
+            Error::<Test>::SignerHasNoClaim,
+        );
     });
 }

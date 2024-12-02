@@ -12,6 +12,7 @@ frame-benchmarking = { workspace = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
 pallet-balances = { workspace = true }
+pallet-nfts = { workspace = true }
 parity-scale-codec = { workspace = true }
 polkadot-primitives = { workspace = true }
 scale-info = { workspace = true }
@@ -31,7 +32,10 @@ hex-literal = { workspace = true }
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+    "pallet-nfts/runtime-benchmarks",
+]
 std = [
     "rustc-hex/std",
     "serde/std",
@@ -44,6 +48,7 @@ std = [
     "frame-system/std",
     "parity-scale-codec/std",
     "pallet-balances/std",
+    "pallet-nfts/std",
     "pallet-vesting/std",
 ]
 try-runtime = [ "frame-support/try-runtime" ]

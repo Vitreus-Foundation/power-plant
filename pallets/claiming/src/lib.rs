@@ -52,14 +52,21 @@
 #![allow(clippy::type_complexity)]
 
 use crate::weights::WeightInfo;
-use frame_support::traits::Currency;
-use frame_support::traits::ExistenceRequirement::AllowDeath;
-use frame_support::traits::VestingSchedule;
-use frame_support::{pallet_prelude::*, DefaultNoBound, PalletId};
+use frame_support::{
+    pallet_prelude::*,
+    traits::{
+        tokens::nonfungibles_v2::{InspectEnumerable, Mutate},
+        Currency,
+        ExistenceRequirement::AllowDeath,
+        Incrementable, VestingSchedule,
+    },
+    DefaultNoBound, PalletId,
+};
+use pallet_nfts::{ItemConfig, ItemSettings};
 use polkadot_primitives::ValidityError;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
-use sp_runtime::traits::{AccountIdConversion, CheckedSub, Saturating};
+use sp_runtime::traits::{AccountIdConversion, BlakeTwo256, CheckedSub, Hash, Saturating};
 use sp_std::{vec, vec::Vec};
 
 #[cfg(not(feature = "std"))]
@@ -75,6 +82,12 @@ mod tests;
 pub mod weights;
 
 const PALLET_ID: PalletId = PalletId(*b"Claiming");
+
+/// NFT level attribute key.
+const NFT_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
+
+/// Extrinsic index.
+const EXTRINSIC_INDEX: u32 = 22;
 
 type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
     <T as frame_system::Config>::AccountId,
@@ -156,6 +169,7 @@ impl sp_std::fmt::Debug for EcdsaSignature {
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
+    use frame_support::traits::nonfungibles_v2::Inspect;
     use frame_system::pallet_prelude::*;
 
     #[pallet::pallet]
@@ -166,6 +180,24 @@ pub mod pallet {
     pub trait Config: frame_system::Config + pallet_balances::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// Registry for the minted NFTs.
+        type Nfts: Inspect<Self::AccountId, ItemId = Self::ItemId, CollectionId = Self::CollectionId>
+            + Mutate<Self::AccountId, ItemConfig>
+            // + Create<Self::AccountId, CollectionConfigFor<Self>>
+            + InspectEnumerable<Self::AccountId>;
+
+        /// The collection id type.
+        type CollectionId: MaybeSerializeDeserialize
+            + Parameter
+            + Member
+            + Copy
+            + Default
+            + Ord
+            + Incrementable;
+
+        /// The item id type.
+        type ItemId: Member + Parameter + MaxEncodedLen + Copy + From<u32>;
 
         /// The currency mechanism, used for VTRS claiming.
         type Currency: Currency<Self::AccountId>;
@@ -207,7 +239,8 @@ pub mod pallet {
     /// This storage allows associating an Ethereum address with a specific NFT and its properties.
     #[pallet::storage]
     #[pallet::getter(fn nfts)]
-    pub(super) type Nfts<T: Config> = StorageMap<_, Identity, EthereumAddress, (u8, u32)>;
+    pub(super) type Nfts<T: Config> =
+        StorageMap<_, Identity, EthereumAddress, (T::CollectionId, u32)>;
 
     #[pallet::storage]
     #[pallet::getter(fn total)]
@@ -270,7 +303,30 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Claim tokens to user account.
+        /// Make a claim to collect your VTRS and NFTs.
+        ///
+        /// The dispatch origin for this call must be _None_.
+        ///
+        /// Unsigned Validation:
+        /// A call to claim is deemed valid if the signature provided matches
+        /// the expected signed message of:
+        ///
+        /// > Ethereum Signed Message:
+        /// > (configured prefix string)(address)
+        ///
+        /// and `address` matches the `dest` account.
+        ///
+        /// Parameters:
+        /// - `dest`: The destination account to payout the claim.
+        /// - `ethereum_signature`: The signature of an ethereum signed message matching the format
+        ///   described above.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// Weight includes logic to validate unsigned `claim` call.
+        ///
+        /// Total Complexity: O(1)
+        /// </weight>
         #[pallet::call_index(0)]
         #[pallet::weight(<T as Config>::WeightInfo::claim())]
         pub fn claim(
@@ -332,7 +388,7 @@ pub mod pallet {
             who: EthereumAddress,
             value: BalanceOf<T>,
             vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
-            nft_info: Option<(u8, u32)>,
+            nft_info: Option<(T::CollectionId, u32)>,
         ) -> DispatchResult {
             ensure_root(origin)?;
 
@@ -408,6 +464,12 @@ impl<T: Config> Pallet<T> {
             return Err(Error::<T>::VestedBalanceExists.into());
         }
 
+        // Mint NFT if it exists.
+        let nft_info = Nfts::<T>::get(signer);
+        if let Some(nft) = nft_info {
+            Self::do_mint(nft.0, nft.1, &dest)?;
+        }
+
         CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
 
         T::OnClaim::on_claim(&dest, amount)?;
@@ -427,6 +489,45 @@ impl<T: Config> Pallet<T> {
         Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
 
         Ok(())
+    }
+
+    /// Mint user NFT.
+    pub fn do_mint(
+        collection_id: T::CollectionId,
+        level: u32,
+        owner: &T::AccountId,
+    ) -> DispatchResult {
+        let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
+        let item_id = Self::create_unique_item_id(&owner);
+
+        T::Nfts::mint_into(&collection_id, &item_id, &owner, &item_config, true)?;
+        T::Nfts::set_attribute(
+            &collection_id,
+            &item_id,
+            &Vec::from(NFT_LEVEL_ATTRIBUTE_KEY),
+            &level.to_le_bytes(),
+        )?;
+
+        Ok(())
+    }
+
+    /// Generate uniq ItemId using block_number, token_owner and extrinsic_index
+    fn create_unique_item_id(owner: &T::AccountId) -> T::ItemId {
+        let block_number = frame_system::Pallet::<T>::block_number();
+        let mut unique_number = Vec::new();
+
+        unique_number.extend_from_slice(&block_number.encode());
+        unique_number.extend_from_slice(&EXTRINSIC_INDEX.to_le_bytes());
+        unique_number.extend_from_slice(owner.encode().as_ref());
+
+        // Combine the bytes of the hash into an u32 by bitwise OR (|) and left shifts (<<).
+        let hash = BlakeTwo256::hash(&unique_number);
+        let mut item_id: u32 = 0;
+        for i in 0..4 {
+            item_id |= (hash[i] as u32) << (i * 8);
+        }
+
+        T::ItemId::from(item_id)
     }
 
     /// Constructs the message that Ethereum RPC's `personal_sign` and `eth_sign` would sign.
