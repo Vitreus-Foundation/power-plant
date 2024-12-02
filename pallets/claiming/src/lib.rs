@@ -56,10 +56,11 @@ use frame_support::traits::Currency;
 use frame_support::traits::ExistenceRequirement::AllowDeath;
 use frame_support::traits::VestingSchedule;
 use frame_support::{pallet_prelude::*, DefaultNoBound, PalletId};
-use scale_info::prelude::vec::Vec;
+use polkadot_primitives::ValidityError;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 use sp_runtime::traits::{AccountIdConversion, CheckedSub, Saturating};
+use sp_std::{vec, vec::Vec};
 
 #[cfg(not(feature = "std"))]
 use sp_std::alloc::{format, string::String};
@@ -259,9 +260,13 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         /// Claim tokens to user account.
         #[pallet::call_index(0)]
-        #[pallet::weight((<T as Config>::WeightInfo::claim(), Pays::No))]
-        pub fn claim(origin: OriginFor<T>, ethereum_signature: EcdsaSignature) -> DispatchResult {
-            let dest = ensure_signed(origin)?;
+        #[pallet::weight(<T as Config>::WeightInfo::claim())]
+        pub fn claim(
+            origin: OriginFor<T>,
+            dest: T::AccountId,
+            ethereum_signature: EcdsaSignature,
+        ) -> DispatchResult {
+            ensure_none(origin)?;
 
             let data = dest.using_encoded(to_ascii_hex);
             let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
@@ -301,6 +306,40 @@ pub mod pallet {
             });
 
             Ok(())
+        }
+    }
+
+    #[pallet::validate_unsigned]
+    impl<T: Config> ValidateUnsigned for Pallet<T> {
+        type Call = Call<T>;
+
+        fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+            const PRIORITY: u64 = 100;
+
+            let maybe_signer = match call {
+                Call::claim { dest, ethereum_signature } => {
+                    let data = dest.using_encoded(to_ascii_hex);
+                    Self::eth_recover(&ethereum_signature, &data, &[][..])
+                },
+                _ => return Err(InvalidTransaction::Call.into()),
+            };
+
+            let signer = maybe_signer.ok_or(InvalidTransaction::Custom(
+                ValidityError::InvalidEthereumSignature.into(),
+            ))?;
+
+            ensure!(
+                Claims::<T>::contains_key(&signer),
+                InvalidTransaction::Custom(ValidityError::SignerHasNoClaim.into())
+            );
+
+            Ok(ValidTransaction {
+                priority: PRIORITY,
+                requires: vec![],
+                provides: vec![("claiming", signer).encode()],
+                longevity: TransactionLongevity::max_value(),
+                propagate: true,
+            })
         }
     }
 }
