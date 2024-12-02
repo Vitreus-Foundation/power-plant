@@ -184,7 +184,6 @@ pub mod pallet {
         /// Registry for the minted NFTs.
         type Nfts: Inspect<Self::AccountId, ItemId = Self::ItemId, CollectionId = Self::CollectionId>
             + Mutate<Self::AccountId, ItemConfig>
-            // + Create<Self::AccountId, CollectionConfigFor<Self>>
             + InspectEnumerable<Self::AccountId>;
 
         /// The collection id type.
@@ -485,6 +484,7 @@ impl<T: Config> Pallet<T> {
         <Total<T>>::put(new_total);
         <Claims<T>>::remove(signer);
         <Vesting<T>>::remove(signer);
+        <Nfts<T>>::remove(signer);
 
         Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
 
