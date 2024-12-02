@@ -19,7 +19,7 @@
 
 use crate::mock::*;
 use crate::secp_utils::*;
-use crate::{to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};
+use crate::{pallet, to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};
 use frame_support::traits::{Currency, ExistenceRequirement, VestingSchedule};
 use frame_support::{assert_err, assert_noop, assert_ok};
 use hex_literal::hex;
@@ -255,12 +255,15 @@ fn mint_claim_with_nft_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 50));
 
-        assert_eq!(Claiming::nfts(&eth(&alice())), None);
+        let nfts_for_alice: Vec<_> = pallet::Nfts::<Test>::iter()
+            .filter(|((address, _), _)| *address == eth(&alice()))
+            .collect();
+        assert!(nfts_for_alice.is_empty());
 
-        let nft_info = Some((1u32.into(), 5));
+        let nft_info = Some((1u32.into(), 1u32.into(), 5));
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, nft_info));
 
-        assert_eq!(Claiming::nfts(&eth(&alice())), nft_info);
+        assert_eq!(Claiming::nfts((&eth(&alice()), nft_info.unwrap().0)), Some((nft_info.unwrap().1, nft_info.unwrap().2)));
     });
 }
 
@@ -270,10 +273,14 @@ fn mint_claim_with_vesting_and_nft_works() {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
 
         assert_eq!(Claiming::vesting(&eth(&eve())), None);
-        assert_eq!(Claiming::nfts(&eth(&eve())), None);
+
+        let nfts_for_eve: Vec<_> = pallet::Nfts::<Test>::iter()
+            .filter(|((address, _), _)| *address == eth(&eve()))
+            .collect();
+        assert!(nfts_for_eve.is_empty());
 
         let vesting_schedule = Some((100, 20, 1));
-        let nft_info = Some((2u32.into(), 10));
+        let nft_info = Some((2u32.into(), 2u32.into(), 10));
         assert_ok!(Claiming::mint_claim(
             RuntimeOrigin::root(),
             eth(&eve()),
@@ -283,7 +290,7 @@ fn mint_claim_with_vesting_and_nft_works() {
         ));
 
         assert_eq!(Claiming::vesting(&eth(&eve())), vesting_schedule);
-        assert_eq!(Claiming::nfts(&eth(&eve())), nft_info);
+        assert_eq!(Claiming::nfts((&eth(&eve()), nft_info.unwrap().0)), Some((nft_info.unwrap().1, nft_info.unwrap().2)));
     });
 }
 
@@ -339,13 +346,16 @@ fn claim_with_nft_should_work() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 300));
 
-        assert_eq!(Claiming::nfts(&eth(&eve())), None);
+        let nfts_for_eve: Vec<_> = pallet::Nfts::<Test>::iter()
+            .filter(|((address, _), _)| *address == eth(&eve()))
+            .collect();
+        assert!(nfts_for_eve.is_empty());
 
-        let nft_info = Some((3u32.into(), 10));
+        let nft_info = Some((3u32.into(), 3u32.into(), 10));
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&eve()), 100, None, nft_info));
 
-        assert_eq!(Claiming::nfts(&eth(&eve())), nft_info);
+        assert_eq!(Claiming::nfts((&eth(&eve()), nft_info.unwrap().0)), Some((nft_info.unwrap().1, nft_info.unwrap().2)));
         assert_noop!(
             Claiming::claim(
                 RuntimeOrigin::none(),
