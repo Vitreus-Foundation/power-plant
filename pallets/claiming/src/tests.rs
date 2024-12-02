@@ -263,7 +263,10 @@ fn mint_claim_with_nft_works() {
         let nft_info = Some((1u32.into(), 1u32.into(), 5));
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, nft_info));
 
-        assert_eq!(Claiming::nfts((&eth(&alice()), nft_info.unwrap().0)), Some((nft_info.unwrap().1, nft_info.unwrap().2)));
+        assert_eq!(
+            Claiming::nfts((&eth(&alice()), nft_info.unwrap().0)),
+            Some((nft_info.unwrap().1, nft_info.unwrap().2))
+        );
     });
 }
 
@@ -290,7 +293,10 @@ fn mint_claim_with_vesting_and_nft_works() {
         ));
 
         assert_eq!(Claiming::vesting(&eth(&eve())), vesting_schedule);
-        assert_eq!(Claiming::nfts((&eth(&eve()), nft_info.unwrap().0)), Some((nft_info.unwrap().1, nft_info.unwrap().2)));
+        assert_eq!(
+            Claiming::nfts((&eth(&eve()), nft_info.unwrap().0)),
+            Some((nft_info.unwrap().1, nft_info.unwrap().2))
+        );
     });
 }
 
@@ -355,7 +361,10 @@ fn claim_with_nft_should_work() {
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&eve()), 100, None, nft_info));
 
-        assert_eq!(Claiming::nfts((&eth(&eve()), nft_info.unwrap().0)), Some((nft_info.unwrap().1, nft_info.unwrap().2)));
+        assert_eq!(
+            Claiming::nfts((&eth(&eve()), nft_info.unwrap().0)),
+            Some((nft_info.unwrap().1, nft_info.unwrap().2))
+        );
         assert_noop!(
             Claiming::claim(
                 RuntimeOrigin::none(),

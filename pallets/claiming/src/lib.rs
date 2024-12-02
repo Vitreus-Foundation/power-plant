@@ -58,7 +58,7 @@ use frame_support::{
         tokens::nonfungibles_v2::{Inspect, InspectEnumerable, Mutate},
         Currency,
         ExistenceRequirement::AllowDeath,
-        Incrementable, VestingSchedule,
+        VestingSchedule,
     },
     DefaultNoBound, PalletId,
 };
@@ -66,7 +66,7 @@ use pallet_nfts::{ItemConfig, ItemSettings};
 use polkadot_primitives::ValidityError;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
-use sp_runtime::traits::{AccountIdConversion, BlakeTwo256, CheckedSub, Hash, Saturating};
+use sp_runtime::traits::{AccountIdConversion, CheckedSub, Saturating};
 use sp_std::{vec, vec::Vec};
 
 #[cfg(not(feature = "std"))]
@@ -81,13 +81,11 @@ mod tests;
 
 pub mod weights;
 
+/// Pallet ID.
 const PALLET_ID: PalletId = PalletId(*b"Claiming");
 
 /// NFT level attribute key.
 const NFT_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
-
-/// Extrinsic index.
-const EXTRINSIC_INDEX: u32 = 22;
 
 type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
     <T as frame_system::Config>::AccountId,
@@ -435,7 +433,7 @@ pub mod pallet {
             let maybe_signer = match call {
                 Call::claim { dest, ethereum_signature } => {
                     let data = dest.using_encoded(to_ascii_hex);
-                    Self::eth_recover(&ethereum_signature, &data, &[][..])
+                    Self::eth_recover(ethereum_signature, &data, &[][..])
                 },
                 _ => return Err(InvalidTransaction::Call.into()),
             };
@@ -445,7 +443,7 @@ pub mod pallet {
             ))?;
 
             ensure!(
-                Claims::<T>::contains_key(&signer),
+                Claims::<T>::contains_key(signer),
                 InvalidTransaction::Custom(ValidityError::SignerHasNoClaim.into())
             );
 
@@ -520,10 +518,10 @@ impl<T: Config> Pallet<T> {
     ) -> DispatchResult {
         let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
 
-        T::Nfts::mint_into(&collection_id, &item_id, &owner, &item_config, true)?;
+        T::Nfts::mint_into(collection_id, item_id, owner, &item_config, true)?;
         T::Nfts::set_attribute(
-            &collection_id,
-            &item_id,
+            collection_id,
+            item_id,
             &Vec::from(NFT_LEVEL_ATTRIBUTE_KEY),
             &level.to_le_bytes(),
         )?;
