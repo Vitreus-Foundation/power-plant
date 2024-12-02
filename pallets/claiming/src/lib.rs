@@ -406,6 +406,11 @@ pub mod pallet {
                 *amount = Some(amount.unwrap_or_default().saturating_add(value))
             });
 
+            // Check if the account already has a vesting schedule
+            if vesting_schedule.is_some() && <Vesting<T>>::contains_key(who) {
+                return Err(Error::<T>::VestedBalanceExists.into());
+            }
+
             // Insert the vesting schedule if provided.
             if let Some(vs) = vesting_schedule {
                 <Vesting<T>>::insert(who, vs);
