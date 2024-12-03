@@ -316,7 +316,7 @@ fn test_year_end_data_saving_vipp_results() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
 
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, None, None));
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             10,
@@ -469,7 +469,7 @@ fn test_minting_vipp_nft() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
 
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, None, None));
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             10,
@@ -489,7 +489,7 @@ fn test_calculating_validator_vipp_points() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
 
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, None, None));
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             10,
@@ -528,7 +528,7 @@ fn test_calculating_cooperator_vipp_points() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
 
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 100));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 100, None, None));
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             100,
@@ -577,7 +577,7 @@ fn test_burning_vipp_nft() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
 
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, None, None));
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             10,
@@ -604,7 +604,7 @@ fn test_from_validator_to_cooperator() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
 
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, None, None));
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             10,

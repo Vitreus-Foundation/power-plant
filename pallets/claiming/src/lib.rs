@@ -229,8 +229,14 @@ pub mod pallet {
     /// with a particular NFT and its properties.
     #[pallet::storage]
     #[pallet::getter(fn nfts)]
-    pub(super) type Nfts<T: Config> =
-        StorageMap<_, Identity, (EthereumAddress, CollectionIdOf<T>), (ItemIdOf<T>, u32)>;
+    pub(super) type Nfts<T: Config> = StorageDoubleMap<
+        _,
+        Identity,
+        EthereumAddress,
+        Identity,
+        CollectionIdOf<T>,
+        (ItemIdOf<T>, u32),
+    >;
 
     #[pallet::storage]
     #[pallet::getter(fn total)]
@@ -416,7 +422,7 @@ pub mod pallet {
 
             // Insert the NFT information if provided.
             if let Some(nft) = nft_info {
-                <Nfts<T>>::insert((who, nft.0), (nft.1, nft.2));
+                <Nfts<T>>::insert(who, nft.0, (nft.1, nft.2));
             }
 
             Ok(())
@@ -472,20 +478,13 @@ impl<T: Config> Pallet<T> {
             Self::total().checked_sub(&amount).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
 
         let vesting = Vesting::<T>::get(signer);
-        if vesting.is_some() && T::VestingSchedule::vesting_balance(&dest).is_some() {
-            return Err(Error::<T>::VestedBalanceExists.into());
-        }
 
         // Mint NFT if it exists.
-        let nfts = Nfts::<T>::iter()
-            .filter(|((address, _), _)| *address == signer)
-            .collect::<Vec<_>>();
+        let nfts = Nfts::<T>::iter_prefix(signer).collect::<Vec<_>>();
 
-        for ((eth_address, collection_id), (item_id, level)) in nfts {
-            if let Some(nft_info) = Some((collection_id, eth_address, item_id, level)) {
-                Self::do_mint(&nft_info.0, &nft_info.2, &nft_info.3, &dest)?;
-                <Nfts<T>>::remove((signer, nft_info.0));
-            }
+        for (collection_id, (item_id, level)) in nfts {
+            Self::do_mint(&collection_id, &item_id, &level, &dest)?;
+            <Nfts<T>>::remove(signer, collection_id);
         }
 
         CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
@@ -494,10 +493,8 @@ impl<T: Config> Pallet<T> {
 
         // Check if this claim should have a vesting schedule.
         if let Some(vs) = vesting {
-            // This can only fail if the account already has a vesting schedule,
-            // but this is checked above.
             T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)
-                .expect("No other vesting schedule exists, as checked above; qed");
+                .map_err(|_| Error::<T>::VestedBalanceExists)?;
         }
 
         <Total<T>>::put(new_total);

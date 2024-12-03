@@ -162,7 +162,7 @@ fn double_claiming_doesnt_work() {
 }
 
 #[test]
-fn claiming_while_vested_doesnt_work() {
+fn claiming_while_vested_work() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
 
@@ -172,14 +172,11 @@ fn claiming_while_vested_doesnt_work() {
         assert_ok!(<Test as Config>::VestingSchedule::add_vesting_schedule(&69, 1000, 100, 10));
 
         // They should not be able to claim
-        assert_noop!(
-            Claiming::claim(
-                RuntimeOrigin::none(),
-                69,
-                sig::<Test>(&alice(), &69u64.encode(), &[][..])
-            ),
-            Error::<Test>::VestedBalanceExists,
-        );
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::none(),
+            69,
+            sig::<Test>(&alice(), &69u64.encode(), &[][..])
+        ),);
     });
 }
 
@@ -255,16 +252,14 @@ fn mint_claim_with_nft_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 50));
 
-        let nfts_for_alice: Vec<_> = pallet::Nfts::<Test>::iter()
-            .filter(|((address, _), _)| *address == eth(&alice()))
-            .collect();
+        let nfts_for_alice: Vec<_> = pallet::Nfts::<Test>::iter_prefix(eth(&alice())).collect();
         assert!(nfts_for_alice.is_empty());
 
         let nft_info = Some((1u32.into(), 1u32.into(), 5));
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, nft_info));
 
         assert_eq!(
-            Claiming::nfts((&eth(&alice()), nft_info.unwrap().0)),
+            Claiming::nfts(&eth(&alice()), nft_info.unwrap().0),
             Some((nft_info.unwrap().1, nft_info.unwrap().2))
         );
     });
@@ -277,9 +272,7 @@ fn mint_claim_with_vesting_and_nft_works() {
 
         assert_eq!(Claiming::vesting(&eth(&eve())), None);
 
-        let nfts_for_eve: Vec<_> = pallet::Nfts::<Test>::iter()
-            .filter(|((address, _), _)| *address == eth(&eve()))
-            .collect();
+        let nfts_for_eve: Vec<_> = pallet::Nfts::<Test>::iter_prefix(eth(&eve())).collect();
         assert!(nfts_for_eve.is_empty());
 
         let vesting_schedule = Some((100, 20, 1));
@@ -294,7 +287,7 @@ fn mint_claim_with_vesting_and_nft_works() {
 
         assert_eq!(Claiming::vesting(&eth(&eve())), vesting_schedule);
         assert_eq!(
-            Claiming::nfts((&eth(&eve()), nft_info.unwrap().0)),
+            Claiming::nfts(&eth(&eve()), nft_info.unwrap().0),
             Some((nft_info.unwrap().1, nft_info.unwrap().2))
         );
     });
@@ -352,9 +345,7 @@ fn claim_with_nft_should_work() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 300));
 
-        let nfts_for_eve: Vec<_> = pallet::Nfts::<Test>::iter()
-            .filter(|((address, _), _)| *address == eth(&eve()))
-            .collect();
+        let nfts_for_eve: Vec<_> = pallet::Nfts::<Test>::iter_prefix(eth(&eve())).collect();
         assert!(nfts_for_eve.is_empty());
 
         let nft_info = Some((3u32.into(), 3u32.into(), 10));
@@ -362,7 +353,7 @@ fn claim_with_nft_should_work() {
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&eve()), 100, None, nft_info));
 
         assert_eq!(
-            Claiming::nfts((&eth(&eve()), nft_info.unwrap().0)),
+            Claiming::nfts(&eth(&eve()), nft_info.unwrap().0),
             Some((nft_info.unwrap().1, nft_info.unwrap().2))
         );
         assert_noop!(
