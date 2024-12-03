@@ -162,7 +162,7 @@ fn double_claiming_doesnt_work() {
 }
 
 #[test]
-fn claiming_while_vested_work() {
+fn claiming_while_vested_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
 
@@ -171,7 +171,7 @@ fn claiming_while_vested_work() {
         // A user is already vested
         assert_ok!(<Test as Config>::VestingSchedule::add_vesting_schedule(&69, 1000, 100, 10));
 
-        // They should not be able to claim
+        // And they should be able to claim
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             69,
@@ -233,7 +233,6 @@ fn mint_claim_with_vesting_works() {
 
         assert_eq!(Claiming::vesting(&eth(&bob())), None);
 
-        // Создаём клейм с вестингом
         let vesting_schedule = Some((100, 10, 1));
         assert_ok!(Claiming::mint_claim(
             RuntimeOrigin::root(),
@@ -244,6 +243,26 @@ fn mint_claim_with_vesting_works() {
         ));
 
         assert_eq!(Claiming::vesting(&eth(&bob())), vesting_schedule);
+    });
+}
+
+#[test]
+fn mint_claim_with_double_vesting_schedule_doesnt_work() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 100));
+
+        assert_eq!(Claiming::vesting(&eth(&alice())), Some((50, 10, 1)));
+
+        assert_noop!(
+            Claiming::mint_claim(
+                RuntimeOrigin::root(),
+                eth(&alice()),
+                100,
+                Some((100, 10, 1)),
+                None
+            ),
+            Error::<Test>::DuplicateVestingSchedule
+        );
     });
 }
 

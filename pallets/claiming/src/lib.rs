@@ -265,8 +265,8 @@ pub mod pallet {
         InvalidEthereumSignature,
         /// Ethereum address has no claim.
         SignerHasNoClaim,
-        /// The account already has a vested balance.
-        VestedBalanceExists,
+        /// The account already has an existing claim with a vesting schedule.
+        DuplicateVestingSchedule,
     }
 
     #[pallet::genesis_config]
@@ -410,19 +410,16 @@ pub mod pallet {
                 *amount = Some(amount.unwrap_or_default().saturating_add(value))
             });
 
-            // Check if the account already has a vesting schedule
-            if vesting_schedule.is_some() && <Vesting<T>>::contains_key(who) {
-                return Err(Error::<T>::VestedBalanceExists.into());
-            }
-
             // Insert the vesting schedule if provided.
             if let Some(vs) = vesting_schedule {
+                ensure!(!<Vesting<T>>::contains_key(who), Error::<T>::DuplicateVestingSchedule);
+
                 <Vesting<T>>::insert(who, vs);
             }
 
             // Insert the NFT information if provided.
-            if let Some(nft) = nft_info {
-                <Nfts<T>>::insert(who, nft.0, (nft.1, nft.2));
+            if let Some((collection_id, item_id, level)) = nft_info {
+                <Nfts<T>>::insert(who, collection_id, (item_id, level));
             }
 
             Ok(())
@@ -477,29 +474,25 @@ impl<T: Config> Pallet<T> {
         let new_total =
             Self::total().checked_sub(&amount).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
 
-        let vesting = Vesting::<T>::get(signer);
-
-        // Mint NFT if it exists.
-        let nfts = Nfts::<T>::iter_prefix(signer).collect::<Vec<_>>();
-
-        for (collection_id, (item_id, level)) in nfts {
-            Self::do_mint(&collection_id, &item_id, &level, &dest)?;
-            <Nfts<T>>::remove(signer, collection_id);
-        }
-
         CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
 
         T::OnClaim::on_claim(&dest, amount)?;
 
         // Check if this claim should have a vesting schedule.
-        if let Some(vs) = vesting {
-            T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)
-                .map_err(|_| Error::<T>::VestedBalanceExists)?;
+        if let Some(vs) = Vesting::<T>::get(signer) {
+            T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)?;
+        }
+
+        // Mint NFT if it exists.
+        for (collection_id, (item_id, level)) in Nfts::<T>::iter_prefix(signer) {
+            Self::do_mint_nft(&collection_id, &item_id, &level, &dest)?;
         }
 
         <Total<T>>::put(new_total);
         <Claims<T>>::remove(signer);
         <Vesting<T>>::remove(signer);
+
+        let _ = <Nfts<T>>::clear_prefix(signer, u32::MAX, None);
 
         Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
 
@@ -507,7 +500,7 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Mint user NFT.
-    pub fn do_mint(
+    pub fn do_mint_nft(
         collection_id: &CollectionIdOf<T>,
         item_id: &ItemIdOf<T>,
         level: &u32,
