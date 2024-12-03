@@ -249,7 +249,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 203,
+    spec_version: 204,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 2,
@@ -1064,6 +1064,7 @@ parameter_types! {
 
 impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type Nfts = Nfts;
     type Currency = Balances;
     type VestingSchedule = Vesting;
     type OnClaim = NacManaging;
@@ -1369,7 +1370,7 @@ impl pallet_evm::Config for Runtime {
     type PrecompilesValue = PrecompilesValue;
     type ChainId = EVMChainId;
     type BlockGasLimit = BlockGasLimit;
-    type Runner = helpers::runner::NacRunner<Self>;
+    type Runner = pallet_evm::runner::stack::Runner<Self>;
     type OnChargeTransaction = EnergyFee;
     type OnCreate = ();
     type FindAuthor = FindAuthorTruncated<Babe>;

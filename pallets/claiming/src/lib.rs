@@ -52,14 +52,22 @@
 #![allow(clippy::type_complexity)]
 
 use crate::weights::WeightInfo;
-use frame_support::traits::Currency;
-use frame_support::traits::ExistenceRequirement::AllowDeath;
-use frame_support::traits::VestingSchedule;
-use frame_support::{pallet_prelude::*, DefaultNoBound, PalletId};
-use scale_info::prelude::vec::Vec;
+use frame_support::{
+    pallet_prelude::*,
+    traits::{
+        tokens::nonfungibles_v2::{Inspect, InspectEnumerable, Mutate},
+        Currency,
+        ExistenceRequirement::AllowDeath,
+        VestingSchedule,
+    },
+    DefaultNoBound, PalletId,
+};
+use pallet_nfts::{ItemConfig, ItemSettings};
+use polkadot_primitives::ValidityError;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
 use sp_runtime::traits::{AccountIdConversion, CheckedSub, Saturating};
+use sp_std::{vec, vec::Vec};
 
 #[cfg(not(feature = "std"))]
 use sp_std::alloc::{format, string::String};
@@ -73,12 +81,19 @@ mod tests;
 
 pub mod weights;
 
+/// Pallet ID.
 const PALLET_ID: PalletId = PalletId(*b"Claiming");
+
+/// NFT level attribute key.
+const NFT_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
 
 type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
     <T as frame_system::Config>::AccountId,
 >>::Currency;
 type BalanceOf<T> = <CurrencyOf<T> as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type CollectionIdOf<T> =
+    <<T as Config>::Nfts as Inspect<<T as frame_system::Config>::AccountId>>::CollectionId;
+type ItemIdOf<T> = <<T as Config>::Nfts as Inspect<<T as frame_system::Config>::AccountId>>::ItemId;
 
 /// Handler for when a claim is made.
 pub trait OnClaimHandler<AccountId, Balance> {
@@ -166,6 +181,11 @@ pub mod pallet {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+        /// Registry for the minted NFTs.
+        type Nfts: Inspect<Self::AccountId>
+            + Mutate<Self::AccountId, ItemConfig>
+            + InspectEnumerable<Self::AccountId>;
+
         /// The currency mechanism, used for VTRS claiming.
         type Currency: Currency<Self::AccountId>;
 
@@ -196,6 +216,28 @@ pub mod pallet {
     pub(super) type Vesting<T: Config> =
         StorageMap<_, Identity, EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>;
 
+    /// Storage map for NFTs that can be claimed by users.
+    /// This maps an Ethereum address and a Collection ID to an NFT represented by its Item ID and level.
+    ///
+    /// Each entry consists of:
+    /// - `(EthereumAddress, CollectionIdOf<T>)`: A tuple containing the Ethereum address
+    ///   eligible to claim the NFT and the ID of the NFT collection.
+    /// - `(ItemIdOf<T>, u32)`: A tuple containing the Item ID of the NFT and its level,
+    ///   where the level represents its rarity or attributes.
+    ///
+    /// This storage allows associating a specific Ethereum address and NFT collection
+    /// with a particular NFT and its properties.
+    #[pallet::storage]
+    #[pallet::getter(fn nfts)]
+    pub(super) type Nfts<T: Config> = StorageDoubleMap<
+        _,
+        Identity,
+        EthereumAddress,
+        Identity,
+        CollectionIdOf<T>,
+        (ItemIdOf<T>, u32),
+    >;
+
     #[pallet::storage]
     #[pallet::getter(fn total)]
     pub(super) type Total<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
@@ -223,8 +265,8 @@ pub mod pallet {
         InvalidEthereumSignature,
         /// Ethereum address has no claim.
         SignerHasNoClaim,
-        /// The account already has a vested balance.
-        VestedBalanceExists,
+        /// The account already has an existing claim with a vesting schedule.
+        DuplicateVestingSchedule,
     }
 
     #[pallet::genesis_config]
@@ -257,11 +299,38 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Claim tokens to user account.
+        /// Make a claim to collect your VTRS and NFTs.
+        ///
+        /// The dispatch origin for this call must be _None_.
+        ///
+        /// Unsigned Validation:
+        /// A call to claim is deemed valid if the signature provided matches
+        /// the expected signed message of:
+        ///
+        /// > Ethereum Signed Message:
+        /// > (configured prefix string)(address)
+        ///
+        /// and `address` matches the `dest` account.
+        ///
+        /// Parameters:
+        /// - `dest`: The destination account to payout the claim.
+        /// - `ethereum_signature`: The signature of an ethereum signed message matching the format
+        ///   described above.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// Weight includes logic to validate unsigned `claim` call.
+        ///
+        /// Total Complexity: O(1)
+        /// </weight>
         #[pallet::call_index(0)]
-        #[pallet::weight((<T as Config>::WeightInfo::claim(), Pays::No))]
-        pub fn claim(origin: OriginFor<T>, ethereum_signature: EcdsaSignature) -> DispatchResult {
-            let dest = ensure_signed(origin)?;
+        #[pallet::weight(<T as Config>::WeightInfo::claim())]
+        pub fn claim(
+            origin: OriginFor<T>,
+            dest: T::AccountId,
+            ethereum_signature: EcdsaSignature,
+        ) -> DispatchResult {
+            ensure_none(origin)?;
 
             let data = dest.using_encoded(to_ascii_hex);
             let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
@@ -272,7 +341,23 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Mint new tokens to claim.
+        /// Mint tokens to the claim account for future claims.
+        ///
+        /// The dispatch origin for this call must be _Root_.
+        ///
+        /// This function adds the specified amount of VTRS tokens to the claim account,
+        /// increasing the total pool of tokens available for claims.
+        ///
+        /// Parameters:
+        /// - `amount`: The amount of VTRS tokens to be added to the claim account.
+        ///
+        /// Emits:
+        /// - `TokenMintedToClaim`: Upon successfully minting the tokens to the claim account.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// Total Complexity: O(1)
+        /// </weight>
         #[pallet::call_index(1)]
         #[pallet::weight(<T as Config>::WeightInfo::mint_tokens_to_claim())]
         pub fn mint_tokens_to_claim(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
@@ -286,21 +371,92 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Mint a new claim to collect VTRS.
+        /// Mint a new claim to collect VTRS tokens and optionally assign an NFT with its collection, ID, and level.
+        ///
+        /// The dispatch origin for this call must be _Root_.
+        ///
+        /// Parameters:
+        /// - `who`: The Ethereum address eligible to collect this claim.
+        /// - `value`: The amount of VTRS tokens that will be claimable.
+        /// - `vesting_schedule`: An optional vesting schedule for these tokens,
+        ///   consisting of:
+        ///   - `BalanceOf<T>`: Total amount to be vested.
+        ///   - `BalanceOf<T>`: Per-block unlock amount.
+        ///   - `BlockNumberFor<T>`: The starting block of the vesting period.
+        /// - `nft_info`: Optional information about an NFT to be assigned to this claim:
+        ///   - `CollectionIdOf<T>`: The ID of the NFT collection.
+        ///   - `ItemIdOf<T>`: The unique ID of the NFT item.
+        ///   - `u32`: The level of the NFT, representing its attributes or rarity.
+        ///
+        /// <weight>
+        /// The weight of this call is invariant over the input parameters.
+        /// We assume the worst case where both vesting and NFT information are being inserted.
+        ///
+        /// Total Complexity: O(1)
+        /// </weight>
         #[pallet::call_index(2)]
         #[pallet::weight(<T as Config>::WeightInfo::mint_claim())]
         pub fn mint_claim(
             origin: OriginFor<T>,
             who: EthereumAddress,
             value: BalanceOf<T>,
+            vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
+            nft_info: Option<(CollectionIdOf<T>, ItemIdOf<T>, u32)>,
         ) -> DispatchResult {
             ensure_root(origin)?;
 
+            // Update the claims storage to include the new value.
             <Claims<T>>::mutate(who, |amount| {
                 *amount = Some(amount.unwrap_or_default().saturating_add(value))
             });
 
+            // Insert the vesting schedule if provided.
+            if let Some(vs) = vesting_schedule {
+                ensure!(!<Vesting<T>>::contains_key(who), Error::<T>::DuplicateVestingSchedule);
+
+                <Vesting<T>>::insert(who, vs);
+            }
+
+            // Insert the NFT information if provided.
+            if let Some((collection_id, item_id, level)) = nft_info {
+                <Nfts<T>>::insert(who, collection_id, (item_id, level));
+            }
+
             Ok(())
+        }
+    }
+
+    #[pallet::validate_unsigned]
+    impl<T: Config> ValidateUnsigned for Pallet<T> {
+        type Call = Call<T>;
+
+        fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
+            const PRIORITY: u64 = 100;
+
+            let maybe_signer = match call {
+                Call::claim { dest, ethereum_signature } => {
+                    let data = dest.using_encoded(to_ascii_hex);
+                    Self::eth_recover(ethereum_signature, &data, &[][..])
+                },
+                _ => return Err(InvalidTransaction::Call.into()),
+            };
+
+            let signer = maybe_signer.ok_or(InvalidTransaction::Custom(
+                ValidityError::InvalidEthereumSignature.into(),
+            ))?;
+
+            ensure!(
+                Claims::<T>::contains_key(signer),
+                InvalidTransaction::Custom(ValidityError::SignerHasNoClaim.into())
+            );
+
+            Ok(ValidTransaction {
+                priority: PRIORITY,
+                requires: vec![],
+                provides: vec![("claiming", signer).encode()],
+                longevity: TransactionLongevity::max_value(),
+                propagate: true,
+            })
         }
     }
 }
@@ -318,28 +474,47 @@ impl<T: Config> Pallet<T> {
         let new_total =
             Self::total().checked_sub(&amount).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
 
-        let vesting = Vesting::<T>::get(signer);
-        if vesting.is_some() && T::VestingSchedule::vesting_balance(&dest).is_some() {
-            return Err(Error::<T>::VestedBalanceExists.into());
-        }
-
         CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
 
         T::OnClaim::on_claim(&dest, amount)?;
 
         // Check if this claim should have a vesting schedule.
-        if let Some(vs) = vesting {
-            // This can only fail if the account already has a vesting schedule,
-            // but this is checked above.
-            T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)
-                .expect("No other vesting schedule exists, as checked above; qed");
+        if let Some(vs) = Vesting::<T>::get(signer) {
+            T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)?;
+        }
+
+        // Mint NFT if it exists.
+        for (collection_id, (item_id, level)) in Nfts::<T>::iter_prefix(signer) {
+            Self::do_mint_nft(&collection_id, &item_id, &level, &dest)?;
         }
 
         <Total<T>>::put(new_total);
         <Claims<T>>::remove(signer);
         <Vesting<T>>::remove(signer);
 
+        let _ = <Nfts<T>>::clear_prefix(signer, u32::MAX, None);
+
         Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
+
+        Ok(())
+    }
+
+    /// Mint user NFT.
+    pub fn do_mint_nft(
+        collection_id: &CollectionIdOf<T>,
+        item_id: &ItemIdOf<T>,
+        level: &u32,
+        owner: &T::AccountId,
+    ) -> DispatchResult {
+        let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
+
+        T::Nfts::mint_into(collection_id, item_id, owner, &item_config, true)?;
+        T::Nfts::set_attribute(
+            collection_id,
+            item_id,
+            &Vec::from(NFT_LEVEL_ATTRIBUTE_KEY),
+            &level.to_le_bytes(),
+        )?;
 
         Ok(())
     }
