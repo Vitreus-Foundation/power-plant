@@ -42,9 +42,9 @@ jobs:
             echo "FEATURE_FLAG=testnet-native" >> $GITHUB_ENV
           fi
 
-      - run: cargo build --locked -features $FEATURE_FLAG
+      - run: cargo build --locked --features $FEATURE_FLAG
 
-      - run: cargo test -features $FEATURE_FLAG --workspace --locked
+      - run: cargo test --features $FEATURE_FLAG --workspace --locked
 
       - name: Check format
         run: |
@@ -52,4 +52,4 @@ jobs:
           rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
           cargo +nightly fmt -- --check
 
-      - run: cargo clippy -features $FEATURE_FLAG --all-targets -- --deny warnings
+      - run: cargo clippy --features $FEATURE_FLAG --all-targets -- --deny warnings
