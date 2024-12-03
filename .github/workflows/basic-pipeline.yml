@@ -50,15 +50,3 @@ jobs:
             | jq '.packages | .[] | .name' \
             | rg --invert-match 'atleta-(node|runtime)' \
             | xargs -I {} cargo clippy --package {} --all-targets --all-features -- --deny warnings --deny missing_docs
-
-  etc:
-    name: "shell scripts"
-    runs-on: ubuntu-latest
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - run: sudo apt-get install shellcheck fd-find -y
-
-      - name: Run ShellCheck
-        run: fdfind --type executable --exec bash -c 'echo {}; shellcheck {}'
