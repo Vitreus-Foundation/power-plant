@@ -1,0 +1,65 @@
+name: Code Hygiene
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - develop
+      - testnet
+      - stagenet
+      - mainnet
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  rust:
+    name: 'cargo check'
+    runs-on: self-hosted
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - uses: actions-rust-lang/setup-rust-toolchain@v1
+      with:
+        target: wasm32-unknown-unknown
+        components: rustfmt clippy rust-src
+
+    - run: sudo apt-get install protobuf-compiler jq ripgrep libclang-dev libssl-dev -y
+
+    - run: cargo build --locked
+
+    - run: cargo test --locked
+
+    - name: Check format
+      run: |
+        rustup toolchain add nightly-x86_64-unknown-linux-gnu
+        rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
+        cargo +nightly fmt -- --check
+
+    - run: cargo clippy --all-targets -- --deny warnings
+
+    - name: Clippy checks all features (exclude node and runtime)
+      run: |
+        set -o pipefail
+        cargo metadata --format-version=1 --no-deps \
+          | jq '.packages | .[] | .name' \
+          | rg --invert-match 'atleta-(node|runtime)' \
+          | xargs -I {} cargo clippy --package {} --all-targets --all-features -- --deny warnings --deny missing_docs
+
+
+  etc:
+    name: 'shell scripts'
+    runs-on: self-hosted
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - run: sudo apt-get install shellcheck fd-find -y
+
+    - name: Run ShellCheck
+      run: fdfind --type executable --exec bash -c 'echo {}; shellcheck {}'
