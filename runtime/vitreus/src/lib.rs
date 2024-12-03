@@ -1369,7 +1369,7 @@ impl pallet_evm::Config for Runtime {
     type PrecompilesValue = PrecompilesValue;
     type ChainId = EVMChainId;
     type BlockGasLimit = BlockGasLimit;
-    type Runner = helpers::runner::NacRunner<Self>;
+    type Runner = pallet_evm::runner::stack::Runner<Self>;
     type OnChargeTransaction = EnergyFee;
     type OnCreate = ();
     type FindAuthor = FindAuthorTruncated<Babe>;
