@@ -312,6 +312,7 @@ parameter_types! {
 
 impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type Nfts = Nfts;
     type Currency = Balances;
     type VestingSchedule = Vesting;
     type OnClaim = NacManaging;
