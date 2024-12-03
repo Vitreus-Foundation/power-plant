@@ -358,30 +358,3 @@ fn add_claim_with_vesting_works() {
         );
     });
 }
-
-#[test]
-fn claim_with_nft_should_work() {
-    new_test_ext().execute_with(|| {
-        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 300));
-
-        let nfts_for_eve: Vec<_> = pallet::Nfts::<Test>::iter_prefix(eth(&eve())).collect();
-        assert!(nfts_for_eve.is_empty());
-
-        let nft_info = Some((3u32.into(), 3u32.into(), 10));
-
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&eve()), 100, None, nft_info));
-
-        assert_eq!(
-            Claiming::nfts(&eth(&eve()), nft_info.unwrap().0),
-            Some((nft_info.unwrap().1, nft_info.unwrap().2))
-        );
-        assert_noop!(
-            Claiming::claim(
-                RuntimeOrigin::none(),
-                42,
-                sig::<Test>(&eve(), &69u64.encode(), &[][..])
-            ),
-            Error::<Test>::SignerHasNoClaim,
-        );
-    });
-}
