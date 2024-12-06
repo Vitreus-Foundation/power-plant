@@ -1043,6 +1043,7 @@ pub mod pallet {
 
                 // NOTE: ledger must be updated prior to calling `Self::weight_of`.
                 Self::update_ledger(&controller, &ledger);
+                Self::adjust_cooperator_targets(&ledger.stash, ledger.active);
 
                 Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
             }

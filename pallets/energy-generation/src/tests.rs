@@ -843,6 +843,65 @@ fn cooperators_also_get_slashed_pro_rata() {
 }
 
 #[test]
+fn cooperators_targets_reduced_after_slashing() {
+    ExtBuilder::default()
+        .cooperate(CooperateSelector::CooperateWithDefault)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+            let slash_percent = Perbill::from_percent(5);
+            let initial_stake = PowerPlant::ledger(100).unwrap().active;
+
+            assert_eq!(PowerPlant::cooperators(101).unwrap().total(), initial_stake);
+
+            on_offence_now(
+                &[OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![],
+                }],
+                &[slash_percent],
+            );
+
+            let stake = PowerPlant::ledger(100).unwrap().active;
+            // Cooperator stake must have been decreased.
+            assert!(stake < initial_stake);
+            // Cooperator targets stake must have been decreased.
+            assert!(PowerPlant::cooperators(101).unwrap().total() <= stake);
+        });
+}
+
+#[test]
+fn cooperators_targets_reduced_after_unbonding() {
+    ExtBuilder::default()
+        .cooperate(CooperateSelector::CooperateWithDefault)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+
+            assert!(PowerPlant::cooperators(101).unwrap().targets.contains_key(&11));
+            assert!(PowerPlant::cooperators(101).unwrap().targets.contains_key(&21));
+            assert!(PowerPlant::collaborations(11).unwrap().contains(&101));
+            assert!(PowerPlant::collaborations(21).unwrap().contains(&101));
+
+            assert_eq!(PowerPlant::ledger(100).unwrap().active, 500);
+            assert_eq!(PowerPlant::cooperators(101).unwrap().total(), 500);
+
+            // Unbond part of stake
+            assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(100), 400));
+
+            assert_eq!(PowerPlant::ledger(100).unwrap().active, 100);
+            assert_eq!(PowerPlant::cooperators(101).unwrap().total(), 100);
+
+            // Chill and unbond the rest
+            assert_ok!(PowerPlant::chill(RuntimeOrigin::signed(100)));
+            assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(100), 100));
+
+            assert_eq!(PowerPlant::ledger(100).unwrap().active, 0);
+            assert_eq!(PowerPlant::cooperators(101), None);
+            assert!(PowerPlant::collaborations(11).unwrap().is_empty());
+            assert!(PowerPlant::collaborations(21).unwrap().is_empty());
+        });
+}
+
+#[test]
 fn double_staking_should_fail() {
     // should test (in the same order):
     // * an account already bonded as stash cannot be be stashed again.
