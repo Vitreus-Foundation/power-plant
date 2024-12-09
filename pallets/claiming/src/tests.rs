@@ -43,11 +43,11 @@ fn mint_tokens_to_claim() {
 #[test]
 fn basic_setup_works() {
     new_test_ext().execute_with(|| {
-        assert_eq!(Claiming::claims(&eth(&alice())), Some(100));
-        assert_eq!(Claiming::claims(&eth(&dave())), Some(200));
-        assert_eq!(Claiming::claims(&eth(&eve())), Some(300));
-        assert_eq!(Claiming::claims(&eth(&frank())), Some(400));
-        assert_eq!(Claiming::claims(&EthereumAddress::default()), None);
+        assert_eq!(Claiming::claims_amount(&eth(&alice()), 1), Some(100));
+        assert_eq!(Claiming::claims_amount(&eth(&dave()), 1), Some(200));
+        assert_eq!(Claiming::claims_amount(&eth(&eve()), 1), Some(300));
+        assert_eq!(Claiming::claims_amount(&eth(&frank()), 1), Some(400));
+        assert_eq!(Claiming::claims_amount(&EthereumAddress::default(), 1), None);
         assert_eq!(Claiming::vesting(&eth(&alice())), Some((50, 10, 1)));
     });
 }
@@ -75,7 +75,7 @@ fn add_claim_works() {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 250));
 
         assert_noop!(
-            Claiming::mint_claim(RuntimeOrigin::signed(42), eth(&bob()), 200, None, None),
+            Claiming::mint_claim(RuntimeOrigin::signed(42), eth(&bob()), 200, 1, None, None),
             sp_runtime::traits::BadOrigin,
         );
         assert_eq!(Balances::free_balance(42), 0);
@@ -87,7 +87,7 @@ fn add_claim_works() {
             ),
             Error::<Test>::SignerHasNoClaim,
         );
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, None, None));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, 1, None, None));
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             69,
@@ -104,10 +104,10 @@ fn add_claim_to_existing_claim_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 250));
 
-        assert_eq!(Claiming::claims(&eth(&alice())), Some(100));
+        assert_eq!(Claiming::claims_amount(&eth(&alice()), 1), Some(100));
 
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, None));
-        assert_eq!(Claiming::claims(&eth(&alice())), Some(150));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, 1, None, None));
+        assert_eq!(Claiming::claims_amount(&eth(&alice()), 1), Some(150));
 
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
@@ -238,6 +238,7 @@ fn mint_claim_with_vesting_works() {
             RuntimeOrigin::root(),
             eth(&bob()),
             100,
+            1,
             vesting_schedule,
             None
         ));
@@ -258,6 +259,7 @@ fn mint_claim_with_double_vesting_schedule_doesnt_work() {
                 RuntimeOrigin::root(),
                 eth(&alice()),
                 100,
+                1,
                 Some((100, 10, 1)),
                 None
             ),
@@ -275,7 +277,7 @@ fn mint_claim_with_nft_works() {
         assert!(nfts_for_alice.is_empty());
 
         let nft_info = Some((1u32.into(), 1u32.into(), 5));
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, nft_info));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, 1, None, nft_info));
 
         assert_eq!(
             Claiming::nfts(&eth(&alice()), nft_info.unwrap().0),
@@ -300,6 +302,7 @@ fn mint_claim_with_vesting_and_nft_works() {
             RuntimeOrigin::root(),
             eth(&eve()),
             100,
+            1,
             vesting_schedule,
             nft_info
         ));
@@ -322,6 +325,7 @@ fn add_claim_with_vesting_works() {
                 RuntimeOrigin::signed(42),
                 eth(&bob()),
                 200,
+                1,
                 Some((50, 10, 1)),
                 None
             ),
@@ -340,6 +344,7 @@ fn add_claim_with_vesting_works() {
             RuntimeOrigin::root(),
             eth(&bob()),
             200,
+            1,
             Some((50, 10, 1)),
             None
         ));

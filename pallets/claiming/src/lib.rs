@@ -527,6 +527,7 @@ impl<T: Config> Pallet<T> {
                 has_presale1_claim = true;
             }
         }
+        ensure!(total_claim > Zero::zero(), Error::<T>::SignerHasNoClaim);
 
         let new_total =
             Self::total().checked_sub(&total_claim).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
