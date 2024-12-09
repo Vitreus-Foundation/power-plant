@@ -1,7 +1,9 @@
 use super::*;
 
 use frame_support::{
-    migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade, weights::Weight,
+    migrations::VersionedMigration,
+    traits::{OnRuntimeUpgrade, UncheckedOnRuntimeUpgrade},
+    weights::Weight,
 };
 
 use crate::{Config, Pallet};
@@ -61,4 +63,52 @@ pub mod v14 {
     #[frame_support::storage_alias]
     pub(crate) type OffendingValidators<T: Config> =
         StorageValue<Pallet<T>, Vec<(u32, bool)>, ValueQuery>;
+}
+
+pub struct FixCooperatorStake<T>(core::marker::PhantomData<T>);
+
+impl<T: Config> OnRuntimeUpgrade for FixCooperatorStake<T> {
+    fn on_runtime_upgrade() -> Weight {
+        let mut count = 0;
+        let mut fixed = 0;
+
+        for (_, ledger) in Ledger::<T>::iter() {
+            if let Some(cooperations) = Cooperators::<T>::get(&ledger.stash) {
+                let targets_stake = cooperations.total();
+                if targets_stake > ledger.active {
+                    Pallet::<T>::adjust_cooperator_targets(&ledger.stash, ledger.active);
+
+                    log!(
+                        info,
+                        "Fix {:?} stake: active/targets/difference: {:?}/{:?}/{:?}",
+                        ledger.stash,
+                        ledger.active,
+                        targets_stake,
+                        targets_stake - ledger.active
+                    );
+
+                    fixed += 1;
+                }
+            }
+            count += 1;
+        }
+
+        log!(info, "Fixed {} out of {} cooperators", fixed, count);
+
+        T::DbWeight::get().reads_writes(count * 2, fixed)
+    }
+
+    #[cfg(feature = "try-runtime")]
+    fn post_upgrade(_: Vec<u8>) -> Result<(), TryRuntimeError> {
+        for (_, ledger) in Ledger::<T>::iter() {
+            if let Some(cooperations) = Cooperators::<T>::get(&ledger.stash) {
+                frame_support::ensure!(
+                    cooperations.total() <= ledger.active,
+                    "cooperator targets stake must not exceed active stake"
+                );
+            }
+        }
+
+        Ok(())
+    }
 }
