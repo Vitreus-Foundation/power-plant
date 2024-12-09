@@ -66,7 +66,7 @@ use pallet_nfts::{ItemConfig, ItemSettings};
 use polkadot_primitives::ValidityError;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
-use sp_runtime::traits::{AccountIdConversion, CheckedSub, Saturating};
+use sp_runtime::traits::{AccountIdConversion, CheckedSub, Saturating, Zero};
 use sp_std::{vec, vec::Vec};
 
 #[cfg(not(feature = "std"))]
@@ -87,6 +87,9 @@ const PALLET_ID: PalletId = PalletId(*b"Claiming");
 
 /// NFT level attribute key.
 const NFT_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
+
+/// Initial presale ID.
+const INITIAL_PRESALE_ID: u16 = 1;
 
 type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
     <T as frame_system::Config>::AccountId,
@@ -173,8 +176,11 @@ pub mod pallet {
     use super::*;
     use frame_system::pallet_prelude::*;
 
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
     #[pallet::pallet]
     #[pallet::without_storage_info]
+    #[pallet::storage_version(STORAGE_VERSION)]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
@@ -204,6 +210,28 @@ pub mod pallet {
         type WeightInfo: WeightInfo;
     }
 
+    /// # Deprecated Claims Storage
+    ///
+    /// A single map that stores claimable balances for Ethereum addresses.
+    ///
+    /// ## Keys:
+    /// - `EthereumAddress`: The Ethereum address of the user who can claim tokens.
+    ///
+    /// ## Value:
+    /// - `BalanceOf<T>`: The claimable amount of tokens.
+    ///
+    /// ## Migration:
+    /// - This storage is deprecated and will be removed in future updates.
+    /// - Data from this storage is being migrated to `ClaimsAmount`, which uses a double map
+    ///   structure to store balances based on Ethereum addresses and presale IDs.
+    ///
+    /// ## Usage:
+    /// - Legacy storage used for managing claimable balances. It is no longer updated
+    ///   and will be fully replaced by `ClaimsAmount`.
+    #[pallet::storage]
+    #[pallet::getter(fn claims)]
+    pub type Claims<T: Config> = StorageMap<_, Identity, EthereumAddress, BalanceOf<T>>;
+
     /// # Claims Storage
     ///
     /// A double map that stores claimable balances for Ethereum addresses based on presale IDs.
@@ -219,8 +247,8 @@ pub mod pallet {
     /// - Store balances for specific Ethereum addresses and presale IDs.
     /// - Allow claims to be validated and processed based on these keys.
     #[pallet::storage]
-    #[pallet::getter(fn claims)]
-    pub(super) type Claims<T: Config> =
+    #[pallet::getter(fn claims_amount)]
+    pub(super) type ClaimsAmount<T: Config> =
         StorageDoubleMap<_, Identity, EthereumAddress, Identity, u16, BalanceOf<T>>;
 
     /// Vesting schedule for a claim.
@@ -299,11 +327,11 @@ pub mod pallet {
         fn build(&self) {
             self.claims.iter().for_each(|(address, amount)| {
                 assert!(
-                    !Claims::<T>::contains_key(address),
+                    !ClaimsAmount::<T>::contains_key(address, INITIAL_PRESALE_ID),
                     "duplicate claims in genesis: {}",
                     String::from_utf8(to_ascii_hex(&address.0)).unwrap()
                 );
-                Claims::<T>::insert(address, amount);
+                ClaimsAmount::<T>::insert(address, INITIAL_PRESALE_ID, amount);
             });
             self.vesting.iter().for_each(|(k, v)| {
                 Vesting::<T>::insert(k, v);
@@ -394,6 +422,7 @@ pub mod pallet {
         /// Parameters:
         /// - `who`: The Ethereum address eligible to collect this claim.
         /// - `value`: The amount of VTRS tokens that will be claimable.
+        /// - `presale_id`: The identifier for the presale associated with this claim.
         /// - `vesting_schedule`: An optional vesting schedule for these tokens,
         ///   consisting of:
         ///   - `BalanceOf<T>`: Total amount to be vested.
@@ -403,6 +432,9 @@ pub mod pallet {
         ///   - `CollectionIdOf<T>`: The ID of the NFT collection.
         ///   - `ItemIdOf<T>`: The unique ID of the NFT item.
         ///   - `u32`: The level of the NFT, representing its attributes or rarity.
+        ///
+        /// ## Errors
+        /// - Returns `DuplicateVestingSchedule` if a vesting schedule already exists for the given Ethereum address.
         ///
         /// <weight>
         /// The weight of this call is invariant over the input parameters.
@@ -416,13 +448,14 @@ pub mod pallet {
             origin: OriginFor<T>,
             who: EthereumAddress,
             value: BalanceOf<T>,
+            presale_id: u16,
             vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
             nft_info: Option<(CollectionIdOf<T>, ItemIdOf<T>, u32)>,
         ) -> DispatchResult {
             ensure_root(origin)?;
 
             // Update the claims storage to include the new value.
-            <Claims<T>>::mutate(who, |amount| {
+            <ClaimsAmount<T>>::mutate(who, presale_id, |amount| {
                 *amount = Some(amount.unwrap_or_default().saturating_add(value))
             });
 
@@ -461,10 +494,9 @@ pub mod pallet {
                 ValidityError::InvalidEthereumSignature.into(),
             ))?;
 
-            ensure!(
-                Claims::<T>::contains_key(signer),
-                InvalidTransaction::Custom(ValidityError::SignerHasNoClaim.into())
-            );
+            // Check if there is any claim for the signer in the storage
+            let has_claim = <ClaimsAmount<T>>::iter_prefix(signer).next().is_some();
+            ensure!(has_claim, InvalidTransaction::Custom(ValidityError::SignerHasNoClaim.into()));
 
             Ok(ValidTransaction {
                 priority: PRIORITY,
@@ -485,14 +517,26 @@ impl<T: Config> Pallet<T> {
 
     /// Claims tokens to account wallet.
     fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> DispatchResult {
-        let amount = <Claims<T>>::get(signer).ok_or(Error::<T>::SignerHasNoClaim)?;
+        let mut total_claim: BalanceOf<T> = Zero::zero();
+        let mut has_presale1_claim = false;
+
+        for (presale_id, amount) in ClaimsAmount::<T>::iter_prefix(signer) {
+            total_claim = total_claim.saturating_add(amount);
+
+            if presale_id == INITIAL_PRESALE_ID {
+                has_presale1_claim = true;
+            }
+        }
 
         let new_total =
-            Self::total().checked_sub(&amount).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
+            Self::total().checked_sub(&total_claim).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
 
-        CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
+        CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, total_claim, AllowDeath)?;
 
-        T::OnClaim::on_claim(&dest, amount)?;
+        if has_presale1_claim {
+            let initial_claim = ClaimsAmount::<T>::get(signer, INITIAL_PRESALE_ID).unwrap();
+            T::OnClaim::on_claim(&dest, initial_claim)?;
+        }
 
         // Check if this claim should have a vesting schedule.
         if let Some(vs) = Vesting::<T>::get(signer) {
@@ -505,12 +549,12 @@ impl<T: Config> Pallet<T> {
         }
 
         <Total<T>>::put(new_total);
-        <Claims<T>>::remove(signer);
+        let _ = <ClaimsAmount<T>>::clear_prefix(signer, u32::MAX, None);
         <Vesting<T>>::remove(signer);
 
         let _ = <Nfts<T>>::clear_prefix(signer, u32::MAX, None);
 
-        Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
+        Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount: total_claim });
 
         Ok(())
     }
