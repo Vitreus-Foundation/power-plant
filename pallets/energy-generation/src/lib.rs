@@ -790,6 +790,47 @@ where
     }
 }
 
+pub struct ChillOnOffence<T, R> {
+    _inner: sp_std::marker::PhantomData<(T, R)>,
+}
+
+impl<T, Reporter, R, O>
+    ReportOffence<Reporter, pallet_session::historical::IdentificationTuple<T>, O>
+    for ChillOnOffence<T, R>
+where
+    T: Config,
+    T: pallet_session::historical::Config<ValidatorId = <T as frame_system::Config>::AccountId>,
+    R: ReportOffence<Reporter, pallet_session::historical::IdentificationTuple<T>, O>,
+    O: Offence<pallet_session::historical::IdentificationTuple<T>>,
+{
+    fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
+        let offenders = offence.offenders().iter().map(|id| id.0.clone()).collect::<Vec<_>>();
+        let offence_session = offence.session_index();
+
+        R::report_offence(reporters, offence)?;
+
+        let offence_in_active_era = Pallet::<T>::active_era()
+            .and_then(|era| Pallet::<T>::eras_start_session_index(era.index))
+            .map(|start_session| offence_session >= start_session)
+            .unwrap_or(false);
+
+        if offence_in_active_era {
+            for stash in offenders.iter() {
+                Pallet::<T>::chill_stash(stash);
+            }
+        }
+
+        Ok(())
+    }
+
+    fn is_known_offence(
+        offenders: &[pallet_session::historical::IdentificationTuple<T>],
+        time_slot: &O::TimeSlot,
+    ) -> bool {
+        R::is_known_offence(offenders, time_slot)
+    }
+}
+
 /// Configurations of the benchmarking of the pallet.
 pub trait BenchmarkingConfig {
     /// The maximum number of validators to use.
