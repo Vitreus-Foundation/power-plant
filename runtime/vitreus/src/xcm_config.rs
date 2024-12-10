@@ -637,7 +637,7 @@ mod currency_adapter {
             )
             .map_err(|_| XcmError::NotWithdrawable)?;
 
-            Currency::withdraw(&who, amount, WithdrawReasons::TRANSFER, KeepAlive)
+            let _ = Currency::withdraw(&who, amount, WithdrawReasons::TRANSFER, KeepAlive)
                 .map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
 
             Currency::transfer(&who, &FeeReceiverAccount::get(), fee_amount, KeepAlive)

@@ -363,7 +363,7 @@ pub mod pallet {
         pub fn mint_tokens_to_claim(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
             ensure_root(origin)?;
 
-            CurrencyOf::<T>::deposit_creating(&Self::claim_account_id(), amount);
+            let _ = CurrencyOf::<T>::deposit_creating(&Self::claim_account_id(), amount);
 
             <Total<T>>::mutate(|value| *value += amount);
             Self::deposit_event(Event::<T>::TokenMintedToClaim(amount));
@@ -454,7 +454,7 @@ pub mod pallet {
                 priority: PRIORITY,
                 requires: vec![],
                 provides: vec![("claiming", signer).encode()],
-                longevity: TransactionLongevity::max_value(),
+                longevity: TransactionLongevity::MAX,
                 propagate: true,
             })
         }

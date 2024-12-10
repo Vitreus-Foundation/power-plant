@@ -161,7 +161,7 @@ use sp_staking::{
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
 
-pub use pallet::{pallet::*, *};
+pub use pallet::pallet::*;
 
 pub(crate) const LOG_TARGET: &str = "runtime::staking";
 
