@@ -22,6 +22,4 @@ pub type V0200 = (
     polkadot_runtime_common::paras_registrar::migration::MigrateToV1<Runtime, ()>,
 );
 
-pub type Unreleased = (
-    pallet_claiming::migrations::v1::MigrateV0ToV1<Runtime>,
-);
+pub type Unreleased = (pallet_claiming::migrations::v1::MigrateV0ToV1<Runtime>,);

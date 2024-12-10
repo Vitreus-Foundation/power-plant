@@ -140,13 +140,8 @@ fn add_claim_for_different_presales_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
 
-        let claims_map: std::collections::HashMap<u16, u64> = vec![
-            (1, 200),
-            (2, 300),
-            (3, 150),
-        ]
-            .into_iter()
-            .collect();
+        let claims_map: std::collections::HashMap<u16, u64> =
+            vec![(1, 200), (2, 300), (3, 150)].into_iter().collect();
 
         // Add claims based on the prepopulated map.
         for (&presale_id, &amount) in claims_map.iter() {
@@ -171,8 +166,7 @@ fn add_claim_for_different_presales_works() {
 
         let total_claimed: u64 = claims_map.values().sum();
         assert_eq!(
-            total_claimed,
-            650,
+            total_claimed, 650,
             "Total claimed amount should be the sum of all presale claims."
         );
 

@@ -4,9 +4,9 @@
 //! to a new one.
 
 use super::*;
+use frame_support::{migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::{traits::Zero, Saturating, TryRuntimeError};
-use frame_support::{migrations::VersionedMigration, traits::UncheckedOnRuntimeUpgrade};
 
 /// Migrating `Claims` from `Map` to `DoubleMap`
 pub mod v1 {
@@ -109,9 +109,9 @@ pub mod v1 {
 
             // Ensure the total balance remains unchanged
             ensure!(
-            new_total == old_total,
-            "Total balance of claims should not change during migration"
-        );
+                new_total == old_total,
+                "Total balance of claims should not change during migration"
+            );
 
             Ok(())
         }
