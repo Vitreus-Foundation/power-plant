@@ -96,13 +96,13 @@ type CollectionIdOf<T> =
 type ItemIdOf<T> = <<T as Config>::Nfts as Inspect<<T as frame_system::Config>::AccountId>>::ItemId;
 
 /// Handler for when a claim is made.
-pub trait OnClaimHandler<AccountId, Balance> {
+pub trait OnClaimHandler<AccountId, Balance, ClaimData> {
     /// Handle a claim.
-    fn on_claim(who: &AccountId, amount: Balance) -> DispatchResult;
+    fn on_claim(who: &AccountId, amount: Balance, data: Option<ClaimData>) -> DispatchResult;
 }
 
-impl<AccountId, Balance> OnClaimHandler<AccountId, Balance> for () {
-    fn on_claim(_who: &AccountId, _amount: Balance) -> DispatchResult {
+impl<AccountId, Balance, ClaimData> OnClaimHandler<AccountId, Balance, ClaimData> for () {
+    fn on_claim(_who: &AccountId, _amount: Balance, _data: Option<ClaimData>) -> DispatchResult {
         Ok(())
     }
 }
@@ -192,8 +192,11 @@ pub mod pallet {
         /// The vesting schedule
         type VestingSchedule: VestingSchedule<Self::AccountId, Moment = BlockNumberFor<Self>>;
 
+        /// Additional claim data.
+        type ClaimData: Parameter;
+
         /// Handler for when a claim is made.
-        type OnClaim: OnClaimHandler<Self::AccountId, BalanceOf<Self>>;
+        type OnClaim: OnClaimHandler<Self::AccountId, BalanceOf<Self>, Self::ClaimData>;
 
         /// Ethereum message prefix
         #[pallet::constant]
@@ -215,6 +218,10 @@ pub mod pallet {
     #[pallet::getter(fn vesting)]
     pub(super) type Vesting<T: Config> =
         StorageMap<_, Identity, EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>;
+
+    /// Additional data for a claim.
+    #[pallet::storage]
+    pub(super) type ClaimsData<T: Config> = StorageMap<_, Identity, EthereumAddress, T::ClaimData>;
 
     /// Storage map for NFTs that can be claimed by users.
     /// This maps an Ethereum address and a Collection ID to an NFT represented by its Item ID and level.
@@ -401,7 +408,7 @@ pub mod pallet {
             who: EthereumAddress,
             value: BalanceOf<T>,
             vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
-            nft_info: Option<(CollectionIdOf<T>, ItemIdOf<T>, u32)>,
+            data: Option<T::ClaimData>,
         ) -> DispatchResult {
             ensure_root(origin)?;
 
@@ -417,10 +424,8 @@ pub mod pallet {
                 <Vesting<T>>::insert(who, vs);
             }
 
-            // Insert the NFT information if provided.
-            if let Some((collection_id, item_id, level)) = nft_info {
-                <Nfts<T>>::insert(who, collection_id, (item_id, level));
-            }
+            // Set the additional claim data.
+            <ClaimsData<T>>::set(who, data);
 
             Ok(())
         }
@@ -476,12 +481,13 @@ impl<T: Config> Pallet<T> {
 
         CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
 
-        T::OnClaim::on_claim(&dest, amount)?;
-
         // Check if this claim should have a vesting schedule.
         if let Some(vs) = Vesting::<T>::get(signer) {
             T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)?;
         }
+
+        let data = ClaimsData::<T>::take(signer);
+        T::OnClaim::on_claim(&dest, amount, data)?;
 
         // Mint NFT if it exists.
         for (collection_id, (item_id, level)) in Nfts::<T>::iter_prefix(signer) {

@@ -1067,6 +1067,7 @@ impl pallet_claiming::Config for Runtime {
     type Nfts = Nfts;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type ClaimData = ();
     type OnClaim = NacManaging;
     type Prefix = Prefix;
     type WeightInfo = ();
