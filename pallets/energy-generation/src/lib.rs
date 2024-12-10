@@ -552,6 +552,14 @@ pub struct Cooperations<T: Config> {
     pub suppressed: bool,
 }
 
+impl<T: Config> Cooperations<T> {
+    fn total(&self) -> StakeOf<T> {
+        self.targets
+            .values()
+            .fold(T::StakeBalance::zero(), |total, stake| total.saturating_add(*stake))
+    }
+}
+
 /// The amount of exposure (to slashing) than an individual cooperator has.
 #[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {

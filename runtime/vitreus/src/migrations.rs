@@ -2,7 +2,10 @@
 
 use super::*;
 
-pub type Permanent = (pallet_xcm::migration::MigrateToLatestXcmVersion<Runtime>,);
+pub type Permanent = (
+    pallet_xcm::migration::MigrateToLatestXcmVersion<Runtime>,
+    pallet_energy_generation::migrations::FixCooperatorStake<Runtime>,
+);
 
 pub type V0200 = (
     pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
