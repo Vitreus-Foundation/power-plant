@@ -6474,7 +6474,6 @@ dependencies = [
  "libsecp256k1",
  "log",
  "pallet-balances",
- "pallet-nfts",
  "pallet-vesting",
  "parity-scale-codec",
  "polkadot-primitives",

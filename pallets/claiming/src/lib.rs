@@ -54,15 +54,9 @@
 use crate::weights::WeightInfo;
 use frame_support::{
     pallet_prelude::*,
-    traits::{
-        tokens::nonfungibles_v2::{Inspect, InspectEnumerable, Mutate},
-        Currency,
-        ExistenceRequirement::AllowDeath,
-        VestingSchedule,
-    },
+    traits::{Currency, ExistenceRequirement::AllowDeath, VestingSchedule},
     DefaultNoBound, PalletId,
 };
-use pallet_nfts::{ItemConfig, ItemSettings};
 use polkadot_primitives::ValidityError;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
@@ -84,16 +78,10 @@ pub mod weights;
 /// Pallet ID.
 const PALLET_ID: PalletId = PalletId(*b"Claiming");
 
-/// NFT level attribute key.
-const NFT_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
-
 type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
     <T as frame_system::Config>::AccountId,
 >>::Currency;
 type BalanceOf<T> = <CurrencyOf<T> as Currency<<T as frame_system::Config>::AccountId>>::Balance;
-type CollectionIdOf<T> =
-    <<T as Config>::Nfts as Inspect<<T as frame_system::Config>::AccountId>>::CollectionId;
-type ItemIdOf<T> = <<T as Config>::Nfts as Inspect<<T as frame_system::Config>::AccountId>>::ItemId;
 
 /// Handler for when a claim is made.
 pub trait OnClaimHandler<AccountId, Balance, ClaimData> {
@@ -181,11 +169,6 @@ pub mod pallet {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
-        /// Registry for the minted NFTs.
-        type Nfts: Inspect<Self::AccountId>
-            + Mutate<Self::AccountId, ItemConfig>
-            + InspectEnumerable<Self::AccountId>;
-
         /// The currency mechanism, used for VTRS claiming.
         type Currency: Currency<Self::AccountId>;
 
@@ -222,28 +205,6 @@ pub mod pallet {
     /// Additional data for a claim.
     #[pallet::storage]
     pub(super) type ClaimsData<T: Config> = StorageMap<_, Identity, EthereumAddress, T::ClaimData>;
-
-    /// Storage map for NFTs that can be claimed by users.
-    /// This maps an Ethereum address and a Collection ID to an NFT represented by its Item ID and level.
-    ///
-    /// Each entry consists of:
-    /// - `(EthereumAddress, CollectionIdOf<T>)`: A tuple containing the Ethereum address
-    ///   eligible to claim the NFT and the ID of the NFT collection.
-    /// - `(ItemIdOf<T>, u32)`: A tuple containing the Item ID of the NFT and its level,
-    ///   where the level represents its rarity or attributes.
-    ///
-    /// This storage allows associating a specific Ethereum address and NFT collection
-    /// with a particular NFT and its properties.
-    #[pallet::storage]
-    #[pallet::getter(fn nfts)]
-    pub(super) type Nfts<T: Config> = StorageDoubleMap<
-        _,
-        Identity,
-        EthereumAddress,
-        Identity,
-        CollectionIdOf<T>,
-        (ItemIdOf<T>, u32),
-    >;
 
     #[pallet::storage]
     #[pallet::getter(fn total)]
@@ -306,7 +267,7 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Make a claim to collect your VTRS and NFTs.
+        /// Make a claim to collect your reward.
         ///
         /// The dispatch origin for this call must be _None_.
         ///
@@ -378,7 +339,7 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Mint a new claim to collect VTRS tokens and optionally assign an NFT with its collection, ID, and level.
+        /// Mint a new claim to collect VTRS tokens.
         ///
         /// The dispatch origin for this call must be _Root_.
         ///
@@ -390,14 +351,11 @@ pub mod pallet {
         ///   - `BalanceOf<T>`: Total amount to be vested.
         ///   - `BalanceOf<T>`: Per-block unlock amount.
         ///   - `BlockNumberFor<T>`: The starting block of the vesting period.
-        /// - `nft_info`: Optional information about an NFT to be assigned to this claim:
-        ///   - `CollectionIdOf<T>`: The ID of the NFT collection.
-        ///   - `ItemIdOf<T>`: The unique ID of the NFT item.
-        ///   - `u32`: The level of the NFT, representing its attributes or rarity.
+        /// - `data`: Optional information assigned to this claim.
         ///
         /// <weight>
         /// The weight of this call is invariant over the input parameters.
-        /// We assume the worst case where both vesting and NFT information are being inserted.
+        /// We assume the worst case where both vesting and claim data are being inserted.
         ///
         /// Total Complexity: O(1)
         /// </weight>
@@ -489,38 +447,11 @@ impl<T: Config> Pallet<T> {
         let data = ClaimsData::<T>::take(signer);
         T::OnClaim::on_claim(&dest, amount, data)?;
 
-        // Mint NFT if it exists.
-        for (collection_id, (item_id, level)) in Nfts::<T>::iter_prefix(signer) {
-            Self::do_mint_nft(&collection_id, &item_id, &level, &dest)?;
-        }
-
         <Total<T>>::put(new_total);
         <Claims<T>>::remove(signer);
         <Vesting<T>>::remove(signer);
 
-        let _ = <Nfts<T>>::clear_prefix(signer, u32::MAX, None);
-
         Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
-
-        Ok(())
-    }
-
-    /// Mint user NFT.
-    pub fn do_mint_nft(
-        collection_id: &CollectionIdOf<T>,
-        item_id: &ItemIdOf<T>,
-        level: &u32,
-        owner: &T::AccountId,
-    ) -> DispatchResult {
-        let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
-
-        T::Nfts::mint_into(collection_id, item_id, owner, &item_config, true)?;
-        T::Nfts::set_attribute(
-            collection_id,
-            item_id,
-            &Vec::from(NFT_LEVEL_ATTRIBUTE_KEY),
-            &level.to_le_bytes(),
-        )?;
 
         Ok(())
     }
