@@ -151,6 +151,9 @@ const DEFAULT_NAC_LEVEL: u8 = 1;
 /// Extrinsic index.
 const EXTRINSIC_INDEX: u32 = 135;
 
+/// Default Presale ID for minting VIPP NFT.
+const PRESALE_ID_FOR_VIPP: u16 = 1;
+
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -718,31 +721,33 @@ impl<T: Config, Balance> OnClaimHandler<T::AccountId, Balance> for Pallet<T>
 where
     Balance: frame_support::traits::tokens::Balance,
 {
-    fn on_claim(who: &T::AccountId, amount: Balance) -> DispatchResult {
-        let collection = T::NftCollectionId::get();
-        let item = T::Nfts::owned_in_collection(&collection, who)
-            .next()
-            .ok_or(Error::<T>::NftNotFound)?;
+    fn on_claim(who: &T::AccountId, amount: Balance, presale_id: u16) -> DispatchResult {
+        if presale_id == PRESALE_ID_FOR_VIPP {
+            let collection = T::NftCollectionId::get();
+            let item = T::Nfts::owned_in_collection(&collection, who)
+                .next()
+                .ok_or(Error::<T>::NftNotFound)?;
 
-        let claimed_raw =
-            T::Nfts::system_attribute(&collection, Some(&item), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-                .unwrap_or(vec![]);
-        let currently_claimed =
-            Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(Balance::zero());
+            let claimed_raw =
+                T::Nfts::system_attribute(&collection, Some(&item), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
+                    .unwrap_or(vec![]);
+            let currently_claimed =
+                Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(Balance::zero());
 
-        let updated_claimed = currently_claimed.saturating_add(amount);
+            let updated_claimed = currently_claimed.saturating_add(amount);
 
-        T::Nfts::set_attribute(
-            &collection,
-            &item,
-            &CLAIM_AMOUNT_ATTRIBUTE_KEY,
-            &updated_claimed.encode(),
-        )?;
+            T::Nfts::set_attribute(
+                &collection,
+                &item,
+                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+                &updated_claimed.encode(),
+            )?;
 
-        if currently_claimed != Balance::zero() {
-            let nft = Self::mint_vipp_nft(who);
-            if let Some(nft) = nft {
-                T::OnVIPPChanged::mint_vipp(who, nft.0, nft.1);
+            if currently_claimed != Balance::zero() {
+                let nft = Self::mint_vipp_nft(who);
+                if let Some(nft) = nft {
+                    T::OnVIPPChanged::mint_vipp(who, nft.0, nft.1);
+                }
             }
         }
 

@@ -277,7 +277,14 @@ fn mint_claim_with_nft_works() {
         assert!(nfts_for_alice.is_empty());
 
         let nft_info = Some((1u32.into(), 1u32.into(), 5));
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, 1, None, nft_info));
+        assert_ok!(Claiming::mint_claim(
+            RuntimeOrigin::root(),
+            eth(&alice()),
+            50,
+            1,
+            None,
+            nft_info
+        ));
 
         assert_eq!(
             Claiming::nfts(&eth(&alice()), nft_info.unwrap().0),

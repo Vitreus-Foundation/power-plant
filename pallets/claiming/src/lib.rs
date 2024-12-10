@@ -1,20 +1,3 @@
-// This file is part of Substrate.
-
-// Copyright (C) 2022 Parity Technologies (UK) Ltd.
-// SPDX-License-Identifier: Apache-2.0
-
-// Licensed under the Apache License, Version 2.0 (the "License");
-// you may not use this file except in compliance with the License.
-// You may obtain a copy of the License at
-//
-// 	http://www.apache.org/licenses/LICENSE-2.0
-//
-// Unless required by applicable law or agreed to in writing, software
-// distributed under the License is distributed on an "AS IS" BASIS,
-// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-// See the License for the specific language governing permissions and
-// limitations under the License.
-
 //! # Claims Pallet
 //!
 //! A secure token claiming system that enables users to claim tokens using Ethereum-style signatures.
@@ -102,11 +85,11 @@ type ItemIdOf<T> = <<T as Config>::Nfts as Inspect<<T as frame_system::Config>::
 /// Handler for when a claim is made.
 pub trait OnClaimHandler<AccountId, Balance> {
     /// Handle a claim.
-    fn on_claim(who: &AccountId, amount: Balance) -> DispatchResult;
+    fn on_claim(who: &AccountId, amount: Balance, presale_id: u16) -> DispatchResult;
 }
 
 impl<AccountId, Balance> OnClaimHandler<AccountId, Balance> for () {
-    fn on_claim(_who: &AccountId, _amount: Balance) -> DispatchResult {
+    fn on_claim(_who: &AccountId, _amount: Balance, _presale_id: u16) -> DispatchResult {
         Ok(())
     }
 }
@@ -209,28 +192,6 @@ pub mod pallet {
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
     }
-
-    /// # Deprecated Claims Storage
-    ///
-    /// A single map that stores claimable balances for Ethereum addresses.
-    ///
-    /// ## Keys:
-    /// - `EthereumAddress`: The Ethereum address of the user who can claim tokens.
-    ///
-    /// ## Value:
-    /// - `BalanceOf<T>`: The claimable amount of tokens.
-    ///
-    /// ## Migration:
-    /// - This storage is deprecated and will be removed in future updates.
-    /// - Data from this storage is being migrated to `ClaimsAmount`, which uses a double map
-    ///   structure to store balances based on Ethereum addresses and presale IDs.
-    ///
-    /// ## Usage:
-    /// - Legacy storage used for managing claimable balances. It is no longer updated
-    ///   and will be fully replaced by `ClaimsAmount`.
-    #[pallet::storage]
-    #[pallet::getter(fn claims)]
-    pub type Claims<T: Config> = StorageMap<_, Identity, EthereumAddress, BalanceOf<T>>;
 
     /// # Claims Storage
     ///
@@ -518,25 +479,22 @@ impl<T: Config> Pallet<T> {
     /// Claims tokens to account wallet.
     fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> DispatchResult {
         let mut total_claim: BalanceOf<T> = Zero::zero();
-        let mut has_presale1_claim = false;
 
-        for (presale_id, amount) in ClaimsAmount::<T>::iter_prefix(signer) {
+        // Claim VTRS amount.
+        for (_, amount) in ClaimsAmount::<T>::iter_prefix(signer) {
             total_claim = total_claim.saturating_add(amount);
-
-            if presale_id == INITIAL_PRESALE_ID {
-                has_presale1_claim = true;
-            }
         }
         ensure!(total_claim > Zero::zero(), Error::<T>::SignerHasNoClaim);
 
-        let new_total =
-            Self::total().checked_sub(&total_claim).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
+        let new_total = Self::total()
+            .checked_sub(&total_claim)
+            .ok_or(Error::<T>::NotEnoughTokensForClaim)?;
 
         CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, total_claim, AllowDeath)?;
 
-        if has_presale1_claim {
-            let initial_claim = ClaimsAmount::<T>::get(signer, INITIAL_PRESALE_ID).unwrap();
-            T::OnClaim::on_claim(&dest, initial_claim)?;
+        // Call Handler on each presale.
+        for (presale_id, amount) in ClaimsAmount::<T>::iter_prefix(signer) {
+            T::OnClaim::on_claim(&dest, amount, presale_id)?;
         }
 
         // Check if this claim should have a vesting schedule.

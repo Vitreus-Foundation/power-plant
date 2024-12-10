@@ -2,9 +2,7 @@
 
 use super::*;
 
-pub type Permanent = (
-    pallet_xcm::migration::MigrateToLatestXcmVersion<Runtime>,
-);
+pub type Permanent = (pallet_xcm::migration::MigrateToLatestXcmVersion<Runtime>,);
 
 pub type V0200 = (
     pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
@@ -22,5 +20,5 @@ pub type V0200 = (
 );
 
 pub type Unreleased = (
-    pallet_claiming::migrations::MigrateToDoubleMap<Runtime>,
+    pallet_claiming::migrations::v1::MigrateV0ToV1<Runtime>,
 );
