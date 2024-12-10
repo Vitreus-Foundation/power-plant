@@ -19,7 +19,7 @@
 
 use crate::mock::*;
 use crate::secp_utils::*;
-use crate::{pallet, to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};
+use crate::{to_ascii_hex, Config, CurrencyOf, EcdsaSignature, Error, EthereumAddress};
 use frame_support::traits::{Currency, ExistenceRequirement, VestingSchedule};
 use frame_support::{assert_err, assert_noop, assert_ok};
 use hex_literal::hex;
@@ -166,7 +166,7 @@ fn claiming_while_vested_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
 
-        CurrencyOf::<Test>::make_free_balance_be(&69, 1000);
+        CurrencyOf::<Test, ()>::make_free_balance_be(&69, 1000);
         assert_eq!(Balances::free_balance(69), 1000);
         // A user is already vested
         assert_ok!(<Test as Config>::VestingSchedule::add_vesting_schedule(&69, 1000, 100, 10));
@@ -262,52 +262,6 @@ fn mint_claim_with_double_vesting_schedule_doesnt_work() {
                 None
             ),
             Error::<Test>::DuplicateVestingSchedule
-        );
-    });
-}
-
-#[test]
-fn mint_claim_with_nft_works() {
-    new_test_ext().execute_with(|| {
-        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 50));
-
-        let nfts_for_alice: Vec<_> = pallet::Nfts::<Test>::iter_prefix(eth(&alice())).collect();
-        assert!(nfts_for_alice.is_empty());
-
-        let nft_info = Some((1u32.into(), 1u32.into(), 5));
-        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, nft_info));
-
-        assert_eq!(
-            Claiming::nfts(&eth(&alice()), nft_info.unwrap().0),
-            Some((nft_info.unwrap().1, nft_info.unwrap().2))
-        );
-    });
-}
-
-#[test]
-fn mint_claim_with_vesting_and_nft_works() {
-    new_test_ext().execute_with(|| {
-        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
-
-        assert_eq!(Claiming::vesting(&eth(&eve())), None);
-
-        let nfts_for_eve: Vec<_> = pallet::Nfts::<Test>::iter_prefix(eth(&eve())).collect();
-        assert!(nfts_for_eve.is_empty());
-
-        let vesting_schedule = Some((100, 20, 1));
-        let nft_info = Some((2u32.into(), 2u32.into(), 10));
-        assert_ok!(Claiming::mint_claim(
-            RuntimeOrigin::root(),
-            eth(&eve()),
-            100,
-            vesting_schedule,
-            nft_info
-        ));
-
-        assert_eq!(Claiming::vesting(&eth(&eve())), vesting_schedule);
-        assert_eq!(
-            Claiming::nfts(&eth(&eve()), nft_info.unwrap().0),
-            Some((nft_info.unwrap().1, nft_info.unwrap().2))
         );
     });
 }

@@ -20,14 +20,12 @@
 use super::secp_utils::eth;
 use crate as pallet_claiming;
 
-use frame_support::traits::{AsEnsureOriginWithArg, WithdrawReasons};
 use frame_support::{
     construct_runtime, derive_impl, parameter_types,
-    traits::{ConstU32, ConstU64},
+    traits::{ConstU32, ConstU64, WithdrawReasons},
 };
 use sp_core::H256;
 use sp_io::hashing::keccak_256;
-use sp_runtime::testing::{TestSignature, UintAuthorityId};
 use sp_runtime::{
     traits::{BlakeTwo256, Identity, IdentityLookup},
     BuildStorage,
@@ -35,16 +33,12 @@ use sp_runtime::{
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
-pub(crate) type Signature = TestSignature;
-pub(crate) type AccountPublic = UintAuthorityId;
-
 construct_runtime!(
     pub enum Test
     {
         System: frame_system,
         Balances: pallet_balances::{Pallet, Event<T>},
         Vesting: pallet_vesting,
-        Nfts: pallet_nfts,
         Claiming: pallet_claiming,
     }
 );
@@ -74,43 +68,6 @@ impl frame_system::Config for Test {
     type SS58Prefix = ();
     type OnSetCode = ();
     type MaxConsumers = ConstU32<16>;
-}
-
-parameter_types! {
-    pub TestCollectionDeposit:  u64 = 0;
-    pub TestItemDeposit:  u64 = 0;
-}
-
-pub type CollectionId = u32;
-pub type ItemId = u32;
-
-impl pallet_nfts::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type CollectionId = CollectionId;
-    type ItemId = ItemId;
-    type Currency = Balances;
-    type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type CollectionDeposit = TestCollectionDeposit;
-    type ApprovalsLimit = ();
-    type ItemAttributesApprovalsLimit = ();
-    type MaxTips = ();
-    type MaxDeadlineDuration = ();
-    type MaxAttributesPerCall = ();
-    type Features = ();
-    type OffchainPublic = AccountPublic;
-    type OffchainSignature = Signature;
-    type ItemDeposit = TestItemDeposit;
-    type MetadataDepositBase = ConstU64<1>;
-    type AttributeDepositBase = ConstU64<1>;
-    type DepositPerByte = ConstU64<1>;
-    type StringLimit = ConstU32<50>;
-    type KeyLimit = ConstU32<50>;
-    type ValueLimit = ConstU32<50>;
-    type WeightInfo = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
-    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
-    type Locker = ();
 }
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
@@ -152,9 +109,9 @@ parameter_types! {
 
 impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type Nfts = Nfts;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type ClaimData = ();
     type OnClaim = ();
     type Prefix = Prefix;
     type WeightInfo = ();
