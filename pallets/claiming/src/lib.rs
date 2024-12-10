@@ -78,10 +78,12 @@ pub mod weights;
 /// Pallet ID.
 const PALLET_ID: PalletId = PalletId(*b"Claiming");
 
-type CurrencyOf<T> = <<T as Config>::VestingSchedule as VestingSchedule<
+type CurrencyOf<T, I> = <<T as Config<I>>::VestingSchedule as VestingSchedule<
     <T as frame_system::Config>::AccountId,
 >>::Currency;
-type BalanceOf<T> = <CurrencyOf<T> as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+
+type BalanceOf<T, I> =
+    <CurrencyOf<T, I> as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 
 /// Handler for when a claim is made.
 pub trait OnClaimHandler<AccountId, Balance, ClaimData> {
@@ -162,12 +164,13 @@ pub mod pallet {
 
     #[pallet::pallet]
     #[pallet::without_storage_info]
-    pub struct Pallet<T>(_);
+    pub struct Pallet<T, I = ()>(PhantomData<(T, I)>);
 
     #[pallet::config]
-    pub trait Config: frame_system::Config + pallet_balances::Config {
+    pub trait Config<I: 'static = ()>: frame_system::Config + pallet_balances::Config {
         /// The overarching event type.
-        type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+        type RuntimeEvent: From<Event<Self, I>>
+            + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// The currency mechanism, used for VTRS claiming.
         type Currency: Currency<Self::AccountId>;
@@ -179,7 +182,7 @@ pub mod pallet {
         type ClaimData: Parameter;
 
         /// Handler for when a claim is made.
-        type OnClaim: OnClaimHandler<Self::AccountId, BalanceOf<Self>, Self::ClaimData>;
+        type OnClaim: OnClaimHandler<Self::AccountId, BalanceOf<Self, I>, Self::ClaimData>;
 
         /// Ethereum message prefix
         #[pallet::constant]
@@ -191,7 +194,8 @@ pub mod pallet {
 
     #[pallet::storage]
     #[pallet::getter(fn claims)]
-    pub(super) type Claims<T: Config> = StorageMap<_, Identity, EthereumAddress, BalanceOf<T>>;
+    pub(super) type Claims<T: Config<I>, I: 'static = ()> =
+        StorageMap<_, Identity, EthereumAddress, BalanceOf<T, I>>;
 
     /// Vesting schedule for a claim.
     /// First balance is the total amount that should be held for vesting.
@@ -199,34 +203,40 @@ pub mod pallet {
     /// The block number is when the vesting should start.
     #[pallet::storage]
     #[pallet::getter(fn vesting)]
-    pub(super) type Vesting<T: Config> =
-        StorageMap<_, Identity, EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>;
+    pub(super) type Vesting<T: Config<I>, I: 'static = ()> = StorageMap<
+        _,
+        Identity,
+        EthereumAddress,
+        (BalanceOf<T, I>, BalanceOf<T, I>, BlockNumberFor<T>),
+    >;
 
     /// Additional data for a claim.
     #[pallet::storage]
-    pub(super) type ClaimsData<T: Config> = StorageMap<_, Identity, EthereumAddress, T::ClaimData>;
+    pub(super) type ClaimsData<T: Config<I>, I: 'static = ()> =
+        StorageMap<_, Identity, EthereumAddress, T::ClaimData>;
 
     #[pallet::storage]
     #[pallet::getter(fn total)]
-    pub(super) type Total<T: Config> = StorageValue<_, BalanceOf<T>, ValueQuery>;
+    pub(super) type Total<T: Config<I>, I: 'static = ()> =
+        StorageValue<_, BalanceOf<T, I>, ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
-    pub enum Event<T: Config> {
+    pub enum Event<T: Config<I>, I: 'static = ()> {
         /// Tokens were claimed.
         Claimed {
             /// To whom the tokens were claimed.
             account_id: T::AccountId,
             /// Amount to claim.
-            amount: BalanceOf<T>,
+            amount: BalanceOf<T, I>,
         },
 
         /// Tokens were minted to claim.
-        TokenMintedToClaim(BalanceOf<T>),
+        TokenMintedToClaim(BalanceOf<T, I>),
     }
 
     #[pallet::error]
-    pub enum Error<T> {
+    pub enum Error<T, I = ()> {
         /// Error indicating insufficient VTRS for a claim.
         NotEnoughTokensForClaim,
         /// Invalid Ethereum signature.
@@ -239,34 +249,36 @@ pub mod pallet {
 
     #[pallet::genesis_config]
     #[derive(DefaultNoBound)]
-    pub struct GenesisConfig<T: Config> {
+    pub struct GenesisConfig<T: Config<I>, I: 'static = ()> {
         /// Claims
-        pub claims: Vec<(EthereumAddress, BalanceOf<T>)>,
+        pub claims: Vec<(EthereumAddress, BalanceOf<T, I>)>,
         /// Vesting schedule for claims
-        pub vesting: Vec<(EthereumAddress, (BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>))>,
+        pub vesting: Vec<(EthereumAddress, (BalanceOf<T, I>, BalanceOf<T, I>, BlockNumberFor<T>))>,
     }
 
     #[pallet::genesis_build]
-    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+    impl<T: Config<I>, I: 'static> BuildGenesisConfig for GenesisConfig<T, I> {
         fn build(&self) {
             self.claims.iter().for_each(|(address, amount)| {
                 assert!(
-                    !Claims::<T>::contains_key(address),
+                    !Claims::<T, I>::contains_key(address),
                     "duplicate claims in genesis: {}",
                     String::from_utf8(to_ascii_hex(&address.0)).unwrap()
                 );
-                Claims::<T>::insert(address, amount);
+                Claims::<T, I>::insert(address, amount);
             });
             self.vesting.iter().for_each(|(k, v)| {
-                Vesting::<T>::insert(k, v);
+                Vesting::<T, I>::insert(k, v);
             });
 
-            <Total<T>>::put(CurrencyOf::<T>::free_balance(&Pallet::<T>::claim_account_id()));
+            <Total<T, I>>::put(CurrencyOf::<T, I>::free_balance(
+                &Pallet::<T, I>::claim_account_id(),
+            ));
         }
     }
 
     #[pallet::call]
-    impl<T: Config> Pallet<T> {
+    impl<T: Config<I>, I: 'static> Pallet<T, I> {
         /// Make a claim to collect your reward.
         ///
         /// The dispatch origin for this call must be _None_.
@@ -292,7 +304,7 @@ pub mod pallet {
         /// Total Complexity: O(1)
         /// </weight>
         #[pallet::call_index(0)]
-        #[pallet::weight(<T as Config>::WeightInfo::claim())]
+        #[pallet::weight(<T as Config<I>>::WeightInfo::claim())]
         pub fn claim(
             origin: OriginFor<T>,
             dest: T::AccountId,
@@ -302,7 +314,7 @@ pub mod pallet {
 
             let data = dest.using_encoded(to_ascii_hex);
             let signer = Self::eth_recover(&ethereum_signature, &data, &[][..])
-                .ok_or(Error::<T>::InvalidEthereumSignature)?;
+                .ok_or(Error::<T, I>::InvalidEthereumSignature)?;
 
             Self::process_claim(signer, dest)?;
 
@@ -327,14 +339,17 @@ pub mod pallet {
         /// Total Complexity: O(1)
         /// </weight>
         #[pallet::call_index(1)]
-        #[pallet::weight(<T as Config>::WeightInfo::mint_tokens_to_claim())]
-        pub fn mint_tokens_to_claim(origin: OriginFor<T>, amount: BalanceOf<T>) -> DispatchResult {
+        #[pallet::weight(<T as Config<I>>::WeightInfo::mint_tokens_to_claim())]
+        pub fn mint_tokens_to_claim(
+            origin: OriginFor<T>,
+            amount: BalanceOf<T, I>,
+        ) -> DispatchResult {
             ensure_root(origin)?;
 
-            CurrencyOf::<T>::deposit_creating(&Self::claim_account_id(), amount);
+            CurrencyOf::<T, I>::deposit_creating(&Self::claim_account_id(), amount);
 
-            <Total<T>>::mutate(|value| *value += amount);
-            Self::deposit_event(Event::<T>::TokenMintedToClaim(amount));
+            <Total<T, I>>::mutate(|value| *value += amount);
+            Self::deposit_event(Event::<T, I>::TokenMintedToClaim(amount));
 
             Ok(())
         }
@@ -360,38 +375,41 @@ pub mod pallet {
         /// Total Complexity: O(1)
         /// </weight>
         #[pallet::call_index(2)]
-        #[pallet::weight(<T as Config>::WeightInfo::mint_claim())]
+        #[pallet::weight(<T as Config<I>>::WeightInfo::mint_claim())]
         pub fn mint_claim(
             origin: OriginFor<T>,
             who: EthereumAddress,
-            value: BalanceOf<T>,
-            vesting_schedule: Option<(BalanceOf<T>, BalanceOf<T>, BlockNumberFor<T>)>,
+            value: BalanceOf<T, I>,
+            vesting_schedule: Option<(BalanceOf<T, I>, BalanceOf<T, I>, BlockNumberFor<T>)>,
             data: Option<T::ClaimData>,
         ) -> DispatchResult {
             ensure_root(origin)?;
 
             // Update the claims storage to include the new value.
-            <Claims<T>>::mutate(who, |amount| {
+            <Claims<T, I>>::mutate(who, |amount| {
                 *amount = Some(amount.unwrap_or_default().saturating_add(value))
             });
 
             // Insert the vesting schedule if provided.
             if let Some(vs) = vesting_schedule {
-                ensure!(!<Vesting<T>>::contains_key(who), Error::<T>::DuplicateVestingSchedule);
+                ensure!(
+                    !<Vesting<T, I>>::contains_key(who),
+                    Error::<T, I>::DuplicateVestingSchedule
+                );
 
-                <Vesting<T>>::insert(who, vs);
+                <Vesting<T, I>>::insert(who, vs);
             }
 
             // Set the additional claim data.
-            <ClaimsData<T>>::set(who, data);
+            <ClaimsData<T, I>>::set(who, data);
 
             Ok(())
         }
     }
 
     #[pallet::validate_unsigned]
-    impl<T: Config> ValidateUnsigned for Pallet<T> {
-        type Call = Call<T>;
+    impl<T: Config<I>, I: 'static> ValidateUnsigned for Pallet<T, I> {
+        type Call = Call<T, I>;
 
         fn validate_unsigned(_source: TransactionSource, call: &Self::Call) -> TransactionValidity {
             const PRIORITY: u64 = 100;
@@ -409,7 +427,7 @@ pub mod pallet {
             ))?;
 
             ensure!(
-                Claims::<T>::contains_key(signer),
+                Claims::<T, I>::contains_key(signer),
                 InvalidTransaction::Custom(ValidityError::SignerHasNoClaim.into())
             );
 
@@ -424,7 +442,7 @@ pub mod pallet {
     }
 }
 
-impl<T: Config> Pallet<T> {
+impl<T: Config<I>, I: 'static> Pallet<T, I> {
     /// The account ID that holds the VTRS to claim.
     pub fn claim_account_id() -> T::AccountId {
         PALLET_ID.into_account_truncating()
@@ -432,26 +450,27 @@ impl<T: Config> Pallet<T> {
 
     /// Claims tokens to account wallet.
     fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> DispatchResult {
-        let amount = <Claims<T>>::get(signer).ok_or(Error::<T>::SignerHasNoClaim)?;
+        let amount = <Claims<T, I>>::get(signer).ok_or(Error::<T, I>::SignerHasNoClaim)?;
 
-        let new_total =
-            Self::total().checked_sub(&amount).ok_or(Error::<T>::NotEnoughTokensForClaim)?;
+        let new_total = Self::total()
+            .checked_sub(&amount)
+            .ok_or(Error::<T, I>::NotEnoughTokensForClaim)?;
 
-        CurrencyOf::<T>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
+        CurrencyOf::<T, I>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
 
         // Check if this claim should have a vesting schedule.
-        if let Some(vs) = Vesting::<T>::get(signer) {
+        if let Some(vs) = Vesting::<T, I>::get(signer) {
             T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)?;
         }
 
-        let data = ClaimsData::<T>::take(signer);
+        let data = ClaimsData::<T, I>::take(signer);
         T::OnClaim::on_claim(&dest, amount, data)?;
 
-        <Total<T>>::put(new_total);
-        <Claims<T>>::remove(signer);
-        <Vesting<T>>::remove(signer);
+        <Total<T, I>>::put(new_total);
+        <Claims<T, I>>::remove(signer);
+        <Vesting<T, I>>::remove(signer);
 
-        Self::deposit_event(Event::<T>::Claimed { account_id: dest, amount });
+        Self::deposit_event(Event::<T, I>::Claimed { account_id: dest, amount });
 
         Ok(())
     }
@@ -493,70 +512,6 @@ fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
         push_nibble(b % 16);
     }
     r
-}
-
-/// Migrations
-pub mod migrations {
-    use super::*;
-    use frame_support::traits::OnRuntimeUpgrade;
-
-    #[cfg(feature = "try-runtime")]
-    use sp_runtime::{traits::Zero, Saturating, TryRuntimeError};
-
-    /// Tranfers a claim and vesting schedule from `Source` to `Destination`.
-    pub struct TransferClaim<T, Source, Destination>(PhantomData<(T, Source, Destination)>);
-
-    impl<T, Source, Destination> OnRuntimeUpgrade for TransferClaim<T, Source, Destination>
-    where
-        T: Config,
-        Source: Get<EthereumAddress>,
-        Destination: Get<EthereumAddress>,
-    {
-        fn on_runtime_upgrade() -> Weight {
-            let source = Source::get();
-            let destination = Destination::get();
-
-            if !<Claims<T>>::contains_key(destination) {
-                if !<Vesting<T>>::contains_key(destination) {
-                    if let Some(amount) = <Claims<T>>::take(source) {
-                        <Claims<T>>::insert(destination, amount);
-                        log::info!("Transfer claim from {source} to {destination}");
-
-                        if let Some(vesting) = <Vesting<T>>::take(source) {
-                            <Vesting<T>>::insert(destination, vesting);
-                            log::info!("Transfer vesting schedule from {source} to {destination}");
-                        }
-                    }
-                } else {
-                    // is that possible?
-                    log::warn!("Address {destination} has vesting schedule without a claim, skip migration");
-                }
-            } else {
-                log::info!("Address {destination} already has a claim, skip migration");
-            }
-
-            T::DbWeight::get().reads_writes(4, 4)
-        }
-
-        #[cfg(feature = "try-runtime")]
-        fn pre_upgrade() -> Result<Vec<u8>, TryRuntimeError> {
-            let total =
-                <Claims<T>>::iter_values().fold(BalanceOf::<T>::zero(), |a, i| a.saturating_add(i));
-            Ok(total.encode())
-        }
-
-        #[cfg(feature = "try-runtime")]
-        fn post_upgrade(state: Vec<u8>) -> Result<(), TryRuntimeError> {
-            let old_total: BalanceOf<T> =
-                Decode::decode(&mut &state[..]).expect("pre_upgrade provides a valid state; qed");
-
-            let new_total =
-                <Claims<T>>::iter_values().fold(BalanceOf::<T>::zero(), |a, i| a.saturating_add(i));
-
-            ensure!(new_total == old_total, "Total balance of claims should not change");
-            Ok(())
-        }
-    }
 }
 
 #[cfg(test)]
