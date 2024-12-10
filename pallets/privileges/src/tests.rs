@@ -485,6 +485,25 @@ fn test_minting_vipp_nft() {
 }
 
 #[test]
+fn test_minting_vipp_nft_doesnt_work() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, 2, None, None));
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::none(),
+            10,
+            sig::<Test>(&bob(), &10u64.encode(), &[][..])
+        ));
+        assert_eq!(Privileges::vip_members(10), None);
+        assert_eq!(Privileges::vipp_members(10), None);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat,));
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
+        assert_eq!(Privileges::vipp_members(10), None);
+    })
+}
+
+#[test]
 fn test_calculating_validator_vipp_points() {
     ExtBuilder::default().build_and_execute(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
