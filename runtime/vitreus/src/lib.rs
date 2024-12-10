@@ -607,7 +607,7 @@ impl pallet_im_online::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type ValidatorSet = Historical;
     type NextSessionRotation = Babe;
-    type ReportUnresponsiveness = Offences;
+    type ReportUnresponsiveness = pallet_energy_generation::ChillOnOffence<Runtime, Offences>;
     type UnsignedPriority = ImOnlineUnsignedPriority;
     type WeightInfo = pallet_im_online::weights::SubstrateWeight<Runtime>;
 }
