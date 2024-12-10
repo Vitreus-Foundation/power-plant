@@ -1072,6 +1072,59 @@ impl pallet_claiming::Config for Runtime {
     type WeightInfo = ();
 }
 
+#[derive(Decode, Encode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
+pub struct KickstartClaimData {
+    collection_id: u32,
+    item_id: u32,
+    level: u32,
+}
+
+pub struct KickstartClaimHandler;
+impl pallet_claiming::OnClaimHandler<AccountId, Balance, KickstartClaimData>
+    for KickstartClaimHandler
+{
+    fn on_claim(
+        who: &AccountId,
+        _amount: Balance,
+        data: Option<KickstartClaimData>,
+    ) -> DispatchResult {
+        use frame_support::traits::nonfungibles_v2::Mutate;
+        use pallet_nfts::{ItemConfig, ItemSettings};
+
+        const NFT_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
+
+        if let Some(KickstartClaimData { collection_id, item_id, level }) = data {
+            let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
+
+            <Nfts as Mutate<AccountId, ItemConfig>>::mint_into(
+                &collection_id,
+                &item_id,
+                who,
+                &item_config,
+                true,
+            )?;
+            <Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+                &collection_id,
+                &item_id,
+                &Vec::from(NFT_LEVEL_ATTRIBUTE_KEY),
+                &level.to_le_bytes(),
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+impl pallet_claiming::Config<pallet_claiming::Instance1> for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type VestingSchedule = Vesting;
+    type ClaimData = KickstartClaimData;
+    type OnClaim = KickstartClaimHandler;
+    type Prefix = Prefix;
+    type WeightInfo = ();
+}
+
 parameter_types! {
     pub const MinVestedTransfer: Balance = 1;
     pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
@@ -1646,6 +1699,7 @@ construct_runtime!(
         Claiming: pallet_claiming = 22,
         Vesting: pallet_vesting = 23,
         SimpleVesting: pallet_simple_vesting = 24,
+        Kickstart: pallet_claiming::<Instance1> = 27,
 
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
