@@ -100,6 +100,105 @@ fn add_claim_works() {
 }
 
 #[test]
+fn add_claim_for_multiple_presales_works() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
+
+        assert_noop!(
+            Claiming::claim(
+                RuntimeOrigin::none(),
+                69,
+                sig::<Test>(&bob(), &69u64.encode(), &[][..])
+            ),
+            Error::<Test>::SignerHasNoClaim,
+        );
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 200, 1, None, None));
+        assert_eq!(Claiming::claims_amount(eth(&bob()), 1).unwrap(), 200);
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 300, 1, None, None));
+        assert_eq!(Claiming::claims_amount(eth(&bob()), 1).unwrap(), 500);
+
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 100, 3, None, None));
+        assert_eq!(Claiming::claims_amount(eth(&bob()), 3).unwrap(), 100);
+        assert_eq!(Balances::free_balance(42), 0);
+
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::none(),
+            69,
+            sig::<Test>(&bob(), &69u64.encode(), &[][..])
+        ));
+        assert_eq!(Balances::free_balance(&69), 600);
+        assert_eq!(Claiming::claims_amount(eth(&bob()), 1), None);
+        assert_eq!(Claiming::claims_amount(eth(&bob()), 2), None);
+        assert_eq!(Claiming::claims_amount(eth(&bob()), 3), None);
+    });
+}
+
+#[test]
+fn add_claim_for_different_presales_works() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 1000));
+
+        let claims_map: std::collections::HashMap<u16, u64> = vec![
+            (1, 200),
+            (2, 300),
+            (3, 150),
+        ]
+            .into_iter()
+            .collect();
+
+        // Add claims based on the prepopulated map.
+        for (&presale_id, &amount) in claims_map.iter() {
+            assert_ok!(Claiming::mint_claim(
+                RuntimeOrigin::root(),
+                eth(&bob()),
+                amount,
+                presale_id,
+                None,
+                None
+            ));
+        }
+
+        for (&presale_id, &amount) in claims_map.iter() {
+            assert_eq!(
+                Claiming::claims_amount(eth(&bob()), presale_id),
+                Some(amount),
+                "Presale {} claim should match the map entry.",
+                presale_id
+            );
+        }
+
+        let total_claimed: u64 = claims_map.values().sum();
+        assert_eq!(
+            total_claimed,
+            650,
+            "Total claimed amount should be the sum of all presale claims."
+        );
+
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::none(),
+            69,
+            sig::<Test>(&bob(), &69u64.encode(), &[][..])
+        ));
+        assert_eq!(
+            Balances::free_balance(&69),
+            total_claimed,
+            "Destination account should receive the total claimed amount."
+        );
+
+        for (&presale_id, _) in claims_map.iter() {
+            assert_eq!(
+                Claiming::claims_amount(eth(&bob()), presale_id),
+                None,
+                "Presale {} claim should be cleared after claiming.",
+                presale_id
+            );
+        }
+    });
+}
+
+#[test]
 fn add_claim_to_existing_claim_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 250));
