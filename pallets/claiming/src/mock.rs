@@ -17,6 +17,8 @@
 
 //! Test environment for 'pallet-claiming'.
 
+#![allow(missing_docs)]
+
 use super::secp_utils::eth;
 use crate as pallet_claiming;
 
