@@ -1728,6 +1728,7 @@ construct_runtime!(
         Bounties: pallet_bounties = 52,
         Democracy: pallet_democracy = 53,
         Elections: pallet_elections_phragmen = 54,
+        Multisig: pallet_multisig = 55,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,
