@@ -22,4 +22,27 @@ pub type V0200 = (
     polkadot_runtime_common::paras_registrar::migration::MigrateToV1<Runtime, ()>,
 );
 
-pub type Unreleased = ();
+pub type Unreleased = (claiming::RemoveStorage);
+
+mod claiming {
+    use frame_support::parameter_types;
+
+    parameter_types! {
+        pub const Claiming: &'static str = "Claiming";
+        pub const Nfts: &'static str = "Nfts";
+        pub const Total: &'static str = "Total";
+    }
+
+    pub type RemoveStorage = (
+        frame_support::migrations::RemoveStorage<
+            Claiming,
+            Nfts,
+            frame_support::weights::constants::RocksDbWeight,
+        >,
+        frame_support::migrations::RemoveStorage<
+            Claiming,
+            Total,
+            frame_support::weights::constants::RocksDbWeight,
+        >,
+    );
+}
