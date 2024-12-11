@@ -31,10 +31,10 @@ use sp_runtime::TokenError;
 fn mint_tokens_to_claim() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 50));
-        assert_eq!(Claiming::total(), 50);
+        assert_eq!(total(), 50);
 
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 150));
-        assert_eq!(Claiming::total(), 200);
+        assert_eq!(total(), 200);
 
         assert_err!(Claiming::mint_tokens_to_claim(RuntimeOrigin::signed(1), 150), BadOrigin);
     });
@@ -65,7 +65,7 @@ fn claiming_works() {
         ));
         assert_eq!(Balances::free_balance(&42), 100);
         assert_eq!(Vesting::vesting_balance(&42), Some(50));
-        assert_eq!(Claiming::total(), 50);
+        assert_eq!(total(), 50);
     });
 }
 
@@ -95,7 +95,7 @@ fn add_claim_works() {
         ));
         assert_eq!(Balances::free_balance(&69), 200);
         assert_eq!(Vesting::vesting_balance(&69), None);
-        assert_eq!(Claiming::total(), 50);
+        assert_eq!(total(), 50);
     });
 }
 
@@ -116,7 +116,7 @@ fn add_claim_to_existing_claim_works() {
         ));
         assert_eq!(Balances::free_balance(&42), 150);
         assert_eq!(Vesting::vesting_balance(&42), Some(50));
-        assert_eq!(Claiming::total(), 100);
+        assert_eq!(total(), 100);
     });
 }
 
@@ -135,7 +135,7 @@ fn claiming_more_than_available_doesnt_work() {
             Error::<Test>::NotEnoughTokensForClaim
         );
         assert_eq!(Balances::free_balance(&42), 0);
-        assert_eq!(Claiming::total(), 50);
+        assert_eq!(total(), 50);
     });
 }
 

@@ -60,7 +60,7 @@ use frame_support::{
 use polkadot_primitives::ValidityError;
 use serde::{self, Deserialize, Deserializer, Serialize, Serializer};
 use sp_io::{crypto::secp256k1_ecdsa_recover, hashing::keccak_256};
-use sp_runtime::traits::{AccountIdConversion, CheckedSub, Saturating};
+use sp_runtime::traits::{AccountIdConversion, Saturating};
 use sp_std::{vec, vec::Vec};
 
 #[cfg(not(feature = "std"))]
@@ -184,7 +184,7 @@ pub mod pallet {
         /// Handler for when a claim is made.
         type OnClaim: OnClaimHandler<Self::AccountId, BalanceOf<Self, I>, Self::ClaimData>;
 
-        /// Ethereum message prefix
+        /// Ethereum message prefix.
         #[pallet::constant]
         type Prefix: Get<&'static [u8]>;
 
@@ -214,11 +214,6 @@ pub mod pallet {
     #[pallet::storage]
     pub(super) type ClaimsData<T: Config<I>, I: 'static = ()> =
         StorageMap<_, Identity, EthereumAddress, T::ClaimData>;
-
-    #[pallet::storage]
-    #[pallet::getter(fn total)]
-    pub(super) type Total<T: Config<I>, I: 'static = ()> =
-        StorageValue<_, BalanceOf<T, I>, ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -270,10 +265,6 @@ pub mod pallet {
             self.vesting.iter().for_each(|(k, v)| {
                 Vesting::<T, I>::insert(k, v);
             });
-
-            <Total<T, I>>::put(CurrencyOf::<T, I>::free_balance(
-                &Pallet::<T, I>::claim_account_id(),
-            ));
         }
     }
 
@@ -348,7 +339,6 @@ pub mod pallet {
 
             CurrencyOf::<T, I>::deposit_creating(&Self::claim_account_id(), amount);
 
-            <Total<T, I>>::mutate(|value| *value += amount);
             Self::deposit_event(Event::<T, I>::TokenMintedToClaim(amount));
 
             Ok(())
@@ -450,25 +440,19 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
     /// Claims tokens to account wallet.
     fn process_claim(signer: EthereumAddress, dest: T::AccountId) -> DispatchResult {
-        let amount = <Claims<T, I>>::get(signer).ok_or(Error::<T, I>::SignerHasNoClaim)?;
+        let amount = <Claims<T, I>>::take(signer).ok_or(Error::<T, I>::SignerHasNoClaim)?;
 
-        let new_total = Self::total()
-            .checked_sub(&amount)
-            .ok_or(Error::<T, I>::NotEnoughTokensForClaim)?;
-
-        CurrencyOf::<T, I>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)?;
+        CurrencyOf::<T, I>::transfer(&Self::claim_account_id(), &dest, amount, AllowDeath)
+            .map_err(|_| Error::<T, I>::NotEnoughTokensForClaim)?;
 
         // Check if this claim should have a vesting schedule.
-        if let Some(vs) = Vesting::<T, I>::get(signer) {
+        if let Some(vs) = Vesting::<T, I>::take(signer) {
             T::VestingSchedule::add_vesting_schedule(&dest, vs.0, vs.1, vs.2)?;
         }
 
         let data = ClaimsData::<T, I>::take(signer);
-        T::OnClaim::on_claim(&dest, amount, data)?;
 
-        <Total<T, I>>::put(new_total);
-        <Claims<T, I>>::remove(signer);
-        <Vesting<T, I>>::remove(signer);
+        T::OnClaim::on_claim(&dest, amount, data)?;
 
         Self::deposit_event(Event::<T, I>::Claimed { account_id: dest, amount });
 
