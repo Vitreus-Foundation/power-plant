@@ -305,6 +305,7 @@ runtime-benchmarks = [
     "pallet-ethereum/runtime-benchmarks",
     "pallet-faucet/runtime-benchmarks",
     "pallet-hotfix-sufficients/runtime-benchmarks",
+    "pallet-multisig/runtime-benchmarks",
     "pallet-nfts/runtime-benchmarks",
     "pallet-treasury-extension/runtime-benchmarks",
     "pallet-uniques/runtime-benchmarks",
