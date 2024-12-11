@@ -337,7 +337,7 @@ pub mod pallet {
         ) -> DispatchResult {
             ensure_root(origin)?;
 
-            CurrencyOf::<T, I>::deposit_creating(&Self::claim_account_id(), amount);
+            let _ = CurrencyOf::<T, I>::deposit_creating(&Self::claim_account_id(), amount);
 
             Self::deposit_event(Event::<T, I>::TokenMintedToClaim(amount));
 
@@ -425,7 +425,7 @@ pub mod pallet {
                 priority: PRIORITY,
                 requires: vec![],
                 provides: vec![("claiming", signer).encode()],
-                longevity: TransactionLongevity::max_value(),
+                longevity: TransactionLongevity::MAX,
                 propagate: true,
             })
         }

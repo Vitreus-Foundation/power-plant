@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use crate::{self as pallet_privileges, *};
 use std::collections::BTreeMap;
 
