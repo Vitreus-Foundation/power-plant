@@ -113,6 +113,7 @@ pallet-energy-broker = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-faucet = { workspace = true }
+pallet-manual-bridge = { workspace = true }
 pallet-nac-managing = { workspace = true }
 pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
@@ -167,6 +168,7 @@ try-runtime = [
     "pallet-grandpa/try-runtime",
     "pallet-hotfix-sufficients/try-runtime",
     "pallet-im-online/try-runtime",
+    "pallet-manual-bridge/try-runtime",
     "pallet-membership/try-runtime",
     "pallet-message-queue/try-runtime",
     "pallet-mmr/try-runtime",
@@ -284,6 +286,7 @@ std = [
     "pallet-energy-fee/std",
     "pallet-energy-generation/std",
     "pallet-faucet/std",
+    "pallet-manual-bridge/std",
     "pallet-nac-managing/std",
     "pallet-privileges/std",
     "pallet-reputation/std",
