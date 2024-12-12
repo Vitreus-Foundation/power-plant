@@ -62,7 +62,7 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         #[pallet::call_index(0)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(3, 3))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(4, 3))]
         pub fn transfer(
             origin: OriginFor<T>,
             dest: EthereumAddress,
@@ -92,7 +92,7 @@ pub mod pallet {
         }
 
         #[pallet::call_index(1)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(4, 4))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(4, 3))]
         pub fn payout(
             origin: OriginFor<T>,
             dest: T::AccountId,
