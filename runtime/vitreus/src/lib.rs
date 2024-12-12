@@ -1681,7 +1681,7 @@ impl pallet_manual_bridge::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type PayoutOrigin =
-        pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 1>;
+        pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>;
     type BridgeAccount = xcm_config::CheckAccount;
     type FeeReceiverAccount = xcm_config::TreasuryAccount;
     type DepositFeePercent = xcm_config::DepositFeePercent;
