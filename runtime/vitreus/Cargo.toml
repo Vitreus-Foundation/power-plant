@@ -72,6 +72,7 @@ pallet-im-online = { workspace = true }
 pallet-membership = { workspace = true }
 pallet-message-queue = { workspace = true }
 pallet-mmr = { workspace = true }
+pallet-multisig = { workspace = true }
 pallet-nfts = { workspace = true }
 pallet-nfts-runtime-api = { workspace = true }
 pallet-offences = { workspace = true }
@@ -112,6 +113,7 @@ pallet-energy-broker = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-faucet = { workspace = true }
+pallet-manual-bridge = { workspace = true }
 pallet-nac-managing = { workspace = true }
 pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
@@ -166,9 +168,11 @@ try-runtime = [
     "pallet-grandpa/try-runtime",
     "pallet-hotfix-sufficients/try-runtime",
     "pallet-im-online/try-runtime",
+    "pallet-manual-bridge/try-runtime",
     "pallet-membership/try-runtime",
     "pallet-message-queue/try-runtime",
     "pallet-mmr/try-runtime",
+    "pallet-multisig/try-runtime",
     "pallet-nac-managing/try-runtime",
     "pallet-nfts/try-runtime",
     "pallet-offences/try-runtime",
@@ -246,6 +250,7 @@ std = [
     "pallet-membership/std",
     "pallet-message-queue/std",
     "pallet-mmr/std",
+    "pallet-multisig/std",
     "pallet-nfts-runtime-api/std",
     "pallet-nfts/std",
     "pallet-offences/std",
@@ -281,6 +286,7 @@ std = [
     "pallet-energy-fee/std",
     "pallet-energy-generation/std",
     "pallet-faucet/std",
+    "pallet-manual-bridge/std",
     "pallet-nac-managing/std",
     "pallet-privileges/std",
     "pallet-reputation/std",
@@ -302,6 +308,7 @@ runtime-benchmarks = [
     "pallet-ethereum/runtime-benchmarks",
     "pallet-faucet/runtime-benchmarks",
     "pallet-hotfix-sufficients/runtime-benchmarks",
+    "pallet-multisig/runtime-benchmarks",
     "pallet-nfts/runtime-benchmarks",
     "pallet-treasury-extension/runtime-benchmarks",
     "pallet-uniques/runtime-benchmarks",

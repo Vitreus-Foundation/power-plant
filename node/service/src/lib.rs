@@ -28,6 +28,8 @@
 
 pub mod benchmarking;
 pub mod eth;
+
+#[allow(dead_code, clippy::doc_lazy_continuation, clippy::manual_inspect)]
 mod parachains_db;
 
 #[cfg(feature = "full-node")]

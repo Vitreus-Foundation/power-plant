@@ -249,10 +249,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 204,
+    spec_version: 205,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
-    transaction_version: 2,
+    transaction_version: 3,
     state_version: 1,
 };
 
@@ -539,7 +539,7 @@ impl pallet_authority_discovery::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
+    pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::MAX;
     pub const MaxKeys: u32 = 10_000;
     pub const MaxPeerInHeartbeats: u32 = 10_000;
 }
@@ -607,7 +607,7 @@ impl pallet_im_online::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type ValidatorSet = Historical;
     type NextSessionRotation = Babe;
-    type ReportUnresponsiveness = Offences;
+    type ReportUnresponsiveness = pallet_energy_generation::ChillOnOffence<Runtime, Offences>;
     type UnsignedPriority = ImOnlineUnsignedPriority;
     type WeightInfo = pallet_im_online::weights::SubstrateWeight<Runtime>;
 }
@@ -1064,10 +1064,63 @@ parameter_types! {
 
 impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type Nfts = Nfts;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type ClaimData = ();
     type OnClaim = NacManaging;
+    type Prefix = Prefix;
+    type WeightInfo = ();
+}
+
+#[derive(Decode, Encode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
+pub struct KickstartClaimData {
+    collection_id: u32,
+    item_id: u32,
+    level: u32,
+}
+
+pub struct KickstartClaimHandler;
+impl pallet_claiming::OnClaimHandler<AccountId, Balance, KickstartClaimData>
+    for KickstartClaimHandler
+{
+    fn on_claim(
+        who: &AccountId,
+        _amount: Balance,
+        data: Option<KickstartClaimData>,
+    ) -> DispatchResult {
+        use frame_support::traits::nonfungibles_v2::Mutate;
+        use pallet_nfts::{ItemConfig, ItemSettings};
+
+        const NFT_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
+
+        if let Some(KickstartClaimData { collection_id, item_id, level }) = data {
+            let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
+
+            <Nfts as Mutate<AccountId, ItemConfig>>::mint_into(
+                &collection_id,
+                &item_id,
+                who,
+                &item_config,
+                true,
+            )?;
+            <Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+                &collection_id,
+                &item_id,
+                &Vec::from(NFT_LEVEL_ATTRIBUTE_KEY),
+                &level.to_le_bytes(),
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+impl pallet_claiming::Config<pallet_claiming::Instance1> for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type VestingSchedule = Vesting;
+    type ClaimData = KickstartClaimData;
+    type OnClaim = KickstartClaimHandler;
     type Prefix = Prefix;
     type WeightInfo = ();
 }
@@ -1116,8 +1169,10 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Nfts(..)
             | RuntimeCall::AtomicSwap(..)
             | RuntimeCall::Claiming(..)
+            | RuntimeCall::Kickstart(..)
             | RuntimeCall::Vesting(..)
             | RuntimeCall::NacManaging(..)
+            | RuntimeCall::ManualBridge(..)
             | RuntimeCall::Privileges(..)
             | RuntimeCall::Council(..)
             | RuntimeCall::TechnicalCommittee(..)
@@ -1430,7 +1485,7 @@ impl parachains_inclusion::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ParasUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
+    pub const ParasUnsignedPriority: TransactionPriority = TransactionPriority::MAX;
 }
 
 impl parachains_paras::Config for Runtime {
@@ -1622,6 +1677,17 @@ impl pallet_faucet::Config for Runtime {
     type WeightInfo = pallet_faucet::weights::SubstrateWeight<Runtime>;
 }
 
+impl pallet_manual_bridge::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type PayoutOrigin =
+        pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>;
+    type BridgeAccount = xcm_config::CheckAccount;
+    type FeeReceiverAccount = xcm_config::TreasuryAccount;
+    type DepositFeePercent = xcm_config::DepositFeePercent;
+    type WithdrawalFeePercent = xcm_config::WithdrawalFeePercent;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -1646,6 +1712,7 @@ construct_runtime!(
         Claiming: pallet_claiming = 22,
         Vesting: pallet_vesting = 23,
         SimpleVesting: pallet_simple_vesting = 24,
+        Kickstart: pallet_claiming::<Instance1> = 27,
 
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
@@ -1673,6 +1740,7 @@ construct_runtime!(
         Bounties: pallet_bounties = 52,
         Democracy: pallet_democracy = 53,
         Elections: pallet_elections_phragmen = 54,
+        Multisig: pallet_multisig = 55,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,
@@ -1711,6 +1779,8 @@ construct_runtime!(
 
         #[cfg(feature = "testnet-runtime")]
         Faucet: pallet_faucet = 240,
+
+        ManualBridge: pallet_manual_bridge = 245,
     }
 );
 
@@ -1774,7 +1844,8 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations = (migrations::Unreleased, migrations::V0200, migrations::Permanent);
+pub type Migrations =
+    (migrations::Unreleased, migrations::V0200, migrations::V0205, migrations::Permanent);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<

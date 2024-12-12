@@ -414,7 +414,7 @@ impl Default for ExtBuilder {
             status: Default::default(),
             stakes: Default::default(),
             stakers: Default::default(),
-            energy_per_stake_currency: 1_000_000u128,
+            energy_per_stake_currency: 5,
             block_authoring_reward: ReputationPoint(12),
         }
     }
@@ -772,7 +772,7 @@ pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
     let total_stake = ErasTotalStake::<Test>::get(era_index);
     let era_blocks = Period::get() * SessionsPerEra::get() as u64 - 1;
     let ratio = Perbill::from_rational(num_blocks, era_blocks);
-    let payout = ratio * rate * total_stake;
+    let payout = (ratio * total_stake) / rate;
 
     assert!(payout > 0);
     payout
