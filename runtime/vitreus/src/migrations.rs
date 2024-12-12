@@ -22,7 +22,9 @@ pub type V0200 = (
     polkadot_runtime_common::paras_registrar::migration::MigrateToV1<Runtime, ()>,
 );
 
-pub type Unreleased = (claiming::RemoveStorage);
+pub type V0205 = (claiming::RemoveStorage);
+
+pub type Unreleased = ();
 
 mod claiming {
     use frame_support::parameter_types;
