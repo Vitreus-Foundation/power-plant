@@ -304,6 +304,7 @@ pallet-nfts = { git = "https://github.com/paritytech/polkadot-sdk", branch = "st
 pallet-nfts-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-offences = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-preimage = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-proxy = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-scheduler = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-session = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false, features = ["historical"] }
 pallet-staking-reward-curve = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }

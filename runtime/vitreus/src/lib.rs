@@ -44,7 +44,7 @@ use polkadot_runtime_parachains::{
 };
 
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
-use frame_support::pallet_prelude::{DispatchError, DispatchResult};
+use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
     Preservation, Provenance, WithdrawConsequence,
@@ -53,7 +53,7 @@ use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, ProcessMessage,
     ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
-use parity_scale_codec::{Compact, Decode, Encode};
+use parity_scale_codec::{Compact, Decode, Encode, MaxEncodedLen};
 use sp_api::impl_runtime_apis;
 use sp_core::{
     crypto::{ByteArray, KeyTypeId},
@@ -147,7 +147,7 @@ pub use pallet_sudo::Call as SudoCall;
 pub use parachains_paras::Call as ParasCall;
 pub use paras_sudo_wrapper::Call as ParasSudoWrapperCall;
 
-pub use areas::{CouncilCollective, TechnicalCollective};
+pub use areas::{deposit, CouncilCollective, TechnicalCollective};
 
 mod precompiles;
 mod helpers {
@@ -1183,6 +1183,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Session(..)
             | RuntimeCall::XcmPallet(..)
             | RuntimeCall::SimpleVesting(..)
+            | RuntimeCall::Proxy(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
@@ -1229,6 +1230,60 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             }
         }
     }
+}
+
+parameter_types! {
+    // One storage item; key size 32, value size 8; .
+    pub const ProxyDepositBase: Balance = deposit(1, 8);
+    // Additional storage item size of 33 bytes.
+    pub const ProxyDepositFactor: Balance = deposit(0, 33);
+    pub const MaxProxies: u16 = 32;
+    pub const AnnouncementDepositBase: Balance = deposit(1, 8);
+    pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+    pub const MaxPending: u16 = 32;
+}
+
+#[derive(
+    Default,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    RuntimeDebug,
+    MaxEncodedLen,
+    scale_info::TypeInfo,
+)]
+pub enum ProxyType {
+    #[default]
+    Any = 0,
+}
+
+impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
+    fn filter(&self, _: &RuntimeCall) -> bool {
+        true
+    }
+    fn is_superset(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl pallet_proxy::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeCall = RuntimeCall;
+    type Currency = Balances;
+    type ProxyType = ProxyType;
+    type ProxyDepositBase = ProxyDepositBase;
+    type ProxyDepositFactor = ProxyDepositFactor;
+    type MaxProxies = MaxProxies;
+    type WeightInfo = pallet_proxy::weights::SubstrateWeight<Runtime>;
+    type MaxPending = MaxPending;
+    type CallHasher = BlakeTwo256;
+    type AnnouncementDepositBase = AnnouncementDepositBase;
+    type AnnouncementDepositFactor = AnnouncementDepositFactor;
 }
 
 impl pallet_sudo::Config for Runtime {
@@ -1728,6 +1783,7 @@ construct_runtime!(
         EnergyGeneration: pallet_energy_generation = 39,
         EnergyBroker: pallet_energy_broker = 40,
         Privileges: pallet_privileges = 41,
+        Proxy: pallet_proxy = 44,
 
         // Governance-related pallets
         Scheduler: pallet_scheduler = 45,
