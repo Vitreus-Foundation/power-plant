@@ -1914,6 +1914,7 @@ pub type Executive = frame_executive::Executive<
     Migrations,
 >;
 
+#[allow(dead_code)]
 fn transact_with_new_gas_limit(
     transact_call: pallet_ethereum::Call<Runtime>,
 ) -> pallet_ethereum::Call<Runtime> {
@@ -1963,7 +1964,6 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         }
     }
 
-    // TODO: get rid of cloning the call
     fn validate_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -2000,17 +2000,12 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
                 };
 
-                transact_with_new_gas_limit(call.clone()).validate_self_contained(
-                    info,
-                    dispatch_info,
-                    len,
-                )
+                call.validate_self_contained(info, dispatch_info, len)
             },
             _ => None,
         }
     }
 
-    // TODO: get rid of cloning the call
     fn pre_dispatch_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -2018,8 +2013,9 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         len: usize,
     ) -> Option<Result<(), TransactionValidityError>> {
         match self {
-            RuntimeCall::Ethereum(call) => transact_with_new_gas_limit(call.clone())
-                .pre_dispatch_self_contained(info, dispatch_info, len),
+            RuntimeCall::Ethereum(call) => {
+                call.pre_dispatch_self_contained(info, dispatch_info, len)
+            },
             _ => None,
         }
     }
