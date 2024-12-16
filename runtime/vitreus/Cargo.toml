@@ -77,6 +77,7 @@ pallet-nfts = { workspace = true }
 pallet-nfts-runtime-api = { workspace = true }
 pallet-offences = { workspace = true }
 pallet-preimage = { workspace = true }
+pallet-proxy = { workspace = true }
 pallet-scheduler = { workspace = true }
 pallet-session = { workspace = true }
 pallet-staking-reward-curve = { workspace = true }
@@ -178,6 +179,7 @@ try-runtime = [
     "pallet-offences/try-runtime",
     "pallet-preimage/try-runtime",
     "pallet-privileges/try-runtime",
+    "pallet-proxy/try-runtime",
     "pallet-reputation/try-runtime",
     "pallet-scheduler/try-runtime",
     "pallet-session/try-runtime",
@@ -255,6 +257,7 @@ std = [
     "pallet-nfts/std",
     "pallet-offences/std",
     "pallet-preimage/std",
+    "pallet-proxy/std",
     "pallet-scheduler/std",
     "pallet-session/std",
     "pallet-sudo/std",
@@ -310,6 +313,7 @@ runtime-benchmarks = [
     "pallet-hotfix-sufficients/runtime-benchmarks",
     "pallet-multisig/runtime-benchmarks",
     "pallet-nfts/runtime-benchmarks",
+    "pallet-proxy/runtime-benchmarks",
     "pallet-treasury-extension/runtime-benchmarks",
     "pallet-uniques/runtime-benchmarks",
     "pallet-xcm/runtime-benchmarks",
