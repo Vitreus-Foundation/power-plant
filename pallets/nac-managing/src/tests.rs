@@ -144,12 +144,12 @@ fn on_claim_should_work() {
         let claimed = get_claimed(collection_id, item_id);
         assert_eq!(claimed, 0);
 
-        NacManaging::on_claim(&owner, 1000_u64).expect("Error on claim");
+        NacManaging::on_claim(&owner, 1000_u64, None).expect("Error on claim");
 
         let claimed = get_claimed(collection_id, item_id);
         assert_eq!(claimed, 1000);
 
-        NacManaging::on_claim(&owner, 1000_u64).expect("Error on claim");
+        NacManaging::on_claim(&owner, 1000_u64, None).expect("Error on claim");
 
         let new_claimed = get_claimed(collection_id, item_id);
         assert_eq!(new_claimed, claimed + 1000);

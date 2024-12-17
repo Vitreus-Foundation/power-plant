@@ -13,6 +13,9 @@ wasm-opt = false
 [lib]
 crate-type = ["cdylib", "rlib"]
 
+[lints]
+workspace = true
+
 [dependencies]
 clap = { workspace = true, features = ["default", "derive"], optional = true }
 futures = { workspace = true, default-features = true }

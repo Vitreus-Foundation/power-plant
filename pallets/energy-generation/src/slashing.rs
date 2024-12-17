@@ -794,6 +794,7 @@ pub fn do_slash<T: Config>(
         }
 
         <Pallet<T>>::update_ledger(&controller, &ledger);
+        <Pallet<T>>::adjust_cooperator_targets(stash, ledger.active);
     }
     value.stake = stake_value;
     <pallet_reputation::Pallet<T>>::do_slash(stash, value.reputation)?;

@@ -1,3 +1,5 @@
+#![allow(missing_docs)]
+
 use crate::{self as pallet_privileges, *};
 use std::collections::BTreeMap;
 
@@ -314,6 +316,7 @@ impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type ClaimData = ();
     type OnClaim = NacManaging;
     type Prefix = Prefix;
     type WeightInfo = ();
