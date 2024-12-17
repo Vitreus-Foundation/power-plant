@@ -21,6 +21,12 @@ license = "Unlicense"
 publish = false
 default-run = "vitreus-power-plant-node"
 
+[lints.rust]
+unexpected_cfgs = { level = "allow" }
+
+[workspace.lints.rust]
+unexpected_cfgs = { level = "allow" }
+
 [dependencies]
 color-eyre = { version = "0.6.1", default-features = false }
 tikv-jemallocator = "0.5.0"
@@ -293,10 +299,12 @@ pallet-im-online = { git = "https://github.com/paritytech/polkadot-sdk", branch 
 pallet-membership = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-message-queue = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-mmr =  { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-multisig =  { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-nfts = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-nfts-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-offences = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-preimage = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-proxy = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-scheduler = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-session = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false, features = ["historical"] }
 pallet-staking-reward-curve = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -360,6 +368,7 @@ pallet-energy-broker = { path = "pallets/energy-broker", default-features = fals
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }
 pallet-faucet = { path = "pallets/faucet", default-features = false }
+pallet-manual-bridge = { path = "pallets/manual-bridge", default-features = false }
 pallet-nac-managing = { path = "pallets/nac-managing", default-features = false }
 pallet-privileges = { path = "pallets/privileges", default-features = false }
 pallet-reputation = { path = "pallets/reputation", default-features = false }

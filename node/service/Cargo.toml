@@ -1,6 +1,5 @@
 [package]
 name = "vitreus-service"
-rust-version = "1.60"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true

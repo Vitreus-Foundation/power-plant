@@ -847,7 +847,7 @@ pub mod pallet {
         /// Swap assets along a `path`, depositing in `send_to`.
         pub(crate) fn do_swap(
             sender: T::AccountId,
-            amounts: &Vec<T::AssetBalance>,
+            amounts: &[T::AssetBalance],
             path: BoundedVec<T::MultiAssetId, T::MaxSwapPathLength>,
             send_to: T::AccountId,
             keep_alive: bool,

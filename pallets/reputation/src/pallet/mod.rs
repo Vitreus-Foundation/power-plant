@@ -1,17 +1,15 @@
 //! Pallet implementation (dispatchables and storages).
 use crate::weights::*;
 use crate::{ReputationPoint, ReputationRecord, ReputationTier};
-pub use impls::*;
 pub use pallet::*;
 
 mod impls;
 
+// because substrate's macros won't allow us to add docs in some places
+#[allow(missing_docs)]
 #[allow(clippy::module_inception)]
 #[frame_support::pallet]
 pub mod pallet {
-    // because substrate's macros won't allow us to add docs in some places
-    #![allow(missing_docs)]
-
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;

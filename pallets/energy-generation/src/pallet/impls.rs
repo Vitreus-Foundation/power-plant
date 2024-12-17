@@ -419,6 +419,18 @@ impl<T: Config> Pallet<T> {
         T::OnVipMembershipHandler::update_active_stake(controller);
     }
 
+    /// Adjust the targets of a cooperator to ensure their total stake does not exceed `active_stake`.
+    pub(crate) fn adjust_cooperator_targets(stash: &T::AccountId, active_stake: StakeOf<T>) {
+        if let Some(cooperations) = <Cooperators<T>>::get(stash) {
+            let proportion = Perbill::from_rational(active_stake, cooperations.total());
+            if proportion < Perbill::one() {
+                let targets = cooperations.targets.map(|(_, stake)| proportion.mul_floor(stake));
+
+                Cooperators::<T>::insert(stash, Cooperations { targets, ..cooperations });
+            }
+        }
+    }
+
     /// Chill a stash account.
     pub(crate) fn chill_stash(stash: &T::AccountId) {
         let chilled_as_validator = Self::do_remove_validator(stash);
