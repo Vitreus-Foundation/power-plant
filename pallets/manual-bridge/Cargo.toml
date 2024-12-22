@@ -1,0 +1,24 @@
+[package]
+name = "pallet-manual-bridge"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[dependencies]
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+parity-scale-codec = { workspace = true }
+scale-info = { workspace = true }
+sp-runtime = { workspace = true }
+
+[features]
+default = ["std"]
+std = [
+    "frame-support/std",
+    "frame-system/std",
+    "parity-scale-codec/std",
+    "scale-info/std",
+]
+try-runtime = ["frame-support/try-runtime"]
+

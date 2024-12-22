@@ -44,7 +44,7 @@ use polkadot_runtime_parachains::{
 };
 
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
-use frame_support::pallet_prelude::{DispatchError, DispatchResult};
+use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect, imbalance::ResolveAssetTo, nonfungibles_v2::Inspect,
     ConversionFromAssetBalance, ConversionToAssetBalance, DepositConsequence, Fortitude,
@@ -54,7 +54,7 @@ use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, ProcessMessage,
     ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
-use parity_scale_codec::{Compact, Decode, Encode};
+use parity_scale_codec::{Compact, Decode, Encode, MaxEncodedLen};
 use sp_api::impl_runtime_apis;
 use sp_core::{
     crypto::{ByteArray, KeyTypeId},
@@ -147,7 +147,7 @@ pub use pallet_sudo::Call as SudoCall;
 pub use parachains_paras::Call as ParasCall;
 pub use paras_sudo_wrapper::Call as ParasSudoWrapperCall;
 
-pub use areas::{CouncilCollective, TechnicalCollective};
+pub use areas::{deposit, CouncilCollective, TechnicalCollective};
 
 mod precompiles;
 mod helpers {
@@ -249,10 +249,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 203,
+    spec_version: 206,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
-    transaction_version: 2,
+    transaction_version: 3,
     state_version: 1,
 };
 
@@ -539,7 +539,7 @@ impl pallet_authority_discovery::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
+    pub const ImOnlineUnsignedPriority: TransactionPriority = TransactionPriority::MAX;
     pub const MaxKeys: u32 = 10_000;
     pub const MaxPeerInHeartbeats: u32 = 10_000;
 }
@@ -607,7 +607,7 @@ impl pallet_im_online::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type ValidatorSet = Historical;
     type NextSessionRotation = Babe;
-    type ReportUnresponsiveness = Offences;
+    type ReportUnresponsiveness = pallet_energy_generation::ChillOnOffence<Runtime, Offences>;
     type UnsignedPriority = ImOnlineUnsignedPriority;
     type WeightInfo = pallet_im_online::weights::SubstrateWeight<Runtime>;
 }
@@ -1085,7 +1085,61 @@ impl pallet_claiming::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type ClaimData = ();
     type OnClaim = NacManaging;
+    type Prefix = Prefix;
+    type WeightInfo = ();
+}
+
+#[derive(Decode, Encode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
+pub struct KickstartClaimData {
+    collection_id: u32,
+    item_id: u32,
+    level: u32,
+}
+
+pub struct KickstartClaimHandler;
+impl pallet_claiming::OnClaimHandler<AccountId, Balance, KickstartClaimData>
+    for KickstartClaimHandler
+{
+    fn on_claim(
+        who: &AccountId,
+        _amount: Balance,
+        data: Option<KickstartClaimData>,
+    ) -> DispatchResult {
+        use frame_support::traits::nonfungibles_v2::Mutate;
+        use pallet_nfts::{ItemConfig, ItemSettings};
+
+        const NFT_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
+
+        if let Some(KickstartClaimData { collection_id, item_id, level }) = data {
+            let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
+
+            <Nfts as Mutate<AccountId, ItemConfig>>::mint_into(
+                &collection_id,
+                &item_id,
+                who,
+                &item_config,
+                true,
+            )?;
+            <Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+                &collection_id,
+                &item_id,
+                &Vec::from(NFT_LEVEL_ATTRIBUTE_KEY),
+                &level.to_le_bytes(),
+            )?;
+        }
+
+        Ok(())
+    }
+}
+
+impl pallet_claiming::Config<pallet_claiming::Instance1> for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type VestingSchedule = Vesting;
+    type ClaimData = KickstartClaimData;
+    type OnClaim = KickstartClaimHandler;
     type Prefix = Prefix;
     type WeightInfo = ();
 }
@@ -1134,8 +1188,10 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Nfts(..)
             | RuntimeCall::AtomicSwap(..)
             | RuntimeCall::Claiming(..)
+            | RuntimeCall::Kickstart(..)
             | RuntimeCall::Vesting(..)
             | RuntimeCall::NacManaging(..)
+            | RuntimeCall::ManualBridge(..)
             | RuntimeCall::Privileges(..)
             | RuntimeCall::Council(..)
             | RuntimeCall::TechnicalCommittee(..)
@@ -1146,6 +1202,8 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Session(..)
             | RuntimeCall::XcmPallet(..)
             | RuntimeCall::SimpleVesting(..)
+            | RuntimeCall::Multisig(..)
+            | RuntimeCall::Proxy(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
@@ -1192,6 +1250,60 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             }
         }
     }
+}
+
+parameter_types! {
+    // One storage item; key size 32, value size 8; .
+    pub const ProxyDepositBase: Balance = deposit(1, 8);
+    // Additional storage item size of 33 bytes.
+    pub const ProxyDepositFactor: Balance = deposit(0, 33);
+    pub const MaxProxies: u16 = 32;
+    pub const AnnouncementDepositBase: Balance = deposit(1, 8);
+    pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+    pub const MaxPending: u16 = 32;
+}
+
+#[derive(
+    Default,
+    Copy,
+    Clone,
+    Eq,
+    PartialEq,
+    Ord,
+    PartialOrd,
+    Encode,
+    Decode,
+    RuntimeDebug,
+    MaxEncodedLen,
+    scale_info::TypeInfo,
+)]
+pub enum ProxyType {
+    #[default]
+    Any = 0,
+}
+
+impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
+    fn filter(&self, _: &RuntimeCall) -> bool {
+        true
+    }
+    fn is_superset(&self, _: &Self) -> bool {
+        true
+    }
+}
+
+impl pallet_proxy::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type RuntimeCall = RuntimeCall;
+    type Currency = Balances;
+    type ProxyType = ProxyType;
+    type ProxyDepositBase = ProxyDepositBase;
+    type ProxyDepositFactor = ProxyDepositFactor;
+    type MaxProxies = MaxProxies;
+    type WeightInfo = pallet_proxy::weights::SubstrateWeight<Runtime>;
+    type MaxPending = MaxPending;
+    type CallHasher = BlakeTwo256;
+    type AnnouncementDepositBase = AnnouncementDepositBase;
+    type AnnouncementDepositFactor = AnnouncementDepositFactor;
 }
 
 impl pallet_sudo::Config for Runtime {
@@ -1388,7 +1500,7 @@ impl pallet_evm::Config for Runtime {
     type PrecompilesValue = PrecompilesValue;
     type ChainId = EVMChainId;
     type BlockGasLimit = BlockGasLimit;
-    type Runner = helpers::runner::NacRunner<Self>;
+    type Runner = pallet_evm::runner::stack::Runner<Self>;
     type OnChargeTransaction = EnergyFee;
     type OnCreate = ();
     type FindAuthor = FindAuthorTruncated<Babe>;
@@ -1448,7 +1560,7 @@ impl parachains_inclusion::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ParasUnsignedPriority: TransactionPriority = TransactionPriority::max_value();
+    pub const ParasUnsignedPriority: TransactionPriority = TransactionPriority::MAX;
 }
 
 impl parachains_paras::Config for Runtime {
@@ -1640,6 +1752,17 @@ impl pallet_faucet::Config for Runtime {
     type WeightInfo = pallet_faucet::weights::SubstrateWeight<Runtime>;
 }
 
+impl pallet_manual_bridge::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type PayoutOrigin =
+        pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>;
+    type BridgeAccount = xcm_config::CheckAccount;
+    type FeeReceiverAccount = xcm_config::TreasuryAccount;
+    type DepositFeePercent = xcm_config::DepositFeePercent;
+    type WithdrawalFeePercent = xcm_config::WithdrawalFeePercent;
+}
+
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -1664,6 +1787,7 @@ construct_runtime!(
         Claiming: pallet_claiming = 22,
         Vesting: pallet_vesting = 23,
         SimpleVesting: pallet_simple_vesting = 24,
+        Kickstart: pallet_claiming::<Instance1> = 27,
 
         // Authorship must be before session in order to note author in the correct session and era
         // for im-online and staking.
@@ -1679,6 +1803,7 @@ construct_runtime!(
         EnergyGeneration: pallet_energy_generation = 39,
         EnergyBroker: pallet_energy_broker = 40,
         Privileges: pallet_privileges = 41,
+        Proxy: pallet_proxy = 44,
 
         // Governance-related pallets
         Scheduler: pallet_scheduler = 45,
@@ -1691,6 +1816,7 @@ construct_runtime!(
         Bounties: pallet_bounties = 52,
         Democracy: pallet_democracy = 53,
         Elections: pallet_elections_phragmen = 54,
+        Multisig: pallet_multisig = 55,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,
@@ -1729,6 +1855,8 @@ construct_runtime!(
 
         #[cfg(feature = "testnet-runtime")]
         Faucet: pallet_faucet = 240,
+
+        ManualBridge: pallet_manual_bridge = 245,
     }
 );
 
@@ -1792,7 +1920,8 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations = (migrations::Unreleased, migrations::V0200, migrations::Permanent);
+pub type Migrations =
+    (migrations::Unreleased, migrations::V0200, migrations::V0205, migrations::Permanent);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
@@ -1804,6 +1933,7 @@ pub type Executive = frame_executive::Executive<
     Migrations,
 >;
 
+#[allow(dead_code)]
 fn transact_with_new_gas_limit(
     transact_call: pallet_ethereum::Call<Runtime>,
 ) -> pallet_ethereum::Call<Runtime> {
@@ -1853,7 +1983,6 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         }
     }
 
-    // TODO: get rid of cloning the call
     fn validate_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -1890,17 +2019,12 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
                 };
 
-                transact_with_new_gas_limit(call.clone()).validate_self_contained(
-                    info,
-                    dispatch_info,
-                    len,
-                )
+                call.validate_self_contained(info, dispatch_info, len)
             },
             _ => None,
         }
     }
 
-    // TODO: get rid of cloning the call
     fn pre_dispatch_self_contained(
         &self,
         info: &Self::SignedInfo,
@@ -1908,8 +2032,9 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
         len: usize,
     ) -> Option<Result<(), TransactionValidityError>> {
         match self {
-            RuntimeCall::Ethereum(call) => transact_with_new_gas_limit(call.clone())
-                .pre_dispatch_self_contained(info, dispatch_info, len),
+            RuntimeCall::Ethereum(call) => {
+                call.pre_dispatch_self_contained(info, dispatch_info, len)
+            },
             _ => None,
         }
     }

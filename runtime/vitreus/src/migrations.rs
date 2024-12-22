@@ -2,7 +2,10 @@
 
 use super::*;
 
-pub type Permanent = (pallet_xcm::migration::MigrateToLatestXcmVersion<Runtime>);
+pub type Permanent = (
+    pallet_xcm::migration::MigrateToLatestXcmVersion<Runtime>,
+    pallet_energy_generation::migrations::FixCooperatorStake<Runtime>,
+);
 
 pub type V0200 = (
     pallet_grandpa::migrations::MigrateV4ToV5<Runtime>,
@@ -18,6 +21,8 @@ pub type V0200 = (
     polkadot_runtime_parachains::scheduler::migration::MigrateV1ToV2<Runtime>,
     polkadot_runtime_common::paras_registrar::migration::MigrateToV1<Runtime, ()>,
 );
+
+pub type V0205 = (claiming::RemoveStorage);
 
 pub type Unreleased = (energy_broker::MigrateToEnergyBrokerV2);
 
@@ -148,4 +153,27 @@ mod energy_broker {
             Ok(())
         }
     }
+}
+
+mod claiming {
+    use frame_support::parameter_types;
+
+    parameter_types! {
+        pub const Claiming: &'static str = "Claiming";
+        pub const Nfts: &'static str = "Nfts";
+        pub const Total: &'static str = "Total";
+    }
+
+    pub type RemoveStorage = (
+        frame_support::migrations::RemoveStorage<
+            Claiming,
+            Nfts,
+            frame_support::weights::constants::RocksDbWeight,
+        >,
+        frame_support::migrations::RemoveStorage<
+            Claiming,
+            Total,
+            frame_support::weights::constants::RocksDbWeight,
+        >,
+    );
 }

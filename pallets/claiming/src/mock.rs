@@ -17,13 +17,14 @@
 
 //! Test environment for 'pallet-claiming'.
 
+#![allow(missing_docs)]
+
 use super::secp_utils::eth;
 use crate as pallet_claiming;
 
-use frame_support::traits::WithdrawReasons;
 use frame_support::{
     construct_runtime, derive_impl, parameter_types,
-    traits::{ConstU32, ConstU64},
+    traits::{ConstU32, ConstU64, WithdrawReasons},
 };
 use sp_core::H256;
 use sp_io::hashing::keccak_256;
@@ -112,6 +113,7 @@ impl pallet_claiming::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type VestingSchedule = Vesting;
+    type ClaimData = ();
     type OnClaim = ();
     type Prefix = Prefix;
     type WeightInfo = ();
@@ -133,6 +135,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     .unwrap();
 
     t.into()
+}
+
+pub(crate) fn total() -> u64 {
+    crate::CurrencyOf::<Test, ()>::free_balance(&Claiming::claim_account_id())
 }
 
 pub(crate) fn alice() -> libsecp256k1::SecretKey {

@@ -17,6 +17,8 @@
 
 //! Test environment for 'pallet-nac-managing'.
 
+#![allow(missing_docs)]
+
 use crate::{self as pallet_nac_managing, *};
 
 use frame_support::{
