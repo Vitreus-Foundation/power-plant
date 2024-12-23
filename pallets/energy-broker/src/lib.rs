@@ -155,33 +155,8 @@ pub mod pallet {
     /// Pallet's callable functions.
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Add liquidity to the energy broker.
-        #[pallet::call_index(0)]
-        #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
-        pub fn force_add_liquidity(
-            origin: OriginFor<T>,
-            source: AccountIdLookupOf<T>,
-            asset: T::AssetKind,
-            amount: T::Balance,
-            keep_alive: bool,
-        ) -> DispatchResult {
-            T::ManageOrigin::ensure_origin(origin)?;
-
-            let source = T::Lookup::lookup(source)?;
-            let preservation = match keep_alive {
-                true => Preserve,
-                false => Expendable,
-            };
-
-            T::Assets::transfer(asset.clone(), &source, &Self::account_id(), amount, preservation)?;
-
-            Self::deposit_event(Event::LiquidityAdded { source, asset, amount });
-
-            Ok(())
-        }
-
         /// Swap the exact amount of input asset into output asset.
-        #[pallet::call_index(1)]
+        #[pallet::call_index(0)]
         #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
         pub fn swap_exact_tokens_for_tokens(
             origin: OriginFor<T>,
@@ -203,7 +178,7 @@ pub mod pallet {
         }
 
         /// Swap any amount of input asset to get the exact amount of output asset.
-        #[pallet::call_index(2)]
+        #[pallet::call_index(1)]
         #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
         pub fn swap_tokens_for_exact_tokens(
             origin: OriginFor<T>,
@@ -222,6 +197,31 @@ pub mod pallet {
                 keep_alive,
             )
             .map(|_| ())
+        }
+
+        /// Add liquidity to the energy broker.
+        #[pallet::call_index(10)]
+        #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
+        pub fn force_add_liquidity(
+            origin: OriginFor<T>,
+            source: AccountIdLookupOf<T>,
+            asset: T::AssetKind,
+            amount: T::Balance,
+            keep_alive: bool,
+        ) -> DispatchResult {
+            T::ManageOrigin::ensure_origin(origin)?;
+
+            let source = T::Lookup::lookup(source)?;
+            let preservation = match keep_alive {
+                true => Preserve,
+                false => Expendable,
+            };
+
+            T::Assets::transfer(asset.clone(), &source, &Self::account_id(), amount, preservation)?;
+
+            Self::deposit_event(Event::LiquidityAdded { source, asset, amount });
+
+            Ok(())
         }
     }
 
