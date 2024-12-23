@@ -7,7 +7,7 @@ use frame_support::{
     construct_runtime, derive_impl, parameter_types,
     traits::{tokens::imbalance::ResolveAssetTo, AsEnsureOriginWithArg, ConstU128, ConstU32},
 };
-use frame_system::EnsureSigned;
+use frame_system::{EnsureRoot, EnsureSigned};
 use sp_arithmetic::{FixedPointNumber, FixedU128};
 use sp_runtime::{traits::IdentityLookup, BuildStorage};
 
@@ -108,6 +108,7 @@ parameter_types! {
 
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type ManageOrigin = EnsureRoot<u128>;
     type Balance = u128;
     type HigherPrecisionBalance = sp_core::U256;
     type AssetKind = NativeOrAssetId;

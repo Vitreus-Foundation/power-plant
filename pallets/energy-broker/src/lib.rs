@@ -53,6 +53,9 @@ pub mod pallet {
         /// Overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+        /// The origin which can manage parameters of this pallet.
+        type ManageOrigin: EnsureOrigin<Self::RuntimeOrigin>;
+
         /// The type in which the assets for swapping are measured.
         type Balance: Balance;
 
@@ -162,7 +165,7 @@ pub mod pallet {
             amount: T::Balance,
             keep_alive: bool,
         ) -> DispatchResult {
-            ensure_root(origin)?;
+            T::ManageOrigin::ensure_origin(origin)?;
 
             let source = T::Lookup::lookup(source)?;
             let preservation = match keep_alive {

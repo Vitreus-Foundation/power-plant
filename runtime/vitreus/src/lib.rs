@@ -991,6 +991,7 @@ impl pallet_energy_broker::EnergyBalanceConverter<Balance, NativeOrAssetId> for 
 
 impl pallet_energy_broker::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type ManageOrigin = EnsureRoot<AccountId>;
     type Balance = Balance;
     type HigherPrecisionBalance = sp_core::U256;
     type AssetKind = NativeOrAssetId;
