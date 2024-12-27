@@ -804,19 +804,28 @@ where
     O: Offence<pallet_session::historical::IdentificationTuple<T>>,
 {
     fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
-        let offenders = offence.offenders().iter().map(|id| id.0.clone()).collect::<Vec<_>>();
+        let invulnerables = Pallet::<T>::invulnerables();
+
+        let offenders = offence
+            .offenders()
+            .iter()
+            .map(|id| id.0.clone())
+            .filter(|stash| !invulnerables.contains(stash))
+            .collect::<Vec<_>>();
         let offence_session = offence.session_index();
 
         R::report_offence(reporters, offence)?;
 
-        let offence_in_active_era = Pallet::<T>::active_era()
-            .and_then(|era| Pallet::<T>::eras_start_session_index(era.index))
-            .map(|start_session| offence_session >= start_session)
-            .unwrap_or(false);
+        if !offenders.is_empty() {
+            let offence_in_active_era = Pallet::<T>::active_era()
+                .and_then(|era| Pallet::<T>::eras_start_session_index(era.index))
+                .map(|start_session| offence_session >= start_session)
+                .unwrap_or(false);
 
-        if offence_in_active_era {
-            for stash in offenders.iter() {
-                Pallet::<T>::chill_stash(stash);
+            if offence_in_active_era {
+                for stash in offenders.iter() {
+                    Pallet::<T>::chill_stash(stash);
+                }
             }
         }
 
