@@ -13,8 +13,6 @@
 
 //! Migration code for the parachain's DB.
 
-#![cfg(feature = "full-node")]
-
 use super::{columns, other_io_error, DatabaseKind, LOG_TARGET};
 use std::{
     fs, io,

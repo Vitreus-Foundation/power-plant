@@ -213,13 +213,20 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
         /// Energy fee is paid to execute transaction [who, fee_amount]
-        EnergyFeePaid { who: T::AccountId, amount: BalanceOf<T> },
+        EnergyFeePaid {
+            who: T::AccountId,
+            amount: BalanceOf<T>,
+        },
         /// The burned energy threshold was updated [new_threshold]
-        BurnedEnergyThresholdUpdated { new_threshold: BalanceOf<T> },
-        ///
-        BlockFullnessThresholdUpdated { new_threshold: Perquintill },
-        ///
-        UpperFeeMultiplierUpdated { new_multiplier: Multiplier },
+        BurnedEnergyThresholdUpdated {
+            new_threshold: BalanceOf<T>,
+        },
+        BlockFullnessThresholdUpdated {
+            new_threshold: Perquintill,
+        },
+        UpperFeeMultiplierUpdated {
+            new_multiplier: Multiplier,
+        },
     }
 
     #[pallet::genesis_config]
@@ -334,9 +341,8 @@ pub mod pallet {
                 Preservation::Expendable,
                 Fortitude::Force,
             )
-            .map(|imbalance| {
+            .inspect(|_| {
                 Self::deposit_event(Event::<T>::EnergyFeePaid { who: who.clone(), amount: fee });
-                imbalance
             })
             .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
 
@@ -390,12 +396,11 @@ pub mod pallet {
                 Preservation::Expendable,
                 Fortitude::Force,
             )
-            .map(|imbalance| {
+            .inspect(|_| {
                 Self::deposit_event(Event::<T>::EnergyFeePaid {
                     who: account_id.clone(),
                     amount: const_energy_fee,
                 });
-                imbalance
             })
             .map_err(|_| pallet_evm::Error::<T>::BalanceLow)?;
             Self::update_burned_energy(imbalance.peek())

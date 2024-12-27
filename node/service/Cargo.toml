@@ -1,6 +1,5 @@
 [package]
 name = "vitreus-service"
-rust-version = "1.60"
 version.workspace = true
 authors.workspace = true
 edition.workspace = true
@@ -109,7 +108,7 @@ default = ["db", "full-node", "sql", "txpool", "with-rocksdb-weights"]
 with-rocksdb-weights = ["vitreus-power-plant-runtime/with-rocksdb-weights"]
 with-paritydb-weights = ["vitreus-power-plant-runtime/with-paritydb-weights"]
 sql = ["fc-db/sql", "fc-mapping-sync/sql"]
-txpool = ["fc-rpc/txpool"]
+txpool = ["vitreus-rpc/txpool"]
 rpc-binary-search-estimate = ["fc-rpc/rpc-binary-search-estimate"]
 
 db = [

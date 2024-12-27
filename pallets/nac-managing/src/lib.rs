@@ -714,11 +714,11 @@ impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
     }
 }
 
-impl<T: Config, Balance> OnClaimHandler<T::AccountId, Balance> for Pallet<T>
+impl<T: Config, Balance> OnClaimHandler<T::AccountId, Balance, ()> for Pallet<T>
 where
     Balance: frame_support::traits::tokens::Balance,
 {
-    fn on_claim(who: &T::AccountId, amount: Balance) -> DispatchResult {
+    fn on_claim(who: &T::AccountId, amount: Balance, _data: Option<()>) -> DispatchResult {
         let collection = T::NftCollectionId::get();
         let item = T::Nfts::owned_in_collection(&collection, who)
             .next()
