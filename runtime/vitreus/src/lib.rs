@@ -46,11 +46,11 @@ use polkadot_runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
-    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
-    Preservation, Provenance, WithdrawConsequence,
+    fungible, fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence,
+    Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, ProcessMessage,
+    Currency, EitherOfDiverse, ExistenceRequirement, Imbalance, OnUnbalanced, ProcessMessage,
     ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
 use parity_scale_codec::{Compact, Decode, Encode, MaxEncodedLen};
@@ -73,6 +73,7 @@ use sp_runtime::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
     ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Percent, Permill,
+    Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{
@@ -1331,55 +1332,63 @@ parameter_types! {
         );
 }
 
-/// Helper struct which mimics some functionality of the Balances pallet.
-///
-/// Used in pallet_evm for correct work of fee calculation. The only difference between Balances
-/// pallet and this struct is the implementation of the reducible balance, due to the fact that tx
-/// fee can be paid as in VTRS as in VNRG.
-pub struct QuasiBalances;
+pub struct CurrencyAdapter<T>(core::marker::PhantomData<T>);
 
-impl Currency<AccountId> for QuasiBalances {
-    type Balance = <Balances as Currency<AccountId>>::Balance;
-
-    type PositiveImbalance = <Balances as Currency<AccountId>>::PositiveImbalance;
-
-    type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
+impl<T> Currency<AccountId> for CurrencyAdapter<T>
+where
+    T: fungible::Inspect<AccountId> + fungible::Balanced<AccountId> + fungible::Mutate<AccountId>,
+{
+    type Balance = <T as fungible::Inspect<AccountId>>::Balance;
+    type PositiveImbalance = fungible::Debt<AccountId, T>;
+    type NegativeImbalance = fungible::Credit<AccountId, T>;
 
     fn total_balance(who: &AccountId) -> Self::Balance {
-        <Balances as Currency<AccountId>>::total_balance(who)
+        T::total_balance(who)
     }
 
     fn can_slash(who: &AccountId, value: Self::Balance) -> bool {
-        <Balances as Currency<AccountId>>::can_slash(who, value)
+        if value.is_zero() {
+            return true;
+        }
+        Self::free_balance(who) >= value
     }
 
     fn total_issuance() -> Self::Balance {
-        <Balances as Currency<AccountId>>::total_issuance()
+        T::total_issuance()
     }
 
     fn minimum_balance() -> Self::Balance {
-        <Balances as Currency<AccountId>>::minimum_balance()
+        T::minimum_balance()
     }
 
     fn burn(amount: Self::Balance) -> Self::PositiveImbalance {
-        <Balances as Currency<AccountId>>::burn(amount)
+        if amount.is_zero() {
+            return Self::PositiveImbalance::zero();
+        }
+        T::rescind(amount)
     }
 
     fn issue(amount: Self::Balance) -> Self::NegativeImbalance {
-        <Balances as Currency<AccountId>>::issue(amount)
+        if amount.is_zero() {
+            return Self::NegativeImbalance::zero();
+        }
+        T::issue(amount)
     }
 
     fn free_balance(who: &AccountId) -> Self::Balance {
-        <Balances as Currency<AccountId>>::free_balance(who)
+        T::reducible_balance(who, Preservation::Preserve, Fortitude::Polite)
     }
 
     fn ensure_can_withdraw(
         who: &AccountId,
-        _amount: Self::Balance,
-        reasons: WithdrawReasons,
-        new_balance: Self::Balance,
+        amount: Self::Balance,
+        _reasons: WithdrawReasons,
+        _new_balance: Self::Balance,
     ) -> DispatchResult {
-        <Balances as Currency<AccountId>>::ensure_can_withdraw(who, _amount, reasons, new_balance)
+        if amount.is_zero() {
+            return Ok(());
+        }
+        T::can_withdraw(who, amount).into_result(true).map(|_| ())
     }
 
     fn transfer(
@@ -1388,66 +1397,104 @@ impl Currency<AccountId> for QuasiBalances {
         value: Self::Balance,
         existence_requirement: ExistenceRequirement,
     ) -> DispatchResult {
-        <Balances as Currency<AccountId>>::transfer(source, dest, value, existence_requirement)
+        if value.is_zero() {
+            return Ok(());
+        }
+
+        let preservation = match existence_requirement {
+            ExistenceRequirement::KeepAlive => Preservation::Preserve,
+            ExistenceRequirement::AllowDeath => Preservation::Expendable,
+        };
+        T::transfer(source, dest, value, preservation).map(|_| ())
     }
 
     fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
-        <Balances as Currency<AccountId>>::slash(who, value)
+        if value.is_zero() {
+            return (Self::NegativeImbalance::zero(), Zero::zero());
+        }
+
+        let imbalance = T::withdraw(
+            who,
+            value,
+            Precision::BestEffort,
+            Preservation::Preserve,
+            Fortitude::Force,
+        )
+        .unwrap_or_else(|_| Self::NegativeImbalance::zero());
+
+        let remaining = value.saturating_sub(imbalance.peek());
+
+        (imbalance, remaining)
     }
 
     fn deposit_into_existing(
         who: &AccountId,
         value: Self::Balance,
     ) -> Result<Self::PositiveImbalance, DispatchError> {
-        <Balances as Currency<AccountId>>::deposit_into_existing(who, value)
+        if value.is_zero() {
+            return Ok(Self::PositiveImbalance::zero());
+        }
+        T::deposit(who, value, Precision::Exact)
     }
 
     fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance {
-        <Balances as Currency<AccountId>>::deposit_creating(who, value)
+        if value.is_zero() {
+            return Self::PositiveImbalance::zero();
+        }
+        T::deposit(who, value, Precision::Exact).unwrap_or_else(|_| Self::PositiveImbalance::zero())
     }
 
     fn withdraw(
         who: &AccountId,
         value: Self::Balance,
-        reasons: WithdrawReasons,
+        _reasons: WithdrawReasons,
         liveness: ExistenceRequirement,
     ) -> Result<Self::NegativeImbalance, DispatchError> {
-        <Balances as Currency<AccountId>>::withdraw(who, value, reasons, liveness)
+        if value.is_zero() {
+            return Ok(Self::NegativeImbalance::zero());
+        }
+
+        let preservation = match liveness {
+            ExistenceRequirement::KeepAlive => Preservation::Preserve,
+            ExistenceRequirement::AllowDeath => Preservation::Expendable,
+        };
+        T::withdraw(who, value, Precision::Exact, preservation, Fortitude::Polite)
     }
 
     fn make_free_balance_be(
         who: &AccountId,
         balance: Self::Balance,
     ) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
-        <Balances as Currency<AccountId>>::make_free_balance_be(who, balance)
+        T::set_balance(who, balance);
+        SignedImbalance::Positive(Self::PositiveImbalance::zero())
     }
 }
 
-impl FungibleInspect<AccountId> for QuasiBalances {
-    type Balance = <Balances as FungibleInspect<AccountId>>::Balance;
+impl<T: fungible::Inspect<AccountId>> fungible::Inspect<AccountId> for CurrencyAdapter<T> {
+    type Balance = T::Balance;
 
     fn total_issuance() -> Self::Balance {
-        <Balances as FungibleInspect<AccountId>>::total_issuance()
+        T::total_issuance()
     }
 
     fn minimum_balance() -> Self::Balance {
-        <Balances as FungibleInspect<AccountId>>::minimum_balance()
+        T::minimum_balance()
     }
 
     fn total_balance(who: &AccountId) -> Self::Balance {
-        <Balances as FungibleInspect<AccountId>>::total_balance(who)
+        T::total_balance(who)
     }
 
     fn balance(who: &AccountId) -> Self::Balance {
-        <Balances as FungibleInspect<AccountId>>::balance(who)
+        T::balance(who)
     }
 
     fn reducible_balance(
-        _who: &AccountId,
-        _preservation: Preservation,
-        _force: Fortitude,
+        who: &AccountId,
+        preservation: Preservation,
+        force: Fortitude,
     ) -> Self::Balance {
-        1_000_000_000_000_000_000_000
+        T::reducible_balance(who, preservation, force)
     }
 
     fn can_deposit(
@@ -1455,11 +1502,11 @@ impl FungibleInspect<AccountId> for QuasiBalances {
         amount: Self::Balance,
         provenance: Provenance,
     ) -> DepositConsequence {
-        <Balances as FungibleInspect<AccountId>>::can_deposit(who, amount, provenance)
+        T::can_deposit(who, amount, provenance)
     }
 
     fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
-        <Balances as FungibleInspect<AccountId>>::can_withdraw(who, amount)
+        T::can_withdraw(who, amount)
     }
 }
 
@@ -1475,7 +1522,7 @@ impl pallet_evm::Config for Runtime {
     type CallOrigin = EnsureAccountId20;
     type WithdrawOrigin = EnsureAccountId20;
     type AddressMapping = IdentityAddressMapping;
-    type Currency = QuasiBalances;
+    type Currency = CurrencyAdapter<EnergyItem>;
     type RuntimeEvent = RuntimeEvent;
     type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
