@@ -349,6 +349,7 @@ fp-evm = { git = "https://github.com/polkadot-evm/frontier", branch = "stable240
 fp-rpc = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 fp-self-contained = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 fp-storage = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
+precompile-utils = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 
 # Frontier FRAME
 pallet-base-fee = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
@@ -361,6 +362,9 @@ pallet-evm-precompile-sha3fips = { git = "https://github.com/polkadot-evm/fronti
 pallet-evm-precompile-simple = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-evm-test-vector-support = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-hotfix-sufficients = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
+
+# Moonbeam
+pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", default-features = false }
 
 # Vitreus pallets
 pallet-claiming = { path = "pallets/claiming", default-features = false }
