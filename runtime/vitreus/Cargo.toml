@@ -9,11 +9,12 @@ repository = { workspace = true }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-parity-scale-codec = { workspace = true }
-scale-info = { workspace = true }
-log = { workspace = true }
 hex-literal = { workspace = true }
+log = { workspace = true }
+num_enum = { workspace = true }
+parity-scale-codec = { workspace = true }
 primitive-types = { workspace = true, features = ["codec", "scale-info", "num-traits"] }
+scale-info = { workspace = true }
 static_assertions = { workspace = true }
 
 # Polkadot
@@ -98,6 +99,7 @@ fp-account = { workspace = true, features = ["serde"] }
 fp-evm = { workspace = true, features = ["serde"] }
 fp-rpc = { workspace = true }
 fp-self-contained = { workspace = true, features = ["serde"] }
+precompile-utils = { workspace = true }
 
 # Frontier FRAME
 pallet-ethereum = { workspace = true }
@@ -107,6 +109,9 @@ pallet-evm-precompile-modexp = { workspace = true }
 pallet-evm-precompile-sha3fips = { workspace = true }
 pallet-evm-precompile-simple = { workspace = true }
 pallet-hotfix-sufficients = { workspace = true }
+
+# Moonbeam
+pallet-evm-precompile-balances-erc20 = { workspace = true }
 
 # Vitreus pallets
 pallet-claiming = { workspace = true }
@@ -275,6 +280,7 @@ std = [
     "fp-evm/std",
     "fp-rpc/std",
     "fp-self-contained/std",
+    "precompile-utils/std",
     # Frontier FRAME
     "pallet-ethereum/std",
     "pallet-evm-chain-id/std",
@@ -283,6 +289,8 @@ std = [
     "pallet-evm-precompile-simple/std",
     "pallet-evm/std",
     "pallet-hotfix-sufficients/std",
+    # Moonbeam
+    "pallet-evm-precompile-balances-erc20/std",
     # Vitreus pallets
     "pallet-claiming/std",
     "pallet-energy-broker/std",
