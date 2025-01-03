@@ -412,11 +412,12 @@ impl pallet_energy_generation::Config for Test {
     type SlashDeferDuration = SlashDeferDuration;
     type AdminOrigin = EnsureOneOrRoot;
     type SessionInterface = Self;
-    type EnergyPerStakeCurrency = EnergyGeneration;
+    type EraEnergyRateCalculator = ();
     type NextNewSession = Session;
     type MaxCooperatorRewardedPerValidator = ConstU32<64>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type EventListeners = EventListenerMock;
+    type SessionChangeListeners = ();
     type DisablingStrategy = pallet_energy_generation::UpToLimitDisablingStrategy<3>;
     type ValidatorReputationTier = ValidatorReputationTier;
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;

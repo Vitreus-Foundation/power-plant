@@ -47,8 +47,8 @@ use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
     fungible, fungible::Inspect as FungibleInspect, imbalance::ResolveAssetTo,
-    nonfungibles_v2::Inspect, ConversionFromAssetBalance, ConversionToAssetBalance,
-    DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
+    nonfungibles_v2::Inspect, DepositConsequence, Fortitude, Precision, Preservation, Provenance,
+    WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, Imbalance, OnUnbalanced, ProcessMessage,
@@ -60,7 +60,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use sp_runtime::traits::{AccountIdConversion, Convert, ConvertInto, Keccak256, Zero};
+use sp_runtime::traits::{AccountIdConversion, Convert, ConvertInto, Keccak256, One, Zero};
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -73,8 +73,8 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Percent, Permill,
-    Saturating,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, Perbill, Percent,
+    Permill, Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{
@@ -102,7 +102,7 @@ use frame_support::{
     },
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
-use pallet_energy_fee::{traits::AssetsBalancesConverter, CallFee, CustomFee, TokenExchange};
+use pallet_energy_fee::{CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -497,7 +497,7 @@ impl pallet_reputation::Config for Runtime {
     type WeightInfo = ();
 }
 
-use pallet_energy_generation::{EnergyRateCalculator, StakeOf, StashOf};
+use pallet_energy_generation::StashOf;
 
 pallet_staking_reward_curve::build! {
     const I_NPOS: PiecewiseLinear<'static> = curve!(
@@ -720,32 +720,6 @@ parameter_types! {
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-pub struct EnergyPerStakeCurrency;
-
-impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerStakeCurrency {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Runtime>,
-        _total_issuance: Energy,
-        _core_nodes_num: u32,
-        _battery_slot_cap: Energy,
-    ) -> Energy {
-        19_909_091_036_891
-    }
-}
-
-pub struct EnergyPerReputationPoint;
-
-impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerReputationPoint {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Runtime>,
-        _total_issuance: Energy,
-        _core_nodes_num: u32,
-        _battery_slot_cap: Energy,
-    ) -> Energy {
-        1_000
-    }
-}
-
 pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
 
 impl Convert<&ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
@@ -790,13 +764,14 @@ impl pallet_energy_generation::Config for Runtime {
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type ValidatorReputationTier = ValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = EnergyGeneration;
+    type EraEnergyRateCalculator = DynamicEnergy;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
     type MaxCooperatorRewardedPerValidator = ConstU32<128>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = ();
+    type SessionChangeListeners = (EnergyBroker, DynamicEnergy);
     type ReputationTierEnergyRewardAdditionalPercentMapping =
         ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = ();
@@ -957,6 +932,7 @@ parameter_types! {
     pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
     pub const SwapFee: u32 = 10; // 1%
     pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
+    pub const BurnedEnergySessionsCount: u32 = 84 * SessionsPerEra::get();
 }
 
 ord_parameter_types! {
@@ -972,11 +948,7 @@ impl pallet_energy_broker::EnergyBalanceConverter<Balance, NativeOrAssetId> for 
     fn asset_to_energy_balance(asset_id: NativeOrAssetId, balance: Balance) -> Option<Balance> {
         match asset_id {
             NativeOrAssetId::Native => {
-                AssetsBalancesConverter::<Runtime, AssetRate>::to_asset_balance(
-                    balance,
-                    VNRG::get(),
-                )
-                .ok()
+                DynamicEnergy::exchange_rate().map(|rate| rate.saturating_mul_int(balance))
             },
             _ => None,
         }
@@ -984,13 +956,9 @@ impl pallet_energy_broker::EnergyBalanceConverter<Balance, NativeOrAssetId> for 
 
     fn energy_to_asset_balance(asset_id: NativeOrAssetId, balance: Balance) -> Option<Balance> {
         match asset_id {
-            NativeOrAssetId::Native => {
-                AssetsBalancesConverter::<Runtime, AssetRate>::from_asset_balance(
-                    balance,
-                    VNRG::get(),
-                )
-                .ok()
-            },
+            NativeOrAssetId::Native => DynamicEnergy::exchange_rate()
+                .and_then(FixedPointNumber::reciprocal)
+                .map(|rate| rate.saturating_mul_int(balance)),
             _ => None,
         }
     }
@@ -1005,10 +973,32 @@ impl pallet_energy_broker::Config for Runtime {
     type Assets = NativeAndAssets;
     type BalanceConverter = EnergyRate;
     type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
+    type OnEnergySell = DynamicEnergy;
     type SwapFee = SwapFee;
-    type EnergyCapacity = ConstU128<{ u128::MAX }>;
     type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
+    type BurnedEnergySessionsCount = BurnedEnergySessionsCount;
+}
+
+parameter_types! {
+    pub const ExpectedSessionDuration: u32 = EPOCH_DURATION_IN_BLOCKS * SECS_PER_BLOCK as u32;
+    pub const AnnualPercentageRate: u32 = 100; // 10%
+    pub MultiplierCoefficients: [FixedI128; 4] = [
+        FixedI128::zero(), FixedI128::zero(), FixedI128::zero(), FixedI128::one(),
+    ];
+}
+
+impl pallet_dynamic_energy::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type ManageOrigin = EnsureRoot<AccountId>;
+    type Balance = Balance;
+    type HigherPrecisionBalance = sp_core::U256;
+    type Staking = EnergyGeneration;
+    type Warehouse = EnergyBroker;
+    type SessionsPerEra = SessionsPerEra;
+    type ExpectedSessionDuration = ExpectedSessionDuration;
+    type DefaultAnnualPercentageRate = AnnualPercentageRate;
+    type DefaultMultiplierCoefficients = MultiplierCoefficients;
 }
 
 parameter_types! {
@@ -1073,6 +1063,7 @@ impl pallet_energy_fee::Config for Runtime {
     type MainRecycleDestination = EnergyBrokerSink;
     type FeeRecycleDestination = ();
     type OnWithdrawFee = NacManaging;
+    type OnEnergyBurn = (EnergyBroker, DynamicEnergy);
 }
 
 parameter_types! {
@@ -1191,6 +1182,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Auctions(..)
             | RuntimeCall::Balances(..)
             | RuntimeCall::Bounties(..)
+            | RuntimeCall::DynamicEnergy(..)
             | RuntimeCall::EnergyGeneration(..)
             | RuntimeCall::EnergyBroker(..)
             | RuntimeCall::Nfts(..)
@@ -1857,6 +1849,7 @@ construct_runtime!(
         EnergyGeneration: pallet_energy_generation = 39,
         EnergyBroker: pallet_energy_broker = 40,
         Privileges: pallet_privileges = 41,
+        DynamicEnergy: pallet_dynamic_energy = 42,
         Proxy: pallet_proxy = 44,
 
         // Governance-related pallets
@@ -2831,7 +2824,8 @@ impl_runtime_apis! {
         fn current_energy_per_stake_currency() -> u128 {
             EnergyGeneration::active_era()
                 .and_then(|era| EnergyGeneration::eras_energy_per_stake_cur(era.index))
-                .unwrap_or(0)
+                .unwrap_or_default().into_inner()
+
         }
     }
 

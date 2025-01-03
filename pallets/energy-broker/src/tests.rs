@@ -384,7 +384,7 @@ fn can_not_swap_zero_amount() {
 fn burn_energy_beyond_capacity() {
     new_test_ext().execute_with(|| {
         let broker_account = EnergyBroker::account_id();
-        set_balances(broker_account, 1000, EnergyCapacity::get().saturating_sub(100));
+        set_balances(broker_account, 1000, INITIAL_ENERGY_CAPACITY.saturating_sub(100));
 
         let energy_issuance = get_energy_total_issuance();
 
@@ -403,7 +403,7 @@ fn burn_energy_beyond_capacity() {
         assert_eq!(balance(ALICE), alice_balance + 98);
         assert_eq!(energy_balance(ALICE), alice_energy - 1000);
 
-        assert_eq!(energy_balance(broker_account), EnergyCapacity::get());
+        assert_eq!(energy_balance(broker_account), INITIAL_ENERGY_CAPACITY);
         assert_eq!(get_energy_total_issuance(), energy_issuance - 880);
 
         // the broker is full, but an user can swap anyway
@@ -418,7 +418,7 @@ fn burn_energy_beyond_capacity() {
         assert_eq!(balance(ALICE), alice_balance + 98 + 98);
         assert_eq!(energy_balance(ALICE), alice_energy - 1000 - 1000);
 
-        assert_eq!(energy_balance(broker_account), EnergyCapacity::get());
+        assert_eq!(energy_balance(broker_account), INITIAL_ENERGY_CAPACITY);
         assert_eq!(get_energy_total_issuance(), energy_issuance - 880 - 980);
     });
 }

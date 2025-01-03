@@ -32,7 +32,7 @@ use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use parity_scale_codec::Codec;
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, CheckedSub, Convert, SaturatedConversion, StaticLookup, Zero},
-    ArithmeticError, Perbill, Percent, Saturating,
+    ArithmeticError, FixedU128, Perbill, Percent, Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::collections::btree_map::BTreeMap;
@@ -42,9 +42,9 @@ mod impls;
 
 use crate::{
     slashing, slashing::NegativeImbalanceOf, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo,
-    Cooperations, DisablingStrategy, EnergyDebtOf, EnergyRateCalculator, Exposure, Forcing,
-    RewardDestination, SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakingLedger,
-    UnappliedSlash, UnlockChunk, ValidatorPrefs,
+    Cooperations, DisablingStrategy, EnergyDebtOf, Exposure, Forcing, RewardDestination,
+    SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakingLedger, UnappliedSlash,
+    UnlockChunk, ValidatorPrefs,
 };
 
 #[cfg(feature = "try-runtime")]
@@ -62,6 +62,7 @@ pub mod pallet {
     use crate::{
         slashing::StorageEssentials, BenchmarkingConfig, EnergyOf, OnVipMembershipHandler,
     };
+    use vitreus_runtime_common::{EraEnergyRateCalculator, OnSessionChange};
 
     use super::*;
 
@@ -185,8 +186,8 @@ pub mod pallet {
         /// Interface for interacting with a session pallet.
         type SessionInterface: SessionInterface<Self::AccountId>;
 
-        /// Energy per stake currency rate calculation callback.
-        type EnergyPerStakeCurrency: EnergyRateCalculator<StakeOf<Self>, EnergyOf<Self>>;
+        /// A type that calculates energy generation for the era that has just ended.
+        type EraEnergyRateCalculator: EraEnergyRateCalculator<EnergyOf<Self>>;
 
         /// Something that can estimate the next session change, accurately or as a best effort
         /// guess.
@@ -217,6 +218,9 @@ pub mod pallet {
         ///
         /// WARNING: this only reports slashing events for the time being.
         type EventListeners: sp_staking::OnStakingUpdate<Self::AccountId, StakeOf<Self>>;
+
+        /// Something that listens to session updates and performs actions when a session changes.
+        type SessionChangeListeners: OnSessionChange;
 
         /// `DisablingStragegy` controls how validators are disabled
         type DisablingStrategy: DisablingStrategy<Self>;
@@ -457,7 +461,7 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn eras_energy_per_stake_cur)]
     pub type ErasEnergyPerStakeCurrency<T: Config> =
-        StorageMap<_, Twox64Concat, EraIndex, EnergyOf<T>>;
+        StorageMap<_, Twox64Concat, EraIndex, FixedU128>;
 
     /// The total amount staked for the last `HISTORY_DEPTH` eras.
     /// If total hasn't been set or has been removed then 0 stake is returned.
@@ -673,7 +677,7 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(crate) fn deposit_event)]
     pub enum Event<T: Config> {
         /// The era energy per stake currency has been set.
-        EraEnergyPerStakeCurrencySet { era_index: EraIndex, energy_rate: EnergyOf<T> },
+        EraEnergyPerStakeCurrencySet { era_index: EraIndex, energy_rate: FixedU128 },
         /// The cooperator has been rewarded by this amount.
         Rewarded { stash: T::AccountId, amount: EnergyOf<T> },
         /// A staker (validator or cooperator) has been slashed by the given amount.

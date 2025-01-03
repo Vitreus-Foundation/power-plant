@@ -16,6 +16,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub const ALICE: u128 = 1;
 pub const INITIAL_BALANCE: u128 = 10000;
 pub const INITIAL_ENERGY_BALANCE: u128 = 10000;
+pub const INITIAL_ENERGY_CAPACITY: u128 = 2 * INITIAL_ENERGY_BALANCE;
 
 construct_runtime!(
     pub enum Test
@@ -103,7 +104,6 @@ parameter_types! {
     pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
     pub const VNRG: u32 = 1;
     pub const FeeAccount: u128 = 99;
-    pub const EnergyCapacity: u128 = 2 * INITIAL_ENERGY_BALANCE;
 }
 
 impl Config for Test {
@@ -115,11 +115,11 @@ impl Config for Test {
     type Assets = NativeAndAssets;
     type BalanceConverter = AssetRate;
     type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
-    // means 2%
-    type SwapFee = ConstU32<20>;
-    type EnergyCapacity = EnergyCapacity;
+    type OnEnergySell = ();
+    type SwapFee = ConstU32<20>; // means 2%
     type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
+    type BurnedEnergySessionsCount = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
@@ -146,6 +146,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut t)
     .unwrap();
+
+    pallet_energy_broker::GenesisConfig::<Test> { energy_capacity: INITIAL_ENERGY_CAPACITY }
+        .assimilate_storage(&mut t)
+        .unwrap();
 
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
