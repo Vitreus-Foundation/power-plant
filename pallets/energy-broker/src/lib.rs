@@ -4,6 +4,8 @@
 #![warn(missing_docs)]
 #![allow(clippy::result_unit_err, clippy::too_many_arguments)]
 
+pub mod migration;
+
 #[cfg(test)]
 mod tests;
 
@@ -45,7 +47,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
     use sp_arithmetic::traits::Unsigned;
 
-    const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]

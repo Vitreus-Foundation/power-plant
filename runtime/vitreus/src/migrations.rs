@@ -24,8 +24,13 @@ pub type V0200 = (
 
 pub type V0205 = (claiming::RemoveStorage);
 
+parameter_types! {
+    pub const EnergyBrokerCapacity: u128 = 10_000_000_000_000_000;
+}
+
 pub type Unreleased = (
     energy_broker::MigrateToEnergyBrokerV2,
+    pallet_energy_broker::migration::MigrateToV1<Runtime, EnergyBrokerCapacity>,
     pallet_energy_generation::migrations::v16::MigrateV15ToV16<Runtime>,
 );
 
