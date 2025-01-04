@@ -24,7 +24,10 @@ pub type V0200 = (
 
 pub type V0205 = (claiming::RemoveStorage);
 
-pub type Unreleased = (energy_broker::MigrateToEnergyBrokerV2);
+pub type Unreleased = (
+    energy_broker::MigrateToEnergyBrokerV2,
+    pallet_energy_generation::migrations::v16::MigrateV15ToV16<Runtime>,
+);
 
 mod energy_broker {
     use super::*;
