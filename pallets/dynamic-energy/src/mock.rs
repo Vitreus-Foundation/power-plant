@@ -20,6 +20,10 @@ impl Staking<u128> for MockStaking {
 }
 
 impl EraSessionLookup for MockStaking {
+    fn active_era() -> Option<EraIndex> {
+        None
+    }
+
     fn era_for_session(session_index: SessionIndex) -> Option<EraIndex> {
         Some(session_index / SessionsPerEra::get())
     }

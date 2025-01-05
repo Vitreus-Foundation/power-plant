@@ -1,6 +1,7 @@
 #![allow(clippy::collapsible_else_if, unused_parens)]
 
 use super::*;
+use sp_runtime::FixedU128;
 
 pub type Permanent = (
     pallet_xcm::migration::MigrateToLatestXcmVersion<Runtime>,
@@ -24,15 +25,27 @@ pub type V0200 = (
 
 pub type V0205 = (claiming::RemoveStorage);
 
-parameter_types! {
-    pub const EnergyBrokerCapacity: u128 = 10_000_000_000_000_000;
-}
-
 pub type Unreleased = (
     energy_broker::MigrateToEnergyBrokerV2,
     pallet_energy_broker::migration::MigrateToV1<Runtime, EnergyBrokerCapacity>,
     pallet_energy_generation::migrations::v16::MigrateV15ToV16<Runtime>,
+    pallet_dynamic_energy::migration::Initialize<
+        Runtime,
+        EnergyGeneration,
+        EnergyExchangeRate,
+        EnergyBurn,
+        EnergySale,
+        TotalStake,
+    >,
 );
+
+parameter_types! {
+    pub const EnergyBrokerCapacity: u128 = 10_000_000_000_000_000;
+    pub const EnergyBurn: u128 = 2_009_132_407_194;
+    pub const EnergySale: u128 = 1_642_710_472_279;
+    pub const TotalStake: u128 = 160000000000000000000000000;
+    pub EnergyExchangeRate: FixedU128 = FixedU128::from_rational(900_000_000, 1_000_000_000_000_000_000);
+}
 
 mod energy_broker {
     use super::*;

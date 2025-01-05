@@ -48,6 +48,9 @@ pub trait Staking<Balance> {
 
 /// A trait for querying era and session-related information.
 pub trait EraSessionLookup {
+    /// Returns the index of the ongoing era.
+    fn active_era() -> Option<EraIndex>;
+
     /// Returns the era index corresponding to the given session index.
     fn era_for_session(session_index: SessionIndex) -> Option<EraIndex>;
 

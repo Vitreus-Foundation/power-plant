@@ -1240,6 +1240,10 @@ impl<T: Config> Staking<StakeOf<T>> for Pallet<T> {
 }
 
 impl<T: Config> EraSessionLookup for Pallet<T> {
+    fn active_era() -> Option<EraIndex> {
+        Self::active_era().map(|era| era.index)
+    }
+
     fn era_for_session(session_index: SessionIndex) -> Option<EraIndex> {
         if session_index <= Self::current_planned_session() {
             let current_era = Self::current_era()?;

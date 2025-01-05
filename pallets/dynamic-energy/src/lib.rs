@@ -16,6 +16,8 @@ use vitreus_runtime_common::{
 
 pub use pallet::*;
 
+pub mod migration;
+
 #[cfg(test)]
 mod mock;
 
