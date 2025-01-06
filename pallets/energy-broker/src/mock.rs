@@ -14,6 +14,7 @@ use sp_runtime::{traits::IdentityLookup, BuildStorage};
 type Block = frame_system::mocking::MockBlock<Test>;
 
 pub const ALICE: u128 = 1;
+pub const BOB: u128 = 2;
 pub const INITIAL_BALANCE: u128 = 10000;
 pub const INITIAL_ENERGY_BALANCE: u128 = 10000;
 pub const INITIAL_ENERGY_CAPACITY: u128 = 2 * INITIAL_ENERGY_BALANCE;
@@ -130,6 +131,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
             (EnergyBroker::account_id(), INITIAL_BALANCE),
             (FeeAccount::get(), 10),
             (ALICE, 1000),
+            (BOB, 1000),
         ],
     }
     .assimilate_storage(&mut t)

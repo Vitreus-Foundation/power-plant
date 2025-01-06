@@ -145,6 +145,8 @@ pub mod pallet {
         SwapExecuted {
             /// Which account was the instigator of the swap.
             who: T::AccountId,
+            /// The account that the assets were transferred to.
+            recipient: T::AccountId,
             /// The swapped assets.
             path: (T::AssetKind, T::AssetKind),
             /// The amount of the first asset that was swapped.
@@ -213,6 +215,7 @@ pub mod pallet {
         #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
         pub fn swap_exact_tokens_for_tokens(
             origin: OriginFor<T>,
+            recipient: T::AccountId,
             path: (T::AssetKind, T::AssetKind),
             amount_in: T::Balance,
             amount_out_min: Option<T::Balance>,
@@ -222,6 +225,7 @@ pub mod pallet {
 
             Self::do_swap_exact_tokens_for_tokens(
                 sender,
+                recipient,
                 path,
                 amount_in,
                 amount_out_min,
@@ -235,6 +239,7 @@ pub mod pallet {
         #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
         pub fn swap_tokens_for_exact_tokens(
             origin: OriginFor<T>,
+            recipient: T::AccountId,
             path: (T::AssetKind, T::AssetKind),
             amount_out: T::Balance,
             amount_in_max: Option<T::Balance>,
@@ -244,6 +249,7 @@ pub mod pallet {
 
             Self::do_swap_tokens_for_exact_tokens(
                 sender,
+                recipient,
                 path,
                 amount_out,
                 amount_in_max,
@@ -365,8 +371,11 @@ pub mod pallet {
             sender: T::AccountId,
             amount_in: T::Balance,
         ) -> Result<T::Balance, DispatchError> {
+            let recipient = sender.clone();
+
             Self::do_swap_exact_tokens_for_tokens(
                 sender,
+                recipient,
                 (T::NativeAsset::get(), T::EnergyAsset::get()),
                 amount_in,
                 None,
@@ -379,8 +388,11 @@ pub mod pallet {
             sender: T::AccountId,
             amount_out: T::Balance,
         ) -> Result<T::Balance, DispatchError> {
+            let recipient = sender.clone();
+
             Self::do_swap_tokens_for_exact_tokens(
                 sender,
+                recipient,
                 (T::NativeAsset::get(), T::EnergyAsset::get()),
                 amount_out,
                 None,
@@ -390,6 +402,7 @@ pub mod pallet {
 
         fn do_swap_exact_tokens_for_tokens(
             sender: T::AccountId,
+            recipient: T::AccountId,
             path: (T::AssetKind, T::AssetKind),
             amount_in: T::Balance,
             amount_out_min: Option<T::Balance>,
@@ -408,15 +421,22 @@ pub mod pallet {
                 );
             }
 
-            Self::do_swap(&sender, &path, (amount_in, amount_out), fee, keep_alive)?;
+            Self::do_swap(&sender, &recipient, &path, (amount_in, amount_out), fee, keep_alive)?;
 
-            Self::deposit_event(Event::SwapExecuted { who: sender, path, amount_in, amount_out });
+            Self::deposit_event(Event::SwapExecuted {
+                who: sender,
+                recipient,
+                path,
+                amount_in,
+                amount_out,
+            });
 
             Ok(amount_out)
         }
 
         fn do_swap_tokens_for_exact_tokens(
             sender: T::AccountId,
+            recipient: T::AccountId,
             path: (T::AssetKind, T::AssetKind),
             amount_out: T::Balance,
             amount_in_max: Option<T::Balance>,
@@ -435,15 +455,22 @@ pub mod pallet {
                 );
             }
 
-            Self::do_swap(&sender, &path, (amount_in, amount_out), fee, keep_alive)?;
+            Self::do_swap(&sender, &recipient, &path, (amount_in, amount_out), fee, keep_alive)?;
 
-            Self::deposit_event(Event::SwapExecuted { who: sender, path, amount_in, amount_out });
+            Self::deposit_event(Event::SwapExecuted {
+                who: sender,
+                recipient,
+                path,
+                amount_in,
+                amount_out,
+            });
 
             Ok(amount_in)
         }
 
         fn do_swap(
             sender: &T::AccountId,
+            recipient: &T::AccountId,
             path: &(T::AssetKind, T::AssetKind),
             amounts: (T::Balance, T::Balance),
             fee_part: T::Balance,
@@ -481,7 +508,7 @@ pub mod pallet {
             Self::transfer(
                 asset_out.clone(),
                 &broker_account,
-                sender,
+                recipient,
                 amount_out,
                 Zero::zero(),
                 Preserve,

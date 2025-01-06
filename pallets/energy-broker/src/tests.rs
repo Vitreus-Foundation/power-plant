@@ -65,6 +65,7 @@ fn can_swap_native_for_exact_energy() {
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (NATIVE_TOKEN, ENERGY_TOKEN),
             exchange_out,
             None,
@@ -97,6 +98,7 @@ fn can_swap_exact_native_for_energy() {
 
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (NATIVE_TOKEN, ENERGY_TOKEN),
             exchange_in + expect_fee,
             None,
@@ -129,6 +131,7 @@ fn can_swap_energy_for_exact_native() {
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (ENERGY_TOKEN, NATIVE_TOKEN),
             exchange_out,
             None,
@@ -161,6 +164,7 @@ fn can_swap_exact_energy_for_native() {
 
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (ENERGY_TOKEN, NATIVE_TOKEN),
             exchange_in + expect_fee,
             None,
@@ -186,6 +190,7 @@ fn swap_with_amount_out_min_works() {
         assert_noop!(
             EnergyBroker::swap_exact_tokens_for_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (NATIVE_TOKEN, ENERGY_TOKEN),
                 amount_in,
                 Some(amount_out + 1),
@@ -196,6 +201,7 @@ fn swap_with_amount_out_min_works() {
 
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (NATIVE_TOKEN, ENERGY_TOKEN),
             amount_in,
             Some(amount_out),
@@ -214,6 +220,7 @@ fn swap_with_amount_in_max_works() {
         assert_noop!(
             EnergyBroker::swap_tokens_for_exact_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (NATIVE_TOKEN, ENERGY_TOKEN),
                 amount_out,
                 Some(amount_in - 1),
@@ -224,6 +231,7 @@ fn swap_with_amount_in_max_works() {
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (NATIVE_TOKEN, ENERGY_TOKEN),
             amount_out,
             Some(amount_in),
@@ -237,6 +245,7 @@ fn swap_without_keep_alive_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (ENERGY_TOKEN, NATIVE_TOKEN),
             energy_balance(ALICE),
             None,
@@ -247,6 +256,7 @@ fn swap_without_keep_alive_works() {
         frame_system::Pallet::<Test>::inc_providers(&ALICE);
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (NATIVE_TOKEN, ENERGY_TOKEN),
             balance(ALICE),
             None,
@@ -267,6 +277,7 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
         assert_noop!(
             EnergyBroker::swap_exact_tokens_for_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (NATIVE_TOKEN, ENERGY_TOKEN),
                 liquidity + 1,
                 None,
@@ -278,6 +289,7 @@ fn swap_when_existential_deposit_would_cause_reaping_but_keep_alive_set() {
         assert_noop!(
             EnergyBroker::swap_exact_tokens_for_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (ENERGY_TOKEN, NATIVE_TOKEN),
                 liquidity + 1,
                 None,
@@ -298,6 +310,7 @@ fn can_not_swap_without_liquidity() {
         assert_noop!(
             EnergyBroker::swap_tokens_for_exact_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (NATIVE_TOKEN, ENERGY_TOKEN),
                 liquidity + 1,
                 None,
@@ -309,6 +322,7 @@ fn can_not_swap_without_liquidity() {
         assert_noop!(
             EnergyBroker::swap_tokens_for_exact_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (ENERGY_TOKEN, NATIVE_TOKEN),
                 liquidity + 1,
                 None,
@@ -325,6 +339,7 @@ fn can_not_swap_zero_amount() {
         assert_noop!(
             EnergyBroker::swap_exact_tokens_for_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (NATIVE_TOKEN, ENERGY_TOKEN),
                 0,
                 None,
@@ -336,6 +351,7 @@ fn can_not_swap_zero_amount() {
         assert_noop!(
             EnergyBroker::swap_tokens_for_exact_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (NATIVE_TOKEN, ENERGY_TOKEN),
                 0,
                 None,
@@ -347,6 +363,7 @@ fn can_not_swap_zero_amount() {
         assert_noop!(
             EnergyBroker::swap_exact_tokens_for_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (ENERGY_TOKEN, NATIVE_TOKEN),
                 0,
                 None,
@@ -358,6 +375,7 @@ fn can_not_swap_zero_amount() {
         assert_noop!(
             EnergyBroker::swap_tokens_for_exact_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (ENERGY_TOKEN, NATIVE_TOKEN),
                 0,
                 None,
@@ -370,6 +388,7 @@ fn can_not_swap_zero_amount() {
         assert_noop!(
             EnergyBroker::swap_exact_tokens_for_tokens(
                 RuntimeOrigin::signed(ALICE),
+                ALICE,
                 (ENERGY_TOKEN, NATIVE_TOKEN),
                 1,
                 None,
@@ -394,6 +413,7 @@ fn burn_energy_beyond_capacity() {
         // the broker saves 100 energy and burns 880
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (ENERGY_TOKEN, NATIVE_TOKEN),
             1000,
             None,
@@ -409,6 +429,7 @@ fn burn_energy_beyond_capacity() {
         // the broker is full, but an user can swap anyway
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (ENERGY_TOKEN, NATIVE_TOKEN),
             1000,
             None,
@@ -432,6 +453,7 @@ fn swap_tokens_for_exact_tokens_works_for_low_amount_out() {
         // amount_in = 1, even though 5 / 10 = 0
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
+            ALICE,
             (NATIVE_TOKEN, ENERGY_TOKEN),
             5,
             None,
@@ -440,5 +462,30 @@ fn swap_tokens_for_exact_tokens_works_for_low_amount_out() {
 
         assert_eq!(balance(ALICE), alice_balance_before - 1);
         assert_eq!(energy_balance(ALICE), alice_energy_before + 5);
+    });
+}
+
+#[test]
+fn swap_to_recipient_works() {
+    new_test_ext().execute_with(|| {
+        let alice_balance = balance(ALICE);
+
+        let exchange_in = 98;
+        let expect_out = 980;
+        let expect_fee = 2;
+
+        assert_eq!(energy_balance(BOB), 0);
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            BOB,
+            (NATIVE_TOKEN, ENERGY_TOKEN),
+            exchange_in + expect_fee,
+            None,
+            true,
+        ));
+
+        assert_eq!(balance(ALICE), alice_balance - exchange_in - expect_fee);
+        assert_eq!(energy_balance(BOB), expect_out);
     });
 }
