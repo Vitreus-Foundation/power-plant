@@ -24,6 +24,7 @@ use sp_staking::offence::OffenceDetails;
 use sp_std::prelude::*;
 use std::ops::Deref;
 use substrate_test_utils::assert_eq_uvec;
+use vitreus_runtime_common::EraSessionLookup;
 
 #[test]
 fn set_staking_configs_works() {
@@ -284,9 +285,6 @@ fn rewards_should_work() {
         )
         .unwrap();
 
-        // Compute total payout now for whole duration of the session.
-        let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-
         start_session(1);
         assert_eq_uvec!(Session::validators(), [21, 11]);
 
@@ -305,6 +303,8 @@ fn rewards_should_work() {
         start_session(3);
 
         assert_eq!(active_era(), 1);
+
+        let total_payout_0 = total_payout_for_era(0);
 
         mock::make_all_reward_payment(0);
 
@@ -339,15 +339,14 @@ fn rewards_should_work() {
         assert_eq_uvec!(Session::validators(), [21, 11]);
         Pallet::<Test>::reward_by_ids(vec![(11, 1.into())]);
 
-        // Compute total payout now for whole duration as other parameter won't change
-        let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
-
         mock::start_active_era(2);
+        let total_payout_1 = total_payout_for_era(1);
+
         let mut events = mock::staking_events();
-        let energy_rate = ErasEnergyPerStakeCurrency::<Test>::get(2).unwrap();
+        let energy_rate = ErasEnergyPerStakeCurrency::<Test>::get(1).unwrap();
         assert_eq!(
             events.pop().unwrap(),
-            Event::EraEnergyPerStakeCurrencySet { era_index: 2, energy_rate }
+            Event::EraEnergyPerStakeCurrencySet { era_index: 1, energy_rate }
         );
         mock::make_all_reward_payment(1);
 
@@ -667,12 +666,11 @@ fn cooperating_and_rewards_should_work() {
                 vec![(21, 200), (11, 150), (41, 525)]
             ));
 
-            // the total reward for era 0
-            let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
             PowerPlant::reward_by_ids(vec![(41, 1.into())]);
             PowerPlant::reward_by_ids(vec![(21, 1.into())]);
 
             mock::start_active_era(1);
+            let total_payout_0 = total_payout_for_era(0);
 
             assert_eq_uvec!(validator_controllers(), [40, 20]);
             let eras_total_stake = ErasTotalStake::<Test>::get(0);
@@ -722,12 +720,11 @@ fn cooperating_and_rewards_should_work() {
                 },
             );
 
-            // the total reward for era 1
-            let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
             PowerPlant::reward_by_ids(vec![(21, 2.into())]);
             PowerPlant::reward_by_ids(vec![(11, 1.into())]);
 
             mock::start_active_era(2);
+            let total_payout_1 = total_payout_for_era(1);
 
             // nothing else will happen, era ends and rewards are paid again, it is expected that
             // cooperators will also be paid. See below
@@ -1207,11 +1204,12 @@ fn reward_destination_works() {
             })
         );
 
+        mock::start_active_era(1);
+
         // Compute total payout now for whole duration as other parameter won't change
-        let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
+        let total_payout_0 = total_payout_for_era(0);
         Pallet::<Test>::reward_by_ids(vec![(11, 1000.into())]);
 
-        mock::start_active_era(1);
         mock::make_all_reward_payment(0);
         let total_stake = ErasTotalStake::<Test>::get(0);
         let energy_reward_10_0 =
@@ -1227,11 +1225,11 @@ fn reward_destination_works() {
         // Change RewardDestination to Stash
         Payee::<Test>::insert(11, RewardDestination::Stash);
 
+        mock::start_active_era(2);
         // Compute total payout now for whole duration as other parameter won't change
-        let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
+        let total_payout_1 = total_payout_for_era(1);
         Pallet::<Test>::reward_by_ids(vec![(11, 1000.into())]);
 
-        mock::start_active_era(2);
         mock::make_all_reward_payment(1);
 
         let total_stake = ErasTotalStake::<Test>::get(1);
@@ -1252,11 +1250,11 @@ fn reward_destination_works() {
         // Check controller balance
         assert_eq!(Assets::balance(VNRG::get(), 10), controller_balance_0);
 
+        mock::start_active_era(3);
         // Compute total payout now for whole duration as other parameter won't change
-        let total_payout_2 = current_total_payout_for_duration(reward_time_per_era());
+        let total_payout_2 = total_payout_for_era(2);
         Pallet::<Test>::reward_by_ids(vec![(11, 1000.into())]);
 
-        mock::start_active_era(3);
         mock::make_all_reward_payment(2);
         let total_stake = ErasTotalStake::<Test>::get(2);
         // Stash reputation tier hasn't changed, no check needed
@@ -1296,12 +1294,11 @@ fn validator_payment_prefs_work() {
         let balance_era_1_10 = Assets::balance(VNRG::get(), 10);
         let balance_era_1_100 = Assets::balance(VNRG::get(), 100);
 
-        // Compute total payout now for whole duration as other parameter won't change
-        let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
         let exposure_1 = PowerPlant::eras_stakers(active_era(), 11);
         // PowerPlant::reward_by_ids(vec![(11, 1.into())]);
 
         mock::start_active_era(2);
+        let total_payout_1 = total_payout_for_era(1);
         mock::make_all_reward_payment(1);
 
         let total_stake = ErasTotalStake::<Test>::get(1);
@@ -1908,9 +1905,10 @@ fn reward_to_stake_works() {
                 },
             );
 
-            // Compute total payout now for whole duration as other parameter won't change
-            let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-            let eras_total_stake = PowerPlant::eras_total_stake(active_era());
+            mock::start_active_era(1);
+
+            let total_payout_0 = total_payout_for_era(0);
+            let eras_total_stake = PowerPlant::eras_total_stake(0);
             let energy_reward_10 =
                 calculate_reward(total_payout_0, eras_total_stake, 1000, Percent::from_percent(8));
             assert_eq!(controller_stash_reputation_tier(&10), Some(ReputationTier::Trailblazer(1)));
@@ -1918,8 +1916,7 @@ fn reward_to_stake_works() {
                 calculate_reward(total_payout_0, eras_total_stake, 2000, Percent::from_percent(8));
             assert_eq!(controller_stash_reputation_tier(&20), Some(ReputationTier::Trailblazer(1)));
 
-            // New era --> rewards are paid --> stakes are changed
-            mock::start_active_era(1);
+            // rewards are paid --> stakes are changed
             mock::make_all_reward_payment(0);
 
             assert_eq!(PowerPlant::eras_stakers(active_era(), 11).total, 1000);
@@ -2157,7 +2154,6 @@ fn bond_with_no_staked_value() {
         });
 }
 
-#[ignore]
 #[test]
 fn bond_with_little_staked_value_bounded() {
     ExtBuilder::default()
@@ -2195,12 +2191,11 @@ fn bond_with_little_staked_value_bounded() {
                 vec![]
             ));
 
-            // 1 era worth of reward. BUT, we set the timestamp after on_initialize, so outdated by
-            // one block.
-            let total_payout_0 = current_total_payout_for_duration(reward_time_per_era());
-
             reward_all_elected();
+
             mock::start_active_era(1);
+            let total_payout_0 = total_payout_for_era(0);
+
             mock::make_all_reward_payment(0);
 
             // 2 is elected.
@@ -2227,10 +2222,11 @@ fn bond_with_little_staked_value_bounded() {
             // no rewards paid to 2. This was initial election.
             assert_eq!(Assets::balance(VNRG::get(), 2), init_balance_2);
 
-            // reward era 2
-            let total_payout_1 = current_total_payout_for_duration(reward_time_per_era());
             reward_all_elected();
+
             mock::start_active_era(2);
+
+            let total_payout_1 = total_payout_for_era(1);
             mock::make_all_reward_payment(1);
 
             assert_eq_uvec!(validator_controllers(), [20, 10, 2]);
@@ -2282,7 +2278,7 @@ fn reward_validator_slashing_validator_does_not_overflow() {
         // Check reward
         ErasStakers::<Test>::insert(0, 11, &exposure);
         ErasStakersClipped::<Test>::insert(0, 11, exposure);
-        ErasEnergyPerStakeCurrency::<Test>::insert(0, 1);
+        ErasEnergyPerStakeCurrency::<Test>::insert(0, FixedU128::from_u32(1));
         mock::start_active_era(1);
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 0));
         assert!(Assets::balance(VNRG::get(), 10) <= Balance::MAX);
@@ -2378,6 +2374,32 @@ fn era_is_always_same_length() {
             session + 2u32 + session_per_era
         );
     });
+}
+
+#[test]
+fn era_session_lookup_works() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_eq!(SessionsPerEra::get(), 3);
+
+        mock::start_active_era(2);
+
+        assert_eq!(PowerPlant::session_range_for_era(0), Some((0, 3)));
+        assert_eq!(PowerPlant::era_for_session(0), Some(0));
+        assert_eq!(PowerPlant::era_for_session(1), Some(0));
+        assert_eq!(PowerPlant::era_for_session(2), Some(0));
+
+        assert_eq!(PowerPlant::session_range_for_era(1), Some((3, 6)));
+        assert_eq!(PowerPlant::era_for_session(3), Some(1));
+        assert_eq!(PowerPlant::era_for_session(4), Some(1));
+        assert_eq!(PowerPlant::era_for_session(5), Some(1));
+
+        // Only a subset of session indexes is available because era 2 has just started.
+        assert_eq!(CurrentPlannedSession::<Test>::get(), 7);
+        assert_eq!(PowerPlant::session_range_for_era(2), Some((6, 8)));
+        assert_eq!(PowerPlant::era_for_session(6), Some(2));
+        assert_eq!(PowerPlant::era_for_session(7), Some(2));
+        assert_eq!(PowerPlant::era_for_session(8), None);
+    })
 }
 
 #[test]
@@ -4191,14 +4213,15 @@ fn test_max_cooperator_rewarded_per_validator_and_cant_steal_someone_else_reward
         assert_eq!(exposure.others.len() as u32, cooperators_num);
 
         Pallet::<Test>::reward_by_ids(vec![(1011, 1.into())]);
-        // compute and ensure the reward amount is greater than zero.
-        let _ = current_total_payout_for_duration(reward_time_per_era());
 
         mock::start_active_era(3);
+
+        // compute and ensure the reward amount is greater than zero.
+        let _ = total_payout_for_era(2);
         mock::make_all_reward_payment(2);
 
-        let energy_rate = ErasEnergyPerStakeCurrency::<Test>::get(1).unwrap();
-        let total_payout_10 = exposure.total / energy_rate;
+        let energy_rate = ErasEnergyPerStakeCurrency::<Test>::get(2).unwrap();
+        let total_payout_10 = energy_rate.saturating_mul_int(exposure.total);
         let cooperator_part = Perbill::from_rational(100, exposure.total);
         let cooperator_reward = cooperator_part * total_payout_10;
         mock::start_active_era(4);
@@ -4249,11 +4272,12 @@ fn test_payout_stakers() {
         }
 
         PowerPlant::reward_by_ids(vec![(11, 1.into())]);
-        // compute and ensure the reward amount is greater than zero.
-        let payout = current_total_payout_for_duration(reward_time_per_era());
-        let actual_paid_out = payout_part.saturating_mul_int(payout);
 
         mock::start_active_era(2);
+
+        // compute and ensure the reward amount is greater than zero.
+        let payout = total_payout_for_era(1);
+        let actual_paid_out = payout_part.saturating_mul_int(payout);
 
         let pre_payout_total_issuance = Assets::total_supply(VNRG::get());
         RewardOnUnbalanceWasCalled::set(false);
@@ -4291,13 +4315,13 @@ fn test_payout_stakers() {
         for i in 3..16 {
             PowerPlant::reward_by_ids(vec![(11, 1.into())]);
 
-            // compute and ensure the reward amount is greater than zero.
-            let payout = current_total_payout_for_duration(reward_time_per_era());
-            let actual_paid_out = payout_part.saturating_mul_int(payout);
-
             let pre_payout_total_issuance = Assets::total_supply(VNRG::get());
 
             mock::start_active_era(i);
+            // compute and ensure the reward amount is greater than zero.
+            let payout = total_payout_for_era(i - 1);
+            let actual_paid_out = payout_part.saturating_mul_int(payout);
+
             RewardOnUnbalanceWasCalled::set(false);
             assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, i - 1));
             assert_eq_error_rate!(
@@ -4326,9 +4350,9 @@ fn test_payout_stakers() {
         let expected_start_reward_era = last_era - history_depth;
         for i in 16..=last_era {
             PowerPlant::reward_by_ids(vec![(11, 1.into())]);
-            // compute and ensure the reward amount is greater than zero.
-            let _ = current_total_payout_for_duration(reward_time_per_era());
             mock::start_active_era(i);
+            // compute and ensure the reward amount is greater than zero.
+            let _ = total_payout_for_era(i - 1);
         }
 
         // We clean it up as history passes
@@ -4393,12 +4417,10 @@ fn payout_stakers_handles_basic_errors() {
             bond_cooperator(1000 + i, 100 + i, bond, vec![(11, bond)]);
         }
 
-        mock::start_active_era(1);
+        mock::start_active_era(2);
 
         // compute and ensure the reward amount is greater than zero.
-        let _ = current_total_payout_for_duration(reward_time_per_era());
-
-        mock::start_active_era(2);
+        let _ = total_payout_for_era(1);
 
         // Wrong Era, too big
         assert_noop!(
@@ -4413,9 +4435,9 @@ fn payout_stakers_handles_basic_errors() {
 
         let last_era = 99;
         for i in 3..=last_era {
-            // compute and ensure the reward amount is greater than zero.
-            let _ = current_total_payout_for_duration(reward_time_per_era());
             mock::start_active_era(i);
+            // compute and ensure the reward amount is greater than zero.
+            let _ = total_payout_for_era(i - 1);
         }
 
         let history_depth = HistoryDepth::get();
@@ -4650,10 +4672,9 @@ fn payout_creates_controller() {
         assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(1337), 1234, 1000000));
         assert_eq!(Balances::free_balance(1337), 0);
 
-        mock::start_active_era(1);
-        // compute and ensure the reward amount is greater than zero.
-        let _ = current_total_payout_for_duration(reward_time_per_era());
         mock::start_active_era(2);
+        // compute and ensure the reward amount is greater than zero.
+        let _ = total_payout_for_era(1);
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
 
         // Controller is created
@@ -4680,10 +4701,9 @@ fn payout_to_any_account_works() {
         // Reward Destination account doesn't exist
         assert_eq!(Balances::free_balance(42), 0);
 
-        mock::start_active_era(1);
-        // compute and ensure the reward amount is greater than zero.
-        let _ = current_total_payout_for_duration(reward_time_per_era());
         mock::start_active_era(2);
+        // compute and ensure the reward amount is greater than zero.
+        let _ = total_payout_for_era(1);
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 1));
 
         // Payment is successful

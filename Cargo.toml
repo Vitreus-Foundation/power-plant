@@ -100,6 +100,7 @@ members = [
     "pallets/reputation",
     "pallets/simple-vesting",
     "pallets/treasury-extension",
+    "runtime/common",
     "runtime/vitreus",
     "runtime/vitreus/runtime-api",
 ]
@@ -368,6 +369,7 @@ pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", de
 
 # Vitreus pallets
 pallet-claiming = { path = "pallets/claiming", default-features = false }
+pallet-dynamic-energy = { path = "pallets/dynamic-energy", default-features = false }
 pallet-energy-broker = { path = "pallets/energy-broker", default-features = false }
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
 pallet-energy-generation = { path = "pallets/energy-generation", default-features = false }
@@ -391,5 +393,6 @@ vitreus-rpc = { path = "rpc" }
 
 chain-spec = { path = "node/chain-spec" }
 vitreus-cli = { path = "cli" }
+vitreus-runtime-common = { path = "runtime/common", default-features = false }
 vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
 vitreus-service = { path = "node/service", default-features = false }

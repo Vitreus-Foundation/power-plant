@@ -153,10 +153,10 @@ use sp_runtime::{
     traits::{Convert, Saturating, StaticLookup, Zero},
     BoundedBTreeMap, Perbill, Perquintill, Rounding, RuntimeDebug,
 };
-// pub use sp_staking::StakerStatus;
+pub use sp_staking::EraIndex;
 use sp_staking::{
     offence::{Offence, OffenceError, ReportOffence},
-    EraIndex, OnStakingUpdate, SessionIndex,
+    OnStakingUpdate, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -676,17 +676,6 @@ impl<AccountId> SessionInterface<AccountId> for () {
         Vec::new()
     }
     fn prune_historical_up_to(_: SessionIndex) {}
-}
-
-/// Handler for determining the energy demand on the current era.
-pub trait EnergyRateCalculator<Stake, Energy> {
-    /// Determine the energy demand for this era.
-    fn calculate_energy_rate(
-        total_staked: Stake,
-        total_issuance: Energy,
-        core_nodes_num: u32,
-        battery_slot_cap: Energy,
-    ) -> Energy;
 }
 
 pub trait OnVipMembershipHandler<T, Res, Perbill> {

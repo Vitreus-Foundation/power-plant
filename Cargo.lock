@@ -6551,6 +6551,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-dynamic-energy"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "log",
+ "parity-scale-codec",
+ "primitive-types",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "vitreus-runtime-common",
+]
+
+[[package]]
 name = "pallet-election-provider-multi-phase"
 version = "36.0.0"
 source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#f2081f6657f011634a483e3a4c91e54150c974c7"
@@ -6605,11 +6621,12 @@ dependencies = [
 
 [[package]]
 name = "pallet-energy-broker"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
+ "log",
  "pallet-assets",
  "pallet-balances",
  "parity-scale-codec",
@@ -6621,6 +6638,7 @@ dependencies = [
  "sp-io",
  "sp-runtime",
  "sp-std",
+ "vitreus-runtime-common",
 ]
 
 [[package]]
@@ -6654,6 +6672,7 @@ dependencies = [
  "sp-runtime",
  "sp-std",
  "substrate-test-utils",
+ "vitreus-runtime-common",
 ]
 
 [[package]]
@@ -6683,6 +6702,7 @@ dependencies = [
  "sp-std",
  "sp-tracing",
  "substrate-test-utils",
+ "vitreus-runtime-common",
 ]
 
 [[package]]
@@ -14059,6 +14079,7 @@ dependencies = [
  "pallet-claiming",
  "pallet-collective",
  "pallet-democracy",
+ "pallet-dynamic-energy",
  "pallet-elections-phragmen",
  "pallet-energy-broker",
  "pallet-energy-fee",
@@ -14178,6 +14199,14 @@ dependencies = [
  "thiserror",
  "vitreus-power-plant-runtime",
  "vitreus-utility-runtime-api",
+]
+
+[[package]]
+name = "vitreus-runtime-common"
+version = "0.1.0"
+dependencies = [
+ "impl-trait-for-tuples",
+ "sp-staking",
 ]
 
 [[package]]
