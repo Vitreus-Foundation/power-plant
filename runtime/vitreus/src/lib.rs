@@ -250,10 +250,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 207,
+    spec_version: 208,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
-    transaction_version: 3,
+    transaction_version: 4,
     state_version: 1,
 };
 
@@ -1967,8 +1967,13 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations =
-    (migrations::Unreleased, migrations::V0200, migrations::V0205, migrations::Permanent);
+pub type Migrations = (
+    migrations::Unreleased,
+    migrations::V0200,
+    migrations::V0205,
+    migrations::V0208,
+    migrations::Permanent,
+);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
