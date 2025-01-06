@@ -4,6 +4,8 @@
 #![warn(missing_docs)]
 #![allow(clippy::result_unit_err, clippy::too_many_arguments)]
 
+pub mod migration;
+
 #[cfg(test)]
 mod tests;
 
@@ -32,6 +34,9 @@ use sp_runtime::{
     },
     DispatchError, Saturating, TokenError,
 };
+use vitreus_runtime_common::{
+    OnEnergyBurn, OnEnergySell, OnSessionChange, SessionIndex, Warehouse,
+};
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
 
@@ -42,7 +47,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::*;
     use sp_arithmetic::traits::Unsigned;
 
-    const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]
@@ -82,13 +87,12 @@ pub mod pallet {
         /// Handler for the [`Config::SwapFee`].
         type SwapFeeTarget: OnUnbalanced<Credit<Self::AccountId, Self::Assets>>;
 
+        /// Handler for when energy has been sold.
+        type OnEnergySell: OnEnergySell<Self::Balance>;
+
         /// A % the energy broker will take of every swap. Represents 10ths of a percent.
         #[pallet::constant]
         type SwapFee: Get<u32>;
-
-        /// The maximum amount of energy that the broker can store.
-        #[pallet::constant]
-        type EnergyCapacity: Get<Self::Balance>;
 
         /// Identifier of native asset.
         #[pallet::constant]
@@ -97,7 +101,31 @@ pub mod pallet {
         /// Identifier of energy asset.
         #[pallet::constant]
         type EnergyAsset: Get<Self::AssetKind>;
+
+        /// The count of sessions used for calculating burned energy.
+        #[pallet::constant]
+        type BurnedEnergySessionsCount: Get<u32>;
     }
+
+    /// The maximum amount of energy that the broker can store.
+    #[pallet::storage]
+    pub type EnergyCapacity<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+    /// An override value for the energy capacity.
+    #[pallet::storage]
+    pub type EnergyCapacityOverride<T: Config> = StorageValue<_, T::Balance>;
+
+    /// The total energy burned during the session.
+    #[pallet::storage]
+    pub type SessionEnergyBurn<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
+
+    /// The total energy burned per session.
+    #[pallet::storage]
+    pub type EnergyBurn<T: Config> = StorageMap<_, Twox64Concat, SessionIndex, T::Balance>;
+
+    /// The total energy burned during last `BurnedEnergySessionsCount` sessions.
+    #[pallet::storage]
+    pub type TotalEnergyBurn<T: Config> = StorageValue<_, T::Balance, ValueQuery>;
 
     // Pallet's events.
     #[pallet::event]
@@ -129,6 +157,31 @@ pub mod pallet {
             /// The amount that was burned.
             amount: T::Balance,
         },
+        /// The energy capacity was forcibly set.
+        EnergyCapacityForceSet {
+            /// The capacity.
+            amount: Option<T::Balance>,
+        },
+        /// The energy capacity was updated.
+        EnergyCapacityUpdated {
+            /// The capacity.
+            amount: T::Balance,
+        },
+    }
+
+    #[pallet::genesis_config]
+    #[derive(frame_support::DefaultNoBound)]
+    pub struct GenesisConfig<T: Config> {
+        /// Initial energy capacity.
+        pub energy_capacity: T::Balance,
+    }
+
+    #[pallet::genesis_build]
+    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
+        fn build(&self) {
+            EnergyCapacity::<T>::put(self.energy_capacity);
+            EnergyCapacityOverride::<T>::put(self.energy_capacity);
+        }
     }
 
     #[pallet::error]
@@ -220,6 +273,21 @@ pub mod pallet {
             T::Assets::transfer(asset.clone(), &source, &Self::account_id(), amount, preservation)?;
 
             Self::deposit_event(Event::LiquidityAdded { source, asset, amount });
+
+            Ok(())
+        }
+
+        /// Force set the energy capacity.
+        #[pallet::call_index(11)]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
+        pub fn force_set_capacity(
+            origin: OriginFor<T>,
+            amount: Option<T::Balance>,
+        ) -> DispatchResult {
+            T::ManageOrigin::ensure_origin(origin)?;
+
+            EnergyCapacityOverride::<T>::set(amount);
+            Self::deposit_event(Event::EnergyCapacityForceSet { amount });
 
             Ok(())
         }
@@ -421,6 +489,8 @@ pub mod pallet {
 
             if asset_in == &T::EnergyAsset::get() {
                 Self::burn_surplus_energy(&broker_account);
+
+                T::OnEnergySell::on_energy_sell(amount_in);
             }
 
             Ok(())
@@ -469,9 +539,9 @@ pub mod pallet {
                 .map_err(|_| Error::<T>::Overflow)
         }
 
-        fn burn_surplus_energy(broker_account: &T::AccountId) {
+        pub(crate) fn burn_surplus_energy(broker_account: &T::AccountId) {
             let burn_amount = T::Assets::balance(T::EnergyAsset::get(), broker_account)
-                .saturating_sub(T::EnergyCapacity::get());
+                .saturating_sub(EnergyCapacity::<T>::get());
 
             if burn_amount > Zero::zero() {
                 let res = T::Assets::burn_from(
@@ -498,4 +568,45 @@ pub trait EnergyBalanceConverter<Balance, AssetId> {
 
     /// Converts an energy balance into an asset balance.
     fn energy_to_asset_balance(asset_id: AssetId, balance: Balance) -> Option<Balance>;
+}
+
+impl<T: Config> OnEnergyBurn<T::Balance> for Pallet<T> {
+    fn on_energy_burn(amount: T::Balance) {
+        SessionEnergyBurn::<T>::mutate(|total| total.saturating_accrue(amount));
+    }
+}
+
+impl<T: Config> OnSessionChange for Pallet<T> {
+    fn on_new_session(index: SessionIndex) {
+        let burned = SessionEnergyBurn::<T>::take();
+        if let Some(index) = index.checked_sub(1) {
+            EnergyBurn::<T>::insert(index, burned);
+            TotalEnergyBurn::<T>::mutate(|total| total.saturating_accrue(burned));
+        }
+
+        if let Some(index) = index.checked_sub(T::BurnedEnergySessionsCount::get() + 1) {
+            if let Some(old_burned) = EnergyBurn::<T>::take(index) {
+                TotalEnergyBurn::<T>::mutate(|total| total.saturating_reduce(old_burned));
+            }
+        }
+
+        let capacity = EnergyCapacityOverride::<T>::get().unwrap_or_else(TotalEnergyBurn::<T>::get);
+
+        if !capacity.is_zero() {
+            EnergyCapacity::<T>::put(capacity);
+            Self::deposit_event(Event::EnergyCapacityUpdated { amount: capacity });
+
+            Self::burn_surplus_energy(&Self::account_id());
+        }
+    }
+}
+
+impl<T: Config> Warehouse<T::Balance> for Pallet<T> {
+    fn current_amount() -> T::Balance {
+        T::Assets::balance(T::EnergyAsset::get(), &Self::account_id())
+    }
+
+    fn max_capacity() -> T::Balance {
+        EnergyCapacity::<T>::get()
+    }
 }

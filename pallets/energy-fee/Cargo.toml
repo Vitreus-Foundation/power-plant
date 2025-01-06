@@ -13,8 +13,8 @@ frame-system = { workspace = true }
 pallet-asset-rate = { workspace = true }
 pallet-balances = { workspace = true }
 pallet-evm = { workspace = true }
-pallet-transaction-payment = { workspace = true }
 pallet-sudo = { workspace = true }
+pallet-transaction-payment = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
 sp-arithmetic = { workspace = true }
@@ -22,6 +22,7 @@ sp-core = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 sp-std = { workspace = true }
+vitreus-runtime-common = { workspace = true, default-features = false }
 
 [dev-dependencies]
 pallet-assets = { workspace = true, default-features = true }
@@ -46,23 +47,23 @@ std = [
     "frame-benchmarking/std",
     "frame-support/std",
     "frame-system/std",
-    "ethereum-types/std",
     "pallet-asset-rate/std",
     "pallet-balances/std",
-    "pallet-ethereum/std",
-    "pallet-evm/std",
     "pallet-base-fee/std",
+    "pallet-ethereum/std",
     "pallet-evm-chain-id/std",
-    "pallet-reputation/std",
-    "parity-scale-codec/std",
+    "pallet-evm/std",
     "pallet-nfts/std",
+    "pallet-reputation/std",
     "pallet-sudo/std",
     "pallet-transaction-payment/std",
+    "parity-scale-codec/std",
     "scale-info/std",
     "sp-arithmetic/std",
     "sp-io/std",
     "sp-runtime/std",
     "sp-std/std",
+    "vitreus-runtime-common/std",
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",

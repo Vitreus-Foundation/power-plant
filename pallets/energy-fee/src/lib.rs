@@ -67,6 +67,7 @@ pub(crate) use pallet_evm::{AddressMapping, OnChargeEVMTransaction};
 pub use pallet_transaction_payment::{
     Config as TransactionPaymentConfig, Multiplier, MultiplierUpdate, OnChargeTransaction,
 };
+use vitreus_runtime_common::OnEnergyBurn;
 
 use sp_arithmetic::{traits::CheckedAdd, ArithmeticError::Overflow};
 use sp_core::{RuntimeDebug, H160, U256};
@@ -172,6 +173,8 @@ pub mod pallet {
         type EnergyAssetId: Get<Self::AssetKind>;
         /// Handler for when a fee has been withdrawn
         type OnWithdrawFee: OnWithdrawFeeHandler<Self::AccountId>;
+        /// Handler for when energy has been burned
+        type OnEnergyBurn: OnEnergyBurn<BalanceOf<Self>>;
 
         type MainRecycleDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
         type FeeRecycleDestination: OnUnbalanced<FeeCreditOf<Self>>;
@@ -466,6 +469,8 @@ impl<T: Config> Pallet<T> {
     }
 
     fn update_burned_energy(amount: BalanceOf<T>) -> Result<(), DispatchError> {
+        T::OnEnergyBurn::on_energy_burn(amount);
+
         BurnedEnergy::<T>::mutate(|current_burned| {
             *current_burned =
                 current_burned.checked_add(&amount).ok_or(DispatchError::Arithmetic(Overflow))?;
