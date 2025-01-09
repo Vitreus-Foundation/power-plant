@@ -73,8 +73,8 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, Perbill, Percent,
-    Permill, Saturating,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, FixedU64, Perbill,
+    Percent, Permill, Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{
@@ -123,6 +123,7 @@ use sp_consensus_beefy::{
     mmr::{BeefyDataProvider, MmrLeafVersion},
 };
 use sp_runtime::transaction_validity::InvalidTransaction;
+use vitreus_runtime_common::ExposureMultiplier;
 use xcm::{
     latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
     VersionedXcm,
@@ -720,28 +721,37 @@ parameter_types! {
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
+pub struct ReputationExposureMultiplier;
 
-impl Convert<&ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
-    fn convert(k: &ReputationTier) -> Perbill {
+impl Convert<&ReputationTier, FixedU64> for ReputationExposureMultiplier {
+    fn convert(k: &ReputationTier) -> FixedU64 {
         match k {
-            ReputationTier::Vanguard(2) => Perbill::from_percent(2),
-            ReputationTier::Vanguard(3) => Perbill::from_percent(4),
-            ReputationTier::Trailblazer(0) => Perbill::from_percent(5),
-            ReputationTier::Trailblazer(1) => Perbill::from_percent(8),
-            ReputationTier::Trailblazer(2) => Perbill::from_percent(10),
-            ReputationTier::Trailblazer(3) => Perbill::from_percent(12),
-            ReputationTier::Ultramodern(0) => Perbill::from_percent(13),
-            ReputationTier::Ultramodern(1) => Perbill::from_percent(16),
-            ReputationTier::Ultramodern(2) => Perbill::from_percent(18),
-            ReputationTier::Ultramodern(3) => Perbill::from_percent(20),
+            ReputationTier::Vanguard(2) => FixedU64::from_rational(2, 100),
+            ReputationTier::Vanguard(3) => FixedU64::from_rational(4, 100),
+            ReputationTier::Trailblazer(0) => FixedU64::from_rational(5, 100),
+            ReputationTier::Trailblazer(1) => FixedU64::from_rational(8, 100),
+            ReputationTier::Trailblazer(2) => FixedU64::from_rational(10, 100),
+            ReputationTier::Trailblazer(3) => FixedU64::from_rational(12, 100),
+            ReputationTier::Ultramodern(0) => FixedU64::from_rational(13, 100),
+            ReputationTier::Ultramodern(1) => FixedU64::from_rational(16, 100),
+            ReputationTier::Ultramodern(2) => FixedU64::from_rational(18, 100),
+            ReputationTier::Ultramodern(3) => FixedU64::from_rational(20, 100),
             ReputationTier::Ultramodern(rank) => {
                 let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
-                Perbill::from_percent(20_u8.saturating_add(additional_percentage).into())
+                FixedU64::from_rational(20_u8.saturating_add(additional_percentage).into(), 100)
             },
             // includes unhandled cases
-            _ => Perbill::zero(),
+            _ => FixedU64::zero(),
         }
+    }
+}
+
+impl ExposureMultiplier<AccountId> for ReputationExposureMultiplier {
+    fn bonus_part(account_id: &AccountId) -> FixedU64 {
+        Reputation::reputation(account_id)
+            .and_then(|record| record.reputation.tier())
+            .map(|tier| Self::convert(&tier))
+            .unwrap_or_default()
     }
 }
 
@@ -772,8 +782,6 @@ impl pallet_energy_generation::Config for Runtime {
     type NextNewSession = Session;
     type EventListeners = ();
     type SessionChangeListeners = (EnergyBroker, DynamicEnergy);
-    type ReputationTierEnergyRewardAdditionalPercentMapping =
-        ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = ();
     type RewardRemainder = Treasury;
     type RuntimeEvent = RuntimeEvent;
@@ -785,6 +793,8 @@ impl pallet_energy_generation::Config for Runtime {
     type StakeBalance = Balance;
     type StakeCurrency = Balances;
     type ValidatorNacLevel = NacManaging;
+    type ValidatorExposureMultiplier = ReputationExposureMultiplier;
+    type CooperatorExposureMultiplier = ();
     type OnVipMembershipHandler = Privileges;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
@@ -2823,7 +2833,7 @@ impl_runtime_apis! {
 
     impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
         fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
-            ReputationTierEnergyRewardAdditionalPercentMapping::convert(&tier)
+            ReputationExposureMultiplier::convert(&tier).into_perbill()
         }
 
         fn current_energy_per_stake_currency() -> u128 {

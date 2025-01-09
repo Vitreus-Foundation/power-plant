@@ -14151,6 +14151,7 @@ dependencies = [
  "staging-xcm-executor",
  "static_assertions",
  "substrate-wasm-builder",
+ "vitreus-runtime-common",
  "vitreus-utility-runtime-api",
  "xcm-runtime-apis",
 ]
@@ -14206,6 +14207,7 @@ name = "vitreus-runtime-common"
 version = "0.1.0"
 dependencies = [
  "impl-trait-for-tuples",
+ "sp-runtime",
  "sp-staking",
 ]
 

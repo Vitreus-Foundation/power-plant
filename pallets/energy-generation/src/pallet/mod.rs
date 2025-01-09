@@ -62,7 +62,7 @@ pub mod pallet {
     use crate::{
         slashing::StorageEssentials, BenchmarkingConfig, EnergyOf, OnVipMembershipHandler,
     };
-    use vitreus_runtime_common::{EraEnergyRateCalculator, OnSessionChange};
+    use vitreus_runtime_common::{EraEnergyRateCalculator, ExposureMultiplier, OnSessionChange};
 
     use super::*;
 
@@ -234,11 +234,11 @@ pub mod pallet {
         #[pallet::constant]
         type CollaborativeValidatorReputationTier: Get<ReputationTier>;
 
-        /// `ReputationTier` -> `Perbill` mapping, depicting additional energy reward ratio per tier.
-        type ReputationTierEnergyRewardAdditionalPercentMapping: for<'a> Convert<
-            &'a ReputationTier,
-            Perbill,
-        >;
+        /// The multiplier applied to a validator stake to calculate the effective exposure.
+        type ValidatorExposureMultiplier: ExposureMultiplier<Self::AccountId>;
+
+        /// The multiplier applied to a cooperator stake to calculate the effective exposure.
+        type CooperatorExposureMultiplier: ExposureMultiplier<Self::AccountId>;
 
         /// A conversion from account ID to NAC level.
         type ValidatorNacLevel: for<'a> Convert<&'a Self::AccountId, Option<u8>>;

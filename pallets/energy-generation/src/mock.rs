@@ -6,12 +6,13 @@ use crate::{self as pallet_energy_generation, *};
 use frame_support::weights::Weight;
 use frame_support::{
     assert_ok, derive_impl, ord_parameter_types, parameter_types,
-    storage::StorageValue,
+    storage::{types::ValueQuery, StorageValue},
     traits::{
         AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Currency, EitherOfDiverse,
         FindAuthor, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
     },
     weights::constants::RocksDbWeight,
+    Twox64Concat,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_reputation::{
@@ -23,10 +24,11 @@ use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{Header, TestSignature, UintAuthorityId},
     traits::{Dispatchable, IdentifyAccount, IdentityLookup, Verify, Zero},
-    BuildStorage, FixedPointNumber, MultiSignature, Percent,
+    BuildStorage, FixedPointNumber, FixedU64, MultiSignature, Percent,
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
+use vitreus_runtime_common::ExposureMultiplier;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -289,28 +291,25 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
     }
 }
 
-pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
+#[frame_support::storage_alias]
+pub(crate) type ValidatorExposureMultiplier<T: Config> =
+    StorageMap<Pallet<T>, Twox64Concat, u64, FixedU64, ValueQuery>;
 
-impl Convert<&ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
-    fn convert(k: &ReputationTier) -> Perbill {
-        match k {
-            ReputationTier::Vanguard(2) => Perbill::from_percent(2),
-            ReputationTier::Vanguard(3) => Perbill::from_percent(4),
-            ReputationTier::Trailblazer(0) => Perbill::from_percent(5),
-            ReputationTier::Trailblazer(1) => Perbill::from_percent(8),
-            ReputationTier::Trailblazer(2) => Perbill::from_percent(10),
-            ReputationTier::Trailblazer(3) => Perbill::from_percent(12),
-            ReputationTier::Ultramodern(0) => Perbill::from_percent(13),
-            ReputationTier::Ultramodern(1) => Perbill::from_percent(16),
-            ReputationTier::Ultramodern(2) => Perbill::from_percent(18),
-            ReputationTier::Ultramodern(3) => Perbill::from_percent(20),
-            ReputationTier::Ultramodern(rank) => {
-                let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
-                Perbill::from_percent(20_u8.saturating_add(additional_percentage).into())
-            },
-            // includes unhandled cases
-            _ => Perbill::zero(),
-        }
+pub struct MockValidatorExposureMultiplier;
+impl ExposureMultiplier<u64> for MockValidatorExposureMultiplier {
+    fn bonus_part(account_id: &u64) -> FixedU64 {
+        ValidatorExposureMultiplier::<Test>::get(account_id)
+    }
+}
+
+#[frame_support::storage_alias]
+pub(crate) type CooperatorExposureMultiplier<T: Config> =
+    StorageMap<Pallet<T>, Twox64Concat, u64, FixedU64, ValueQuery>;
+
+pub struct MockCooperatorExposureMultiplier;
+impl ExposureMultiplier<u64> for MockCooperatorExposureMultiplier {
+    fn bonus_part(account_id: &u64) -> FixedU64 {
+        CooperatorExposureMultiplier::<Test>::get(account_id)
     }
 }
 
@@ -340,8 +339,8 @@ impl pallet_energy_generation::Config for Test {
     type SessionChangeListeners = ();
     type DisablingStrategy =
         pallet_energy_generation::UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR>;
-    type ReputationTierEnergyRewardAdditionalPercentMapping =
-        ReputationTierEnergyRewardAdditionalPercentMapping;
+    type ValidatorExposureMultiplier = MockValidatorExposureMultiplier;
+    type CooperatorExposureMultiplier = MockCooperatorExposureMultiplier;
     type Reward = MockReward;
     type RewardRemainder = RewardRemainderMock;
     type RuntimeEvent = RuntimeEvent;
@@ -969,9 +968,7 @@ pub(crate) fn calculate_reward(
     total_payout: Balance,
     total_stake: Balance,
     personal_stake: Balance,
-    bonus_percent: Percent,
 ) -> Balance {
     let part = Perbill::from_rational(personal_stake, total_stake);
-    let reward = part * total_payout;
-    bonus_percent.mul_floor(reward) + reward
+    part * total_payout
 }
