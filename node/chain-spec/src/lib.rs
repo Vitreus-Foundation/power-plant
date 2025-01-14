@@ -1261,9 +1261,10 @@ fn session_keys(
 
 fn properties() -> Properties {
     let mut properties = Properties::new();
+    properties.insert("isEthereum".into(), true.into());
+    properties.insert("ss58Format".into(), SS58Prefix::get().into());
     properties.insert("tokenSymbol".into(), "VTRS".into());
     properties.insert("tokenDecimals".into(), 18.into());
-    properties.insert("ss58Format".into(), SS58Prefix::get().into());
     properties
 }
 
