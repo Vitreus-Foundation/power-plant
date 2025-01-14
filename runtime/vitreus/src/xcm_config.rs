@@ -20,12 +20,12 @@
 
 use super::{
     parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
-    CouncilCollective, Dmp, ParaId, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
-    TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet,
+    CouncilCollective, Dmp, DynamicEnergy, ParaId, Runtime, RuntimeCall, RuntimeEvent,
+    RuntimeOrigin, TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet,
 };
 use frame_support::{
     parameter_types,
-    traits::{tokens::imbalance::ResolveTo, Contains, Equals, Everything, Nothing},
+    traits::{tokens::imbalance::ResolveTo, Contains, ContainsPair, Equals, Everything, Nothing},
     weights::{ConstantMultiplier, Weight},
 };
 use frame_system::EnsureRoot;
@@ -46,7 +46,10 @@ use xcm_builder::{
     SovereignSignedViaLocation, TakeWeightCredit, TrailingSetTopicAsId, UsingComponents,
     WithComputedOrigin, WithUniqueTopic, XcmFeeManagerFromComponents,
 };
-use xcm_executor::{traits::WithOriginFilter, XcmExecutor};
+use xcm_executor::{
+    traits::{MatchesFungibles, TransactAsset, WithOriginFilter},
+    XcmExecutor,
+};
 
 // TODO: use constants from `vitreus-runtime-constants` crate
 const ASSET_HUB_ID: u32 = 1000;
@@ -175,6 +178,22 @@ pub type EnergyTransactor = FungiblesAdapter<
     CheckAccount,
 >;
 
+pub struct EnergyCheckoutTracker;
+impl TransactAsset for EnergyCheckoutTracker {
+    fn check_out(_dest: &Location, what: &Asset, _context: &XcmContext) {
+        use vitreus_runtime_common::OnEnergyBurn;
+
+        log::trace!(
+            target: "xcm::energy_checkout_tracker",
+            "check_out dest: {:?}, what: {:?}",
+            _dest, what
+        );
+        if let Ok((_, amount)) = EnergyTokenConcreteId::matches_fungibles(what) {
+            DynamicEnergy::on_energy_burn(amount);
+        }
+    }
+}
+
 /// The means that we convert an the XCM message origin location into a local dispatch origin.
 type LocalOriginConverter = (
     // A `Signed` origin of the sovereign account that the original location controls.
@@ -212,6 +231,7 @@ pub type XcmRouter = WithUniqueTopic<
 
 parameter_types! {
     pub const Vtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(TokenLocation::get()) });
+    pub Vnrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(EnergyTokenLocation::get()) });
     pub WrappedVtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(WrappedTokenLocation::get()) });
     pub AssetHub: Location = Parachain(ASSET_HUB_ID).into_location();
     pub BridgeHub: Location = Parachain(BRIDGE_HUB_ID).into_location();
@@ -220,6 +240,7 @@ parameter_types! {
     pub WrappedVtrsForAssetHub: (AssetFilter, Location) = (WrappedVtrs::get(), AssetHub::get());
     pub const MaxAssetsIntoHolding: u32 = 64;
 }
+
 pub type TrustedTeleporters = (
     xcm_builder::Case<VtrsForAssetHub>,
     xcm_builder::Case<VtrsForBridgeHub>,
@@ -230,6 +251,14 @@ pub struct OnlyParachains;
 impl Contains<Location> for OnlyParachains {
     fn contains(loc: &Location) -> bool {
         matches!(loc.unpack(), (0, [Parachain(_)]))
+    }
+}
+
+pub struct EnergyForParachains;
+impl ContainsPair<Asset, Location> for EnergyForParachains {
+    fn contains(asset: &Asset, location: &Location) -> bool {
+        log::trace!(target: "xcm::contains", "EnergyForParachains asset: {:?}, location: {:?}", asset, location);
+        Vnrg::get().matches(asset) && OnlyParachains::contains(location)
     }
 }
 
@@ -351,7 +380,8 @@ pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
-    type AssetTransactor = (LocalAssetTransactor, WrappedTokenTransactor, EnergyTransactor);
+    type AssetTransactor =
+        (LocalAssetTransactor, WrappedTokenTransactor, EnergyTransactor, EnergyCheckoutTracker);
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
     type IsTeleporter = TrustedTeleporters;
@@ -421,7 +451,7 @@ impl pallet_xcm::Config for Runtime {
     // Anyone can execute XCM messages locally.
     type ExecuteXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
     type XcmExecuteFilter = Everything;
-    type XcmExecutor = XcmExecutor<XcmConfig>;
+    type XcmExecutor = executor_adapter::XcmExecutor<XcmExecutor<XcmConfig>, EnergyForParachains>;
     type XcmTeleportFilter = Everything;
     // Anyone is able to use reserve transfers regardless of who they are and what they want to
     // transfer.
@@ -443,6 +473,56 @@ impl pallet_xcm::Config for Runtime {
     #[cfg(feature = "runtime-benchmarks")]
     type ReachableDest = ReachableDest;
     type AdminOrigin = EnsureRoot<AccountId>;
+}
+
+mod executor_adapter {
+    use super::*;
+    use sp_std::marker::PhantomData;
+    use xcm::latest::Assets;
+    use xcm_executor::traits::XcmAssetTransfers;
+
+    pub struct XcmExecutor<Executor, IsTeleporter>(PhantomData<(Executor, IsTeleporter)>);
+
+    impl<Executor: ExecuteXcm<Call>, Call, IsTeleporter> ExecuteXcm<Call>
+        for XcmExecutor<Executor, IsTeleporter>
+    {
+        type Prepared = Executor::Prepared;
+
+        fn prepare(message: Xcm<Call>) -> Result<Self::Prepared, Xcm<Call>> {
+            Executor::prepare(message)
+        }
+
+        fn execute(
+            origin: impl Into<Location>,
+            pre: Self::Prepared,
+            id: &mut XcmHash,
+            weight_credit: Weight,
+        ) -> Outcome {
+            Executor::execute(origin, pre, id, weight_credit)
+        }
+
+        fn prepare_and_execute(
+            origin: impl Into<Location>,
+            message: Xcm<Call>,
+            id: &mut XcmHash,
+            weight_limit: Weight,
+            weight_credit: Weight,
+        ) -> Outcome {
+            Executor::prepare_and_execute(origin, message, id, weight_limit, weight_credit)
+        }
+
+        fn charge_fees(location: impl Into<Location>, fees: Assets) -> XcmResult {
+            Executor::charge_fees(location, fees)
+        }
+    }
+
+    impl<Executor: XcmAssetTransfers, IsTeleporter: ContainsPair<Asset, Location>> XcmAssetTransfers
+        for XcmExecutor<Executor, IsTeleporter>
+    {
+        type IsReserve = Executor::IsReserve;
+        type IsTeleporter = (Executor::IsTeleporter, IsTeleporter);
+        type AssetTransactor = Executor::AssetTransactor;
+    }
 }
 
 mod origin_conversion {
