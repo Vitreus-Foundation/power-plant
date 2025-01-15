@@ -4,9 +4,6 @@ version.workspace = true
 authors.workspace = true
 edition.workspace = true
 
-[lints]
-workspace = true
-
 [dependencies]
 jsonrpsee = { workspace = true, features = ["server"] }
 thiserror = { workspace = true, default-features = true }
@@ -54,3 +51,6 @@ node-rpc-server = { workspace = true, default-features = true }
 
 vitreus-power-plant-runtime = { workspace = true, default-features = true }
 vitreus-utility-runtime-api = { workspace = true, default-features = true }
+
+[features]
+txpool = ["fc-rpc/txpool"]

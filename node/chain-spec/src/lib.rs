@@ -18,11 +18,12 @@ use sp_runtime::{FixedU128, Perbill};
 use crate::tech_addresses::treasury;
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig, EVMChainIdConfig,
-    EnergyFeeConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
-    NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig,
-    SS58Prefix, SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig,
-    SystemConfig, TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig,
+    DynamicEnergyConfig, EVMChainIdConfig, EnergyBrokerConfig, EnergyFeeConfig,
+    EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations, NacManagingConfig,
+    PrivilegesConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix,
+    SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig, SystemConfig,
+    TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
     COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
@@ -354,6 +355,7 @@ pub fn testnet_genesis(
             initial_energy_rate: INITIAL_ENERGY_RATE,
             ..Default::default()
         },
+        energy_broker: EnergyBrokerConfig { energy_capacity: 1_000_000_000_000 },
         assets: AssetsConfig {
             assets: vec![(VNRG::get(), root_key, false, 1)],
             metadata: vec![(
@@ -413,6 +415,11 @@ pub fn testnet_genesis(
         technical_membership: Default::default(),
         treasury: Default::default(),
         elections: Default::default(),
+        dynamic_energy: DynamicEnergyConfig {
+            energy_burn: 10_000_000_000,
+            energy_sale: 10_000_000_000,
+            total_stake: stakers.iter().map(|x| x.2).sum(),
+        },
         energy_generation: EnergyGenerationConfig {
             validator_count: 125,
             minimum_validator_count: initial_validators.len() as u32,
@@ -511,6 +518,7 @@ fn mainnet_genesis(
             initial_energy_rate: INITIAL_ENERGY_RATE,
             ..Default::default()
         },
+        energy_broker: EnergyBrokerConfig { energy_capacity: 1_000_000_000_000 },
         assets: AssetsConfig {
             assets: vec![(VNRG::get(), root_key, false, 1)],
             metadata: vec![(
@@ -568,6 +576,11 @@ fn mainnet_genesis(
         technical_membership: Default::default(),
         treasury: Default::default(),
         elections: Default::default(),
+        dynamic_energy: DynamicEnergyConfig {
+            energy_burn: 10_000_000_000,
+            energy_sale: 10_000_000_000,
+            total_stake: stakers.iter().map(|x| x.2).sum(),
+        },
         energy_generation: EnergyGenerationConfig {
             validator_count: initial_validators.len() as u32,
             minimum_validator_count: initial_validators.len() as u32 - 1,

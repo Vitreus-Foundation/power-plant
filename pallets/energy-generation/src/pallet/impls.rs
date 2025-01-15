@@ -17,23 +17,23 @@ use frame_support::{
 use frame_system::pallet_prelude::BlockNumberFor;
 use scale_info::prelude::*;
 
-use crate::OnVipMembershipHandler;
 use pallet_reputation::{ReputationPoint, ReputationRecord};
 use pallet_session::historical;
 use sp_runtime::{
     traits::{Convert, One, Saturating, Zero},
-    Perbill,
+    FixedPointNumber, FixedU128, Perbill,
 };
 use sp_staking::{
     offence::{OffenceDetails, OnOffenceHandler},
     EraIndex, SessionIndex,
 };
 use sp_std::prelude::*;
+use vitreus_runtime_common::{EraEnergyRateCalculator, EraSessionLookup, OnSessionChange, Staking};
 
 use crate::slashing::NegativeImbalanceOf;
 use crate::{
     log, slashing, weights::WeightInfo, ActiveEraInfo, Cooperations, EnergyDebtOf, EnergyOf,
-    EnergyRateCalculator, Exposure, ExposureOf, Forcing, IndividualExposure, RewardDestination,
+    Exposure, ExposureOf, Forcing, IndividualExposure, OnVipMembershipHandler, RewardDestination,
     SessionInterface, StakeOf, StakingLedger, ValidatorPrefs,
 };
 
@@ -320,7 +320,7 @@ impl<T: Config> Pallet<T> {
 
         <Ledger<T>>::insert(&controller, &ledger);
 
-        let validator_total_payout = exposure.total.into() / era_energy_rate;
+        let validator_total_payout = era_energy_rate.saturating_mul_int(exposure.total.into());
 
         let validator_prefs = Self::eras_validator_prefs(era, &validator_stash);
         // Validator first gets a cut off the top.
@@ -384,6 +384,8 @@ impl<T: Config> Pallet<T> {
     fn make_payout(stash: &T::AccountId, amount: EnergyOf<T>) -> Option<EnergyDebtOf<T>> {
         let dest = Self::payee(stash);
         let asset_id = T::EnergyAssetId::get();
+
+        // TODO: calculate bonus energy correctly
         let amount = Self::calculate_energy_reward_multiplier(stash)
             .mul_floor(amount)
             .saturating_add(amount);
@@ -438,6 +440,17 @@ impl<T: Config> Pallet<T> {
         if chilled_as_validator || chilled_as_cooperator {
             Self::deposit_event(Event::<T>::Chilled { stash: stash.clone() });
         }
+    }
+
+    /// Compute energy demand rate
+    fn store_energy_rate(era_index: EraIndex) {
+        let energy = T::EraEnergyRateCalculator::calculate(era_index).unwrap_or_default();
+        let staked = Self::eras_total_stake(era_index);
+        let energy_rate = FixedU128::checked_from_rational(energy, staked).unwrap_or_default();
+
+        <ErasEnergyPerStakeCurrency<T>>::insert(era_index, energy_rate);
+
+        Self::deposit_event(Event::<T>::EraEnergyPerStakeCurrencySet { era_index, energy_rate });
     }
 
     /// Plan a new session potentially trigger a new era.
@@ -517,6 +530,8 @@ impl<T: Config> Pallet<T> {
             T::SessionInterface::disable_validator(index);
         }
 
+        T::SessionChangeListeners::on_new_session(start_session);
+
         Ok(())
     }
 
@@ -536,7 +551,6 @@ impl<T: Config> Pallet<T> {
     /// Start a new era. It does:
     ///
     /// * Increment `active_era.index`,
-    /// * Calculate energy rate per bonded currency for active era
     /// * reset `active_era.start`,
     /// * update `BondedEras` and apply slashes.
     fn start_era(start_session: SessionIndex) -> DispatchResult {
@@ -549,8 +563,6 @@ impl<T: Config> Pallet<T> {
             });
             new_index
         });
-
-        Self::store_energy_rate(active_era);
 
         let bonding_duration = T::BondingDuration::get();
 
@@ -575,31 +587,14 @@ impl<T: Config> Pallet<T> {
             }
         });
 
-        Self::apply_unapplied_slashes(active_era)
+        Self::apply_unapplied_slashes(active_era)?;
+
+        Ok(())
     }
 
-    /// Compute energy demand rate
-    fn store_energy_rate(era_index: EraIndex) {
-        let staked = Self::eras_total_stake(era_index);
-        let issuance = pallet_assets::Pallet::<T>::total_supply(T::EnergyAssetId::get());
-        let core_nodes_num = Self::core_nodes_count();
-        let battery_slot_cap = T::BatterySlotCapacity::get();
+    fn end_era(active_era: ActiveEraInfo, _session_index: SessionIndex) {
+        Self::store_energy_rate(active_era.index);
 
-        let energy_per_stake_currency = T::EnergyPerStakeCurrency::calculate_energy_rate(
-            staked,
-            issuance,
-            core_nodes_num,
-            battery_slot_cap,
-        );
-
-        <ErasEnergyPerStakeCurrency<T>>::insert(era_index, energy_per_stake_currency);
-        Self::deposit_event(Event::<T>::EraEnergyPerStakeCurrencySet {
-            era_index,
-            energy_rate: energy_per_stake_currency,
-        });
-    }
-
-    fn end_era(_active_era: ActiveEraInfo, _session_index: SessionIndex) {
         // Clear disabled validators.
         <DisabledValidators<T>>::kill();
     }
@@ -1238,14 +1233,39 @@ where
     }
 }
 
-impl<T: Config> EnergyRateCalculator<StakeOf<T>, EnergyOf<T>> for Pallet<T> {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<T>,
-        _total_issuance: EnergyOf<T>,
-        _core_nodes_num: u32,
-        _battery_slot_cap: EnergyOf<T>,
-    ) -> EnergyOf<T> {
-        Pallet::<T>::current_energy_per_stake_currency().unwrap_or(EnergyOf::<T>::zero())
+impl<T: Config> Staking<StakeOf<T>> for Pallet<T> {
+    fn total_stake(era: EraIndex) -> StakeOf<T> {
+        Self::eras_total_stake(era)
+    }
+}
+
+impl<T: Config> EraSessionLookup for Pallet<T> {
+    fn active_era() -> Option<EraIndex> {
+        Self::active_era().map(|era| era.index)
+    }
+
+    fn era_for_session(session_index: SessionIndex) -> Option<EraIndex> {
+        if session_index <= Self::current_planned_session() {
+            let current_era = Self::current_era()?;
+
+            for era in (0..=current_era).rev() {
+                let start_index = Self::eras_start_session_index(era)?;
+
+                if session_index >= start_index {
+                    return Some(era);
+                }
+            }
+        }
+
+        None
+    }
+
+    fn session_range_for_era(era_index: EraIndex) -> Option<(SessionIndex, SessionIndex)> {
+        let start = Self::eras_start_session_index(era_index)?;
+        let end = Self::eras_start_session_index(era_index.saturating_plus_one())
+            .unwrap_or_else(|| Self::current_planned_session().saturating_plus_one());
+
+        Some((start, end))
     }
 }
 

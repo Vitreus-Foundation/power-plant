@@ -46,11 +46,12 @@ use polkadot_runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
-    fungible::Inspect as FungibleInspect, nonfungibles_v2::Inspect, DepositConsequence, Fortitude,
-    Preservation, Provenance, WithdrawConsequence,
+    fungible, fungible::Inspect as FungibleInspect, imbalance::ResolveAssetTo,
+    nonfungibles_v2::Inspect, DepositConsequence, Fortitude, Precision, Preservation, Provenance,
+    WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, OnUnbalanced, ProcessMessage,
+    Currency, EitherOfDiverse, ExistenceRequirement, Imbalance, OnUnbalanced, ProcessMessage,
     ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
 use parity_scale_codec::{Compact, Decode, Encode, MaxEncodedLen};
@@ -59,7 +60,7 @@ use sp_core::{
     crypto::{ByteArray, KeyTypeId},
     OpaqueMetadata, H160, H256, U256,
 };
-use sp_runtime::traits::{AccountIdConversion, Convert, ConvertInto, Keccak256, Zero};
+use sp_runtime::traits::{AccountIdConversion, Convert, ConvertInto, Keccak256, One, Zero};
 use sp_runtime::{
     create_runtime_str,
     curve::PiecewiseLinear,
@@ -72,7 +73,8 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, FixedPointNumber, Perbill, Percent, Permill,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, Perbill, Percent,
+    Permill, Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{
@@ -99,9 +101,8 @@ use frame_support::{
         constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter, WeightToFee,
     },
 };
-use frame_system::{EnsureNever, EnsureRoot, EnsureSignedBy};
-use pallet_energy_broker::{ConstantSum, NativeOrAssetId, NativeOrAssetIdConverter};
-use pallet_energy_fee::{traits::AssetsBalancesConverter, CallFee, CustomFee, TokenExchange};
+use frame_system::{EnsureRoot, EnsureSignedBy};
+use pallet_energy_fee::{CallFee, CustomFee, TokenExchange};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -249,10 +250,10 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 206,
+    spec_version: 208,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
-    transaction_version: 3,
+    transaction_version: 4,
     state_version: 1,
 };
 
@@ -472,7 +473,10 @@ impl pallet_assets::Config for Runtime {
     type AssetId = AssetId;
     type AssetIdParameter = Compact<AssetId>;
     type Currency = Balances;
-    type CreateOrigin = EnsureNever<AccountId>;
+    #[cfg(feature = "mainnet-runtime")]
+    type CreateOrigin = frame_system::EnsureNever<AccountId>;
+    #[cfg(feature = "testnet-runtime")]
+    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
     type ForceOrigin = EnsureRoot<AccountId>;
     type AssetDeposit = AssetDeposit;
     type AssetAccountDeposit = AssetAccountDeposit;
@@ -493,7 +497,7 @@ impl pallet_reputation::Config for Runtime {
     type WeightInfo = ();
 }
 
-use pallet_energy_generation::{EnergyRateCalculator, StakeOf, StashOf};
+use pallet_energy_generation::StashOf;
 
 pallet_staking_reward_curve::build! {
     const I_NPOS: PiecewiseLinear<'static> = curve!(
@@ -716,32 +720,6 @@ parameter_types! {
     pub const OffendingValidatorsThreshold: Perbill = Perbill::from_percent(17);
 }
 
-pub struct EnergyPerStakeCurrency;
-
-impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerStakeCurrency {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Runtime>,
-        _total_issuance: Energy,
-        _core_nodes_num: u32,
-        _battery_slot_cap: Energy,
-    ) -> Energy {
-        19_909_091_036_891
-    }
-}
-
-pub struct EnergyPerReputationPoint;
-
-impl EnergyRateCalculator<StakeOf<Runtime>, Energy> for EnergyPerReputationPoint {
-    fn calculate_energy_rate(
-        _total_staked: StakeOf<Runtime>,
-        _total_issuance: Energy,
-        _core_nodes_num: u32,
-        _battery_slot_cap: Energy,
-    ) -> Energy {
-        1_000
-    }
-}
-
 pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
 
 impl Convert<&ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
@@ -786,13 +764,14 @@ impl pallet_energy_generation::Config for Runtime {
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type ValidatorReputationTier = ValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = EnergyGeneration;
+    type EraEnergyRateCalculator = DynamicEnergy;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
     type MaxCooperatorRewardedPerValidator = ConstU32<128>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = ();
+    type SessionChangeListeners = (EnergyBroker, DynamicEnergy);
     type ReputationTierEnergyRewardAdditionalPercentMapping =
         ReputationTierEnergyRewardAdditionalPercentMapping;
     type Reward = ();
@@ -835,7 +814,10 @@ impl pallet_nfts::Config for Runtime {
     type ItemId = ItemId;
     type Currency = Balances;
     type ForceOrigin = EnsureRoot<AccountId>;
-    type CreateOrigin = EnsureNever<AccountId>;
+    #[cfg(feature = "mainnet-runtime")]
+    type CreateOrigin = frame_system::EnsureNever<AccountId>;
+    #[cfg(feature = "testnet-runtime")]
+    type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
     type Locker = ();
     type CollectionDeposit = CollectionDeposit;
     type ItemDeposit = ItemDeposit;
@@ -936,14 +918,21 @@ impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
     type BenchmarkHelper = ();
 }
 
+type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<AssetId>;
+
+pub type NativeAndAssets = frame_support::traits::fungible::UnionOf<
+    Balances,
+    Assets,
+    frame_support::traits::fungible::NativeFromLeft,
+    NativeOrAssetId,
+    AccountId,
+>;
+
 parameter_types! {
     pub const AssetConversionPalletId: PalletId = PalletId(*b"py/ascon");
-    pub const AllowMultiAssetPools: bool = false;
-    pub const LiquidityWithdrawalFee: Permill = Permill::from_percent(1);
-    pub const PoolSetupFee: Balance = 0;
-    pub const PoolSwapFee: u32 = 10; // 1%
-    pub const MaxSwapPathLength: u32 = 2;
-    pub const MintMinLiquidity: Balance = 100;
+    pub const SwapFee: u32 = 10; // 1%
+    pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
+    pub const BurnedEnergySessionsCount: u32 = 84 * SessionsPerEra::get();
 }
 
 ord_parameter_types! {
@@ -951,33 +940,65 @@ ord_parameter_types! {
         AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
-type EnergyRate = AssetsBalancesConverter<Runtime, AssetRate>;
 type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
+
+pub struct EnergyRate;
+
+impl pallet_energy_broker::EnergyBalanceConverter<Balance, NativeOrAssetId> for EnergyRate {
+    fn asset_to_energy_balance(asset_id: NativeOrAssetId, balance: Balance) -> Option<Balance> {
+        match asset_id {
+            NativeOrAssetId::Native => {
+                DynamicEnergy::exchange_rate().map(|rate| rate.saturating_mul_int(balance))
+            },
+            _ => None,
+        }
+    }
+
+    fn energy_to_asset_balance(asset_id: NativeOrAssetId, balance: Balance) -> Option<Balance> {
+        match asset_id {
+            NativeOrAssetId::Native => DynamicEnergy::exchange_rate()
+                .and_then(FixedPointNumber::reciprocal)
+                .map(|rate| rate.saturating_mul_int(balance)),
+            _ => None,
+        }
+    }
+}
 
 impl pallet_energy_broker::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type Formula = ConstantSum<EnergyRate>;
-    type Currency = Balances;
+    type ManageOrigin = EnsureRoot<AccountId>;
     type Balance = Balance;
     type HigherPrecisionBalance = sp_core::U256;
-    type AssetBalance = Balance;
-    type AssetId = AssetId;
-    type Assets = Assets;
-    type PoolAssetId = AssetId;
-    type PoolAssets = PoolAssets;
-    type PalletId = AssetConversionPalletId;
-    type LPFee = PoolSwapFee;
-    type PoolSetupFee = PoolSetupFee;
-    type PoolSetupFeeReceiver = AssetConversionOrigin;
-    type LiquidityWithdrawalFee = LiquidityWithdrawalFee;
-    type AllowMultiAssetPools = AllowMultiAssetPools;
-    type MaxSwapPathLength = MaxSwapPathLength;
-    type MintMinLiquidity = MintMinLiquidity;
-    type MultiAssetId = NativeOrAssetId<AssetId>;
-    type MultiAssetIdConverter = NativeOrAssetIdConverter<AssetId>;
-    type WeightInfo = pallet_energy_broker::weights::SubstrateWeight<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type AssetKind = NativeOrAssetId;
+    type Assets = NativeAndAssets;
+    type BalanceConverter = EnergyRate;
+    type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
+    type OnEnergySell = DynamicEnergy;
+    type SwapFee = SwapFee;
+    type NativeAsset = NativeAsset;
+    type EnergyAsset = VNRG;
+    type BurnedEnergySessionsCount = BurnedEnergySessionsCount;
+}
+
+parameter_types! {
+    pub const ExpectedSessionDuration: u32 = EPOCH_DURATION_IN_BLOCKS * SECS_PER_BLOCK as u32;
+    pub const AnnualPercentageRate: u32 = 100; // 10%
+    pub MultiplierCoefficients: [FixedI128; 4] = [
+        FixedI128::zero(), FixedI128::zero(), FixedI128::zero(), FixedI128::one(),
+    ];
+}
+
+impl pallet_dynamic_energy::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type ManageOrigin = EnsureRoot<AccountId>;
+    type Balance = Balance;
+    type HigherPrecisionBalance = sp_core::U256;
+    type Staking = EnergyGeneration;
+    type Warehouse = EnergyBroker;
+    type SessionsPerEra = SessionsPerEra;
+    type ExpectedSessionDuration = ExpectedSessionDuration;
+    type DefaultAnnualPercentageRate = AnnualPercentageRate;
+    type DefaultMultiplierCoefficients = MultiplierCoefficients;
 }
 
 parameter_types! {
@@ -1002,27 +1023,23 @@ impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
     for EnergyBrokerExchange
 {
     fn convert_from_input(amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::get_amount_out(
-            &amount,
-            (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
-        )
-        .map_err(|e| e.into())
+        EnergyBroker::get_amount_out(amount, &(NativeAsset::get(), VNRG::get().into()))
+            .map(|(amount, _)| amount)
+            .map_err(|e| e.into())
     }
 
     fn convert_from_output(amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::get_amount_in(
-            &amount,
-            (&NativeOrAssetId::Native, &NativeOrAssetId::Asset(VNRG::get())),
-        )
-        .map_err(|e| e.into())
+        EnergyBroker::get_amount_in(amount, &(NativeAsset::get(), VNRG::get().into()))
+            .map(|(amount, _)| amount)
+            .map_err(|e| e.into())
     }
 
     fn exchange_from_input(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::swap_exact_native_for_tokens(*who, VNRG::get(), amount, None, *who, true)
+        EnergyBroker::swap_exact_native_for_energy(*who, amount)
     }
 
     fn exchange_from_output(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::swap_native_for_exact_tokens(*who, VNRG::get(), amount, None, *who, true)
+        EnergyBroker::swap_native_for_exact_energy(*who, amount)
     }
 
     fn exchange_inner(
@@ -1046,6 +1063,7 @@ impl pallet_energy_fee::Config for Runtime {
     type MainRecycleDestination = EnergyBrokerSink;
     type FeeRecycleDestination = ();
     type OnWithdrawFee = NacManaging;
+    type OnEnergyBurn = (EnergyBroker, DynamicEnergy);
 }
 
 parameter_types! {
@@ -1164,6 +1182,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Auctions(..)
             | RuntimeCall::Balances(..)
             | RuntimeCall::Bounties(..)
+            | RuntimeCall::DynamicEnergy(..)
             | RuntimeCall::EnergyGeneration(..)
             | RuntimeCall::EnergyBroker(..)
             | RuntimeCall::Nfts(..)
@@ -1331,55 +1350,63 @@ parameter_types! {
         );
 }
 
-/// Helper struct which mimics some functionality of the Balances pallet.
-///
-/// Used in pallet_evm for correct work of fee calculation. The only difference between Balances
-/// pallet and this struct is the implementation of the reducible balance, due to the fact that tx
-/// fee can be paid as in VTRS as in VNRG.
-pub struct QuasiBalances;
+pub struct CurrencyAdapter<T>(core::marker::PhantomData<T>);
 
-impl Currency<AccountId> for QuasiBalances {
-    type Balance = <Balances as Currency<AccountId>>::Balance;
-
-    type PositiveImbalance = <Balances as Currency<AccountId>>::PositiveImbalance;
-
-    type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
+impl<T> Currency<AccountId> for CurrencyAdapter<T>
+where
+    T: fungible::Inspect<AccountId> + fungible::Balanced<AccountId> + fungible::Mutate<AccountId>,
+{
+    type Balance = <T as fungible::Inspect<AccountId>>::Balance;
+    type PositiveImbalance = fungible::Debt<AccountId, T>;
+    type NegativeImbalance = fungible::Credit<AccountId, T>;
 
     fn total_balance(who: &AccountId) -> Self::Balance {
-        <Balances as Currency<AccountId>>::total_balance(who)
+        T::total_balance(who)
     }
 
     fn can_slash(who: &AccountId, value: Self::Balance) -> bool {
-        <Balances as Currency<AccountId>>::can_slash(who, value)
+        if value.is_zero() {
+            return true;
+        }
+        Self::free_balance(who) >= value
     }
 
     fn total_issuance() -> Self::Balance {
-        <Balances as Currency<AccountId>>::total_issuance()
+        T::total_issuance()
     }
 
     fn minimum_balance() -> Self::Balance {
-        <Balances as Currency<AccountId>>::minimum_balance()
+        T::minimum_balance()
     }
 
     fn burn(amount: Self::Balance) -> Self::PositiveImbalance {
-        <Balances as Currency<AccountId>>::burn(amount)
+        if amount.is_zero() {
+            return Self::PositiveImbalance::zero();
+        }
+        T::rescind(amount)
     }
 
     fn issue(amount: Self::Balance) -> Self::NegativeImbalance {
-        <Balances as Currency<AccountId>>::issue(amount)
+        if amount.is_zero() {
+            return Self::NegativeImbalance::zero();
+        }
+        T::issue(amount)
     }
 
     fn free_balance(who: &AccountId) -> Self::Balance {
-        <Balances as Currency<AccountId>>::free_balance(who)
+        T::reducible_balance(who, Preservation::Preserve, Fortitude::Polite)
     }
 
     fn ensure_can_withdraw(
         who: &AccountId,
-        _amount: Self::Balance,
-        reasons: WithdrawReasons,
-        new_balance: Self::Balance,
+        amount: Self::Balance,
+        _reasons: WithdrawReasons,
+        _new_balance: Self::Balance,
     ) -> DispatchResult {
-        <Balances as Currency<AccountId>>::ensure_can_withdraw(who, _amount, reasons, new_balance)
+        if amount.is_zero() {
+            return Ok(());
+        }
+        T::can_withdraw(who, amount).into_result(true).map(|_| ())
     }
 
     fn transfer(
@@ -1388,66 +1415,104 @@ impl Currency<AccountId> for QuasiBalances {
         value: Self::Balance,
         existence_requirement: ExistenceRequirement,
     ) -> DispatchResult {
-        <Balances as Currency<AccountId>>::transfer(source, dest, value, existence_requirement)
+        if value.is_zero() {
+            return Ok(());
+        }
+
+        let preservation = match existence_requirement {
+            ExistenceRequirement::KeepAlive => Preservation::Preserve,
+            ExistenceRequirement::AllowDeath => Preservation::Expendable,
+        };
+        T::transfer(source, dest, value, preservation).map(|_| ())
     }
 
     fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
-        <Balances as Currency<AccountId>>::slash(who, value)
+        if value.is_zero() {
+            return (Self::NegativeImbalance::zero(), Zero::zero());
+        }
+
+        let imbalance = T::withdraw(
+            who,
+            value,
+            Precision::BestEffort,
+            Preservation::Preserve,
+            Fortitude::Force,
+        )
+        .unwrap_or_else(|_| Self::NegativeImbalance::zero());
+
+        let remaining = value.saturating_sub(imbalance.peek());
+
+        (imbalance, remaining)
     }
 
     fn deposit_into_existing(
         who: &AccountId,
         value: Self::Balance,
     ) -> Result<Self::PositiveImbalance, DispatchError> {
-        <Balances as Currency<AccountId>>::deposit_into_existing(who, value)
+        if value.is_zero() {
+            return Ok(Self::PositiveImbalance::zero());
+        }
+        T::deposit(who, value, Precision::Exact)
     }
 
     fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance {
-        <Balances as Currency<AccountId>>::deposit_creating(who, value)
+        if value.is_zero() {
+            return Self::PositiveImbalance::zero();
+        }
+        T::deposit(who, value, Precision::Exact).unwrap_or_else(|_| Self::PositiveImbalance::zero())
     }
 
     fn withdraw(
         who: &AccountId,
         value: Self::Balance,
-        reasons: WithdrawReasons,
+        _reasons: WithdrawReasons,
         liveness: ExistenceRequirement,
     ) -> Result<Self::NegativeImbalance, DispatchError> {
-        <Balances as Currency<AccountId>>::withdraw(who, value, reasons, liveness)
+        if value.is_zero() {
+            return Ok(Self::NegativeImbalance::zero());
+        }
+
+        let preservation = match liveness {
+            ExistenceRequirement::KeepAlive => Preservation::Preserve,
+            ExistenceRequirement::AllowDeath => Preservation::Expendable,
+        };
+        T::withdraw(who, value, Precision::Exact, preservation, Fortitude::Polite)
     }
 
     fn make_free_balance_be(
         who: &AccountId,
         balance: Self::Balance,
     ) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
-        <Balances as Currency<AccountId>>::make_free_balance_be(who, balance)
+        T::set_balance(who, balance);
+        SignedImbalance::Positive(Self::PositiveImbalance::zero())
     }
 }
 
-impl FungibleInspect<AccountId> for QuasiBalances {
-    type Balance = <Balances as FungibleInspect<AccountId>>::Balance;
+impl<T: fungible::Inspect<AccountId>> fungible::Inspect<AccountId> for CurrencyAdapter<T> {
+    type Balance = T::Balance;
 
     fn total_issuance() -> Self::Balance {
-        <Balances as FungibleInspect<AccountId>>::total_issuance()
+        T::total_issuance()
     }
 
     fn minimum_balance() -> Self::Balance {
-        <Balances as FungibleInspect<AccountId>>::minimum_balance()
+        T::minimum_balance()
     }
 
     fn total_balance(who: &AccountId) -> Self::Balance {
-        <Balances as FungibleInspect<AccountId>>::total_balance(who)
+        T::total_balance(who)
     }
 
     fn balance(who: &AccountId) -> Self::Balance {
-        <Balances as FungibleInspect<AccountId>>::balance(who)
+        T::balance(who)
     }
 
     fn reducible_balance(
-        _who: &AccountId,
-        _preservation: Preservation,
-        _force: Fortitude,
+        who: &AccountId,
+        preservation: Preservation,
+        force: Fortitude,
     ) -> Self::Balance {
-        1_000_000_000_000_000_000_000
+        T::reducible_balance(who, preservation, force)
     }
 
     fn can_deposit(
@@ -1455,11 +1520,11 @@ impl FungibleInspect<AccountId> for QuasiBalances {
         amount: Self::Balance,
         provenance: Provenance,
     ) -> DepositConsequence {
-        <Balances as FungibleInspect<AccountId>>::can_deposit(who, amount, provenance)
+        T::can_deposit(who, amount, provenance)
     }
 
     fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
-        <Balances as FungibleInspect<AccountId>>::can_withdraw(who, amount)
+        T::can_withdraw(who, amount)
     }
 }
 
@@ -1475,7 +1540,7 @@ impl pallet_evm::Config for Runtime {
     type CallOrigin = EnsureAccountId20;
     type WithdrawOrigin = EnsureAccountId20;
     type AddressMapping = IdentityAddressMapping;
-    type Currency = QuasiBalances;
+    type Currency = CurrencyAdapter<EnergyItem>;
     type RuntimeEvent = RuntimeEvent;
     type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
@@ -1784,6 +1849,7 @@ construct_runtime!(
         EnergyGeneration: pallet_energy_generation = 39,
         EnergyBroker: pallet_energy_broker = 40,
         Privileges: pallet_privileges = 41,
+        DynamicEnergy: pallet_dynamic_energy = 42,
         Proxy: pallet_proxy = 44,
 
         // Governance-related pallets
@@ -1901,8 +1967,13 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
-pub type Migrations =
-    (migrations::Unreleased, migrations::V0200, migrations::V0205, migrations::Permanent);
+pub type Migrations = (
+    migrations::Unreleased,
+    migrations::V0200,
+    migrations::V0205,
+    migrations::V0208,
+    migrations::Permanent,
+);
 
 /// Executive: handles dispatch to the various modules.
 pub type Executive = frame_executive::Executive<
@@ -2682,44 +2753,12 @@ impl_runtime_apis! {
         }
 
         fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
-            EnergyBroker::quote_price_exact_tokens_for_tokens(
-                NativeOrAssetId::Native,
-                NativeOrAssetId::Asset(VNRG::get()),
+            EnergyBroker::get_amount_out(
                 UNITS,
-                true
+                &(NativeAsset::get(), VNRG::get().into())
             )
-        }
-    }
-
-    impl pallet_energy_broker::AssetConversionApi<
-        Block,
-        Balance,
-        Balance,
-        NativeOrAssetId<AssetId>
-    > for Runtime {
-        fn quote_price_tokens_for_exact_tokens(
-            asset1: NativeOrAssetId<AssetId>,
-            asset2: NativeOrAssetId<AssetId>,
-            amount: Balance,
-            include_fee: bool,
-        ) -> Option<Balance> {
-            EnergyBroker::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
-        }
-
-        fn quote_price_exact_tokens_for_tokens(
-            asset1: NativeOrAssetId<AssetId>,
-            asset2: NativeOrAssetId<AssetId>,
-            amount: Balance,
-            include_fee: bool,
-        ) -> Option<Balance> {
-            EnergyBroker::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
-        }
-
-        fn get_reserves(
-            asset1: NativeOrAssetId<AssetId>,
-            asset2: NativeOrAssetId<AssetId>,
-        ) -> Option<(Balance, Balance)> {
-            EnergyBroker::get_reserves(&asset1, &asset2).ok()
+            .map(|(amount, _)| amount)
+            .ok()
         }
     }
 
@@ -2790,7 +2829,8 @@ impl_runtime_apis! {
         fn current_energy_per_stake_currency() -> u128 {
             EnergyGeneration::active_era()
                 .and_then(|era| EnergyGeneration::eras_energy_per_stake_cur(era.index))
-                .unwrap_or(0)
+                .unwrap_or_default().into_inner()
+
         }
     }
 
