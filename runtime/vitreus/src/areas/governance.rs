@@ -1,5 +1,5 @@
 use crate::{
-    AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council,
+    AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
     MoreThanHalfCouncil, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent,
     RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee, Treasury, TreasuryExtension,
     DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, UNITS,
@@ -269,7 +269,7 @@ impl pallet_democracy::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Scheduler = Scheduler;
     type Preimages = Preimage;
-    type Currency = Balances;
+    type Currency = DemocracyExtension;
     type EnactmentPeriod = EnactmentPeriod;
     type LaunchPeriod = LaunchPeriod;
     type VotingPeriod = VotingPeriod;
@@ -326,4 +326,13 @@ impl pallet_democracy::Config for Runtime {
     type VetoOrigin = pallet_collective::EnsureMember<AccountId, TechnicalCollective>;
     type PalletsOrigin = OriginCaller;
     type Slash = Treasury;
+}
+
+impl pallet_democracy_extension::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type ManageOrigin = EitherOfDiverse<
+        pallet_collective::EnsureProportionAtLeast<AccountId, TechnicalCollective, 2, 3>,
+        frame_system::EnsureRoot<AccountId>,
+    >;
+    type Currency = Balances;
 }

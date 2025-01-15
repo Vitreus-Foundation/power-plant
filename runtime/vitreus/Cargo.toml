@@ -115,6 +115,7 @@ pallet-evm-precompile-balances-erc20 = { workspace = true }
 
 # Vitreus pallets
 pallet-claiming = { workspace = true }
+pallet-democracy-extension = { workspace = true }
 pallet-dynamic-energy = { workspace = true }
 pallet-energy-broker = { workspace = true }
 pallet-energy-fee = { workspace = true }
@@ -162,6 +163,7 @@ try-runtime = [
     "pallet-bounties/try-runtime",
     "pallet-claiming/try-runtime",
     "pallet-collective/try-runtime",
+    "pallet-democracy-extension/try-runtime",
     "pallet-democracy/try-runtime",
     "pallet-dynamic-energy/try-runtime",
     "pallet-elections-phragmen/try-runtime",
@@ -295,6 +297,7 @@ std = [
     "pallet-evm-precompile-balances-erc20/std",
     # Vitreus pallets
     "pallet-claiming/std",
+    "pallet-democracy-extension/std",
     "pallet-dynamic-energy/std",
     "pallet-energy-broker/std",
     "pallet-energy-fee/std",

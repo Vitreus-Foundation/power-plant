@@ -1864,6 +1864,7 @@ construct_runtime!(
         Democracy: pallet_democracy = 53,
         Elections: pallet_elections_phragmen = 54,
         Multisig: pallet_multisig = 55,
+        DemocracyExtension: pallet_democracy_extension = 56,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,
