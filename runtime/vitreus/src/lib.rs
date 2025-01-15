@@ -1290,14 +1290,30 @@ parameter_types! {
 pub enum ProxyType {
     #[default]
     Any = 0,
+    Staking = 1,
 }
 
 impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
-    fn filter(&self, _: &RuntimeCall) -> bool {
-        true
+    fn filter(&self, c: &RuntimeCall) -> bool {
+        match self {
+            ProxyType::Any => true,
+            ProxyType::Staking => {
+                matches!(
+                    c,
+                    RuntimeCall::EnergyGeneration(..)
+                        | RuntimeCall::Session(..)
+                        | RuntimeCall::Utility(..)
+                )
+            },
+        }
     }
-    fn is_superset(&self, _: &Self) -> bool {
-        true
+    fn is_superset(&self, o: &Self) -> bool {
+        match (self, o) {
+            (x, y) if x == y => true,
+            (ProxyType::Any, _) => true,
+            (_, ProxyType::Any) => false,
+            _ => false,
+        }
     }
 }
 
