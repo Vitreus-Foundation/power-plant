@@ -11,6 +11,7 @@
   ],
   "protocolId": null,
   "properties": {
+    "isEthereum": true,
     "ss58Format": 1943,
     "tokenDecimals": 18,
     "tokenSymbol": "VTRS"
