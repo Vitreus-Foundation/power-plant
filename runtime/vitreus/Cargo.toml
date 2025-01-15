@@ -126,6 +126,7 @@ pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-simple-vesting = { workspace = true }
 pallet-treasury-extension = { workspace = true }
+vitreus-runtime-common = { workspace = true }
 
 # Runtime API
 energy-fee-runtime-api = { workspace = true }
@@ -306,6 +307,7 @@ std = [
     "pallet-reputation/std",
     "pallet-simple-vesting/std",
     "pallet-treasury-extension/std",
+    "vitreus-runtime-common/std",
     # Runtime API
     "energy-fee-runtime-api/std",
     "energy-generation-runtime-api/std",
