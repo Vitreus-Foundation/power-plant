@@ -73,8 +73,8 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, FixedU64, Perbill,
-    Percent, Permill, Saturating,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, FixedU128, FixedU64,
+    Perbill, Percent, Permill, Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{
@@ -2846,17 +2846,20 @@ impl_runtime_apis! {
         }
     }
 
-
-    impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
-        fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
-            ReputationExposureMultiplier::convert(&tier).into_perbill()
+    impl energy_generation_runtime_api::EnergyGenerationApi<Block, AccountId> for Runtime {
+        fn energy_reward_per_stake() -> FixedU128 {
+            EnergyGeneration::active_era()
+                .and_then(|era| era.index.checked_sub(1))
+                .and_then(EnergyGeneration::eras_energy_per_stake_currency)
+                .unwrap_or_default()
         }
 
-        fn current_energy_per_stake_currency() -> u128 {
-            EnergyGeneration::active_era()
-                .and_then(|era| EnergyGeneration::eras_energy_per_stake_cur(era.index))
-                .unwrap_or_default().into_inner()
+        fn validator_exposure_multiplier(account: AccountId) -> FixedU64 {
+            <Self as pallet_energy_generation::Config>::ValidatorExposureMultiplier::multiplier(&account)
+        }
 
+        fn cooperator_exposure_multiplier(account: AccountId) -> FixedU64 {
+            <Self as pallet_energy_generation::Config>::CooperatorExposureMultiplier::multiplier(&account)
         }
     }
 

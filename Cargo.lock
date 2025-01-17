@@ -2122,29 +2122,25 @@ dependencies = [
 
 [[package]]
 name = "energy-generation-rpc"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "energy-generation-runtime-api",
  "jsonrpsee",
- "pallet-reputation",
  "parity-scale-codec",
  "sp-api",
  "sp-blockchain",
  "sp-runtime",
- "sp-std",
 ]
 
 [[package]]
 name = "energy-generation-runtime-api"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
- "pallet-reputation",
  "parity-scale-codec",
  "scale-info",
  "serde",
  "sp-api",
  "sp-runtime",
- "sp-std",
 ]
 
 [[package]]

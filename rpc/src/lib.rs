@@ -81,7 +81,7 @@ where
     C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
     C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block, AccountId, Balance, RuntimeCall>,
-    C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block>,
+    C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block, AccountId>,
     C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
     P: TransactionPool<Block = Block> + 'static,
     A: ChainApi<Block = Block> + 'static,

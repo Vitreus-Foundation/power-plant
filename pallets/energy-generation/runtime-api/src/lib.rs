@@ -1,13 +1,21 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
-use pallet_reputation::ReputationTier;
-use sp_runtime::Perbill;
+use parity_scale_codec::Encode;
+use sp_runtime::{FixedU128, FixedU64};
 
 sp_api::decl_runtime_apis! {
-    pub trait EnergyGenerationApi
+    #[api_version(2)]
+    pub trait EnergyGenerationApi<AccountId>
+    where
+        AccountId: Encode
     {
-        fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill;
+        /// Returns the energy reward per stake for the most recent era.
+        fn energy_reward_per_stake() -> FixedU128;
 
-        fn current_energy_per_stake_currency() -> u128;
+        /// Returns the exposure multiplier for a validator's role.
+        fn validator_exposure_multiplier(account: AccountId) -> FixedU64;
+
+        /// Returns the exposure multiplier for a cooperator's role.
+        fn cooperator_exposure_multiplier(account: AccountId) -> FixedU64;
     }
 }

@@ -459,7 +459,7 @@ pub mod pallet {
 
     /// Eras energy rate per stake currency (VNRG per 1 VTRS)
     #[pallet::storage]
-    #[pallet::getter(fn eras_energy_per_stake_cur)]
+    #[pallet::getter(fn eras_energy_per_stake_currency)]
     pub type ErasEnergyPerStakeCurrency<T: Config> =
         StorageMap<_, Twox64Concat, EraIndex, FixedU128>;
 
