@@ -129,6 +129,7 @@ pallet-treasury-extension = { workspace = true }
 vitreus-runtime-common = { workspace = true }
 
 # Runtime API
+dynamic-energy-runtime-api = { workspace = true }
 energy-fee-runtime-api = { workspace = true }
 energy-generation-runtime-api = { workspace = true }
 vitreus-utility-runtime-api = { workspace = true }
@@ -309,6 +310,7 @@ std = [
     "pallet-treasury-extension/std",
     "vitreus-runtime-common/std",
     # Runtime API
+    "dynamic-energy-runtime-api/std",
     "energy-fee-runtime-api/std",
     "energy-generation-runtime-api/std",
     "vitreus-utility-runtime-api/std",

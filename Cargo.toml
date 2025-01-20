@@ -381,6 +381,7 @@ pallet-reputation = { path = "pallets/reputation", default-features = false }
 pallet-simple-vesting = { path = "pallets/simple-vesting", default-features = false }
 
 # Runtime API
+dynamic-energy-runtime-api = { path = "pallets/dynamic-energy/runtime-api", default-features = false }
 energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-features = false }
 energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api", default-features = false }
 vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false }

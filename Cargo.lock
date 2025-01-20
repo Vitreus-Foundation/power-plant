@@ -1993,6 +1993,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d6ef0072f8a535281e4876be788938b528e9a1d43900b82c2569af7da799125"
 
 [[package]]
+name = "dynamic-energy-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-runtime",
+]
+
+[[package]]
 name = "ecdsa"
 version = "0.16.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14045,6 +14056,7 @@ version = "0.1.0"
 dependencies = [
  "binary-merkle-tree",
  "chain-spec",
+ "dynamic-energy-runtime-api",
  "energy-fee-runtime-api",
  "energy-generation-runtime-api",
  "ethereum",

@@ -2714,6 +2714,16 @@ impl_runtime_apis! {
         }
     }
 
+    impl dynamic_energy_runtime_api::DynamicEnergyApi<Block> for Runtime {
+        fn exchange_rate() -> Option<FixedU128> {
+            DynamicEnergy::exchange_rate()
+        }
+
+        fn calculate_warehouse_capacity_multiplier() -> FixedU128 {
+            DynamicEnergy::calculate_warehouse_capacity_multiplier()
+        }
+    }
+
     impl energy_fee_runtime_api::EnergyFeeApi<Block, AccountId, Balance, RuntimeCall> for Runtime {
         fn estimate_gas(request: CallRequest) -> U256 {
             let CallRequest {

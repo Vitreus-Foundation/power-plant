@@ -299,6 +299,25 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+    /// Calculates warehouse capacity multiplier using `a*x^3+b*x^2+c*x+d` polynomial.
+    pub fn calculate_warehouse_capacity_multiplier() -> FixedU128 {
+        let x = FixedI128::from_perbill(Perbill::from_rational(
+            T::Warehouse::current_amount(),
+            T::Warehouse::max_capacity(),
+        )) * 100.into(); // convert to percents
+
+        let [a, b, c, d] = MultiplierCoefficients::<T>::get();
+
+        let multiplier = a * x.saturating_pow(3) + b * x.saturating_pow(2) + c * x + d;
+
+        if multiplier > FixedI128::zero() {
+            FixedU128::from_inner(multiplier.into_inner() as u128)
+        } else {
+            log::warn!(target: LOG_TARGET, "Invalid warehouse capacity multiplier");
+            FixedU128::one()
+        }
+    }
+
     fn update_generation_rate(index: SessionIndex) {
         let rate = EnergyBurnOverride::<T>::get().unwrap_or_else(SessionEnergyBurn::<T>::get);
 
@@ -367,7 +386,7 @@ impl<T: Config> Pallet<T> {
         total_stake: T::HigherPrecisionBalance,
     ) -> Option<FixedU128> {
         let period = Self::session_duration().into();
-        let multiplier = Self::calculate_multiplier().into_inner().into();
+        let multiplier = Self::calculate_warehouse_capacity_multiplier().into_inner().into();
 
         log::trace!(
             target: LOG_TARGET,
@@ -405,25 +424,6 @@ impl<T: Config> Pallet<T> {
         let weight = Perbill::from_rational(2, smooth_factor.saturating_plus_one());
 
         Saturating::saturating_add(weight * value, (Perbill::one() - weight) * old_value)
-    }
-
-    /// Calculates warehouse capacity multiplier using `a*x^3+b*x^2+c*x+d` polynomial.
-    fn calculate_multiplier() -> FixedU128 {
-        let x = FixedI128::from_perbill(Perbill::from_rational(
-            T::Warehouse::current_amount(),
-            T::Warehouse::max_capacity(),
-        )) * 100.into(); // convert to percents
-
-        let [a, b, c, d] = MultiplierCoefficients::<T>::get();
-
-        let multiplier = a * x.saturating_pow(3) + b * x.saturating_pow(2) + c * x + d;
-
-        if multiplier > FixedI128::zero() {
-            FixedU128::from_inner(multiplier.into_inner() as u128)
-        } else {
-            log::warn!(target: LOG_TARGET, "Invalid warehouse capacity multiplier");
-            FixedU128::one()
-        }
     }
 }
 
