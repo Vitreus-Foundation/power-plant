@@ -19,12 +19,6 @@
 //!   - Optional block hash
 //! - Returns: Fee details including breakdown
 //!
-//! ### Exchange Rate
-//! - `energyFee_vtrsToVnrgSwapRate`: Gets current VTRS/VNRG exchange rate
-//! - Parameters:
-//!   - Optional block hash
-//! - Returns: Exchange rate as u128
-//!
 //! ## Implementation Details
 //! - Uses runtime API to perform calculations
 //! - Falls back to best block if hash not specified
@@ -63,9 +57,6 @@ pub trait EnergyFeeApi<BlockHash, AccountId, Balance, Call> {
         encoded_call: Bytes,
         at: Option<BlockHash>,
     ) -> RpcResult<Option<FeeDetails<Balance>>>;
-
-    #[method(name = "energyFee_vtrsToVnrgSwapRate")]
-    fn vtrs_to_vnrg_swap_rate(&self, at: Option<BlockHash>) -> RpcResult<Option<u128>>;
 }
 
 pub struct EnergyFee<C, B> {
@@ -133,24 +124,6 @@ where
             ErrorObject::owned(
                 ErrorCode::InternalError.code(),
                 "Unable to query estimate_call_fee.",
-                Some(e.to_string()),
-            )
-        })
-    }
-
-    fn vtrs_to_vnrg_swap_rate(
-        &self,
-        at: Option<<Block as BlockT>::Hash>,
-    ) -> RpcResult<Option<u128>> {
-        let api = self.client.runtime_api();
-        let at = at.unwrap_or(
-            // If the block hash is not supplied assume the best block.
-            self.client.info().best_hash,
-        );
-        api.vtrs_to_vnrg_swap_rate(at).map_err(|e| {
-            ErrorObject::owned(
-                ErrorCode::InternalError.code(),
-                "Unable to query vtrs_to_vnrg_swap_rate.",
                 Some(e.to_string()),
             )
         })

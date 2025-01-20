@@ -2787,15 +2787,6 @@ impl_runtime_apis! {
                 vnrg: fees.0,
             }).ok()
         }
-
-        fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
-            EnergyBroker::get_amount_out(
-                UNITS,
-                &(NativeAsset::get(), VNRG::get().into())
-            )
-            .map(|(amount, _)| amount)
-            .ok()
-        }
     }
 
     #[cfg(feature = "runtime-benchmarks")]
