@@ -9,12 +9,16 @@ sp_api::decl_runtime_apis! {
     where
         Balance: Decode + Encode,
     {
+        /// Estimates energy received from a given amount of native currency.
         fn estimate_energy_from_native(amount: Balance) -> Option<Balance>;
 
+        /// Estimates native currency received from a given amount of energy.
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance>;
 
+        /// Returns the current exchange rate between energy and native currency.
         fn energy_exchange_rate() -> Option<FixedU128>;
 
+        /// Returns the current warehouse fill level as a percentage.
         fn current_warehouse_level() -> Percent;
     }
 }
