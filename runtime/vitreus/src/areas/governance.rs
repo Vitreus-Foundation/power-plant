@@ -88,7 +88,8 @@ parameter_types! {
     pub const VotingBondFactor: Balance = deposit(0, 32);
     pub const DesiredMembers: u32 = 7;
     pub const DesiredRunnersUp: u32 = 7;
-    pub const TermDuration: BlockNumber = prod_or_fast!(6 * MONTHS, 10 * MINUTES);
+    // TODO: remove `storage` after April of 2025
+    pub storage TermDuration: BlockNumber = prod_or_fast!(6 * MONTHS, 10 * MINUTES);
     pub const MaxCandidates: u32 = 64;
     pub const MaxVoters: u32 = 512;
     pub const MaxVotesPerVoter: u32 = 16;
@@ -103,15 +104,13 @@ impl pallet_elections_phragmen::Config for Runtime {
     type PalletId = ElectionsPhragmenPalletId;
     type Currency = Balances;
     type ChangeMembers = Council;
-    // NOTE: this implies that council's genesis members cannot be set directly and must come from
-    // this module.
-    type InitializeMembers = Council;
+    type InitializeMembers = ();
     type CurrencyToVote = sp_staking::currency_to_vote::U128CurrencyToVote;
     type CandidacyBond = CandidacyBond;
     type VotingBondBase = VotingBondBase;
     type VotingBondFactor = VotingBondFactor;
-    type LoserCandidate = ();
-    type KickedMember = ();
+    type LoserCandidate = Treasury;
+    type KickedMember = Treasury;
     type DesiredMembers = DesiredMembers;
     type DesiredRunnersUp = DesiredRunnersUp;
     type TermDuration = TermDuration;
