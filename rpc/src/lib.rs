@@ -80,6 +80,7 @@ where
     C::Api: BlockBuilder<Block>,
     C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
+    C::Api: energy_broker_rpc::EnergyBrokerRuntimeApi<Block, Balance>,
     C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block, AccountId, Balance, RuntimeCall>,
     C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block, AccountId>,
     C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
@@ -89,10 +90,12 @@ where
     CIDP: CreateInherentDataProviders<Block, ()> + Send + 'static,
     B: sc_client_api::Backend<Block> + Send + Sync + 'static,
 {
+    use energy_broker_rpc::{EnergyBroker, EnergyBrokerApiServer};
     use energy_fee_rpc::{EnergyFee, EnergyFeeApiServer};
     use energy_generation_rpc::{EnergyGeneration, EnergyGenerationApiServer};
     use node_rpc_server::{Node, NodeApiServer};
 
+    io.merge(EnergyBroker::new(client.clone()).into_rpc())?;
     io.merge(EnergyFee::new(client.clone()).into_rpc())?;
     io.merge(EnergyGeneration::new(client.clone()).into_rpc())?;
     io.merge(Node::new(node.name).into_rpc())?;

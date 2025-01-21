@@ -382,11 +382,13 @@ pallet-simple-vesting = { path = "pallets/simple-vesting", default-features = fa
 
 # Runtime API
 dynamic-energy-runtime-api = { path = "pallets/dynamic-energy/runtime-api", default-features = false }
+energy-broker-runtime-api = { path = "pallets/energy-broker/runtime-api", default-features = false }
 energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-features = false }
 energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api", default-features = false }
 vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false }
 
 # RPC
+energy-broker-rpc = { path = "pallets/energy-broker/rpc" }
 energy-fee-rpc = { path = "pallets/energy-fee/rpc" }
 energy-generation-rpc = { path = "pallets/energy-generation/rpc" }
 node-rpc-server = { path = "rpc/node-rpc-server" }

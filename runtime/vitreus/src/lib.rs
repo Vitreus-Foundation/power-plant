@@ -2724,6 +2724,32 @@ impl_runtime_apis! {
         }
     }
 
+    impl energy_broker_runtime_api::EnergyBrokerApi<Block, Balance> for Runtime {
+        fn estimate_energy_from_native(amount: Balance) -> Option<Balance> {
+            EnergyBroker::get_amount_out(
+                amount,
+                &(NativeAsset::get(), VNRG::get().into())
+            ).map(|x| x.0).ok()
+        }
+
+        fn estimate_native_from_energy(amount: Balance) -> Option<Balance> {
+            EnergyBroker::get_amount_out(
+                amount,
+                &(VNRG::get().into(), NativeAsset::get())
+            ).map(|x| x.0).ok()
+        }
+
+        fn energy_exchange_rate() -> Option<FixedU128> {
+            DynamicEnergy::exchange_rate()
+        }
+
+        fn current_warehouse_level() -> Percent {
+            use vitreus_runtime_common::Warehouse;
+
+            Percent::from_rational(EnergyBroker::current_amount(), EnergyBroker::max_capacity())
+        }
+    }
+
     impl energy_fee_runtime_api::EnergyFeeApi<Block, AccountId, Balance, RuntimeCall> for Runtime {
         fn estimate_gas(request: CallRequest) -> U256 {
             let CallRequest {

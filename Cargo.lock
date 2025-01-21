@@ -2103,6 +2103,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "energy-broker-rpc"
+version = "0.1.0"
+dependencies = [
+ "energy-broker-runtime-api",
+ "jsonrpsee",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+]
+
+[[package]]
+name = "energy-broker-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "scale-info",
+ "serde",
+ "sp-api",
+ "sp-runtime",
+]
+
+[[package]]
 name = "energy-fee-rpc"
 version = "0.1.0"
 dependencies = [
@@ -14057,6 +14080,7 @@ dependencies = [
  "binary-merkle-tree",
  "chain-spec",
  "dynamic-energy-runtime-api",
+ "energy-broker-runtime-api",
  "energy-fee-runtime-api",
  "energy-generation-runtime-api",
  "ethereum",
@@ -14168,6 +14192,7 @@ dependencies = [
 name = "vitreus-rpc"
 version = "1.1.0"
 dependencies = [
+ "energy-broker-rpc",
  "energy-fee-rpc",
  "energy-generation-rpc",
  "fc-api",
