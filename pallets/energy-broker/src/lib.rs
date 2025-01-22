@@ -517,7 +517,7 @@ pub mod pallet {
             if asset_in == &T::EnergyAsset::get() {
                 Self::burn_surplus_energy(&broker_account);
 
-                T::OnEnergySell::on_energy_sell(amount_in);
+                T::OnEnergySell::on_energy_sell(amount_in.saturating_sub(fee_part));
             }
 
             Ok(())
