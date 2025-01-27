@@ -1005,6 +1005,7 @@ impl pallet_dynamic_energy::Config for Runtime {
     type HigherPrecisionBalance = sp_core::U256;
     type Staking = EnergyGeneration;
     type Warehouse = EnergyBroker;
+    type UnixTime = Timestamp;
     type SessionsPerEra = SessionsPerEra;
     type ExpectedSessionDuration = ExpectedSessionDuration;
     type DefaultAnnualPercentageRate = AnnualPercentageRate;

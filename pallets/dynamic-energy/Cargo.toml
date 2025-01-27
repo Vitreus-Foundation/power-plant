@@ -17,6 +17,7 @@ vitreus-runtime-common = { workspace = true }
 [dev-dependencies]
 sp-core = { workspace = true }
 sp-io = { workspace = true }
+pallet-timestamp = { workspace = true }
 primitive-types = { workspace = true, features = ["num-traits"] }
 
 [features]
