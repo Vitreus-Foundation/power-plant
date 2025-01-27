@@ -12,6 +12,7 @@ services:
       --base-path /tmp/node
       --chain ./target/release/vitreus-power-plant-mainnet.json
       --name smithsonian
+      --node-key ${NODE_KEY}
       --port 30333
       --rpc-port 9944
       --rpc-external

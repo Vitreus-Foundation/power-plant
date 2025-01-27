@@ -1005,6 +1005,7 @@ impl pallet_dynamic_energy::Config for Runtime {
     type HigherPrecisionBalance = sp_core::U256;
     type Staking = EnergyGeneration;
     type Warehouse = EnergyBroker;
+    type UnixTime = Timestamp;
     type SessionsPerEra = SessionsPerEra;
     type ExpectedSessionDuration = ExpectedSessionDuration;
     type DefaultAnnualPercentageRate = AnnualPercentageRate;
@@ -1890,6 +1891,7 @@ construct_runtime!(
         Democracy: pallet_democracy = 53,
         Elections: pallet_elections_phragmen = 54,
         Multisig: pallet_multisig = 55,
+        DemocracyExtension: pallet_democracy_extension = 56,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,

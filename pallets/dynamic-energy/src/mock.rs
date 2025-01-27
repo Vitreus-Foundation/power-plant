@@ -49,6 +49,7 @@ construct_runtime!(
     pub enum Test
     {
         System: frame_system,
+        Timestamp: pallet_timestamp,
         DynamicEnergy: pallet_dynamic_energy,
     }
 );
@@ -57,6 +58,9 @@ construct_runtime!(
 impl frame_system::Config for Test {
     type Block = Block;
 }
+
+#[derive_impl(pallet_timestamp::config_preludes::TestDefaultConfig)]
+impl pallet_timestamp::Config for Test {}
 
 parameter_types! {
     pub SessionsPerEra: u32 = 3;
@@ -74,6 +78,7 @@ impl pallet_dynamic_energy::Config for Test {
     type HigherPrecisionBalance = sp_core::U256;
     type Staking = MockStaking;
     type Warehouse = MockWarehouse;
+    type UnixTime = Timestamp;
     type SessionsPerEra = SessionsPerEra;
     type ExpectedSessionDuration = ExpectedSessionDuration;
     type DefaultAnnualPercentageRate = DefaultAnnualPercentageRate;

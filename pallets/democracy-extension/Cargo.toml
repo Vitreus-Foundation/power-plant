@@ -1,33 +1,33 @@
 [package]
-name = "pallet-dynamic-energy"
+name = "pallet-democracy-extension"
 version = "0.1.0"
 authors.workspace = true
 edition.workspace = true
 repository.workspace = true
 
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
 [dependencies]
-log = { workspace = true }
 frame-support = { workspace = true }
 frame-system = { workspace = true }
+pallet-democracy = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
 sp-runtime = { workspace = true }
-vitreus-runtime-common = { workspace = true }
 
 [dev-dependencies]
-sp-core = { workspace = true }
+pallet-balances = { workspace = true }
+pallet-scheduler = { workspace = true }
 sp-io = { workspace = true }
-pallet-timestamp = { workspace = true }
-primitive-types = { workspace = true, features = ["num-traits"] }
 
 [features]
 default = ["std"]
 std = [
     "frame-support/std",
     "frame-system/std",
+    "pallet-democracy/std",
     "parity-scale-codec/std",
     "scale-info/std",
     "sp-runtime/std",
-    "vitreus-runtime-common/std",
 ]
 try-runtime = ["frame-support/try-runtime"]

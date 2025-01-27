@@ -6581,12 +6581,28 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-democracy-extension"
+version = "0.1.0"
+dependencies = [
+ "frame-support",
+ "frame-system",
+ "pallet-balances",
+ "pallet-democracy",
+ "pallet-scheduler",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-io",
+ "sp-runtime",
+]
+
+[[package]]
 name = "pallet-dynamic-energy"
 version = "0.1.0"
 dependencies = [
  "frame-support",
  "frame-system",
  "log",
+ "pallet-timestamp",
  "parity-scale-codec",
  "primitive-types",
  "scale-info",
@@ -14111,6 +14127,7 @@ dependencies = [
  "pallet-claiming",
  "pallet-collective",
  "pallet-democracy",
+ "pallet-democracy-extension",
  "pallet-dynamic-energy",
  "pallet-elections-phragmen",
  "pallet-energy-broker",

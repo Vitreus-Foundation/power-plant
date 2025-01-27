@@ -1,5 +1,5 @@
 use crate::{
-    AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council,
+    AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
     MoreThanHalfCouncil, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent,
     RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee, Treasury, TreasuryExtension,
     DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, UNITS,
@@ -88,7 +88,8 @@ parameter_types! {
     pub const VotingBondFactor: Balance = deposit(0, 32);
     pub const DesiredMembers: u32 = 7;
     pub const DesiredRunnersUp: u32 = 7;
-    pub const TermDuration: BlockNumber = prod_or_fast!(6 * MONTHS, 10 * MINUTES);
+    // TODO: remove `storage` after April of 2025
+    pub storage TermDuration: BlockNumber = prod_or_fast!(6 * MONTHS, 10 * MINUTES);
     pub const MaxCandidates: u32 = 64;
     pub const MaxVoters: u32 = 512;
     pub const MaxVotesPerVoter: u32 = 16;
@@ -103,15 +104,13 @@ impl pallet_elections_phragmen::Config for Runtime {
     type PalletId = ElectionsPhragmenPalletId;
     type Currency = Balances;
     type ChangeMembers = Council;
-    // NOTE: this implies that council's genesis members cannot be set directly and must come from
-    // this module.
-    type InitializeMembers = Council;
+    type InitializeMembers = ();
     type CurrencyToVote = sp_staking::currency_to_vote::U128CurrencyToVote;
     type CandidacyBond = CandidacyBond;
     type VotingBondBase = VotingBondBase;
     type VotingBondFactor = VotingBondFactor;
-    type LoserCandidate = ();
-    type KickedMember = ();
+    type LoserCandidate = Treasury;
+    type KickedMember = Treasury;
     type DesiredMembers = DesiredMembers;
     type DesiredRunnersUp = DesiredRunnersUp;
     type TermDuration = TermDuration;
@@ -269,7 +268,7 @@ impl pallet_democracy::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Scheduler = Scheduler;
     type Preimages = Preimage;
-    type Currency = Balances;
+    type Currency = DemocracyExtension;
     type EnactmentPeriod = EnactmentPeriod;
     type LaunchPeriod = LaunchPeriod;
     type VotingPeriod = VotingPeriod;
@@ -326,4 +325,13 @@ impl pallet_democracy::Config for Runtime {
     type VetoOrigin = pallet_collective::EnsureMember<AccountId, TechnicalCollective>;
     type PalletsOrigin = OriginCaller;
     type Slash = Treasury;
+}
+
+impl pallet_democracy_extension::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type ManageOrigin = EitherOfDiverse<
+        pallet_collective::EnsureProportionAtLeast<AccountId, TechnicalCollective, 2, 3>,
+        frame_system::EnsureRoot<AccountId>,
+    >;
+    type Currency = Balances;
 }

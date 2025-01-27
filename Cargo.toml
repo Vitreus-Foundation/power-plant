@@ -315,7 +315,6 @@ pallet-transaction-payment = { git = "https://github.com/paritytech/polkadot-sdk
 pallet-transaction-payment-rpc = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-transaction-payment-rpc-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-treasury = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-treasury-extension = { path = "pallets/treasury-extension", default-features = false }
 pallet-uniques = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-utility = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-vesting = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
@@ -369,6 +368,7 @@ pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", de
 
 # Vitreus pallets
 pallet-claiming = { path = "pallets/claiming", default-features = false }
+pallet-democracy-extension = { path = "pallets/democracy-extension", default-features = false }
 pallet-dynamic-energy = { path = "pallets/dynamic-energy", default-features = false }
 pallet-energy-broker = { path = "pallets/energy-broker", default-features = false }
 pallet-energy-fee = { path = "pallets/energy-fee", default-features = false }
@@ -379,6 +379,7 @@ pallet-nac-managing = { path = "pallets/nac-managing", default-features = false 
 pallet-privileges = { path = "pallets/privileges", default-features = false }
 pallet-reputation = { path = "pallets/reputation", default-features = false }
 pallet-simple-vesting = { path = "pallets/simple-vesting", default-features = false }
+pallet-treasury-extension = { path = "pallets/treasury-extension", default-features = false }
 
 # Runtime API
 dynamic-energy-runtime-api = { path = "pallets/dynamic-energy/runtime-api", default-features = false }
