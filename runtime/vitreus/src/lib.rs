@@ -2894,6 +2894,16 @@ impl_runtime_apis! {
         }
     }
 
+    impl governance_runtime_api::GovernanceApi<Block, Balance> for Runtime {
+        fn electorate() -> Balance {
+            <Self as pallet_democracy::Config>::Currency::total_issuance()
+        }
+
+        fn threshold(referendum_index: u32) -> Option<Percent> {
+            DemocracyExtension::threshold(referendum_index)
+        }
+    }
+
     impl nfts_runtime_api::NftsAuxApi<Block, AccountId, CollectionId, ItemId> for Runtime {
         fn owned(account: AccountId) -> Vec<(CollectionId, ItemId)> {
             <Nfts as InspectEnumerable<AccountId>>::owned(&account).collect()

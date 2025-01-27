@@ -1,6 +1,11 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use frame_support::traits::{Currency, LockableCurrency, ReservableCurrency};
+use pallet_democracy::{ReferendumIndex, ReferendumInfo, ReferendumInfoOf, VoteThreshold};
+use sp_runtime::{
+    traits::{IntegerSquareRoot, One},
+    FixedPointNumber, FixedU128, Percent, Saturating,
+};
 
 pub use pallet::*;
 
@@ -61,5 +66,27 @@ pub mod pallet {
 
             Ok(())
         }
+    }
+}
+
+impl<T: Config> Pallet<T> {
+    pub fn threshold(ref_index: ReferendumIndex) -> Option<Percent> {
+        let status = ReferendumInfoOf::<T>::get(ref_index).and_then(|info| match info {
+            ReferendumInfo::Ongoing(status) => Some(status),
+            ReferendumInfo::Finished { .. } => None,
+        })?;
+
+        let turnout = FixedU128::checked_from_rational(
+            status.tally.turnout.integer_sqrt(),
+            <T as pallet_democracy::Config>::Currency::total_issuance().integer_sqrt(),
+        )?;
+
+        let threshold = match status.threshold {
+            VoteThreshold::SuperMajorityApprove => FixedU128::one() / turnout.saturating_plus_one(),
+            VoteThreshold::SuperMajorityAgainst => turnout / turnout.saturating_plus_one(),
+            VoteThreshold::SimpleMajority => FixedU128::from_rational(1, 2),
+        };
+
+        Some(Percent::from_rational(threshold.into_inner(), FixedU128::DIV))
     }
 }

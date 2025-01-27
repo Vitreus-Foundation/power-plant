@@ -386,6 +386,7 @@ dynamic-energy-runtime-api = { path = "pallets/dynamic-energy/runtime-api", defa
 energy-broker-runtime-api = { path = "pallets/energy-broker/runtime-api", default-features = false }
 energy-fee-runtime-api = { path = "pallets/energy-fee/runtime-api", default-features = false }
 energy-generation-runtime-api = { path = "pallets/energy-generation/runtime-api", default-features = false }
+governance-runtime-api = { path = "pallets/democracy-extension/runtime-api", default-features = false }
 nfts-runtime-api = { path = "runtime/vitreus/nfts-runtime-api", default-features = false }
 vitreus-utility-runtime-api = { path = "runtime/vitreus/runtime-api", default-features = false }
 

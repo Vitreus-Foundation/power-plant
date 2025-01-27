@@ -3544,6 +3544,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "governance-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+ "sp-runtime",
+]
+
+[[package]]
 name = "governor"
 version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14131,6 +14140,7 @@ dependencies = [
  "frame-system-benchmarking",
  "frame-system-rpc-runtime-api",
  "frame-try-runtime",
+ "governance-runtime-api",
  "hex-literal",
  "log",
  "nfts-runtime-api",
