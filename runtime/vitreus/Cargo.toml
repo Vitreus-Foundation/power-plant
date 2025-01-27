@@ -134,6 +134,7 @@ dynamic-energy-runtime-api = { workspace = true }
 energy-broker-runtime-api = { workspace = true }
 energy-fee-runtime-api = { workspace = true }
 energy-generation-runtime-api = { workspace = true }
+nfts-runtime-api = { workspace = true }
 vitreus-utility-runtime-api = { workspace = true }
 
 [dev-dependencies]
@@ -318,6 +319,7 @@ std = [
     "energy-broker-runtime-api/std",
     "energy-fee-runtime-api/std",
     "energy-generation-runtime-api/std",
+    "nfts-runtime-api/std",
     "vitreus-utility-runtime-api/std",
 ]
 runtime-benchmarks = [

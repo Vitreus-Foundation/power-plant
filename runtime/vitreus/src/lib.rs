@@ -46,9 +46,11 @@ use polkadot_runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
-    fungible, fungible::Inspect as FungibleInspect, imbalance::ResolveAssetTo,
-    nonfungibles_v2::Inspect, DepositConsequence, Fortitude, Precision, Preservation, Provenance,
-    WithdrawConsequence,
+    fungible,
+    fungible::Inspect as FungibleInspect,
+    imbalance::ResolveAssetTo,
+    nonfungibles_v2::{Inspect, InspectEnumerable},
+    DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, Imbalance, OnUnbalanced, ProcessMessage,
@@ -815,8 +817,8 @@ parameter_types! {
     pub Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
-type CollectionId = u32;
-type ItemId = u32;
+pub type CollectionId = u32;
+pub type ItemId = u32;
 
 impl pallet_nfts::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
@@ -2576,18 +2578,18 @@ impl_runtime_apis! {
         }
     }
 
-    impl pallet_nfts_runtime_api::NftsApi<Block, AccountId, u32, u32> for Runtime {
-        fn owner(collection: u32, item: u32) -> Option<AccountId> {
+    impl pallet_nfts_runtime_api::NftsApi<Block, AccountId, CollectionId, ItemId> for Runtime {
+        fn owner(collection: CollectionId, item: ItemId) -> Option<AccountId> {
             <Nfts as Inspect<AccountId>>::owner(&collection, &item)
         }
 
-        fn collection_owner(collection: u32) -> Option<AccountId> {
+        fn collection_owner(collection: CollectionId) -> Option<AccountId> {
             <Nfts as Inspect<AccountId>>::collection_owner(&collection)
         }
 
         fn attribute(
-            collection: u32,
-            item: u32,
+            collection: CollectionId,
+            item: ItemId,
             key: Vec<u8>,
         ) -> Option<Vec<u8>> {
             <Nfts as Inspect<AccountId>>::attribute(&collection, &item, &key)
@@ -2595,8 +2597,8 @@ impl_runtime_apis! {
 
         fn custom_attribute(
             account: AccountId,
-            collection: u32,
-            item: u32,
+            collection: CollectionId,
+            item: ItemId,
             key: Vec<u8>,
         ) -> Option<Vec<u8>> {
             <Nfts as Inspect<AccountId>>::custom_attribute(
@@ -2608,14 +2610,14 @@ impl_runtime_apis! {
         }
 
         fn system_attribute(
-            collection: u32,
-            item: Option<u32>,
+            collection: CollectionId,
+            item: Option<ItemId>,
             key: Vec<u8>,
         ) -> Option<Vec<u8>> {
             <Nfts as Inspect<AccountId>>::system_attribute(&collection, item.as_ref(), &key)
         }
 
-        fn collection_attribute(collection: u32, key: Vec<u8>) -> Option<Vec<u8>> {
+        fn collection_attribute(collection: CollectionId, key: Vec<u8>) -> Option<Vec<u8>> {
             <Nfts as Inspect<AccountId>>::collection_attribute(&collection, &key)
         }
     }
@@ -2889,6 +2891,18 @@ impl_runtime_apis! {
 
         fn cooperator_exposure_multiplier(account: AccountId) -> FixedU64 {
             <Self as pallet_energy_generation::Config>::CooperatorExposureMultiplier::multiplier(&account)
+        }
+    }
+
+    impl nfts_runtime_api::NftsAuxApi<Block, AccountId, CollectionId, ItemId> for Runtime {
+        fn owned(account: AccountId) -> Vec<(CollectionId, ItemId)> {
+            <Nfts as InspectEnumerable<AccountId>>::owned(&account).collect()
+        }
+
+        fn level(account: AccountId, collection: CollectionId) -> Option<Vec<u8>> {
+            <Nfts as InspectEnumerable<AccountId>>::owned_in_collection(&collection, &account)
+                .next()
+                .and_then(|item| <Nfts as Inspect<AccountId>>::system_attribute(&collection, Some(&item), &[0, 0, 1]))
         }
     }
 

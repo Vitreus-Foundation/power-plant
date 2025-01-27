@@ -48,6 +48,7 @@ pallet-transaction-payment-rpc = { workspace = true, default-features = true }
 energy-broker-rpc = { workspace = true, default-features = true }
 energy-fee-rpc = { workspace = true, default-features = true }
 energy-generation-rpc = { workspace = true, default-features = true }
+nfts-rpc = { workspace = true, default-features = true }
 node-rpc-server = { workspace = true, default-features = true }
 
 vitreus-power-plant-runtime = { workspace = true, default-features = true }

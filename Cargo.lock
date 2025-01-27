@@ -5913,6 +5913,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "nfts-rpc"
+version = "0.1.0"
+dependencies = [
+ "jsonrpsee",
+ "nfts-runtime-api",
+ "parity-scale-codec",
+ "sp-api",
+ "sp-blockchain",
+ "sp-runtime",
+]
+
+[[package]]
+name = "nfts-runtime-api"
+version = "0.1.0"
+dependencies = [
+ "parity-scale-codec",
+ "sp-api",
+]
+
+[[package]]
 name = "nix"
 version = "0.24.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -14113,6 +14133,7 @@ dependencies = [
  "frame-try-runtime",
  "hex-literal",
  "log",
+ "nfts-runtime-api",
  "num_enum 0.6.1",
  "pallet-asset-rate",
  "pallet-assets",
@@ -14220,6 +14241,7 @@ dependencies = [
  "fp-rpc",
  "jsonrpsee",
  "mmr-rpc",
+ "nfts-rpc",
  "node-rpc-server",
  "pallet-transaction-payment-rpc",
  "polkadot-rpc",
