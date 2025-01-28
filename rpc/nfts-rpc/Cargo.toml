@@ -1,0 +1,13 @@
+[package]
+name = "nfts-rpc"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+nfts-runtime-api = { workspace = true }
+parity-scale-codec = { workspace = true }
+jsonrpsee = { workspace = true, features = ["server", "macros"] }
+sp-runtime = { workspace = true, default-features = false }
+sp-blockchain = { workspace = true }
+sp-api = { workspace = true, default-features = false }

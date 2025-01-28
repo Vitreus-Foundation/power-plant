@@ -46,9 +46,11 @@ use polkadot_runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
-    fungible, fungible::Inspect as FungibleInspect, imbalance::ResolveAssetTo,
-    nonfungibles_v2::Inspect, DepositConsequence, Fortitude, Precision, Preservation, Provenance,
-    WithdrawConsequence,
+    fungible,
+    fungible::Inspect as FungibleInspect,
+    imbalance::ResolveAssetTo,
+    nonfungibles_v2::{Inspect, InspectEnumerable},
+    DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, ExistenceRequirement, Imbalance, OnUnbalanced, ProcessMessage,
@@ -73,8 +75,8 @@ use sp_runtime::{
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
     },
-    ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, FixedU64, Perbill,
-    Percent, Permill, Saturating,
+    ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, FixedU128, FixedU64,
+    Perbill, Percent, Permill, Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{
@@ -815,8 +817,8 @@ parameter_types! {
     pub Features: PalletFeatures = PalletFeatures::all_enabled();
 }
 
-type CollectionId = u32;
-type ItemId = u32;
+pub type CollectionId = u32;
+pub type ItemId = u32;
 
 impl pallet_nfts::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
@@ -2576,18 +2578,18 @@ impl_runtime_apis! {
         }
     }
 
-    impl pallet_nfts_runtime_api::NftsApi<Block, AccountId, u32, u32> for Runtime {
-        fn owner(collection: u32, item: u32) -> Option<AccountId> {
+    impl pallet_nfts_runtime_api::NftsApi<Block, AccountId, CollectionId, ItemId> for Runtime {
+        fn owner(collection: CollectionId, item: ItemId) -> Option<AccountId> {
             <Nfts as Inspect<AccountId>>::owner(&collection, &item)
         }
 
-        fn collection_owner(collection: u32) -> Option<AccountId> {
+        fn collection_owner(collection: CollectionId) -> Option<AccountId> {
             <Nfts as Inspect<AccountId>>::collection_owner(&collection)
         }
 
         fn attribute(
-            collection: u32,
-            item: u32,
+            collection: CollectionId,
+            item: ItemId,
             key: Vec<u8>,
         ) -> Option<Vec<u8>> {
             <Nfts as Inspect<AccountId>>::attribute(&collection, &item, &key)
@@ -2595,8 +2597,8 @@ impl_runtime_apis! {
 
         fn custom_attribute(
             account: AccountId,
-            collection: u32,
-            item: u32,
+            collection: CollectionId,
+            item: ItemId,
             key: Vec<u8>,
         ) -> Option<Vec<u8>> {
             <Nfts as Inspect<AccountId>>::custom_attribute(
@@ -2608,14 +2610,14 @@ impl_runtime_apis! {
         }
 
         fn system_attribute(
-            collection: u32,
-            item: Option<u32>,
+            collection: CollectionId,
+            item: Option<ItemId>,
             key: Vec<u8>,
         ) -> Option<Vec<u8>> {
             <Nfts as Inspect<AccountId>>::system_attribute(&collection, item.as_ref(), &key)
         }
 
-        fn collection_attribute(collection: u32, key: Vec<u8>) -> Option<Vec<u8>> {
+        fn collection_attribute(collection: CollectionId, key: Vec<u8>) -> Option<Vec<u8>> {
             <Nfts as Inspect<AccountId>>::collection_attribute(&collection, &key)
         }
     }
@@ -2716,6 +2718,42 @@ impl_runtime_apis! {
         }
     }
 
+    impl dynamic_energy_runtime_api::DynamicEnergyApi<Block> for Runtime {
+        fn exchange_rate() -> Option<FixedU128> {
+            DynamicEnergy::exchange_rate()
+        }
+
+        fn calculate_warehouse_capacity_multiplier() -> FixedU128 {
+            DynamicEnergy::calculate_warehouse_capacity_multiplier()
+        }
+    }
+
+    impl energy_broker_runtime_api::EnergyBrokerApi<Block, Balance> for Runtime {
+        fn estimate_energy_from_native(amount: Balance) -> Option<Balance> {
+            EnergyBroker::get_amount_out(
+                amount,
+                &(NativeAsset::get(), VNRG::get().into())
+            ).map(|x| x.0).ok()
+        }
+
+        fn estimate_native_from_energy(amount: Balance) -> Option<Balance> {
+            EnergyBroker::get_amount_out(
+                amount,
+                &(VNRG::get().into(), NativeAsset::get())
+            ).map(|x| x.0).ok()
+        }
+
+        fn energy_exchange_rate() -> Option<FixedU128> {
+            DynamicEnergy::exchange_rate()
+        }
+
+        fn current_warehouse_level() -> Percent {
+            use vitreus_runtime_common::Warehouse;
+
+            Percent::from_rational(EnergyBroker::current_amount(), EnergyBroker::max_capacity())
+        }
+    }
+
     impl energy_fee_runtime_api::EnergyFeeApi<Block, AccountId, Balance, RuntimeCall> for Runtime {
         fn estimate_gas(request: CallRequest) -> U256 {
             let CallRequest {
@@ -2779,15 +2817,6 @@ impl_runtime_apis! {
                 vnrg: fees.0,
             }).ok()
         }
-
-        fn vtrs_to_vnrg_swap_rate() -> Option<u128> {
-            EnergyBroker::get_amount_out(
-                UNITS,
-                &(NativeAsset::get(), VNRG::get().into())
-            )
-            .map(|(amount, _)| amount)
-            .ok()
-        }
     }
 
     #[cfg(feature = "runtime-benchmarks")]
@@ -2848,17 +2877,42 @@ impl_runtime_apis! {
         }
     }
 
-
-    impl energy_generation_runtime_api::EnergyGenerationApi<Block> for Runtime {
-        fn reputation_tier_additional_reward(tier: ReputationTier) -> Perbill {
-            ReputationExposureMultiplier::convert(&tier).into_perbill()
+    impl energy_generation_runtime_api::EnergyGenerationApi<Block, AccountId> for Runtime {
+        fn energy_reward_per_stake() -> FixedU128 {
+            EnergyGeneration::active_era()
+                .and_then(|era| era.index.checked_sub(1))
+                .and_then(EnergyGeneration::eras_energy_per_stake_currency)
+                .unwrap_or_default()
         }
 
-        fn current_energy_per_stake_currency() -> u128 {
-            EnergyGeneration::active_era()
-                .and_then(|era| EnergyGeneration::eras_energy_per_stake_cur(era.index))
-                .unwrap_or_default().into_inner()
+        fn validator_exposure_multiplier(account: AccountId) -> FixedU64 {
+            <Self as pallet_energy_generation::Config>::ValidatorExposureMultiplier::multiplier(&account)
+        }
 
+        fn cooperator_exposure_multiplier(account: AccountId) -> FixedU64 {
+            <Self as pallet_energy_generation::Config>::CooperatorExposureMultiplier::multiplier(&account)
+        }
+    }
+
+    impl governance_runtime_api::GovernanceApi<Block, Balance> for Runtime {
+        fn electorate() -> Balance {
+            <Self as pallet_democracy::Config>::Currency::total_issuance()
+        }
+
+        fn threshold(referendum_index: u32) -> Option<Percent> {
+            DemocracyExtension::threshold(referendum_index)
+        }
+    }
+
+    impl nfts_runtime_api::NftsAuxApi<Block, AccountId, CollectionId, ItemId> for Runtime {
+        fn owned(account: AccountId) -> Vec<(CollectionId, ItemId)> {
+            <Nfts as InspectEnumerable<AccountId>>::owned(&account).collect()
+        }
+
+        fn level(account: AccountId, collection: CollectionId) -> Option<Vec<u8>> {
+            <Nfts as InspectEnumerable<AccountId>>::owned_in_collection(&collection, &account)
+                .next()
+                .and_then(|item| <Nfts as Inspect<AccountId>>::system_attribute(&collection, Some(&item), &[0, 0, 1]))
         }
     }
 

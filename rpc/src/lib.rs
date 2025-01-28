@@ -21,7 +21,7 @@ use sp_runtime::RuntimeAppPublic;
 
 // Runtime
 use vitreus_power_plant_runtime::{
-    opaque::Block, AccountId, Balance, BlockNumber, Nonce, RuntimeCall,
+    opaque::Block, AccountId, Balance, BlockNumber, CollectionId, ItemId, Nonce, RuntimeCall,
 };
 
 mod consensus_data_providers;
@@ -80,8 +80,10 @@ where
     C::Api: BlockBuilder<Block>,
     C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
+    C::Api: energy_broker_rpc::EnergyBrokerRuntimeApi<Block, Balance>,
     C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block, AccountId, Balance, RuntimeCall>,
-    C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block>,
+    C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block, AccountId>,
+    C::Api: nfts_rpc::NftsRuntimeApi<Block, AccountId, CollectionId, ItemId>,
     C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
     P: TransactionPool<Block = Block> + 'static,
     A: ChainApi<Block = Block> + 'static,
@@ -89,12 +91,16 @@ where
     CIDP: CreateInherentDataProviders<Block, ()> + Send + 'static,
     B: sc_client_api::Backend<Block> + Send + Sync + 'static,
 {
+    use energy_broker_rpc::{EnergyBroker, EnergyBrokerApiServer};
     use energy_fee_rpc::{EnergyFee, EnergyFeeApiServer};
     use energy_generation_rpc::{EnergyGeneration, EnergyGenerationApiServer};
+    use nfts_rpc::{Nfts, NftsApiServer};
     use node_rpc_server::{Node, NodeApiServer};
 
+    io.merge(EnergyBroker::new(client.clone()).into_rpc())?;
     io.merge(EnergyFee::new(client.clone()).into_rpc())?;
     io.merge(EnergyGeneration::new(client.clone()).into_rpc())?;
+    io.merge(Nfts::new(client.clone()).into_rpc())?;
     io.merge(Node::new(node.name).into_rpc())?;
 
     // Ethereum compatibility RPCs
