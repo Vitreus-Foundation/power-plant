@@ -110,7 +110,7 @@ resolver = "2"
 authors = ["Vitreus Foundation"]
 edition = "2021"
 repository = "https://bitbucket.org/vitreus/vitreus-power-plant"
-version = "1.1.0"
+version = "1.1.1"
 
 [workspace.dependencies]
 affix = "0.1"
