@@ -117,10 +117,10 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             Fortitude::Polite,
         );
 
-        if !amount.is_zero() {
-            if T::EnergyExchange::swap_exact_tokens_for_tokens(account_id, amount, false).is_ok() {
-                Self::deposit_event(Event::EnergyExchanged { amount });
-            }
+        if !amount.is_zero()
+            && T::EnergyExchange::swap_exact_tokens_for_tokens(account_id, amount, false).is_ok()
+        {
+            Self::deposit_event(Event::EnergyExchanged { amount });
         }
     }
 }
