@@ -4,7 +4,9 @@
   "chainType": "Live",
   "bootNodes": [
     "/ip4/45.32.187.143/tcp/30333/p2p/12D3KooWRU68VGevXegCoSH67T8PYKy8GzJqLFfgWQpevhwXoKuT",
-    "/ip4/95.179.142.83/tcp/30333/p2p/12D3KooWFbGb65YDoVwcFdE1iXZ1ym8RExkaN5t3s64xR2sw2JRE"
+    "/ip4/78.141.217.78/tcp/30333/ws/p2p/12D3KooWCz8VwjBnZTRYnobGuNA6YAHVThHDxgdayMTJVzzKRWQm",
+    "/ip4/78.141.214.6/tcp/30333/ws/p2p/12D3KooWFGrAy2TVwWUb74n3abZBYq7no8uFiorDZ89VN5j6Fo9F",
+    "/ip4/66.245.195.140/tcp/30333/ws/p2p/12D3KooWNcg41JiK7ryASqbq8rRUrtqVR1DdP2Ch3cSGsKGxmGF2"
   ],
   "telemetryEndpoints": [
      ["wss://telemetry-dev.compliq.io/submit/", 1]
