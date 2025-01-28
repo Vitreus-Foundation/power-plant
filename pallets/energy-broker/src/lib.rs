@@ -23,7 +23,7 @@ use frame_support::{
             Precision::{BestEffort, Exact},
             Preservation::{self, Expendable, Preserve},
         },
-        OnUnbalanced,
+        Contains, OnUnbalanced,
     },
     PalletId,
 };
@@ -32,10 +32,10 @@ use sp_runtime::{
         AccountIdConversion, CheckedDiv, CheckedMul, Ensure, Get, IntegerSquareRoot, One,
         StaticLookup, Zero,
     },
-    DispatchError, Saturating, TokenError,
+    DispatchError, Saturating, TokenError, Vec,
 };
 use vitreus_runtime_common::{
-    OnEnergyBurn, OnEnergySell, OnSessionChange, SessionIndex, Warehouse,
+    OnEnergyBurn, OnEnergySell, OnSessionChange, QuotePrice, SessionIndex, Swap, Warehouse,
 };
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -83,6 +83,9 @@ pub mod pallet {
 
         /// A type used for conversion between an energy balance and an asset balance.
         type BalanceConverter: EnergyBalanceConverter<Self::Balance, Self::AssetKind>;
+
+        /// Accounts that will not be charged swap fees.
+        type FeelessAccounts: Contains<Self::AccountId>;
 
         /// Handler for the [`Config::SwapFee`].
         type SwapFeeTarget: OnUnbalanced<Credit<Self::AccountId, Self::Assets>>;
@@ -310,13 +313,15 @@ pub mod pallet {
         ///
         /// Given an input amount and swap path, returns the output amount
         /// of the other asset and the swap fee amount.
-        pub fn get_amount_out(
+        pub(crate) fn get_amount_out(
             amount_in: T::Balance,
             path: &(T::AssetKind, T::AssetKind),
+            include_fee: bool,
         ) -> Result<(T::Balance, T::Balance), Error<T>> {
             ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
 
-            let exchange_in = Self::to_amount_with_fee_deducted(amount_in)?;
+            let exchange_in =
+                if include_fee { Self::to_amount_with_fee_deducted(amount_in)? } else { amount_in };
             let fee = amount_in.saturating_sub(exchange_in);
 
             let amount_out = match path {
@@ -339,9 +344,10 @@ pub mod pallet {
         ///
         /// Given an output amount and swap path, returns the input amount
         /// of the other asset and the swap fee amount.
-        pub fn get_amount_in(
+        pub(crate) fn get_amount_in(
             amount_out: T::Balance,
             path: &(T::AssetKind, T::AssetKind),
+            include_fee: bool,
         ) -> Result<(T::Balance, T::Balance), Error<T>> {
             ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
 
@@ -360,7 +366,11 @@ pub mod pallet {
             // to prevent swap failure when buying energy.
             let exchange_in = exchange_in.max(1u8.into());
 
-            let amount_in = Self::to_amount_with_fee_included(exchange_in)?;
+            let amount_in = if include_fee {
+                Self::to_amount_with_fee_included(exchange_in)?
+            } else {
+                exchange_in
+            };
             let fee = amount_in.saturating_sub(exchange_in);
 
             Ok((amount_in, fee))
@@ -400,7 +410,7 @@ pub mod pallet {
             )
         }
 
-        fn do_swap_exact_tokens_for_tokens(
+        pub(crate) fn do_swap_exact_tokens_for_tokens(
             sender: T::AccountId,
             recipient: T::AccountId,
             path: (T::AssetKind, T::AssetKind),
@@ -412,7 +422,8 @@ pub mod pallet {
                 ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
             }
 
-            let (amount_out, fee) = Self::get_amount_out(amount_in, &path)?;
+            let include_fee = !T::FeelessAccounts::contains(&sender);
+            let (amount_out, fee) = Self::get_amount_out(amount_in, &path, include_fee)?;
 
             if let Some(amount_out_min) = amount_out_min {
                 ensure!(
@@ -434,7 +445,7 @@ pub mod pallet {
             Ok(amount_out)
         }
 
-        fn do_swap_tokens_for_exact_tokens(
+        pub(crate) fn do_swap_tokens_for_exact_tokens(
             sender: T::AccountId,
             recipient: T::AccountId,
             path: (T::AssetKind, T::AssetKind),
@@ -446,7 +457,8 @@ pub mod pallet {
                 ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
             }
 
-            let (amount_in, fee) = Self::get_amount_in(amount_out, &path)?;
+            let include_fee = !T::FeelessAccounts::contains(&sender);
+            let (amount_in, fee) = Self::get_amount_in(amount_out, &path, include_fee)?;
 
             if let Some(amount_in_max) = amount_in_max {
                 ensure!(
@@ -595,6 +607,86 @@ pub trait EnergyBalanceConverter<Balance, AssetId> {
 
     /// Converts an energy balance into an asset balance.
     fn energy_to_asset_balance(asset_id: AssetId, balance: Balance) -> Option<Balance>;
+}
+
+impl<T: Config> QuotePrice for Pallet<T> {
+    type Balance = T::Balance;
+    type AssetKind = T::AssetKind;
+
+    fn quote_price_tokens_for_exact_tokens(
+        asset1: Self::AssetKind,
+        asset2: Self::AssetKind,
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance> {
+        Self::get_amount_in(amount, &(asset1, asset2), include_fee)
+            .map(|(amount_in, _)| amount_in)
+            .ok()
+    }
+
+    fn quote_price_exact_tokens_for_tokens(
+        asset1: Self::AssetKind,
+        asset2: Self::AssetKind,
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance> {
+        Self::get_amount_out(amount, &(asset1, asset2), include_fee)
+            .map(|(amount_out, _)| amount_out)
+            .ok()
+    }
+}
+
+impl<T: Config> Swap<T::AccountId> for Pallet<T> {
+    type Balance = T::Balance;
+    type AssetKind = T::AssetKind;
+
+    fn max_path_len() -> u32 {
+        2
+    }
+
+    fn swap_exact_tokens_for_tokens(
+        sender: T::AccountId,
+        path: Vec<Self::AssetKind>,
+        amount_in: Self::Balance,
+        amount_out_min: Option<Self::Balance>,
+        send_to: T::AccountId,
+        keep_alive: bool,
+    ) -> Result<Self::Balance, DispatchError> {
+        if let Ok([asset_in, asset_out]) = <[T::AssetKind; 2]>::try_from(path) {
+            Self::do_swap_exact_tokens_for_tokens(
+                sender,
+                send_to,
+                (asset_in, asset_out),
+                amount_in,
+                amount_out_min,
+                keep_alive,
+            )
+        } else {
+            Err(Error::<T>::InvalidPath.into())
+        }
+    }
+
+    fn swap_tokens_for_exact_tokens(
+        sender: T::AccountId,
+        path: Vec<Self::AssetKind>,
+        amount_out: Self::Balance,
+        amount_in_max: Option<Self::Balance>,
+        send_to: T::AccountId,
+        keep_alive: bool,
+    ) -> Result<Self::Balance, DispatchError> {
+        if let Ok([asset_in, asset_out]) = <[T::AssetKind; 2]>::try_from(path) {
+            Self::do_swap_tokens_for_exact_tokens(
+                sender,
+                send_to,
+                (asset_in, asset_out),
+                amount_out,
+                amount_in_max,
+                keep_alive,
+            )
+        } else {
+            Err(Error::<T>::InvalidPath.into())
+        }
+    }
 }
 
 impl<T: Config> OnEnergyBurn<T::Balance> for Pallet<T> {
