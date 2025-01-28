@@ -53,8 +53,8 @@ use frame_support::traits::tokens::{
     DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, ExistenceRequirement, Imbalance, OnUnbalanced, ProcessMessage,
-    ProcessMessageError, SignedImbalance, WithdrawReasons,
+    Currency, EitherOfDiverse, Equals, ExistenceRequirement, Imbalance, OnUnbalanced,
+    ProcessMessage, ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
 use parity_scale_codec::{Compact, Decode, Encode, MaxEncodedLen};
 use sp_api::impl_runtime_apis;
@@ -125,7 +125,7 @@ use sp_consensus_beefy::{
     mmr::{BeefyDataProvider, MmrLeafVersion},
 };
 use sp_runtime::transaction_validity::InvalidTransaction;
-use vitreus_runtime_common::ExposureMultiplier;
+use vitreus_runtime_common::{ExposureMultiplier, QuotePrice};
 use xcm::{
     latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
     VersionedXcm,
@@ -783,7 +783,7 @@ impl pallet_energy_generation::Config for Runtime {
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = ();
-    type SessionChangeListeners = (EnergyBroker, DynamicEnergy);
+    type SessionChangeListeners = (EnergyBroker, DynamicEnergy, TreasuryExtension);
     type Reward = ();
     type RewardRemainder = Treasury;
     type RuntimeEvent = RuntimeEvent;
@@ -984,6 +984,7 @@ impl pallet_energy_broker::Config for Runtime {
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
     type BalanceConverter = EnergyRate;
+    type FeelessAccounts = Equals<xcm_config::TreasuryAccount>;
     type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
     type OnEnergySell = DynamicEnergy;
     type SwapFee = SwapFee;
@@ -1036,15 +1037,23 @@ impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
     for EnergyBrokerExchange
 {
     fn convert_from_input(amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::get_amount_out(amount, &(NativeAsset::get(), VNRG::get().into()))
-            .map(|(amount, _)| amount)
-            .map_err(|e| e.into())
+        EnergyBroker::quote_price_exact_tokens_for_tokens(
+            NativeAsset::get(),
+            VNRG::get().into(),
+            amount,
+            true,
+        )
+        .ok_or(DispatchError::Unavailable)
     }
 
     fn convert_from_output(amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::get_amount_in(amount, &(NativeAsset::get(), VNRG::get().into()))
-            .map(|(amount, _)| amount)
-            .map_err(|e| e.into())
+        EnergyBroker::quote_price_tokens_for_exact_tokens(
+            NativeAsset::get(),
+            VNRG::get().into(),
+            amount,
+            true,
+        )
+        .ok_or(DispatchError::Unavailable)
     }
 
     fn exchange_from_input(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
@@ -2730,17 +2739,21 @@ impl_runtime_apis! {
 
     impl energy_broker_runtime_api::EnergyBrokerApi<Block, Balance> for Runtime {
         fn estimate_energy_from_native(amount: Balance) -> Option<Balance> {
-            EnergyBroker::get_amount_out(
+            EnergyBroker::quote_price_exact_tokens_for_tokens(
+                NativeAsset::get(),
+                VNRG::get().into(),
                 amount,
-                &(NativeAsset::get(), VNRG::get().into())
-            ).map(|x| x.0).ok()
+                true,
+            )
         }
 
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance> {
-            EnergyBroker::get_amount_out(
+            EnergyBroker::quote_price_exact_tokens_for_tokens(
+                VNRG::get().into(),
+                NativeAsset::get(),
                 amount,
-                &(VNRG::get().into(), NativeAsset::get())
-            ).map(|x| x.0).ok()
+                true,
+            )
         }
 
         fn energy_exchange_rate() -> Option<FixedU128> {

@@ -281,6 +281,7 @@ frame-system = { git = "https://github.com/paritytech/polkadot-sdk", branch = "s
 frame-system-benchmarking = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 frame-system-rpc-runtime-api = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 frame-try-runtime = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-asset-conversion = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-asset-rate = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-assets = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-atomic-swap = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }

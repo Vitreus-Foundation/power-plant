@@ -5,12 +5,15 @@
 
 // TODO: move here custom traits from pallets
 
-pub use sp_staking::{EraIndex, SessionIndex};
-
 use sp_runtime::{
     traits::{One, Zero},
     FixedU64, Saturating,
 };
+
+pub use sp_staking::{EraIndex, SessionIndex};
+
+mod exchange;
+pub use exchange::*;
 
 /// A trait for executing actions when a new session begins.
 #[impl_trait_for_tuples::impl_for_tuples(8)]

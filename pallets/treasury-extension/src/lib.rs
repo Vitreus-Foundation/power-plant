@@ -32,13 +32,25 @@
 
 use frame_support::{
     pallet_prelude::*,
-    traits::{Currency, Get, Imbalance, IsType, OnUnbalanced},
+    traits::{
+        fungible::Inspect,
+        tokens::{Fortitude, Preservation},
+        Currency, Get, Imbalance, IsType, OnUnbalanced,
+    },
 };
 use pallet_treasury::{BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
-use sp_arithmetic::{traits::Saturating, Permill};
+use sp_arithmetic::{
+    traits::{Saturating, Zero},
+    Permill,
+};
+use vitreus_runtime_common::{OnSessionChange, SessionIndex, SwapEnergyForNative};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
+
+type ExchangeBalanceOf<T, I> = <<T as Config<I>>::EnergyExchange as SwapEnergyForNative<
+    <T as frame_system::Config>::AccountId,
+>>::Balance;
 
 #[cfg(test)]
 mod mock;
@@ -66,10 +78,19 @@ pub mod pallet {
         /// Because this pallet emits events, it depends on the runtime definition of an event.
         type RuntimeEvent: From<Event<Self, I>>
             + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// Energy asset.
+        type EnergyAsset: Inspect<Self::AccountId, Balance = ExchangeBalanceOf<Self, I>>;
+
+        /// A type used for swapping energy for native currency.
+        type EnergyExchange: SwapEnergyForNative<Self::AccountId>;
+
         /// Funds ratio to be recycled.
         type SpendThreshold: Get<Permill>;
+
         /// What to do with the recycled funds
         type OnRecycled: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
+
         /// Weight information for functions in this pallet.
         type WeightInfo: WeightInfo;
     }
@@ -78,12 +99,29 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config<I>, I: 'static = ()> {
         Recycled { recyled_funds: BalanceOf<T, I> },
+        EnergyExchanged { amount: ExchangeBalanceOf<T, I> },
     }
 }
 
 impl<T: Config<I>, I: 'static> Pallet<T, I> {
     fn treasury_balance() -> BalanceOf<T, I> {
         pallet_treasury::Pallet::<T, I>::pot()
+    }
+
+    fn exchange_energy() {
+        let account_id = pallet_treasury::Pallet::<T, I>::account_id();
+
+        let amount = T::EnergyAsset::reducible_balance(
+            &account_id,
+            Preservation::Expendable,
+            Fortitude::Polite,
+        );
+
+        if !amount.is_zero() {
+            if T::EnergyExchange::swap_exact_tokens_for_tokens(account_id, amount, false).is_ok() {
+                Self::deposit_event(Event::EnergyExchanged { amount });
+            }
+        }
     }
 }
 
@@ -114,5 +152,11 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
 
         *budget_remaining = budget_remaining.saturating_sub(unrecycled_amount);
         *total_weight += <T as pallet::Config<I>>::WeightInfo::spend_funds();
+    }
+}
+
+impl<T: Config<I>, I: 'static> OnSessionChange for Pallet<T, I> {
+    fn on_new_session(_index: SessionIndex) {
+        Self::exchange_energy()
     }
 }
