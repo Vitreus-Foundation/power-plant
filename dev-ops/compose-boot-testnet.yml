@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   boot_node:
-    image: cdivtrs/power-plant:testnet-latest
+    image: vitreusfoundation/power-plant:testnet-latest
     container_name: power-plant-boot-node
     restart: always
     volumes:

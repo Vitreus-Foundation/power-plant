@@ -7,7 +7,7 @@ volumes:
 
 services:
   power-plant-purge-chain:
-    image: cdivtrs/power-plant:latest
+    image: vitreusfoundation/power-plant:latest
     container_name: power-plant-purge-chain
     volumes:
       - node_data:/tmp/node
