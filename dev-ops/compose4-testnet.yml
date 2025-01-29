@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   fourth_node:
-    image: cdivtrs/power-plant:testnet-latest
+    image: vitreusfoundation/power-plant:testnet-latest
     container_name: power-plant-fourth-node
     restart: always
     volumes:
