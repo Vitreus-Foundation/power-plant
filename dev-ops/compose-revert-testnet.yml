@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   revert:
-    image: cdivtrs/power-plant-testnet:latest
+    image: vitreusfoundation/power-plant-testnet:latest
     container_name: power-plant-revert
     depends_on:
       - vitreus_power_plant

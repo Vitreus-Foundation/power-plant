@@ -115,6 +115,7 @@ impl Config for Test {
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
     type BalanceConverter = AssetRate;
+    type FeelessAccounts = ();
     type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
     type OnEnergySell = ();
     type SwapFee = ConstU32<20>; // means 2%

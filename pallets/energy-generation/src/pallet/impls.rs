@@ -28,7 +28,9 @@ use sp_staking::{
     EraIndex, SessionIndex,
 };
 use sp_std::prelude::*;
-use vitreus_runtime_common::{EraEnergyRateCalculator, EraSessionLookup, OnSessionChange, Staking};
+use vitreus_runtime_common::{
+    EraEnergyRateCalculator, EraSessionLookup, ExposureMultiplier, OnSessionChange, Staking,
+};
 
 use crate::slashing::NegativeImbalanceOf;
 use crate::{
@@ -385,11 +387,6 @@ impl<T: Config> Pallet<T> {
         let dest = Self::payee(stash);
         let asset_id = T::EnergyAssetId::get();
 
-        // TODO: calculate bonus energy correctly
-        let amount = Self::calculate_energy_reward_multiplier(stash)
-            .mul_floor(amount)
-            .saturating_add(amount);
-
         match dest {
             RewardDestination::Controller => Self::bonded(stash).and_then(|controller| {
                 pallet_assets::Pallet::<T>::deposit(asset_id, &controller, amount, Precision::Exact)
@@ -733,41 +730,46 @@ impl<T: Config> Pallet<T> {
         Self::ellect_validators();
 
         Validators::<T>::iter()
-            .map(|(validator, prefs)| {
-                let controller = Self::bonded(&validator).unwrap();
-                // Build `struct exposure` from `support`.
-                let own: StakeOf<T> = Self::ledger(&controller).unwrap().active;
+            .filter_map(|(validator, prefs)| {
+                let controller = Self::bonded(&validator)?;
+                let ledger = Self::ledger(&controller)?;
+
+                let own = T::ValidatorExposureMultiplier::multiplier(&validator)
+                    .saturating_mul_int(ledger.active);
+
                 let others = match Collaborations::<T>::get(&validator) {
                     Some(coops) => coops
                         .iter()
                         .cloned()
                         .filter_map(|who| {
-                            match Self::cooperators(&who)
-                                .and_then(|collab| collab.targets.get(&validator).cloned())
-                            {
-                                Some(value) => {
-                                    let record = pallet_reputation::Pallet::<T>::reputation(&who)
-                                        .unwrap_or_else(ReputationRecord::with_now::<T>);
-                                    if record.reputation >= prefs.min_coop_reputation {
-                                        Some(IndividualExposure { who, value })
-                                    } else {
-                                        None
-                                    }
-                                },
-                                None => None,
+                            let record = pallet_reputation::Pallet::<T>::reputation(&who)
+                                .unwrap_or_else(ReputationRecord::with_now::<T>);
+
+                            if record.reputation >= prefs.min_coop_reputation {
+                                let value = Self::cooperators(&who)
+                                    .and_then(|collab| collab.targets.get(&validator).cloned())
+                                    .map(|stake| {
+                                        T::CooperatorExposureMultiplier::multiplier(&who)
+                                            .saturating_mul_int(stake)
+                                    })?;
+
+                                Some(IndividualExposure { who, value })
+                            } else {
+                                None
                             }
                         })
                         .collect(),
+
                     None => Vec::new(),
                 };
-                let total = own
-                    + others
-                        .iter()
-                        .fold(Zero::zero(), |acc: StakeOf<T>, x| acc.saturating_add(x.value));
 
-                let exposure = Exposure { own, others, total };
+                let others_stake = others
+                    .iter()
+                    .fold(StakeOf::<T>::zero(), |total, x| total.saturating_add(x.value));
 
-                (validator, exposure)
+                let exposure = Exposure { total: own.saturating_add(others_stake), own, others };
+
+                Some((validator, exposure))
             })
             .collect()
     }
@@ -975,22 +977,6 @@ impl<T: Config> Pallet<T> {
         let reward = Self::block_authoring_reward().saturating_mul(active_validators_count as u64);
 
         ReputationPoint(reward)
-    }
-
-    // TODO: make coefficients a runtime parameter.
-    pub fn calculate_energy_reward_multiplier(stash: &T::AccountId) -> Perbill {
-        let reputation = if let Some(record) = pallet_reputation::AccountReputation::<T>::get(stash)
-        {
-            record.reputation
-        } else {
-            return Perbill::zero();
-        };
-
-        if let Some(tier) = reputation.tier() {
-            T::ReputationTierEnergyRewardAdditionalPercentMapping::convert(&tier)
-        } else {
-            Perbill::zero()
-        }
     }
 }
 

@@ -421,7 +421,8 @@ impl pallet_energy_generation::Config for Test {
     type DisablingStrategy = pallet_energy_generation::UpToLimitDisablingStrategy<3>;
     type ValidatorReputationTier = ValidatorReputationTier;
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
-    type ReputationTierEnergyRewardAdditionalPercentMapping = ();
+    type ValidatorExposureMultiplier = ();
+    type CooperatorExposureMultiplier = ();
     type ValidatorNacLevel = ();
     type OnVipMembershipHandler = Privileges;
     type BenchmarkingConfig = TestBenchmarkingConfig;

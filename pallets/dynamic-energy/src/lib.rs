@@ -1,12 +1,12 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::all)]
 
-use frame_support::traits::{tokens::Balance, Get};
+use frame_support::traits::{tokens::Balance, Get, UnixTime};
 use sp_runtime::{
     traits::{
         AtLeast32BitUnsigned, CheckedConversion, CheckedDiv, CheckedMul, Debug, Ensure, One, Zero,
     },
-    FixedI128, FixedPointNumber, FixedU128, Perbill, Saturating,
+    FixedI128, FixedPointNumber, FixedU128, Perbill, SaturatedConversion, Saturating,
 };
 
 use vitreus_runtime_common::{
@@ -66,6 +66,9 @@ pub mod pallet {
         /// The access to warehouse functionality.
         type Warehouse: Warehouse<EnergyOf<Self>>;
 
+        /// Time used for computing session duration.
+        type UnixTime: UnixTime;
+
         /// Number of sessions per era.
         #[pallet::constant]
         type SessionsPerEra: Get<SessionIndex>;
@@ -120,6 +123,11 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn exchange_rate)]
     pub type ExchangeRate<T: Config> = StorageValue<_, FixedU128>;
+
+    /// The start time of the session, expressed as the number of seconds since the UNIX epoch.
+    #[pallet::storage]
+    #[pallet::getter(fn session_start_time)]
+    pub type SessionStartTime<T: Config> = StorageValue<_, u64, ValueQuery>;
 
     /// The total energy burned during the session.
     #[pallet::storage]
@@ -299,6 +307,25 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+    /// Calculates warehouse capacity multiplier using `a*x^3+b*x^2+c*x+d` polynomial.
+    pub fn calculate_warehouse_capacity_multiplier() -> FixedU128 {
+        let x = FixedI128::from_perbill(Perbill::from_rational(
+            T::Warehouse::current_amount(),
+            T::Warehouse::max_capacity(),
+        )) * 100.into(); // convert to percents
+
+        let [a, b, c, d] = MultiplierCoefficients::<T>::get();
+
+        let multiplier = a * x.saturating_pow(3) + b * x.saturating_pow(2) + c * x + d;
+
+        if multiplier > FixedI128::zero() {
+            FixedU128::from_inner(multiplier.into_inner() as u128)
+        } else {
+            log::warn!(target: LOG_TARGET, "Invalid warehouse capacity multiplier");
+            FixedU128::one()
+        }
+    }
+
     fn update_generation_rate(index: SessionIndex) {
         let rate = EnergyBurnOverride::<T>::get().unwrap_or_else(SessionEnergyBurn::<T>::get);
 
@@ -311,7 +338,7 @@ impl<T: Config> Pallet<T> {
         EnergyGeneration::<T>::insert(index, rate);
     }
 
-    fn update_exchange_rate(index: SessionIndex) {
+    fn update_exchange_rate(index: SessionIndex, duration: u32) {
         let energy_sale =
             EnergySaleOverride::<T>::get().unwrap_or_else(SessionEnergySale::<T>::get);
 
@@ -332,6 +359,7 @@ impl<T: Config> Pallet<T> {
         let rate = match Self::calculate_exchange_rate(
             T::HigherPrecisionBalance::from(energy_sale),
             T::HigherPrecisionBalance::from(total_stake),
+            duration,
         ) {
             Some(rate) => {
                 log::info!(target: LOG_TARGET, "Calculate exchange rate: {}", rate);
@@ -365,9 +393,10 @@ impl<T: Config> Pallet<T> {
     fn calculate_exchange_rate(
         energy_sale: T::HigherPrecisionBalance,
         total_stake: T::HigherPrecisionBalance,
+        session_duration: u32,
     ) -> Option<FixedU128> {
-        let period = Self::session_duration().into();
-        let multiplier = Self::calculate_multiplier().into_inner().into();
+        let period = session_duration.into();
+        let multiplier = Self::calculate_warehouse_capacity_multiplier().into_inner().into();
 
         log::trace!(
             target: LOG_TARGET,
@@ -393,11 +422,6 @@ impl<T: Config> Pallet<T> {
         Some(FixedU128::from_inner(raw))
     }
 
-    // TODO: calculate duration using timestamp
-    fn session_duration() -> u32 {
-        T::ExpectedSessionDuration::get()
-    }
-
     fn smooth_value<N>(value: N, old_value: N, smooth_factor: u32) -> N
     where
         N: AtLeast32BitUnsigned,
@@ -405,25 +429,6 @@ impl<T: Config> Pallet<T> {
         let weight = Perbill::from_rational(2, smooth_factor.saturating_plus_one());
 
         Saturating::saturating_add(weight * value, (Perbill::one() - weight) * old_value)
-    }
-
-    /// Calculates warehouse capacity multiplier using `a*x^3+b*x^2+c*x+d` polynomial.
-    fn calculate_multiplier() -> FixedU128 {
-        let x = FixedI128::from_perbill(Perbill::from_rational(
-            T::Warehouse::current_amount(),
-            T::Warehouse::max_capacity(),
-        )) * 100.into(); // convert to percents
-
-        let [a, b, c, d] = MultiplierCoefficients::<T>::get();
-
-        let multiplier = a * x.saturating_pow(3) + b * x.saturating_pow(2) + c * x + d;
-
-        if multiplier > FixedI128::zero() {
-            FixedU128::from_inner(multiplier.into_inner() as u128)
-        } else {
-            log::warn!(target: LOG_TARGET, "Invalid warehouse capacity multiplier");
-            FixedU128::one()
-        }
     }
 }
 
@@ -441,9 +446,18 @@ impl<T: Config> OnEnergySell<EnergyOf<T>> for Pallet<T> {
 
 impl<T: Config> OnSessionChange for Pallet<T> {
     fn on_new_session(index: SessionIndex) {
-        Self::update_generation_rate(index);
-        Self::update_exchange_rate(index);
+        let now = T::UnixTime::now().as_secs();
 
+        let duration = if Self::session_start_time() != 0 {
+            now.saturating_sub(Self::session_start_time()).saturated_into()
+        } else {
+            T::ExpectedSessionDuration::get()
+        };
+
+        Self::update_generation_rate(index);
+        Self::update_exchange_rate(index, duration);
+
+        SessionStartTime::<T>::put(now);
         SessionEnergyBurn::<T>::put(EnergyOf::<T>::zero());
         SessionEnergySale::<T>::put(EnergyOf::<T>::zero());
 

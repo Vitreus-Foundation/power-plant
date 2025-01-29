@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   power_plant_first_node:
-    image: cdivtrs/power-plant:latest
+    image: vitreusfoundation/power-plant:latest
     container_name: power-plant-first-node
     restart: always
     volumes:
@@ -16,7 +16,6 @@ services:
       --rpc-port 9944
       --rpc-methods=unsafe
       --validator
-      --node-key ${NODE_KEY}
       --prometheus-external
       --rpc-cors all
       --sync warp
