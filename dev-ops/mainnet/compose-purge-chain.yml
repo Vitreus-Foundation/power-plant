@@ -1,0 +1,18 @@
+version: "3.3"
+
+volumes:
+  node_data:
+    name: node_data_mainnet_24_04_04_1
+    external: true
+
+services:
+  power-plant-purge-chain:
+    image: cdivtrs/power-plant:latest
+    container_name: power-plant-purge-chain
+    volumes:
+      - node_data:/tmp/node
+    command: >
+      ./target/release/vitreus-power-plant-node purge-chain
+      -y
+      --base-path /tmp/node
+      --chain mainnet
