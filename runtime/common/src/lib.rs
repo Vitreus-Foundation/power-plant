@@ -5,7 +5,15 @@
 
 // TODO: move here custom traits from pallets
 
+use sp_runtime::{
+    traits::{One, Zero},
+    FixedU64, Saturating,
+};
+
 pub use sp_staking::{EraIndex, SessionIndex};
+
+mod exchange;
+pub use exchange::*;
 
 /// A trait for executing actions when a new session begins.
 #[impl_trait_for_tuples::impl_for_tuples(8)]
@@ -44,6 +52,33 @@ impl<T> EraEnergyRateCalculator<T> for () {
 pub trait Staking<Balance> {
     /// Returns the total stake for the specified era.
     fn total_stake(era: EraIndex) -> Balance;
+}
+
+/// A trait for calculating the exposure multiplier for an account.
+pub trait ExposureMultiplier<AccountId> {
+    /// Returns the bonus multiplier component for the given account.
+    fn bonus_part(account_id: &AccountId) -> FixedU64;
+
+    /// Returns the total exposure multiplier for the given account.
+    ///
+    /// This includes the bonus component and a base multiplier of 1.
+    fn multiplier(account_id: &AccountId) -> FixedU64 {
+        FixedU64::one().saturating_add(Self::bonus_part(account_id))
+    }
+}
+
+#[impl_trait_for_tuples::impl_for_tuples(8)]
+impl<AccountId> ExposureMultiplier<AccountId> for Tuple {
+    #[allow(clippy::let_and_return)]
+    fn bonus_part(account_id: &AccountId) -> FixedU64 {
+        let mut total = FixedU64::zero();
+
+        for_tuples!( #(
+            total.saturating_accrue(Tuple::bonus_part(account_id));
+        )* );
+
+        total
+    }
 }
 
 /// A trait for querying era and session-related information.

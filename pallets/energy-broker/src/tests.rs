@@ -38,10 +38,10 @@ fn get_amount_works() {
     new_test_ext().execute_with(|| {
         let amount_in = 100000;
         let (amount_out, fee) =
-            EnergyBroker::get_amount_out(amount_in, &(NATIVE_TOKEN, ENERGY_TOKEN)).unwrap();
+            EnergyBroker::get_amount_out(amount_in, &(NATIVE_TOKEN, ENERGY_TOKEN), true).unwrap();
 
         let (expected_amount_in, expected_fee) =
-            EnergyBroker::get_amount_in(amount_out, &(NATIVE_TOKEN, ENERGY_TOKEN)).unwrap();
+            EnergyBroker::get_amount_in(amount_out, &(NATIVE_TOKEN, ENERGY_TOKEN), true).unwrap();
 
         assert_eq!(amount_in, expected_amount_in);
         assert_eq!(fee, expected_fee);
@@ -185,7 +185,7 @@ fn swap_with_amount_out_min_works() {
     new_test_ext().execute_with(|| {
         let amount_in = 200;
         let (amount_out, _) =
-            EnergyBroker::get_amount_out(amount_in, &(NATIVE_TOKEN, ENERGY_TOKEN)).unwrap();
+            EnergyBroker::get_amount_out(amount_in, &(NATIVE_TOKEN, ENERGY_TOKEN), true).unwrap();
 
         assert_noop!(
             EnergyBroker::swap_exact_tokens_for_tokens(
@@ -215,7 +215,7 @@ fn swap_with_amount_in_max_works() {
     new_test_ext().execute_with(|| {
         let amount_out = 200;
         let (amount_in, _) =
-            EnergyBroker::get_amount_in(amount_out, &(NATIVE_TOKEN, ENERGY_TOKEN)).unwrap();
+            EnergyBroker::get_amount_in(amount_out, &(NATIVE_TOKEN, ENERGY_TOKEN), true).unwrap();
 
         assert_noop!(
             EnergyBroker::swap_tokens_for_exact_tokens(

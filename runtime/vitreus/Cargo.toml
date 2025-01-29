@@ -115,6 +115,7 @@ pallet-evm-precompile-balances-erc20 = { workspace = true }
 
 # Vitreus pallets
 pallet-claiming = { workspace = true }
+pallet-democracy-extension = { workspace = true }
 pallet-dynamic-energy = { workspace = true }
 pallet-energy-broker = { workspace = true }
 pallet-energy-fee = { workspace = true }
@@ -126,10 +127,15 @@ pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-simple-vesting = { workspace = true }
 pallet-treasury-extension = { workspace = true }
+vitreus-runtime-common = { workspace = true }
 
 # Runtime API
+dynamic-energy-runtime-api = { workspace = true }
+energy-broker-runtime-api = { workspace = true }
 energy-fee-runtime-api = { workspace = true }
 energy-generation-runtime-api = { workspace = true }
+governance-runtime-api = { workspace = true }
+nfts-runtime-api = { workspace = true }
 vitreus-utility-runtime-api = { workspace = true }
 
 [dev-dependencies]
@@ -162,6 +168,7 @@ try-runtime = [
     "pallet-bounties/try-runtime",
     "pallet-claiming/try-runtime",
     "pallet-collective/try-runtime",
+    "pallet-democracy-extension/try-runtime",
     "pallet-democracy/try-runtime",
     "pallet-dynamic-energy/try-runtime",
     "pallet-elections-phragmen/try-runtime",
@@ -295,6 +302,7 @@ std = [
     "pallet-evm-precompile-balances-erc20/std",
     # Vitreus pallets
     "pallet-claiming/std",
+    "pallet-democracy-extension/std",
     "pallet-dynamic-energy/std",
     "pallet-energy-broker/std",
     "pallet-energy-fee/std",
@@ -306,9 +314,14 @@ std = [
     "pallet-reputation/std",
     "pallet-simple-vesting/std",
     "pallet-treasury-extension/std",
+    "vitreus-runtime-common/std",
     # Runtime API
+    "dynamic-energy-runtime-api/std",
+    "energy-broker-runtime-api/std",
     "energy-fee-runtime-api/std",
     "energy-generation-runtime-api/std",
+    "governance-runtime-api/std",
+    "nfts-runtime-api/std",
     "vitreus-utility-runtime-api/std",
 ]
 runtime-benchmarks = [

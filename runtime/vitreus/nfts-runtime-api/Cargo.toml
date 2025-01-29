@@ -1,0 +1,16 @@
+[package]
+name = "nfts-runtime-api"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+
+[dependencies]
+parity-scale-codec = { workspace = true }
+sp-api = { workspace = true }
+
+[features]
+default = ["std"]
+std = [
+    "parity-scale-codec/std",
+    "sp-api/std",
+]

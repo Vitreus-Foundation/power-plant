@@ -1,15 +1,13 @@
 [package]
 name = "energy-generation-rpc"
-version = "0.1.0"
+version = "0.2.0"
 authors.workspace = true
 edition.workspace = true
 
 [dependencies]
 energy-generation-runtime-api = { workspace = true }
-parity-scale-codec = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server", "macros", "client"] }
-sp-runtime = { workspace = true, default-features = false }
-sp-blockchain = { workspace = true }
-sp-std = { workspace = true, default-features = false }
+parity-scale-codec = { workspace = true }
 sp-api = { workspace = true, default-features = false }
-pallet-reputation = { workspace = true, default-features = false }
+sp-blockchain = { workspace = true }
+sp-runtime = { workspace = true, default-features = false }
