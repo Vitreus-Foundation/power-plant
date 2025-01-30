@@ -153,10 +153,10 @@ use sp_runtime::{
     traits::{Convert, Saturating, StaticLookup, Zero},
     BoundedBTreeMap, Perbill, Perquintill, Rounding, RuntimeDebug,
 };
-// pub use sp_staking::StakerStatus;
+pub use sp_staking::EraIndex;
 use sp_staking::{
     offence::{Offence, OffenceError, ReportOffence},
-    EraIndex, OnStakingUpdate, SessionIndex,
+    OnStakingUpdate, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
 pub use weights::WeightInfo;
@@ -678,17 +678,6 @@ impl<AccountId> SessionInterface<AccountId> for () {
     fn prune_historical_up_to(_: SessionIndex) {}
 }
 
-/// Handler for determining the energy demand on the current era.
-pub trait EnergyRateCalculator<Stake, Energy> {
-    /// Determine the energy demand for this era.
-    fn calculate_energy_rate(
-        total_staked: Stake,
-        total_issuance: Energy,
-        core_nodes_num: u32,
-        battery_slot_cap: Energy,
-    ) -> Energy;
-}
-
 pub trait OnVipMembershipHandler<T, Res, Perbill> {
     /// Change quarter info.
     fn change_quarter_info() -> Res;
@@ -804,19 +793,28 @@ where
     O: Offence<pallet_session::historical::IdentificationTuple<T>>,
 {
     fn report_offence(reporters: Vec<Reporter>, offence: O) -> Result<(), OffenceError> {
-        let offenders = offence.offenders().iter().map(|id| id.0.clone()).collect::<Vec<_>>();
+        let invulnerables = Pallet::<T>::invulnerables();
+
+        let offenders = offence
+            .offenders()
+            .iter()
+            .map(|id| id.0.clone())
+            .filter(|stash| !invulnerables.contains(stash))
+            .collect::<Vec<_>>();
         let offence_session = offence.session_index();
 
         R::report_offence(reporters, offence)?;
 
-        let offence_in_active_era = Pallet::<T>::active_era()
-            .and_then(|era| Pallet::<T>::eras_start_session_index(era.index))
-            .map(|start_session| offence_session >= start_session)
-            .unwrap_or(false);
+        if !offenders.is_empty() {
+            let offence_in_active_era = Pallet::<T>::active_era()
+                .and_then(|era| Pallet::<T>::eras_start_session_index(era.index))
+                .map(|start_session| offence_session >= start_session)
+                .unwrap_or(false);
 
-        if offence_in_active_era {
-            for stash in offenders.iter() {
-                Pallet::<T>::chill_stash(stash);
+            if offence_in_active_era {
+                for stash in offenders.iter() {
+                    Pallet::<T>::chill_stash(stash);
+                }
             }
         }
 

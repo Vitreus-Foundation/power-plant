@@ -24,7 +24,6 @@
 //! ### Fee Estimation
 //! - `estimate_gas`: Calculate gas cost for EVM calls
 //! - `estimate_call_fee`: Calculate total fee for runtime calls
-//! - `vtrs_to_vnrg_swap_rate`: Get current token exchange rate
 //!
 //! ## Implementation Notes
 //! - No-std compatible
@@ -93,7 +92,5 @@ sp_api::decl_runtime_apis! {
         fn estimate_gas(request: CallRequest) -> U256;
 
         fn estimate_call_fee(account: AccountId, call: Call) -> Option<FeeDetails<Balance>>;
-
-        fn vtrs_to_vnrg_swap_rate() -> Option<u128>;
     }
 }

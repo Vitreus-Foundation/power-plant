@@ -2,7 +2,7 @@ version: "3.3"
 
 services:
   archive_node_1:
-    image: cdivtrs/power-plant:latest
+    image: vitreusfoundation/power-plant:latest
     container_name: power-plant-archive-node-1
     restart: always
     volumes:
@@ -12,6 +12,7 @@ services:
       --base-path /tmp/node
       --chain ./target/release/vitreus-power-plant-mainnet.json
       --name smithsonian
+      --node-key ${NODE_KEY}
       --port 30333
       --rpc-port 9944
       --rpc-external

@@ -1,0 +1,33 @@
+[package]
+name = "pallet-dynamic-energy"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+repository.workspace = true
+
+[dependencies]
+log = { workspace = true }
+frame-support = { workspace = true }
+frame-system = { workspace = true }
+parity-scale-codec = { workspace = true }
+scale-info = { workspace = true }
+sp-runtime = { workspace = true }
+vitreus-runtime-common = { workspace = true }
+
+[dev-dependencies]
+sp-core = { workspace = true }
+sp-io = { workspace = true }
+pallet-timestamp = { workspace = true }
+primitive-types = { workspace = true, features = ["num-traits"] }
+
+[features]
+default = ["std"]
+std = [
+    "frame-support/std",
+    "frame-system/std",
+    "parity-scale-codec/std",
+    "scale-info/std",
+    "sp-runtime/std",
+    "vitreus-runtime-common/std",
+]
+try-runtime = ["frame-support/try-runtime"]

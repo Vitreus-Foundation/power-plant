@@ -6,12 +6,13 @@ use crate::{self as pallet_energy_generation, *};
 use frame_support::weights::Weight;
 use frame_support::{
     assert_ok, derive_impl, ord_parameter_types, parameter_types,
-    storage::StorageValue,
+    storage::{types::ValueQuery, StorageValue},
     traits::{
         AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Currency, EitherOfDiverse,
         FindAuthor, Get, Hooks, Imbalance, OnUnbalanced, OneSessionHandler,
     },
     weights::constants::RocksDbWeight,
+    Twox64Concat,
 };
 use frame_system::{EnsureRoot, EnsureSigned, EnsureSignedBy};
 use pallet_reputation::{
@@ -23,10 +24,11 @@ use sp_runtime::{
     curve::PiecewiseLinear,
     testing::{Header, TestSignature, UintAuthorityId},
     traits::{Dispatchable, IdentifyAccount, IdentityLookup, Verify, Zero},
-    BuildStorage, MultiSignature, Percent,
+    BuildStorage, FixedPointNumber, FixedU64, MultiSignature, Percent,
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
+use vitreus_runtime_common::ExposureMultiplier;
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -289,32 +291,36 @@ impl OnStakingUpdate<AccountId, Balance> for EventListenerMock {
     }
 }
 
-pub struct ReputationTierEnergyRewardAdditionalPercentMapping;
+#[frame_support::storage_alias]
+pub(crate) type ValidatorExposureMultiplier<T: Config> =
+    StorageMap<Pallet<T>, Twox64Concat, u64, FixedU64, ValueQuery>;
 
-impl Convert<&ReputationTier, Perbill> for ReputationTierEnergyRewardAdditionalPercentMapping {
-    fn convert(k: &ReputationTier) -> Perbill {
-        match k {
-            ReputationTier::Vanguard(2) => Perbill::from_percent(2),
-            ReputationTier::Vanguard(3) => Perbill::from_percent(4),
-            ReputationTier::Trailblazer(0) => Perbill::from_percent(5),
-            ReputationTier::Trailblazer(1) => Perbill::from_percent(8),
-            ReputationTier::Trailblazer(2) => Perbill::from_percent(10),
-            ReputationTier::Trailblazer(3) => Perbill::from_percent(12),
-            ReputationTier::Ultramodern(0) => Perbill::from_percent(13),
-            ReputationTier::Ultramodern(1) => Perbill::from_percent(16),
-            ReputationTier::Ultramodern(2) => Perbill::from_percent(18),
-            ReputationTier::Ultramodern(3) => Perbill::from_percent(20),
-            ReputationTier::Ultramodern(rank) => {
-                let additional_percentage = rank.saturating_sub(RANKS_PER_TIER);
-                Perbill::from_percent(20_u8.saturating_add(additional_percentage).into())
-            },
-            // includes unhandled cases
-            _ => Perbill::zero(),
-        }
+pub struct MockValidatorExposureMultiplier;
+impl ExposureMultiplier<u64> for MockValidatorExposureMultiplier {
+    fn bonus_part(account_id: &u64) -> FixedU64 {
+        ValidatorExposureMultiplier::<Test>::get(account_id)
+    }
+}
+
+#[frame_support::storage_alias]
+pub(crate) type CooperatorExposureMultiplier<T: Config> =
+    StorageMap<Pallet<T>, Twox64Concat, u64, FixedU64, ValueQuery>;
+
+pub struct MockCooperatorExposureMultiplier;
+impl ExposureMultiplier<u64> for MockCooperatorExposureMultiplier {
+    fn bonus_part(account_id: &u64) -> FixedU64 {
+        CooperatorExposureMultiplier::<Test>::get(account_id)
     }
 }
 
 pub(crate) const DISABLING_LIMIT_FACTOR: usize = 3;
+
+pub struct MockEraEnergyRateCalculator;
+impl vitreus_runtime_common::EraEnergyRateCalculator<u128> for MockEraEnergyRateCalculator {
+    fn calculate(_era: EraIndex) -> Option<u128> {
+        Some(2000000)
+    }
+}
 
 impl pallet_energy_generation::Config for Test {
     type AdminOrigin = EnsureOneOrRoot;
@@ -323,17 +329,18 @@ impl pallet_energy_generation::Config for Test {
     type BondingDuration = BondingDuration;
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type EnergyAssetId = VNRG;
-    type EnergyPerStakeCurrency = PowerPlant;
+    type EraEnergyRateCalculator = MockEraEnergyRateCalculator;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
     type MaxCooperatorRewardedPerValidator = ConstU32<64>;
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = EventListenerMock;
+    type SessionChangeListeners = ();
     type DisablingStrategy =
         pallet_energy_generation::UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR>;
-    type ReputationTierEnergyRewardAdditionalPercentMapping =
-        ReputationTierEnergyRewardAdditionalPercentMapping;
+    type ValidatorExposureMultiplier = MockValidatorExposureMultiplier;
+    type CooperatorExposureMultiplier = MockCooperatorExposureMultiplier;
     type Reward = MockReward;
     type RewardRemainder = RewardRemainderMock;
     type RuntimeEvent = RuntimeEvent;
@@ -765,14 +772,11 @@ pub(crate) fn start_active_era(era_index: EraIndex) {
     assert_eq!(current_era(), active_era());
 }
 
-pub(crate) fn current_total_payout_for_duration(duration: u64) -> Balance {
-    let num_blocks = duration / BLOCK_TIME;
-    let era_index = CurrentEra::<Test>::get().unwrap_or_default();
+pub(crate) fn total_payout_for_era(era_index: EraIndex) -> Balance {
     let rate = ErasEnergyPerStakeCurrency::<Test>::get(era_index).unwrap_or_default();
     let total_stake = ErasTotalStake::<Test>::get(era_index);
-    let era_blocks = Period::get() * SessionsPerEra::get() as u64 - 1;
-    let ratio = Perbill::from_rational(num_blocks, era_blocks);
-    let payout = (ratio * total_stake) / rate;
+
+    let payout = rate.saturating_mul_int(total_stake);
 
     assert!(payout > 0);
     payout
@@ -805,14 +809,6 @@ pub(crate) fn make_validator(controller: AccountId, stash: AccountId, balance: B
     ));
 }
 
-/// Time it takes to finish a session.
-///
-/// Note, if you see `time_per_session() - BLOCK_TIME`, it is fine. This is because we set the
-/// timestamp after on_initialize, so the timestamp is always one block old.
-pub(crate) fn time_per_session() -> u64 {
-    Period::get() * BLOCK_TIME
-}
-
 // reputation reward points each account receive per session
 pub(crate) fn reputation_per_sessions(num: u64) -> u64 {
     Period::get() * num * *pallet_reputation::REPUTATION_POINTS_PER_BLOCK
@@ -820,19 +816,6 @@ pub(crate) fn reputation_per_sessions(num: u64) -> u64 {
 
 pub(crate) fn reputation_per_era() -> u64 {
     reputation_per_sessions(SessionsPerEra::get() as u64)
-}
-
-/// Time it takes to finish an era.
-///
-/// Note, if you see `time_per_era() - BLOCK_TIME`, it is fine. This is because we set the
-/// timestamp after on_initialize, so the timestamp is always one block old.
-pub(crate) fn time_per_era() -> u64 {
-    time_per_session() * SessionsPerEra::get() as u64
-}
-
-/// Time that will be calculated for the reward per era.
-pub(crate) fn reward_time_per_era() -> u64 {
-    time_per_era() - BLOCK_TIME
 }
 
 pub(crate) fn reward_all_elected() {
@@ -985,9 +968,7 @@ pub(crate) fn calculate_reward(
     total_payout: Balance,
     total_stake: Balance,
     personal_stake: Balance,
-    bonus_percent: Percent,
 ) -> Balance {
     let part = Perbill::from_rational(personal_stake, total_stake);
-    let reward = part * total_payout;
-    bonus_percent.mul_floor(reward) + reward
+    part * total_payout
 }

@@ -154,6 +154,8 @@ parameter_types! {
 
 impl crate::Config for Test {
     type RuntimeEvent = RuntimeEvent;
+    type EnergyAsset = ();
+    type EnergyExchange = ();
     type SpendThreshold = SpendThreshold;
     type OnRecycled = ();
     type WeightInfo = ();

@@ -186,6 +186,7 @@ impl pallet_energy_fee::Config for Test {
     type FeeRecycleDestination =
         SplitTwoWays<Balance, FeeCreditOf<Test>, FeeBurnDestination<FeeBurnAccount>, (), 2, 8>;
     type OnWithdrawFee = ();
+    type OnEnergyBurn = ();
 }
 
 impl pallet_timestamp::Config for Test {

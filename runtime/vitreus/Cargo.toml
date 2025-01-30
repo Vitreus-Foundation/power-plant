@@ -9,11 +9,12 @@ repository = { workspace = true }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
-parity-scale-codec = { workspace = true }
-scale-info = { workspace = true }
-log = { workspace = true }
 hex-literal = { workspace = true }
+log = { workspace = true }
+num_enum = { workspace = true }
+parity-scale-codec = { workspace = true }
 primitive-types = { workspace = true, features = ["codec", "scale-info", "num-traits"] }
+scale-info = { workspace = true }
 static_assertions = { workspace = true }
 
 # Polkadot
@@ -98,6 +99,7 @@ fp-account = { workspace = true, features = ["serde"] }
 fp-evm = { workspace = true, features = ["serde"] }
 fp-rpc = { workspace = true }
 fp-self-contained = { workspace = true, features = ["serde"] }
+precompile-utils = { workspace = true }
 
 # Frontier FRAME
 pallet-ethereum = { workspace = true }
@@ -108,8 +110,13 @@ pallet-evm-precompile-sha3fips = { workspace = true }
 pallet-evm-precompile-simple = { workspace = true }
 pallet-hotfix-sufficients = { workspace = true }
 
+# Moonbeam
+pallet-evm-precompile-balances-erc20 = { workspace = true }
+
 # Vitreus pallets
 pallet-claiming = { workspace = true }
+pallet-democracy-extension = { workspace = true }
+pallet-dynamic-energy = { workspace = true }
 pallet-energy-broker = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-energy-generation = { workspace = true }
@@ -120,10 +127,15 @@ pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-simple-vesting = { workspace = true }
 pallet-treasury-extension = { workspace = true }
+vitreus-runtime-common = { workspace = true }
 
 # Runtime API
+dynamic-energy-runtime-api = { workspace = true }
+energy-broker-runtime-api = { workspace = true }
 energy-fee-runtime-api = { workspace = true }
 energy-generation-runtime-api = { workspace = true }
+governance-runtime-api = { workspace = true }
+nfts-runtime-api = { workspace = true }
 vitreus-utility-runtime-api = { workspace = true }
 
 [dev-dependencies]
@@ -156,7 +168,9 @@ try-runtime = [
     "pallet-bounties/try-runtime",
     "pallet-claiming/try-runtime",
     "pallet-collective/try-runtime",
+    "pallet-democracy-extension/try-runtime",
     "pallet-democracy/try-runtime",
+    "pallet-dynamic-energy/try-runtime",
     "pallet-elections-phragmen/try-runtime",
     "pallet-energy-broker/try-runtime",
     "pallet-energy-fee/try-runtime",
@@ -275,6 +289,7 @@ std = [
     "fp-evm/std",
     "fp-rpc/std",
     "fp-self-contained/std",
+    "precompile-utils/std",
     # Frontier FRAME
     "pallet-ethereum/std",
     "pallet-evm-chain-id/std",
@@ -283,8 +298,12 @@ std = [
     "pallet-evm-precompile-simple/std",
     "pallet-evm/std",
     "pallet-hotfix-sufficients/std",
+    # Moonbeam
+    "pallet-evm-precompile-balances-erc20/std",
     # Vitreus pallets
     "pallet-claiming/std",
+    "pallet-democracy-extension/std",
+    "pallet-dynamic-energy/std",
     "pallet-energy-broker/std",
     "pallet-energy-fee/std",
     "pallet-energy-generation/std",
@@ -295,9 +314,14 @@ std = [
     "pallet-reputation/std",
     "pallet-simple-vesting/std",
     "pallet-treasury-extension/std",
+    "vitreus-runtime-common/std",
     # Runtime API
+    "dynamic-energy-runtime-api/std",
+    "energy-broker-runtime-api/std",
     "energy-fee-runtime-api/std",
     "energy-generation-runtime-api/std",
+    "governance-runtime-api/std",
+    "nfts-runtime-api/std",
     "vitreus-utility-runtime-api/std",
 ]
 runtime-benchmarks = [

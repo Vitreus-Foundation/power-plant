@@ -11,6 +11,34 @@ use crate::{Config, Pallet};
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 
+pub mod v16 {
+    use super::*;
+    use sp_runtime::{FixedPointNumber, FixedU128};
+
+    pub struct VersionUncheckedMigrateV15ToV16<T>(core::marker::PhantomData<T>);
+    impl<T: Config> UncheckedOnRuntimeUpgrade for VersionUncheckedMigrateV15ToV16<T> {
+        fn on_runtime_upgrade() -> Weight {
+            let mut count = 0;
+
+            ErasEnergyPerStakeCurrency::<T>::translate_values(|rate: EnergyOf<T>| {
+                count += 1;
+                FixedU128::checked_from_rational(1, rate)
+            });
+
+            log!(info, "Upgraded {} records", count);
+            T::DbWeight::get().reads_writes(count, count)
+        }
+    }
+
+    pub type MigrateV15ToV16<T> = VersionedMigration<
+        15,
+        16,
+        VersionUncheckedMigrateV15ToV16<T>,
+        Pallet<T>,
+        <T as frame_system::Config>::DbWeight,
+    >;
+}
+
 /// Migrating `OffendingValidators` from `Vec<(u32, bool)>` to `Vec<u32>`
 pub mod v15 {
     use super::*;
