@@ -1,12 +1,9 @@
 //! Tests for the module.
 
-use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event, TokenExchange};
+use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event};
 use frame_support::{
     dispatch::{DispatchInfo, GetDispatchInfo},
-    traits::{
-        fungible::Inspect, Hooks, LockIdentifier, LockableCurrency, NamedReservableCurrency,
-        WithdrawReasons,
-    },
+    traits::{fungible::Inspect, Hooks},
 };
 use frame_system::{
     mocking::MockUncheckedExtrinsic,
@@ -211,7 +208,6 @@ fn vtrs_exchange_during_withdraw_evm_fee_works() {
     new_test_ext(0).execute_with(|| {
         System::set_block_number(1);
         let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
-        let initial_vtrs_recycle_dest_balance: Balance = BalancesVTRS::balance(&MAIN_DEST);
 
         // fee equals arbitrary number since we don't take it into account
         assert!(<EnergyFee as OnChargeEVMTransaction<Test>>::withdraw_fee(
@@ -226,7 +222,6 @@ fn vtrs_exchange_during_withdraw_evm_fee_works() {
             .expect("Expected to calculate missing fee in VTRS");
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance - vtrs_fee);
         assert_eq!(BalancesVNRG::balance(&ALICE), 0);
-        assert_eq!(BalancesVTRS::balance(&MAIN_DEST), initial_vtrs_recycle_dest_balance + vtrs_fee);
 
         System::assert_has_event(
             Event::<Test>::EnergyFeePaid { who: ALICE, amount: GetConstantEnergyFee::get() }.into(),
@@ -300,30 +295,6 @@ fn check_burned_energy_threshold_works() {
             extension.pre_dispatch(&ALICE, &assets_transfer_call, &dispatch_info, extrinsic_len),
             Err(TransactionValidityError::Invalid(InvalidTransaction::ExhaustsResources))
         );
-    });
-}
-
-#[test]
-fn check_sudo_bypass_burned_energy_threshold_works() {
-    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
-        BurnedEnergyThreshold::<Test>::put(0);
-        let transfer_amount: Balance = 1_000_000_000;
-        let assets_transfer_call: RuntimeCall =
-            RuntimeCall::Assets(pallet_assets::Call::transfer {
-                id: VNRG.into(),
-                target: BOB,
-                amount: transfer_amount,
-            });
-        let sudo_assets_transfer_call: RuntimeCall =
-            RuntimeCall::Sudo(pallet_sudo::Call::sudo { call: Box::new(assets_transfer_call) });
-        let dispatch_info: DispatchInfo = sudo_assets_transfer_call.get_dispatch_info();
-        let extrinsic_len: usize = 1000;
-
-        let extension: CheckEnergyFee<Test> = CheckEnergyFee::new();
-        assert!(extension
-            .clone()
-            .pre_dispatch(&ALICE, &sudo_assets_transfer_call, &dispatch_info, extrinsic_len)
-            .is_ok());
     });
 }
 
@@ -559,41 +530,4 @@ fn update_base_fee_works() {
             initial_energy_balance - constant_fee_1 - constant_fee_2,
         );
     });
-}
-
-#[test]
-fn exchange_should_not_withdraw_reserved_balance() {
-    new_test_ext(0).execute_with(|| {
-        assert_eq!(BalancesVTRS::free_balance(&ALICE), VTRS_INITIAL_BALANCE);
-        let exchange_amount = 10;
-        let freeze_amount = 100;
-
-        const VESTING_ID: [u8; 8] = *b"vesting ";
-        const STAKING_ID: LockIdentifier = *b"staking ";
-        BalancesVTRS::reserve_named(
-            &VESTING_ID,
-            &ALICE,
-            VTRS_INITIAL_BALANCE - exchange_amount - freeze_amount,
-        )
-        .expect("Expected to reserve VTRS");
-        BalancesVTRS::set_lock(STAKING_ID, &ALICE, freeze_amount, WithdrawReasons::all());
-
-        assert!(<EnergyExchange as TokenExchange<
-            AccountId,
-            BalancesVTRS,
-            BalancesVNRG,
-            MainBurnDestination<MainBurnAccount>,
-            Balance,
-        >>::exchange_inner(&ALICE, exchange_amount + 1, 1)
-        .is_err());
-
-        assert!(<EnergyExchange as TokenExchange<
-            AccountId,
-            BalancesVTRS,
-            BalancesVNRG,
-            MainBurnDestination<MainBurnAccount>,
-            Balance,
-        >>::exchange_inner(&ALICE, exchange_amount, 1)
-        .is_ok());
-    })
 }

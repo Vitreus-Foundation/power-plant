@@ -14,7 +14,6 @@ use frame_support::{
     genesis_builder_helper::{build_state, get_preset},
     PalletId,
 };
-use pallet_balances::NegativeImbalance;
 use polkadot_primitives::{
     runtime_api, slashing, ApprovalVotingParams, CandidateCommitments, CandidateEvent,
     CandidateHash, CommittedCandidateReceipt, CoreIndex, CoreState, DisputeState, ExecutorParams,
@@ -53,8 +52,8 @@ use frame_support::traits::tokens::{
     DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, Equals, ExistenceRequirement, Imbalance, OnUnbalanced,
-    ProcessMessage, ProcessMessageError, SignedImbalance, WithdrawReasons,
+    Currency, EitherOfDiverse, Equals, ExistenceRequirement, Imbalance, ProcessMessage,
+    ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
 use parity_scale_codec::{Compact, Decode, Encode, MaxEncodedLen};
 use sp_api::impl_runtime_apis;
@@ -104,7 +103,7 @@ use frame_support::{
     },
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
-use pallet_energy_fee::{CallFee, CustomFee, TokenExchange};
+use pallet_energy_fee::{CallFee, CustomFee};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
 };
@@ -125,7 +124,9 @@ use sp_consensus_beefy::{
     mmr::{BeefyDataProvider, MmrLeafVersion},
 };
 use sp_runtime::transaction_validity::InvalidTransaction;
-use vitreus_runtime_common::{ExposureMultiplier, QuotePrice};
+use vitreus_runtime_common::{
+    ExposureMultiplier, NativeEnergyExchange, QuotePriceEnergyForNative, QuotePriceNativeForEnergy,
+};
 use xcm::{
     latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
     VersionedXcm,
@@ -1018,74 +1019,20 @@ impl pallet_dynamic_energy::Config for Runtime {
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
     pub GetConstantGasLimit: U256 = U256::from(100_000);
-    pub EnergyBrokerPalletId: PalletId = PalletId(*b"enrgbrkr");
 }
 
-pub struct EnergyBrokerSink;
-
-impl OnUnbalanced<NegativeImbalance<Runtime>> for EnergyBrokerSink {
-    fn on_nonzero_unbalanced(amount: NegativeImbalance<Runtime>) {
-        let energy_broker_address: AccountId =
-            EnergyBrokerPalletId::get().into_account_truncating();
-        Balances::resolve_creating(&energy_broker_address, amount);
-    }
-}
-
-pub struct EnergyBrokerExchange;
-
-impl TokenExchange<AccountId, Balances, EnergyItem, EnergyBrokerSink, Balance>
-    for EnergyBrokerExchange
-{
-    fn convert_from_input(amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::quote_price_exact_tokens_for_tokens(
-            NativeAsset::get(),
-            VNRG::get().into(),
-            amount,
-            true,
-        )
-        .ok_or(DispatchError::Unavailable)
-    }
-
-    fn convert_from_output(amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::quote_price_tokens_for_exact_tokens(
-            NativeAsset::get(),
-            VNRG::get().into(),
-            amount,
-            true,
-        )
-        .ok_or(DispatchError::Unavailable)
-    }
-
-    fn exchange_from_input(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::swap_exact_native_for_energy(*who, amount)
-    }
-
-    fn exchange_from_output(who: &AccountId, amount: Balance) -> Result<Balance, DispatchError> {
-        EnergyBroker::swap_native_for_exact_energy(*who, amount)
-    }
-
-    fn exchange_inner(
-        _who: &AccountId,
-        _amount_in: Balance,
-        _amount_out: Balance,
-    ) -> Result<Balance, DispatchError> {
-        Err(DispatchError::Other("Unimplemented"))
-    }
-}
+type EnergyBrokerExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, VNRG>;
 
 impl pallet_energy_fee::Config for Runtime {
-    type ManageOrigin = MoreThanHalfCouncil;
     type RuntimeEvent = RuntimeEvent;
-    type FeeTokenBalanced = EnergyItem;
-    type MainTokenBalanced = Balances;
-    type EnergyExchange = EnergyBrokerExchange;
+    type ManageOrigin = MoreThanHalfCouncil;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
-    type EnergyAssetId = VNRG;
-    type MainRecycleDestination = EnergyBrokerSink;
-    type FeeRecycleDestination = ();
+    type EnergyAsset = EnergyItem;
+    type EnergyExchange = EnergyBrokerExchange;
     type OnWithdrawFee = NacManaging;
     type OnEnergyBurn = (EnergyBroker, DynamicEnergy);
+    type FeeRecycleDestination = ();
 }
 
 parameter_types! {
@@ -2087,7 +2034,7 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                     EnergyFee::dispatch_info_to_fee(self, Some(dispatch_info), None)
                 {
                     let (_, fee_vtrs_amount) =
-                        if let Ok(parts) = EnergyFee::calculate_fee_parts(&account_id, amount) {
+                        if let Some(parts) = EnergyFee::calculate_fee_parts(&account_id, amount) {
                             parts
                         } else {
                             return Some(Err(InvalidTransaction::Payment.into()));
@@ -2737,21 +2684,11 @@ impl_runtime_apis! {
 
     impl energy_broker_runtime_api::EnergyBrokerApi<Block, Balance> for Runtime {
         fn estimate_energy_from_native(amount: Balance) -> Option<Balance> {
-            EnergyBroker::quote_price_exact_tokens_for_tokens(
-                NativeAsset::get(),
-                VNRG::get().into(),
-                amount,
-                true,
-            )
+            <EnergyBrokerExchange as QuotePriceNativeForEnergy>::quote_price_exact_tokens_for_tokens(amount, true)
         }
 
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance> {
-            EnergyBroker::quote_price_exact_tokens_for_tokens(
-                VNRG::get().into(),
-                NativeAsset::get(),
-                amount,
-                true,
-            )
+            <EnergyBrokerExchange as QuotePriceEnergyForNative>::quote_price_exact_tokens_for_tokens(amount, true)
         }
 
         fn energy_exchange_rate() -> Option<FixedU128> {
@@ -2826,7 +2763,7 @@ impl_runtime_apis! {
             EnergyFee::calculate_fee_parts(&account, fee).map(|fees| energy_fee_runtime_api::FeeDetails {
                 vtrs: fees.1,
                 vnrg: fees.0,
-            }).ok()
+            })
         }
     }
 
