@@ -2006,11 +2006,9 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 ///
 /// This contains the combined migrations of the last 10 releases. It allows to skip runtime
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
+#[rustfmt::skip]
 pub type Migrations = (
     migrations::Unreleased,
-    migrations::V0200,
-    migrations::V0205,
-    migrations::V0208,
     migrations::Permanent,
 );
 
