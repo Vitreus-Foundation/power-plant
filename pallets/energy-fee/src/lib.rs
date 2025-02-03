@@ -53,7 +53,7 @@
 
 pub use crate::extension::CheckEnergyFee;
 pub use crate::traits::CustomFee;
-use frame_support::dispatch::DispatchClass;
+use frame_support::dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo};
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
     tokens::{Fortitude, Imbalance, Precision, Preservation},
@@ -68,7 +68,7 @@ use vitreus_runtime_common::{OnEnergyBurn, QuotePriceNativeForEnergy, SwapNative
 use sp_arithmetic::{traits::CheckedAdd, ArithmeticError::Overflow};
 use sp_core::{RuntimeDebug, H160, U256};
 use sp_runtime::{
-    traits::{Convert, DispatchInfoOf, Get, PostDispatchInfoOf, Saturating, Zero},
+    traits::{Convert, DispatchInfoOf, Dispatchable, Get, PostDispatchInfoOf, Saturating, Zero},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
     DispatchError, Perbill, Perquintill,
 };
@@ -273,7 +273,10 @@ pub mod pallet {
         }
     }
 
-    impl<T: Config> OnChargeTransaction<T> for Pallet<T> {
+    impl<T: Config> OnChargeTransaction<T> for Pallet<T>
+    where
+        T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+    {
         type Balance = BalanceOf<T>;
         type LiquidityInfo = Option<Credit<T::AccountId, T::EnergyAsset>>;
 
@@ -295,9 +298,13 @@ pub mod pallet {
                     Self::ensure_sufficient_energy(who, fee).map_err(|_| {
                         TransactionValidityError::Invalid(InvalidTransaction::Payment)
                     })?;
-                    return Ok(None);
+                    Zero::zero()
                 },
             };
+
+            if fee.is_zero() {
+                return Ok(None);
+            }
 
             Self::ensure_sufficient_energy(who, fee)
                 .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
@@ -309,32 +316,53 @@ pub mod pallet {
                 Preservation::Expendable,
                 Fortitude::Force,
             )
-            .inspect(|_| {
-                Self::deposit_event(Event::<T>::EnergyFeePaid { who: who.clone(), amount: fee });
-            })
             .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
 
-            Self::update_burned_energy(imbalance.peek())
-                .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
             T::OnWithdrawFee::on_withdraw_fee(who);
 
             Ok(Some(imbalance))
         }
 
-        // TODO: make a refund for calls non-elligible for custom fee
-        // TODO: decide what to do with fee debt generated during exchange (if it would remain
-        // relevant after EnergyBroker implementation)
         fn correct_and_deposit_fee(
-            _who: &T::AccountId,
-            _dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
-            _post_info: &PostDispatchInfoOf<T::RuntimeCall>,
+            who: &T::AccountId,
+            dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+            post_info: &PostDispatchInfoOf<T::RuntimeCall>,
             _corrected_fee: Self::Balance,
-            _tip: Self::Balance,
+            tip: Self::Balance,
             already_withdrawn: Self::LiquidityInfo,
         ) -> Result<(), TransactionValidityError> {
-            if let Some(credit) = already_withdrawn {
-                T::FeeRecycleDestination::on_unbalanced(credit);
+            if let Some(paid) = already_withdrawn {
+                let refund_imbalance = if post_info.pays_fee(dispatch_info) == Pays::No {
+                    T::EnergyAsset::deposit(
+                        who,
+                        // don't refund tip
+                        paid.peek().saturating_sub(tip),
+                        Precision::BestEffort,
+                    )
+                    .ok()
+                } else {
+                    None
+                };
+
+                // merge the imbalance caused by paying the fees and refunding parts of it again.
+                let adjusted_paid: Credit<T::AccountId, T::EnergyAsset> = paid
+                    .offset(refund_imbalance.unwrap_or_default())
+                    .same()
+                    .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+
+                let actual_fee = adjusted_paid.peek();
+                let (tip, fee) = adjusted_paid.split(tip);
+                T::FeeRecycleDestination::on_unbalanceds(Some(fee).into_iter().chain(Some(tip)));
+
+                Self::update_burned_energy(actual_fee)
+                    .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+
+                Self::deposit_event(Event::<T>::EnergyFeePaid {
+                    who: who.clone(),
+                    amount: actual_fee,
+                });
             }
+
             Ok(())
         }
     }

@@ -2,7 +2,7 @@
 
 use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event};
 use frame_support::{
-    dispatch::{DispatchInfo, GetDispatchInfo},
+    dispatch::{DispatchInfo, GetDispatchInfo, PostDispatchInfo},
     traits::{fungible::Inspect, Hooks},
 };
 use frame_system::{
@@ -99,12 +99,27 @@ fn withdraw_fee_with_custom_coefficients_works() {
 
         let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
 
-        assert!(<EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+        let withdraw_fee_result = <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
             &ALICE,
             &assets_transfer_call,
             &dispatch_info,
             computed_fee,
             0,
+        );
+        assert!(withdraw_fee_result.is_ok());
+
+        let post_dispatch_info: PostDispatchInfo = PostDispatchInfo {
+            actual_weight: Some(AssetsWeight::<Test>::transfer()),
+            ..Default::default()
+        };
+
+        assert!(<EnergyFee as OnChargeTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE,
+            &dispatch_info,
+            &post_dispatch_info,
+            computed_fee,
+            0,
+            withdraw_fee_result.unwrap()
         )
         .is_ok());
 
