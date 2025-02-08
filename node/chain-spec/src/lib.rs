@@ -19,12 +19,11 @@ use crate::tech_addresses::treasury;
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
     BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig,
-    DynamicEnergyConfig, EVMChainIdConfig, EnergyBrokerConfig, EnergyFeeConfig,
-    EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations, NacManagingConfig,
-    PrivilegesConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix,
-    SessionConfig, Signature, SimpleVestingConfig, StakerStatus, SudoConfig, SystemConfig,
-    TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
-    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    DynamicEnergyConfig, EVMChainIdConfig, EnergyBrokerConfig, EnergyGenerationConfig,
+    ImOnlineConfig, ImOnlineId, MaxCooperations, NacManagingConfig, PrivilegesConfig,
+    ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
+    SimpleVestingConfig, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
+    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
 };
 
 /// Node `ChainSpec` extensions.
@@ -351,10 +350,6 @@ pub fn testnet_genesis(
         evm_chain_id: EVMChainIdConfig { chain_id, ..Default::default() },
         evm: Default::default(),
         ethereum: Default::default(),
-        energy_fee: EnergyFeeConfig {
-            initial_energy_rate: INITIAL_ENERGY_RATE,
-            ..Default::default()
-        },
         energy_broker: EnergyBrokerConfig { energy_capacity: 1_000_000_000_000 },
         assets: AssetsConfig {
             assets: vec![(VNRG::get(), root_key, false, 1)],
@@ -514,10 +509,6 @@ fn mainnet_genesis(
         evm_chain_id: EVMChainIdConfig { chain_id: SS58Prefix::get() as u64, ..Default::default() },
         evm: Default::default(),
         ethereum: Default::default(),
-        energy_fee: EnergyFeeConfig {
-            initial_energy_rate: INITIAL_ENERGY_RATE,
-            ..Default::default()
-        },
         energy_broker: EnergyBrokerConfig { energy_capacity: 1_000_000_000_000 },
         assets: AssetsConfig {
             assets: vec![(VNRG::get(), root_key, false, 1)],
