@@ -2672,13 +2672,22 @@ impl_runtime_apis! {
         }
     }
 
-    impl dynamic_energy_runtime_api::DynamicEnergyApi<Block> for Runtime {
+    impl dynamic_energy_runtime_api::DynamicEnergyApi<Block, Balance> for Runtime {
         fn exchange_rate() -> Option<FixedU128> {
             DynamicEnergy::exchange_rate()
         }
 
         fn calculate_warehouse_capacity_multiplier() -> FixedU128 {
             DynamicEnergy::calculate_warehouse_capacity_multiplier()
+        }
+
+
+        fn generation_rate_parameters() -> dynamic_energy_runtime_api::GenerationRateParameters<Balance> {
+            DynamicEnergy::generation_rate_parameters()
+        }
+
+        fn exchange_rate_parameters() -> dynamic_energy_runtime_api::ExchangeRateParameters<Balance> {
+            DynamicEnergy::exchange_rate_parameters()
         }
     }
 
