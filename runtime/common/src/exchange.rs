@@ -36,6 +36,54 @@ pub trait QuotePrice {
     ) -> Option<Self::Balance>;
 }
 
+/// Trait providing methods to quote swap prices for exchanging native currency for energy.
+pub trait QuotePriceNativeForEnergy {
+    /// Measurement units of the asset classes for pricing.
+    type Balance: Balance;
+    /// Type representing the kind of assets for which the price is being quoted.
+    type AssetKind;
+    /// A constant representing the native asset kind.
+    type NativeAsset: Get<Self::AssetKind>;
+    /// A constant representing the energy asset kind.
+    type EnergyAsset: Get<Self::AssetKind>;
+
+    /// Quotes the amount of energy resulting from swapping the exact `amount` of native currency.
+    fn quote_price_exact_tokens_for_tokens(
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance>;
+
+    /// Quotes the amount of native currency required to obtain the exact `amount` of energy.
+    fn quote_price_tokens_for_exact_tokens(
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance>;
+}
+
+/// Trait providing methods to quote swap prices for exchanging energy for native currency.
+pub trait QuotePriceEnergyForNative {
+    /// Measurement units of the asset classes for pricing.
+    type Balance: Balance;
+    /// Type representing the kind of assets for which the price is being quoted.
+    type AssetKind;
+    /// A constant representing the native asset kind.
+    type NativeAsset: Get<Self::AssetKind>;
+    /// A constant representing the energy asset kind.
+    type EnergyAsset: Get<Self::AssetKind>;
+
+    /// Quotes the amount of native currency resulting from swapping the exact `amount` of energy.
+    fn quote_price_exact_tokens_for_tokens(
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance>;
+
+    /// Quotes the amount of energy required to obtain the exact `amount` of native currency.
+    fn quote_price_tokens_for_exact_tokens(
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance>;
+}
+
 /// A trait for swapping native currency for energy.
 pub trait SwapNativeForEnergy<AccountId> {
     /// The type in which the assets for swapping are measured.
@@ -92,6 +140,80 @@ pub trait SwapEnergyForNative<AccountId> {
 pub struct NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>(
     core::marker::PhantomData<(Exchange, NativeAsset, EnergyAsset)>,
 );
+
+impl<Exchange, NativeAsset, EnergyAsset> QuotePriceNativeForEnergy
+    for NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>
+where
+    Exchange: QuotePrice,
+    NativeAsset: Get<Exchange::AssetKind>,
+    EnergyAsset: Get<Exchange::AssetKind>,
+{
+    type Balance = Exchange::Balance;
+    type AssetKind = Exchange::AssetKind;
+    type NativeAsset = NativeAsset;
+    type EnergyAsset = EnergyAsset;
+
+    fn quote_price_exact_tokens_for_tokens(
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance> {
+        Exchange::quote_price_exact_tokens_for_tokens(
+            NativeAsset::get(),
+            EnergyAsset::get(),
+            amount,
+            include_fee,
+        )
+    }
+
+    fn quote_price_tokens_for_exact_tokens(
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance> {
+        Exchange::quote_price_tokens_for_exact_tokens(
+            NativeAsset::get(),
+            EnergyAsset::get(),
+            amount,
+            include_fee,
+        )
+    }
+}
+
+impl<Exchange, NativeAsset, EnergyAsset> QuotePriceEnergyForNative
+    for NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>
+where
+    Exchange: QuotePrice,
+    NativeAsset: Get<Exchange::AssetKind>,
+    EnergyAsset: Get<Exchange::AssetKind>,
+{
+    type Balance = Exchange::Balance;
+    type AssetKind = Exchange::AssetKind;
+    type NativeAsset = NativeAsset;
+    type EnergyAsset = EnergyAsset;
+
+    fn quote_price_exact_tokens_for_tokens(
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance> {
+        Exchange::quote_price_exact_tokens_for_tokens(
+            EnergyAsset::get(),
+            NativeAsset::get(),
+            amount,
+            include_fee,
+        )
+    }
+
+    fn quote_price_tokens_for_exact_tokens(
+        amount: Self::Balance,
+        include_fee: bool,
+    ) -> Option<Self::Balance> {
+        Exchange::quote_price_tokens_for_exact_tokens(
+            EnergyAsset::get(),
+            NativeAsset::get(),
+            amount,
+            include_fee,
+        )
+    }
+}
 
 impl<AccountId, Exchange, NativeAsset, EnergyAsset> SwapNativeForEnergy<AccountId>
     for NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>
@@ -186,6 +308,48 @@ where
             send_to,
             keep_alive,
         )
+    }
+}
+
+impl QuotePriceNativeForEnergy for () {
+    type Balance = u32;
+    type AssetKind = ();
+    type NativeAsset = ();
+    type EnergyAsset = ();
+
+    fn quote_price_exact_tokens_for_tokens(
+        _amount: Self::Balance,
+        _include_fee: bool,
+    ) -> Option<Self::Balance> {
+        None
+    }
+
+    fn quote_price_tokens_for_exact_tokens(
+        _amount: Self::Balance,
+        _include_fee: bool,
+    ) -> Option<Self::Balance> {
+        None
+    }
+}
+
+impl QuotePriceEnergyForNative for () {
+    type Balance = u32;
+    type AssetKind = ();
+    type NativeAsset = ();
+    type EnergyAsset = ();
+
+    fn quote_price_exact_tokens_for_tokens(
+        _amount: Self::Balance,
+        _include_fee: bool,
+    ) -> Option<Self::Balance> {
+        None
+    }
+
+    fn quote_price_tokens_for_exact_tokens(
+        _amount: Self::Balance,
+        _include_fee: bool,
+    ) -> Option<Self::Balance> {
+        None
     }
 }
 

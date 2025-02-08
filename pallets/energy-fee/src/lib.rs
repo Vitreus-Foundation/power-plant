@@ -34,7 +34,6 @@
 //! - `OnChargeTransaction`: Handles standard transaction fee withdrawal
 //! - `OnChargeEVMTransaction`: Handles EVM transaction fee withdrawal
 //! - `MultiplierUpdate`: Controls fee multiplier adjustments
-//! - `TokenExchange`: Manages VTRS/VNRG exchange for fees
 //!
 //! # Configuration
 //!
@@ -42,8 +41,7 @@
 //! - `ManageOrigin`: Authority allowed to modify pallet parameters
 //! - `GetConstantFee`: Base fee value
 //! - `CustomFee`: Custom fee calculation logic
-//! - `FeeTokenBalanced`: Fee token (VNRG) operations
-//! - `MainTokenBalanced`: Main token (VTRS) operations
+//! - `EnergyAsset`: Fee token (VNRG) operations
 //! - `EnergyExchange`: Token exchange mechanism
 //!
 //! # Warning
@@ -54,29 +52,26 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 pub use crate::extension::CheckEnergyFee;
-pub use crate::traits::{CustomFee, TokenExchange};
-use frame_support::dispatch::{DispatchClass, RawOrigin};
+pub use crate::traits::CustomFee;
+use frame_support::dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo};
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect},
     tokens::{Fortitude, Imbalance, Precision, Preservation},
-    Currency,
 };
 pub use pallet::*;
-use pallet_asset_rate::Pallet as AssetRatePallet;
 pub(crate) use pallet_evm::{AddressMapping, OnChargeEVMTransaction};
 pub use pallet_transaction_payment::{
     Config as TransactionPaymentConfig, Multiplier, MultiplierUpdate, OnChargeTransaction,
 };
-use vitreus_runtime_common::OnEnergyBurn;
+use vitreus_runtime_common::{OnEnergyBurn, QuotePriceNativeForEnergy, SwapNativeForEnergy};
 
 use sp_arithmetic::{traits::CheckedAdd, ArithmeticError::Overflow};
 use sp_core::{RuntimeDebug, H160, U256};
 use sp_runtime::{
-    traits::{Convert, DispatchInfoOf, Get, PostDispatchInfoOf, Saturating, Zero},
+    traits::{Convert, DispatchInfoOf, Dispatchable, Get, PostDispatchInfoOf, Saturating, Zero},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
     DispatchError, Perbill, Perquintill,
 };
-use sp_std::boxed::Box;
 
 #[cfg(test)]
 pub(crate) mod mock;
@@ -91,16 +86,11 @@ pub mod extension;
 pub mod traits;
 
 pub(crate) type BalanceOf<T> =
-    <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance;
+    <<T as pallet_evm::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance;
 pub(crate) type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
-pub(crate) type NegativeImbalanceOf<T> =
-    <<T as Config>::MainTokenBalanced as Currency<AccountIdOf<T>>>::NegativeImbalance;
-
-pub type MainCreditOf<T> =
-    Credit<<T as frame_system::Config>::AccountId, <T as Config>::MainTokenBalanced>;
 
 pub type FeeCreditOf<T> =
-    Credit<<T as frame_system::Config>::AccountId, <T as Config>::FeeTokenBalanced>;
+    Credit<<T as frame_system::Config>::AccountId, <T as Config>::EnergyAsset>;
 
 /// Fee type inferred from call info
 #[derive(PartialEq, Eq, RuntimeDebug)]
@@ -129,7 +119,7 @@ pub mod pallet {
         weights::Weight,
     };
     use frame_system::pallet_prelude::*;
-    use sp_arithmetic::{traits::One, FixedU128};
+    use sp_arithmetic::traits::One;
 
     /// Pallet which implements fee withdrawal traits
     #[pallet::pallet]
@@ -137,46 +127,39 @@ pub mod pallet {
 
     #[pallet::config]
     pub trait Config:
-        frame_system::Config
-        + pallet_transaction_payment::Config
-        + pallet_asset_rate::Config
-        + pallet_evm::Config
+        frame_system::Config + pallet_transaction_payment::Config + pallet_evm::Config
     {
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
-        /// Defines who can manage parameters of this pallet
+
+        /// Defines who can manage parameters of this pallet.
         type ManageOrigin: EnsureOrigin<Self::RuntimeOrigin>;
-        /// Get constant fee value
+
+        /// Get constant fee value.
         type GetConstantFee: Get<BalanceOf<Self>>;
-        /// Calculates custom fee for selected pallets/extrinsics/execution scenarios
+
+        /// Calculates custom fee for selected pallets/extrinsics/execution scenarios.
         type CustomFee: CustomFee<
             Self::RuntimeCall,
             DispatchInfoOf<Self::RuntimeCall>,
             BalanceOf<Self>,
             Self::GetConstantFee,
         >;
-        /// Fee token manipulation traits
-        type FeeTokenBalanced: Balanced<Self::AccountId>
+
+        /// Energy asset.
+        type EnergyAsset: Balanced<Self::AccountId>
             + Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
-        /// Chain currency (main token) manipulation traits
-        type MainTokenBalanced: Currency<Self::AccountId, Balance = BalanceOf<Self>>;
-        /// Exchange main token -> fee token
-        /// Could not be used for fee token -> main token exchange
-        type EnergyExchange: TokenExchange<
-            Self::AccountId,
-            Self::MainTokenBalanced,
-            Self::FeeTokenBalanced,
-            Self::MainRecycleDestination,
-            BalanceOf<Self>,
-        >;
-        /// Used for initializing the pallet
-        type EnergyAssetId: Get<Self::AssetKind>;
-        /// Handler for when a fee has been withdrawn
+
+        /// A type used for swapping native currency for energy.
+        type EnergyExchange: QuotePriceNativeForEnergy<Balance = BalanceOf<Self>>
+            + SwapNativeForEnergy<Self::AccountId, Balance = BalanceOf<Self>>;
+
+        /// Handler for when a fee has been withdrawn.
         type OnWithdrawFee: OnWithdrawFeeHandler<Self::AccountId>;
-        /// Handler for when energy has been burned
+
+        /// Handler for when energy has been burned.
         type OnEnergyBurn: OnEnergyBurn<BalanceOf<Self>>;
 
-        type MainRecycleDestination: OnUnbalanced<NegativeImbalanceOf<Self>>;
         type FeeRecycleDestination: OnUnbalanced<FeeCreditOf<Self>>;
     }
 
@@ -230,24 +213,6 @@ pub mod pallet {
         UpperFeeMultiplierUpdated {
             new_multiplier: Multiplier,
         },
-    }
-
-    #[pallet::genesis_config]
-    #[derive(frame_support::DefaultNoBound)]
-    pub struct GenesisConfig<T: Config> {
-        pub initial_energy_rate: FixedU128,
-        pub _config: PhantomData<T>,
-    }
-
-    #[pallet::genesis_build]
-    impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
-        fn build(&self) {
-            let _ = AssetRatePallet::<T>::create(
-                RawOrigin::Root.into(),
-                Box::new(T::EnergyAssetId::get()),
-                self.initial_energy_rate,
-            );
-        }
     }
 
     #[pallet::hooks]
@@ -308,9 +273,12 @@ pub mod pallet {
         }
     }
 
-    impl<T: Config> OnChargeTransaction<T> for Pallet<T> {
+    impl<T: Config> OnChargeTransaction<T> for Pallet<T>
+    where
+        T::RuntimeCall: Dispatchable<Info = DispatchInfo, PostInfo = PostDispatchInfo>,
+    {
         type Balance = BalanceOf<T>;
-        type LiquidityInfo = Option<Credit<T::AccountId, T::FeeTokenBalanced>>;
+        type LiquidityInfo = Option<Credit<T::AccountId, T::EnergyAsset>>;
 
         fn withdraw_fee(
             who: &T::AccountId,
@@ -327,56 +295,81 @@ pub mod pallet {
             {
                 CallFee::Regular(fee) => fee,
                 CallFee::EVM(fee) => {
-                    Self::on_low_balance_exchange(who, fee).map_err(|_| {
+                    Self::ensure_sufficient_energy(who, fee).map_err(|_| {
                         TransactionValidityError::Invalid(InvalidTransaction::Payment)
                     })?;
-                    return Ok(None);
+                    Zero::zero()
                 },
             };
 
-            Self::on_low_balance_exchange(who, fee)
+            if fee.is_zero() {
+                return Ok(None);
+            }
+
+            Self::ensure_sufficient_energy(who, fee)
                 .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
 
-            let imbalance = T::FeeTokenBalanced::withdraw(
+            let imbalance = T::EnergyAsset::withdraw(
                 who,
                 fee,
                 Precision::Exact,
                 Preservation::Expendable,
                 Fortitude::Force,
             )
-            .inspect(|_| {
-                Self::deposit_event(Event::<T>::EnergyFeePaid { who: who.clone(), amount: fee });
-            })
             .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
 
-            Self::update_burned_energy(imbalance.peek())
-                .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
             T::OnWithdrawFee::on_withdraw_fee(who);
 
             Ok(Some(imbalance))
         }
 
-        // TODO: make a refund for calls non-elligible for custom fee
-        // TODO: decide what to do with fee debt generated during exchange (if it would remain
-        // relevant after EnergyBroker implementation)
         fn correct_and_deposit_fee(
-            _who: &T::AccountId,
-            _dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
-            _post_info: &PostDispatchInfoOf<T::RuntimeCall>,
+            who: &T::AccountId,
+            dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+            post_info: &PostDispatchInfoOf<T::RuntimeCall>,
             _corrected_fee: Self::Balance,
-            _tip: Self::Balance,
+            tip: Self::Balance,
             already_withdrawn: Self::LiquidityInfo,
         ) -> Result<(), TransactionValidityError> {
-            if let Some(credit) = already_withdrawn {
-                T::FeeRecycleDestination::on_unbalanced(credit);
+            if let Some(paid) = already_withdrawn {
+                let refund_imbalance = if post_info.pays_fee(dispatch_info) == Pays::No {
+                    T::EnergyAsset::deposit(
+                        who,
+                        // don't refund tip
+                        paid.peek().saturating_sub(tip),
+                        Precision::BestEffort,
+                    )
+                    .ok()
+                } else {
+                    None
+                };
+
+                // merge the imbalance caused by paying the fees and refunding parts of it again.
+                let adjusted_paid: Credit<T::AccountId, T::EnergyAsset> = paid
+                    .offset(refund_imbalance.unwrap_or_default())
+                    .same()
+                    .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+
+                let actual_fee = adjusted_paid.peek();
+                let (tip, fee) = adjusted_paid.split(tip);
+                T::FeeRecycleDestination::on_unbalanceds(Some(fee).into_iter().chain(Some(tip)));
+
+                Self::update_burned_energy(actual_fee)
+                    .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+
+                Self::deposit_event(Event::<T>::EnergyFeePaid {
+                    who: who.clone(),
+                    amount: actual_fee,
+                });
             }
+
             Ok(())
         }
     }
 
     impl<T: Config> OnChargeEVMTransaction<T> for Pallet<T> {
         // Kept type as Option to satisfy bound of Default
-        type LiquidityInfo = Option<Credit<T::AccountId, T::FeeTokenBalanced>>;
+        type LiquidityInfo = Option<Credit<T::AccountId, T::EnergyAsset>>;
 
         fn withdraw_fee(
             who: &H160,
@@ -389,10 +382,10 @@ pub mod pallet {
             let const_energy_fee = T::CustomFee::ethereum_fee();
             let account_id = <T as pallet_evm::Config>::AddressMapping::into_account_id(*who);
 
-            Self::on_low_balance_exchange(&account_id, const_energy_fee)
+            Self::ensure_sufficient_energy(&account_id, const_energy_fee)
                 .map_err(|_| pallet_evm::Error::<T>::BalanceLow)?;
 
-            let imbalance = T::FeeTokenBalanced::withdraw(
+            let imbalance = T::EnergyAsset::withdraw(
                 &account_id,
                 const_energy_fee,
                 Precision::Exact,
@@ -436,35 +429,41 @@ impl<T: Config> Pallet<T> {
     /// Check if user `who` owns reducible balance of token used for charging fees
     /// of at least `amount`, and if no, then exchange missing funds for user `who` using
     /// `T::EnergyExchange`
-    fn on_low_balance_exchange(
+    fn ensure_sufficient_energy(
         who: &T::AccountId,
         amount: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
         let current_balance =
-            T::FeeTokenBalanced::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
+            T::EnergyAsset::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
 
-        (current_balance < amount)
-            .then(|| {
-                T::EnergyExchange::exchange_from_output(who, amount.saturating_sub(current_balance))
-                    .map(|_| ())
-            })
-            .map_or(Ok(()), |v| v)
+        if current_balance < amount {
+            T::EnergyExchange::swap_tokens_for_exact_tokens(
+                who.clone(),
+                amount.saturating_sub(current_balance),
+                true,
+            )
+            .map(|_| ())
+        } else {
+            Ok(())
+        }
     }
 
     /// Calculate fee as VTRS and VNRG parts based on the presence of VNRG tokens
     pub fn calculate_fee_parts(
         who: &T::AccountId,
         amount: BalanceOf<T>,
-    ) -> Result<(BalanceOf<T>, BalanceOf<T>), DispatchError> {
+    ) -> Option<(BalanceOf<T>, BalanceOf<T>)> {
         let current_balance =
-            T::FeeTokenBalanced::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
+            T::EnergyAsset::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
 
         if current_balance < amount {
-            let missing_amount =
-                T::EnergyExchange::convert_from_output(amount.saturating_sub(current_balance))?;
-            Ok((current_balance, missing_amount))
+            T::EnergyExchange::quote_price_tokens_for_exact_tokens(
+                amount.saturating_sub(current_balance),
+                true,
+            )
+            .map(|amount_in| (current_balance, amount_in))
         } else {
-            Ok((amount, BalanceOf::<T>::zero()))
+            Some((amount, BalanceOf::<T>::zero()))
         }
     }
 
