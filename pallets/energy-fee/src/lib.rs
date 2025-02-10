@@ -70,7 +70,7 @@ use sp_core::{RuntimeDebug, H160, U256};
 use sp_runtime::{
     traits::{Convert, DispatchInfoOf, Dispatchable, Get, PostDispatchInfoOf, Saturating, Zero},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
-    DispatchError, Perbill, Perquintill,
+    DispatchError, Perbill, Permill, Perquintill,
 };
 
 #[cfg(test)]
@@ -160,7 +160,11 @@ pub mod pallet {
         /// Handler for when energy has been burned.
         type OnEnergyBurn: OnEnergyBurn<BalanceOf<Self>>;
 
-        type FeeRecycleDestination: OnUnbalanced<FeeCreditOf<Self>>;
+        /// Proportion of the transaction fee that is recycled.
+        type FeeRecyclingRate: Get<Permill>;
+
+        /// Recipient of the recycled fees.
+        type FeeRecyclingDestination: OnUnbalanced<FeeCreditOf<Self>>;
     }
 
     #[pallet::storage]
@@ -352,10 +356,14 @@ pub mod pallet {
 
                 let actual_fee = adjusted_paid.peek();
                 let (tip, fee) = adjusted_paid.split(tip);
-                T::FeeRecycleDestination::on_unbalanceds(Some(fee).into_iter().chain(Some(tip)));
 
-                Self::update_burned_energy(actual_fee)
-                    .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+                let recycled_amount = T::FeeRecyclingRate::get() * fee.peek();
+                let (recycled, burned) = fee.split(recycled_amount);
+
+                T::FeeRecyclingDestination::on_unbalanced(recycled);
+
+                Self::update_burned_energy(burned.peek());
+                Self::update_burned_energy(tip.peek());
 
                 Self::deposit_event(Event::<T>::EnergyFeePaid {
                     who: who.clone(),
@@ -399,8 +407,7 @@ pub mod pallet {
                 });
             })
             .map_err(|_| pallet_evm::Error::<T>::BalanceLow)?;
-            Self::update_burned_energy(imbalance.peek())
-                .map_err(|_| pallet_evm::Error::<T>::FeeOverflow)?;
+
             T::OnWithdrawFee::on_withdraw_fee(&account_id);
 
             Ok(Some(imbalance))
@@ -413,7 +420,11 @@ pub mod pallet {
             already_withdrawn: Self::LiquidityInfo,
         ) -> Self::LiquidityInfo {
             if let Some(credit) = already_withdrawn {
-                T::FeeRecycleDestination::on_unbalanced(credit);
+                let recycled_amount = T::FeeRecyclingRate::get() * credit.peek();
+                let (recycled, burned) = credit.split(recycled_amount);
+
+                T::FeeRecyclingDestination::on_unbalanced(recycled);
+                Self::update_burned_energy(burned.peek());
             };
             None
         }
@@ -467,14 +478,10 @@ impl<T: Config> Pallet<T> {
         }
     }
 
-    fn update_burned_energy(amount: BalanceOf<T>) -> Result<(), DispatchError> {
+    fn update_burned_energy(amount: BalanceOf<T>) {
         T::OnEnergyBurn::on_energy_burn(amount);
 
-        BurnedEnergy::<T>::mutate(|current_burned| {
-            *current_burned =
-                current_burned.checked_add(&amount).ok_or(DispatchError::Arithmetic(Overflow))?;
-            Ok(())
-        })
+        BurnedEnergy::<T>::mutate(|total| total.saturating_accrue(amount));
     }
 
     fn validate_call_fee(fee_amount: BalanceOf<T>) -> Result<(), DispatchError> {

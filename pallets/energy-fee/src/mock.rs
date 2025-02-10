@@ -11,7 +11,7 @@ use frame_support::{
     parameter_types,
     traits::{
         fungible::{Balanced, ItemOf, Mutate},
-        tokens::{imbalance::SplitTwoWays, Fortitude, Precision, Preservation},
+        tokens::{Fortitude, Precision, Preservation},
         AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything, OnUnbalanced,
     },
     weights::{ConstantMultiplier, IdentityFee},
@@ -130,6 +130,7 @@ impl pallet_balances::Config for Test {
 
 parameter_types! {
     pub const FeeBurnAccount: AccountId = FEE_DEST;
+    pub const FeeRecyclingRate: Permill = Permill::from_percent(20);
 }
 
 pub struct FeeBurnDestination<GetAccountId: Get<AccountId>>(PhantomData<GetAccountId>);
@@ -220,10 +221,10 @@ impl pallet_energy_fee::Config for Test {
     type CustomFee = EnergyFee;
     type EnergyAsset = BalancesVNRG;
     type EnergyExchange = MockEnergyExchange;
-    type FeeRecycleDestination =
-        SplitTwoWays<Balance, FeeCreditOf<Test>, FeeBurnDestination<FeeBurnAccount>, (), 2, 8>;
     type OnWithdrawFee = ();
     type OnEnergyBurn = ();
+    type FeeRecyclingRate = FeeRecyclingRate;
+    type FeeRecyclingDestination = FeeBurnDestination<FeeBurnAccount>;
 }
 
 impl pallet_timestamp::Config for Test {

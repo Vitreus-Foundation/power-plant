@@ -218,12 +218,21 @@ impl OnUnbalanced<NegativeImbalanceOf<Runtime>> for StakingRewardsSink {
     }
 }
 
+parameter_types! {
+    pub storage TreasuryTargetBalance: Balance = 100_000_000 * UNITS;
+    pub storage FeeRecyclingBaseRate: Permill = Permill::from_percent(12);
+    pub storage FeeRecyclingScalingFactor: Permill = Permill::from_percent(2);
+}
+
 impl pallet_treasury_extension::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type EnergyAsset = EnergyItem;
     type EnergyExchange = EnergyBrokerExchange;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = StakingRewardsSink;
+    type TreasuryTargetBalance = TreasuryTargetBalance;
+    type FeeRecyclingBaseRate = FeeRecyclingBaseRate;
+    type FeeRecyclingScalingFactor = FeeRecyclingScalingFactor;
     type WeightInfo = pallet_treasury_extension::weights::SubstrateWeight<Runtime>;
 }
 

@@ -130,7 +130,11 @@ fn withdraw_fee_with_custom_coefficients_works() {
             initial_energy_balance.saturating_sub(constant_fee),
         );
 
-        assert_eq!(BurnedEnergy::<Test>::get(), constant_fee);
+        assert_eq!(
+            BurnedEnergy::<Test>::get(),
+            Perbill::from_rational(8u32, 10u32).mul_floor(constant_fee)
+        );
+
         System::assert_has_event(
             Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into(),
         );
@@ -211,7 +215,11 @@ fn evm_withdraw_fee_works() {
             Perbill::from_rational(2u32, 10u32).mul_floor(constant_fee)
         );
 
-        assert_eq!(BurnedEnergy::<Test>::get(), constant_fee);
+        assert_eq!(
+            BurnedEnergy::<Test>::get(),
+            Perbill::from_rational(8u32, 10u32).mul_floor(constant_fee)
+        );
+
         System::assert_has_event(
             Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into(),
         );

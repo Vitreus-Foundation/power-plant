@@ -47,7 +47,7 @@ use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug}
 use frame_support::traits::tokens::{
     fungible,
     fungible::Inspect as FungibleInspect,
-    imbalance::ResolveAssetTo,
+    imbalance::{ResolveAssetTo, ResolveTo},
     nonfungibles_v2::{Inspect, InspectEnumerable},
     DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
 };
@@ -1032,7 +1032,9 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyExchange = EnergyBrokerExchange;
     type OnWithdrawFee = NacManaging;
     type OnEnergyBurn = (EnergyBroker, DynamicEnergy);
-    type FeeRecycleDestination = ();
+    type FeeRecyclingRate = TreasuryExtension;
+    type FeeRecyclingDestination =
+        ResolveTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::EnergyAsset>;
 }
 
 parameter_types! {
@@ -1844,7 +1846,7 @@ construct_runtime!(
         TechnicalCommittee: pallet_collective::<Instance2> = 48,
         TechnicalMembership: pallet_membership::<Instance1> = 49,
         Treasury: pallet_treasury = 50,
-        TreasuryExtension: pallet_treasury_extension::{Pallet, Event<T>} = 51,
+        TreasuryExtension: pallet_treasury_extension = 51,
         Bounties: pallet_bounties = 52,
         Democracy: pallet_democracy = 53,
         Elections: pallet_elections_phragmen = 54,
