@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Add dynamic fee recycling rate calculation based on treasury balance
+- Refund fees for successful `payout_stakers` calls
 - Runtime API to access parameters used for energy generation and exchange rate calculations
 
 ### Changed
