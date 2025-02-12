@@ -4573,6 +4573,19 @@ fn payout_stakers_handles_weight_refund() {
 }
 
 #[test]
+fn payout_stakers_first_payout_free_works() {
+    ExtBuilder::default().build_and_execute(|| {
+        start_active_era(1);
+
+        let res = PowerPlant::payout_stakers(RuntimeOrigin::signed(1), 11, 0);
+        assert_eq!(res.unwrap().pays_fee, Pays::No);
+
+        let res = PowerPlant::payout_stakers(RuntimeOrigin::signed(1), 11, 0);
+        assert_eq!(res.unwrap_err().post_info.pays_fee, Pays::Yes);
+    });
+}
+
+#[test]
 fn bond_during_era_correctly_populates_claimed_rewards() {
     ExtBuilder::default().has_stakers(false).build_and_execute(|| {
         // Era = None

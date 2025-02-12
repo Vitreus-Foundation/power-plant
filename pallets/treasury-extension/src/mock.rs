@@ -158,6 +158,9 @@ impl crate::Config for Test {
     type EnergyExchange = ();
     type SpendThreshold = SpendThreshold;
     type OnRecycled = ();
+    type TreasuryTargetBalance = ();
+    type FeeRecyclingBaseRate = ();
+    type FeeRecyclingScalingFactor = ();
     type WeightInfo = ();
 }
 

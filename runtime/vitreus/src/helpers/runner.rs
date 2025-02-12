@@ -30,12 +30,12 @@ where
         + pallet_transaction_payment::Config,
     <T as frame_system::Config>::RuntimeCall:
         From<Call<T>> + GetDispatchInfo + Dispatchable<Info = DispatchInfo>,
-    <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance: Into<U256>,
+    <<T as pallet_evm::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance: Into<U256>,
     <<T as pallet_evm::Config>::Currency as Currency<AccountIdOf<T>>>::Balance:
         TryFrom<U256> + Into<U256>,
     <T as pallet_transaction_payment::Config>::OnChargeTransaction: OnChargeTransaction<
         T,
-        Balance = <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance,
+        Balance = <<T as pallet_evm::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance,
     >,
 {
     type Error = pallet_evm::Error<T>;
@@ -244,10 +244,10 @@ where
         + pallet_transaction_payment::Config
         + pallet_energy_fee::Config,
     T::RuntimeCall: GetDispatchInfo + Dispatchable<Info = DispatchInfo>,
-    <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance: Into<U256>,
+    <<T as pallet_evm::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance: Into<U256>,
     <T as pallet_transaction_payment::Config>::OnChargeTransaction: OnChargeTransaction<
         T,
-        Balance = <<T as pallet_asset_rate::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance,
+        Balance = <<T as pallet_evm::Config>::Currency as Inspect<AccountIdOf<T>>>::Balance,
     >,
 {
     fn evm_user_has_permission(

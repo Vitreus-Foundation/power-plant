@@ -1531,6 +1531,7 @@ pub mod pallet {
         /// The origin of this call must be _Signed_. Any account can call this function, even if
         /// it is not one of the stakers.
         ///
+        /// Transaction fees will be waived if the call is successful.
         /// ## Complexity
         /// - At most O(MaxCooperatorRewardedPerValidator).
         #[pallet::call_index(19)]
