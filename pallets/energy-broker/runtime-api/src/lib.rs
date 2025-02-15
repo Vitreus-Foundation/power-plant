@@ -4,9 +4,11 @@ use parity_scale_codec::{Decode, Encode};
 use sp_runtime::{FixedU128, Percent};
 
 sp_api::decl_runtime_apis! {
-    #[api_version(1)]
-    pub trait EnergyBrokerApi<Balance>
+    #[api_version(2)]
+    pub trait EnergyBrokerApi<AccountId, AssetKind, Balance>
     where
+        AccountId: Encode,
+        AssetKind: Encode,
         Balance: Decode + Encode,
     {
         /// Estimates energy received from a given amount of native currency.
@@ -14,6 +16,24 @@ sp_api::decl_runtime_apis! {
 
         /// Estimates native currency received from a given amount of energy.
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance>;
+
+        /// Quotes the amount of `asset2` resulting from swapping the exact `amount` of `asset1`.
+        fn quote_price_exact_tokens_for_tokens(
+            who: Option<AccountId>,
+            asset1: AssetKind,
+            asset2: AssetKind,
+            amount: Balance,
+            include_fee: bool,
+        ) -> Option<Balance>;
+
+        /// Quotes the amount of `asset1` required to obtain the exact `amount` of `asset2`.
+        fn quote_price_tokens_for_exact_tokens(
+            who: Option<AccountId>,
+            asset1: AssetKind,
+            asset2: AssetKind,
+            amount: Balance,
+            include_fee: bool,
+        ) -> Option<Balance>;
 
         /// Returns the current exchange rate between energy and native currency.
         fn energy_exchange_rate() -> Option<FixedU128>;

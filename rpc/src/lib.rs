@@ -21,7 +21,8 @@ use sp_runtime::RuntimeAppPublic;
 
 // Runtime
 use vitreus_power_plant_runtime::{
-    opaque::Block, AccountId, Balance, BlockNumber, CollectionId, ItemId, Nonce, RuntimeCall,
+    opaque::Block, AccountId, Balance, BlockNumber, CollectionId, ItemId, NativeOrAssetId, Nonce,
+    RuntimeCall,
 };
 
 mod consensus_data_providers;
@@ -80,7 +81,7 @@ where
     C::Api: BlockBuilder<Block>,
     C::Api: fp_rpc::ConvertTransactionRuntimeApi<Block>,
     C::Api: fp_rpc::EthereumRuntimeRPCApi<Block>,
-    C::Api: energy_broker_rpc::EnergyBrokerRuntimeApi<Block, Balance>,
+    C::Api: energy_broker_rpc::EnergyBrokerRuntimeApi<Block, AccountId, NativeOrAssetId, Balance>,
     C::Api: energy_fee_rpc::EnergyFeeRuntimeApi<Block, AccountId, Balance, RuntimeCall>,
     C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block, AccountId>,
     C::Api: nfts_rpc::NftsRuntimeApi<Block, AccountId, CollectionId, ItemId>,
