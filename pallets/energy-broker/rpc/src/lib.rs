@@ -36,25 +36,27 @@ pub trait EnergyBrokerApi<BlockHash> {
     fn current_warehouse_level(&self, at: Option<BlockHash>) -> RpcResult<Percent>;
 }
 
-pub struct EnergyBroker<C, B, Balance> {
+pub struct EnergyBroker<C, B, AccountId, AssetKind, Balance> {
     client: Arc<C>,
-    _marker: std::marker::PhantomData<(B, Balance)>,
+    _marker: std::marker::PhantomData<(B, AccountId, AssetKind, Balance)>,
 }
 
-impl<C, B, Balance> EnergyBroker<C, B, Balance> {
+impl<C, B, AccountId, AssetKind, Balance> EnergyBroker<C, B, AccountId, AssetKind, Balance> {
     pub fn new(client: Arc<C>) -> Self {
         Self { client, _marker: Default::default() }
     }
 }
 
-impl<C, Block, Balance> EnergyBrokerApiServer<<Block as BlockT>::Hash>
-    for EnergyBroker<C, Block, Balance>
+impl<C, Block, AccountId, AssetKind, Balance> EnergyBrokerApiServer<<Block as BlockT>::Hash>
+    for EnergyBroker<C, Block, AccountId, AssetKind, Balance>
 where
     Block: BlockT,
+    AccountId: Encode + Send + Sync + 'static,
+    AssetKind: Encode + Send + Sync + 'static,
     Balance: Decode + Encode + Into<NumberOrHex> + TryFrom<NumberOrHex> + Send + Sync + 'static,
     C: Send + Sync + 'static,
     C: ProvideRuntimeApi<Block> + HeaderBackend<Block>,
-    C::Api: EnergyBrokerRuntimeApi<Block, Balance>,
+    C::Api: EnergyBrokerRuntimeApi<Block, AccountId, AssetKind, Balance>,
 {
     fn estimate_energy_from_native(
         &self,

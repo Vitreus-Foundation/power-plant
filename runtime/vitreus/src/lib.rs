@@ -125,7 +125,8 @@ use sp_consensus_beefy::{
 };
 use sp_runtime::transaction_validity::InvalidTransaction;
 use vitreus_runtime_common::{
-    ExposureMultiplier, NativeEnergyExchange, QuotePriceEnergyForNative, QuotePriceNativeForEnergy,
+    ExposureMultiplier, NativeEnergyExchange, QuotePrice, QuotePriceEnergyForNative,
+    QuotePriceNativeForEnergy,
 };
 use xcm::{
     latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
@@ -936,7 +937,7 @@ impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
     type BenchmarkHelper = ();
 }
 
-type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<AssetId>;
+pub type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<AssetId>;
 
 pub type NativeAndAssets = frame_support::traits::fungible::UnionOf<
     Balances,
@@ -2699,13 +2700,33 @@ impl_runtime_apis! {
         }
     }
 
-    impl energy_broker_runtime_api::EnergyBrokerApi<Block, Balance> for Runtime {
+    impl energy_broker_runtime_api::EnergyBrokerApi<Block, AccountId, NativeOrAssetId, Balance> for Runtime {
         fn estimate_energy_from_native(amount: Balance) -> Option<Balance> {
             <EnergyBrokerExchange as QuotePriceNativeForEnergy>::quote_price_exact_tokens_for_tokens(amount, true)
         }
 
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance> {
             <EnergyBrokerExchange as QuotePriceEnergyForNative>::quote_price_exact_tokens_for_tokens(amount, true)
+        }
+
+        fn quote_price_exact_tokens_for_tokens(
+            _who: Option<AccountId>,
+            asset1: NativeOrAssetId,
+            asset2: NativeOrAssetId,
+            amount: Balance,
+            include_fee: bool,
+        ) -> Option<Balance> {
+            EnergyBroker::quote_price_exact_tokens_for_tokens(asset1, asset2, amount, include_fee)
+        }
+
+        fn quote_price_tokens_for_exact_tokens(
+            _who: Option<AccountId>,
+            asset1: NativeOrAssetId,
+            asset2: NativeOrAssetId,
+            amount: Balance,
+            include_fee: bool,
+        ) -> Option<Balance> {
+            EnergyBroker::quote_price_tokens_for_exact_tokens(asset1, asset2, amount, include_fee)
         }
 
         fn energy_exchange_rate() -> Option<FixedU128> {
