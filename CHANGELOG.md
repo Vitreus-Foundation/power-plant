@@ -4,6 +4,12 @@ Changelog for the Vitreus runtime.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- Add `pallet-assets-freezer`
+
 ## [210] - 2025-02-11
 
 ### Added

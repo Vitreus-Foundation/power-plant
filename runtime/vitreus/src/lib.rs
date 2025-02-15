@@ -488,12 +488,17 @@ impl pallet_assets::Config for Runtime {
     type MetadataDepositPerByte = MetadataDepositPerByte;
     type ApprovalDeposit = ApprovalDeposit;
     type StringLimit = AssetsStringLimit;
-    type Freezer = ();
+    type Freezer = AssetsFreezer;
     type Extra = ();
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = ();
+}
+
+impl pallet_assets_freezer::Config for Runtime {
+    type RuntimeFreezeReason = RuntimeFreezeReason;
+    type RuntimeEvent = RuntimeEvent;
 }
 
 impl pallet_reputation::Config for Runtime {
@@ -1809,6 +1814,7 @@ construct_runtime!(
         TransactionPayment: pallet_transaction_payment = 7,
         Sudo: pallet_sudo = 8,
         PoolAssets: pallet_assets::<Instance1> = 9,
+        AssetsFreezer: pallet_assets_freezer = 10,
 
         EVM: pallet_evm = 15,
         EVMChainId: pallet_evm_chain_id = 16,
