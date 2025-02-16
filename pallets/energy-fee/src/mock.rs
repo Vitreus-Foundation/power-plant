@@ -1,23 +1,22 @@
 use core::marker::PhantomData;
 
-use crate::traits::{AssetsBalancesConverter, NativeExchange};
 use crate::{self as pallet_energy_fee, FeeCreditOf};
 use crate::{CallFee, CustomFee};
 use fp_account::AccountId20;
 
-use frame_support::dispatch::GetDispatchInfo;
-use frame_support::traits::fungible::{Balanced, ItemOf};
-use frame_support::traits::tokens::imbalance::SplitTwoWays;
-use frame_support::traits::{Currency, OnUnbalanced};
-use frame_support::weights::{ConstantMultiplier, IdentityFee};
 use frame_support::{
     derive_impl,
+    dispatch::GetDispatchInfo,
     pallet_prelude::Weight,
     parameter_types,
-    traits::{AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything},
+    traits::{
+        fungible::{Balanced, ItemOf, Mutate},
+        tokens::{Fortitude, Precision, Preservation},
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything, OnUnbalanced,
+    },
+    weights::{ConstantMultiplier, IdentityFee},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
-use pallet_balances::NegativeImbalance;
 use pallet_ethereum::PostLogContent;
 use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::{Compact, Encode};
@@ -27,8 +26,9 @@ use sp_core::{Get, H256, U256};
 
 use sp_runtime::{
     traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup, Zero},
-    BuildStorage, Permill,
+    BuildStorage, DispatchError, Permill,
 };
+use vitreus_runtime_common::{QuotePriceNativeForEnergy, SwapNativeForEnergy};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -37,13 +37,11 @@ pub(crate) type AssetId = u32;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
-pub(crate) type EnergyRate = AssetsBalancesConverter<Test, AssetRate>;
 
 pub(crate) const VNRG: AssetId = 1;
 pub(crate) const ALICE: AccountId = AccountId20([1u8; 20]);
 pub(crate) const BOB: AccountId = AccountId20([2u8; 20]);
 pub(crate) const FEE_DEST: AccountId = AccountId20([3u8; 20]);
-pub(crate) const MAIN_DEST: AccountId = AccountId20([4u8; 20]);
 
 /// 10^9 with 18 decimals
 /// 1 VNRG = VNRG_TO_VTRS_RATE VTRS
@@ -60,13 +58,10 @@ frame_support::construct_runtime!(
         Assets: pallet_assets,
         TransactionPayment: pallet_transaction_payment,
         EnergyFee: pallet_energy_fee,
-        AssetRate: pallet_asset_rate,
-        EVMChainId: pallet_evm_chain_id,
         Timestamp: pallet_timestamp,
         Ethereum: pallet_ethereum,
         EVM: pallet_evm,
         BaseFee: pallet_base_fee,
-        Sudo: pallet_sudo,
     }
 );
 
@@ -133,19 +128,9 @@ impl pallet_balances::Config for Test {
     type RuntimeHoldReason = ();
 }
 
-impl pallet_asset_rate::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type CreateOrigin = EnsureRoot<AccountId>;
-    type RemoveOrigin = EnsureRoot<AccountId>;
-    type UpdateOrigin = EnsureRoot<AccountId>;
-    type AssetKind = AssetId;
-    type Currency = BalancesVTRS;
-    type WeightInfo = ();
-}
-
 parameter_types! {
     pub const FeeBurnAccount: AccountId = FEE_DEST;
-    pub const MainBurnAccount: AccountId = MAIN_DEST;
+    pub const FeeRecyclingRate: Permill = Permill::from_percent(20);
 }
 
 pub struct FeeBurnDestination<GetAccountId: Get<AccountId>>(PhantomData<GetAccountId>);
@@ -159,34 +144,87 @@ impl<GetAccountId: Get<AccountId>> OnUnbalanced<FeeCreditOf<Test>>
     }
 }
 
-pub struct MainBurnDestination<GetAccountId: Get<AccountId>>(PhantomData<GetAccountId>);
+pub struct MockEnergyExchange;
 
-impl<GetAccountId: Get<AccountId>> OnUnbalanced<NegativeImbalance<Test>>
-    for MainBurnDestination<GetAccountId>
-{
-    fn on_nonzero_unbalanced(amount: NegativeImbalance<Test>) {
-        let account_id = GetAccountId::get();
-        <BalancesVTRS as Currency<AccountId>>::resolve_creating(&account_id, amount);
+impl QuotePriceNativeForEnergy for MockEnergyExchange {
+    type Balance = u128;
+    type AssetKind = ();
+    type NativeAsset = ();
+    type EnergyAsset = ();
+
+    fn quote_price_exact_tokens_for_tokens(
+        amount: Self::Balance,
+        _include_fee: bool,
+    ) -> Option<Self::Balance> {
+        VNRG_TO_VTRS_RATE.reciprocal().map(|rate| rate.saturating_mul_int(amount))
+    }
+
+    fn quote_price_tokens_for_exact_tokens(
+        amount: Self::Balance,
+        _include_fee: bool,
+    ) -> Option<Self::Balance> {
+        Some(VNRG_TO_VTRS_RATE.saturating_mul_int(amount))
     }
 }
 
-pub(crate) type EnergyExchange =
-    NativeExchange<AssetId, BalancesVTRS, BalancesVNRG, EnergyRate, GetVNRG>;
+impl SwapNativeForEnergy<AccountId> for MockEnergyExchange {
+    type Balance = u128;
+    type AssetKind = ();
+    type NativeAsset = ();
+    type EnergyAsset = ();
+
+    fn swap_exact_tokens_for_tokens(
+        who: AccountId,
+        amount_in: Self::Balance,
+        _keep_alive: bool,
+    ) -> Result<Self::Balance, DispatchError> {
+        let amount_out = Self::quote_price_exact_tokens_for_tokens(amount_in, true)
+            .ok_or(DispatchError::Unavailable)?;
+
+        BalancesVTRS::burn_from(
+            &who,
+            amount_in,
+            Preservation::Preserve,
+            Precision::Exact,
+            Fortitude::Polite,
+        )?;
+        BalancesVNRG::mint_into(&who, amount_out)?;
+
+        Ok(amount_out)
+    }
+
+    fn swap_tokens_for_exact_tokens(
+        who: AccountId,
+        amount_out: Self::Balance,
+        _keep_alive: bool,
+    ) -> Result<Self::Balance, DispatchError> {
+        let amount_in = Self::quote_price_tokens_for_exact_tokens(amount_out, true)
+            .ok_or(DispatchError::Unavailable)?;
+
+        BalancesVTRS::burn_from(
+            &who,
+            amount_in,
+            Preservation::Preserve,
+            Precision::Exact,
+            Fortitude::Polite,
+        )?;
+        BalancesVNRG::mint_into(&who, amount_out)?;
+
+        Ok(amount_out)
+    }
+}
 
 impl pallet_energy_fee::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type ManageOrigin = EnsureRoot<AccountId>;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
-    type FeeTokenBalanced = BalancesVNRG;
-    type MainTokenBalanced = BalancesVTRS;
-    type EnergyExchange = EnergyExchange;
-    type EnergyAssetId = GetVNRG;
-    type MainRecycleDestination = MainBurnDestination<MainBurnAccount>;
-    type FeeRecycleDestination =
-        SplitTwoWays<Balance, FeeCreditOf<Test>, FeeBurnDestination<FeeBurnAccount>, (), 2, 8>;
+    type EnergyAsset = BalancesVNRG;
+    type EnergyExchange = MockEnergyExchange;
     type OnWithdrawFee = ();
     type OnEnergyBurn = ();
+    type FeeRecyclingRate = FeeRecyclingRate;
+    type FeeRecyclingDestination = FeeBurnDestination<FeeBurnAccount>;
 }
 
 impl pallet_timestamp::Config for Test {
@@ -195,8 +233,6 @@ impl pallet_timestamp::Config for Test {
     type OnTimestampSet = ();
     type WeightInfo = ();
 }
-
-impl pallet_evm_chain_id::Config for Test {}
 
 impl pallet_ethereum::Config for Test {
     type RuntimeEvent = RuntimeEvent;
@@ -235,7 +271,7 @@ impl pallet_evm::Config for Test {
     type BlockGasLimit = BlockGasLimit;
     type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
     type CallOrigin = EnsureAccountId20;
-    type ChainId = EVMChainId;
+    type ChainId = ConstU64<42>;
     type Currency = BalancesVTRS;
     type Runner = pallet_evm::runner::stack::Runner<Self>;
     type RuntimeEvent = RuntimeEvent;
@@ -334,11 +370,6 @@ impl pallet_transaction_payment::Config for Test {
     type FeeMultiplierUpdate = EnergyFee;
 }
 
-impl pallet_sudo::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type RuntimeCall = RuntimeCall;
-    type WeightInfo = ();
-}
 // Build genesis storage according to the mock runtime.
 pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
@@ -355,7 +386,6 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
             (BOB, VTRS_INITIAL_BALANCE),
             // required for account creation
             (FEE_DEST, 1),
-            (MAIN_DEST, 1),
         ],
     }
     .assimilate_storage(&mut t)
@@ -369,17 +399,6 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
     }
     .assimilate_storage(&mut t)
     .unwrap();
-
-    pallet_energy_fee::GenesisConfig::<Test> {
-        initial_energy_rate: VNRG_TO_VTRS_RATE,
-        ..Default::default()
-    }
-    .assimilate_storage(&mut t)
-    .unwrap();
-
-    pallet_sudo::GenesisConfig::<Test> { key: Some(ALICE) }
-        .assimilate_storage(&mut t)
-        .unwrap();
 
     t.into()
 }

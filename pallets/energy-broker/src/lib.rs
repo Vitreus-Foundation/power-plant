@@ -376,40 +376,6 @@ pub mod pallet {
             Ok((amount_in, fee))
         }
 
-        /// Swap the exact amount of native asset into energy asset.
-        pub fn swap_exact_native_for_energy(
-            sender: T::AccountId,
-            amount_in: T::Balance,
-        ) -> Result<T::Balance, DispatchError> {
-            let recipient = sender.clone();
-
-            Self::do_swap_exact_tokens_for_tokens(
-                sender,
-                recipient,
-                (T::NativeAsset::get(), T::EnergyAsset::get()),
-                amount_in,
-                None,
-                true,
-            )
-        }
-
-        /// Swap any amount of native asset to get the exact amount of energy asset.
-        pub fn swap_native_for_exact_energy(
-            sender: T::AccountId,
-            amount_out: T::Balance,
-        ) -> Result<T::Balance, DispatchError> {
-            let recipient = sender.clone();
-
-            Self::do_swap_tokens_for_exact_tokens(
-                sender,
-                recipient,
-                (T::NativeAsset::get(), T::EnergyAsset::get()),
-                amount_out,
-                None,
-                true,
-            )
-        }
-
         pub(crate) fn do_swap_exact_tokens_for_tokens(
             sender: T::AccountId,
             recipient: T::AccountId,

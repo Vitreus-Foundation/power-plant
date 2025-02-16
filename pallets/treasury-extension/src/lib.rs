@@ -41,7 +41,7 @@ use frame_support::{
 use pallet_treasury::{BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
 use sp_arithmetic::{
     traits::{Saturating, Zero},
-    Permill,
+    FixedPointNumber, FixedU64, Permill,
 };
 use vitreus_runtime_common::{OnSessionChange, SessionIndex, SwapEnergyForNative};
 
@@ -91,9 +91,25 @@ pub mod pallet {
         /// What to do with the recycled funds
         type OnRecycled: OnUnbalanced<NegativeImbalanceOf<Self, I>>;
 
+        /// The target balance the treasury aims to maintain.
+        #[pallet::constant]
+        type TreasuryTargetBalance: Get<BalanceOf<Self, I>>;
+
+        /// The base rate used for fee recycling calculations.
+        #[pallet::constant]
+        type FeeRecyclingBaseRate: Get<Permill>;
+
+        /// A multiplier adjusting the recycling rate based on deviations from `TreasuryTargetBalance`.
+        #[pallet::constant]
+        type FeeRecyclingScalingFactor: Get<Permill>;
+
         /// Weight information for functions in this pallet.
         type WeightInfo: WeightInfo;
     }
+
+    #[pallet::storage]
+    #[pallet::getter(fn fee_recycling_rate)]
+    pub type FeeRecyclingRate<T: Config<I>, I: 'static = ()> = StorageValue<_, Permill, ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -122,6 +138,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
         {
             Self::deposit_event(Event::EnergyExchanged { amount });
         }
+    }
+
+    fn update_fee_recycling_rate(total_weight: &mut Weight) {
+        let target_balance = T::TreasuryTargetBalance::get();
+
+        let rate = if !target_balance.is_zero() {
+            total_weight.saturating_accrue(T::DbWeight::get().reads_writes(3, 0));
+
+            let base_rate = FixedU64::from(T::FeeRecyclingBaseRate::get());
+            let scaling_factor = FixedU64::from(T::FeeRecyclingScalingFactor::get());
+            let ratio =
+                FixedU64::saturating_from_rational(Self::treasury_balance(), target_balance);
+
+            base_rate
+                .saturating_add(scaling_factor)
+                .saturating_sub(scaling_factor * ratio)
+                .into_clamped_perthing()
+        } else {
+            Permill::zero()
+        };
+
+        total_weight.saturating_accrue(T::DbWeight::get().reads_writes(1, 1));
+        FeeRecyclingRate::<T, I>::put(rate);
     }
 }
 
@@ -152,11 +191,19 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
 
         *budget_remaining = budget_remaining.saturating_sub(unrecycled_amount);
         *total_weight += <T as pallet::Config<I>>::WeightInfo::spend_funds();
+
+        Self::update_fee_recycling_rate(total_weight);
     }
 }
 
 impl<T: Config<I>, I: 'static> OnSessionChange for Pallet<T, I> {
     fn on_new_session(_index: SessionIndex) {
         Self::exchange_energy()
+    }
+}
+
+impl<T: Config<I>, I: 'static> Get<Permill> for Pallet<T, I> {
+    fn get() -> Permill {
+        Self::fee_recycling_rate()
     }
 }
