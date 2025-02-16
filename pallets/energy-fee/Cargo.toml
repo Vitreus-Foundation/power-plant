@@ -10,10 +10,7 @@ targets = ["x86_64-unknown-linux-gnu"]
 [dependencies]
 frame-support = { workspace = true }
 frame-system = { workspace = true }
-pallet-asset-rate = { workspace = true }
-pallet-balances = { workspace = true }
 pallet-evm = { workspace = true }
-pallet-sudo = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
@@ -25,16 +22,13 @@ sp-std = { workspace = true }
 vitreus-runtime-common = { workspace = true, default-features = false }
 
 [dev-dependencies]
-pallet-assets = { workspace = true, default-features = true }
+pallet-assets = { workspace = true }
+pallet-balances = { workspace = true }
 pallet-ethereum = { workspace = true }
-pallet-evm-chain-id = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-timestamp = { workspace = true }
 pallet-nfts = { workspace = true }
-pallet-staking-reward-curve = { workspace = true }
-substrate-test-utils = { workspace = true }
 frame-benchmarking = { workspace = true }
-rand_chacha = { workspace = true }
 ethereum-types = { workspace = true }
 fp-account = { workspace = true }
 pallet-base-fee = { workspace = true }
@@ -47,15 +41,12 @@ std = [
     "frame-benchmarking/std",
     "frame-support/std",
     "frame-system/std",
-    "pallet-asset-rate/std",
     "pallet-balances/std",
     "pallet-base-fee/std",
     "pallet-ethereum/std",
-    "pallet-evm-chain-id/std",
     "pallet-evm/std",
     "pallet-nfts/std",
     "pallet-reputation/std",
-    "pallet-sudo/std",
     "pallet-transaction-payment/std",
     "parity-scale-codec/std",
     "scale-info/std",

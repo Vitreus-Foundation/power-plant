@@ -378,7 +378,9 @@ impl<T: Config> Pallet<T> {
 
         T::Reward::on_unbalanced(total_imbalance);
         debug_assert!(cooperator_payout_count <= T::MaxCooperatorRewardedPerValidator::get());
-        Ok(Some(T::ThisWeightInfo::payout_stakers_alive_staked(cooperator_payout_count)).into())
+
+        let weight = T::ThisWeightInfo::payout_stakers_alive_staked(cooperator_payout_count);
+        Ok((Some(weight), Pays::No).into())
     }
 
     /// Actually make a payment to a staker. This uses the currency's reward function

@@ -2,6 +2,8 @@
 #![warn(clippy::all)]
 
 use frame_support::traits::{tokens::Balance, Get, UnixTime};
+use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
+use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{
         AtLeast32BitUnsigned, CheckedConversion, CheckedDiv, CheckedMul, Debug, Ensure, One, Zero,
@@ -30,6 +32,26 @@ const SECONDS_IN_YEAR: u32 = 60 * 60 * 24 * 36525 / 100;
 
 type EnergyOf<T> = <T as Config>::Balance;
 type StakeOf<T> = <T as Config>::Balance;
+
+#[derive(Default, Decode, Encode, MaxEncodedLen, TypeInfo)]
+pub struct GenerationRateParameters<Balance> {
+    energy_burn: Balance,
+    new_rate: Option<Balance>,
+    old_rate: Option<Balance>,
+    smooth_factor: u32,
+}
+
+#[derive(Default, Decode, Encode, MaxEncodedLen, TypeInfo)]
+pub struct ExchangeRateParameters<Balance> {
+    energy_sale: Balance,
+    total_stake: Balance,
+    duration: u32,
+    apr: u32,
+    multiplier: FixedU128,
+    new_rate: Option<FixedU128>,
+    old_rate: Option<FixedU128>,
+    smooth_factor: u32,
+}
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -118,6 +140,18 @@ pub mod pallet {
     #[pallet::storage]
     pub type ExchangeRateSmoothFactor<T: Config> =
         StorageValue<_, u32, ValueQuery, DefaultSmoothFactor<T>>;
+
+    /// Parameters used to calculate the generation rate.
+    #[pallet::storage]
+    #[pallet::getter(fn generation_rate_parameters)]
+    pub type GenerationRateParams<T: Config> =
+        StorageValue<_, GenerationRateParameters<T::Balance>, ValueQuery>;
+
+    /// Parameters used to calculate the exchange rate.
+    #[pallet::storage]
+    #[pallet::getter(fn exchange_rate_parameters)]
+    pub type ExchangeRateParams<T: Config> =
+        StorageValue<_, ExchangeRateParameters<T::Balance>, ValueQuery>;
 
     /// VNRG/VTRS exchange rate.
     #[pallet::storage]
@@ -327,13 +361,28 @@ impl<T: Config> Pallet<T> {
     }
 
     fn update_generation_rate(index: SessionIndex) {
-        let rate = EnergyBurnOverride::<T>::get().unwrap_or_else(SessionEnergyBurn::<T>::get);
+        let energy_burn =
+            EnergyBurnOverride::<T>::get().unwrap_or_else(SessionEnergyBurn::<T>::get);
 
-        log::info!(target: LOG_TARGET, "Calculate generation rate: {:?}", rate);
+        let new_rate = Self::calculate_generation_rate(energy_burn).inspect(
+            |rate| log::info!(target: LOG_TARGET, "Calculate generation rate: {:?}", rate),
+        );
 
-        let old_rate = index.checked_sub(1).map(EnergyGeneration::<T>::get).unwrap_or_default();
+        let old_rate = index.checked_sub(1).map(EnergyGeneration::<T>::get);
+        let smooth_factor = GenerationRateSmoothFactor::<T>::get();
 
-        let rate = Self::smooth_value(rate, old_rate, GenerationRateSmoothFactor::<T>::get());
+        GenerationRateParams::<T>::put(GenerationRateParameters {
+            energy_burn,
+            new_rate,
+            old_rate,
+            smooth_factor,
+        });
+
+        let rate = Self::smooth_value(
+            new_rate.unwrap_or_default(),
+            old_rate.unwrap_or_default(),
+            smooth_factor,
+        );
 
         EnergyGeneration::<T>::insert(index, rate);
     }
@@ -341,11 +390,6 @@ impl<T: Config> Pallet<T> {
     fn update_exchange_rate(index: SessionIndex, duration: u32) {
         let energy_sale =
             EnergySaleOverride::<T>::get().unwrap_or_else(SessionEnergySale::<T>::get);
-
-        if energy_sale.is_zero() {
-            log::trace!(target: LOG_TARGET, "Energy sale is zero; skipping exchange rate update");
-            return;
-        }
 
         let total_stake = TotalStakeOverride::<T>::get()
             .or_else(|| {
@@ -356,63 +400,88 @@ impl<T: Config> Pallet<T> {
             })
             .unwrap_or_default();
 
-        let rate = match Self::calculate_exchange_rate(
-            T::HigherPrecisionBalance::from(energy_sale),
-            T::HigherPrecisionBalance::from(total_stake),
-            duration,
-        ) {
-            Some(rate) => {
-                log::info!(target: LOG_TARGET, "Calculate exchange rate: {}", rate);
-                rate
-            },
-            None => {
-                log::warn!(
-                    target: LOG_TARGET,
-                    "Failed to calculate exchange rate: energy_sale: {:?}, total_stake: {:?}",
-                    energy_sale, total_stake
-                );
-                return;
-            },
+        let apr = Self::annual_percentage_rate();
+        let multiplier = Self::calculate_warehouse_capacity_multiplier();
+
+        let new_rate = if !energy_sale.is_zero() {
+            match Self::calculate_exchange_rate(energy_sale, total_stake, duration, apr, multiplier)
+            {
+                Some(rate) => {
+                    log::info!(target: LOG_TARGET, "Calculate exchange rate: {}", rate);
+                    Some(rate)
+                },
+                None => {
+                    log::warn!(
+                        target: LOG_TARGET,
+                        "Failed to calculate exchange rate: energy_sale: {:?}, total_stake: {:?}",
+                        energy_sale, total_stake
+                    );
+                    None
+                },
+            }
+        } else {
+            None
         };
 
-        let old_rate = ExchangeRate::<T>::get().unwrap_or_default();
+        let old_rate = ExchangeRate::<T>::get();
+        let smooth_factor = ExchangeRateSmoothFactor::<T>::get();
 
-        let rate = FixedU128::from_inner(Self::smooth_value(
-            rate.into_inner(),
-            old_rate.into_inner(),
-            ExchangeRateSmoothFactor::<T>::get(),
-        ));
+        ExchangeRateParams::<T>::put(ExchangeRateParameters {
+            energy_sale,
+            total_stake,
+            duration,
+            apr,
+            multiplier,
+            new_rate,
+            old_rate,
+            smooth_factor,
+        });
 
-        ExchangeRate::<T>::put(rate);
+        if let Some(new_rate) = new_rate {
+            let old_rate = old_rate.unwrap_or_default();
 
-        Self::deposit_event(Event::ExchangeRateUpdated { rate });
+            let rate = FixedU128::from_inner(Self::smooth_value(
+                new_rate.into_inner(),
+                old_rate.into_inner(),
+                smooth_factor,
+            ));
+
+            ExchangeRate::<T>::put(rate);
+
+            Self::deposit_event(Event::ExchangeRateUpdated { rate });
+        }
+    }
+
+    fn calculate_generation_rate(energy_burn: EnergyOf<T>) -> Option<EnergyOf<T>> {
+        Some(energy_burn)
     }
 
     /// Calculates exchange rate by the following rule:
     /// `energy_sale * seconds_in_year / total_stake * seconds_in_period * APR * capacity_multiplier`
     fn calculate_exchange_rate(
-        energy_sale: T::HigherPrecisionBalance,
-        total_stake: T::HigherPrecisionBalance,
-        session_duration: u32,
+        energy_sale: EnergyOf<T>,
+        total_stake: StakeOf<T>,
+        duration: u32,
+        apr: u32,
+        multiplier: FixedU128,
     ) -> Option<FixedU128> {
-        let period = session_duration.into();
-        let multiplier = Self::calculate_warehouse_capacity_multiplier().into_inner().into();
+        let multiplier = multiplier.into_inner();
 
         log::trace!(
             target: LOG_TARGET,
-            "energy_sale: {:?}, total_stake: {:?}, period: {:?}, multiplier: {:?}",
-            energy_sale, total_stake, period, multiplier
+            "energy_sale: {:?}, total_stake: {:?}, duration: {:?}, multiplier: {:?}",
+            energy_sale, total_stake, duration, multiplier
         );
 
-        let numerator = energy_sale
+        let numerator = T::HigherPrecisionBalance::from(energy_sale)
             .checked_mul(&1000u32.into())? // APR
-            .checked_mul(&SECONDS_IN_YEAR.into())? // period
+            .checked_mul(&SECONDS_IN_YEAR.into())? // duration
             .checked_mul(&FixedU128::DIV.into())?; // multiplier
 
-        let denominator = total_stake
-            .checked_mul(&Self::annual_percentage_rate().into())?
-            .checked_mul(&period)?
-            .checked_mul(&multiplier)?;
+        let denominator = T::HigherPrecisionBalance::from(total_stake)
+            .checked_mul(&apr.into())?
+            .checked_mul(&duration.into())?
+            .checked_mul(&multiplier.into())?;
 
         let raw = numerator
             .checked_mul(&FixedU128::DIV.into())?

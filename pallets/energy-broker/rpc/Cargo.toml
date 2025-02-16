@@ -6,8 +6,9 @@ edition.workspace = true
 
 [dependencies]
 energy-broker-runtime-api = { workspace = true }
-parity-scale-codec = { workspace = true }
 jsonrpsee = { workspace = true, features = ["server", "macros"] }
-sp-runtime = { workspace = true, default-features = false }
+parity-scale-codec = { workspace = true }
+sp-api = { workspace = true }
 sp-blockchain = { workspace = true }
-sp-api = { workspace = true, default-features = false }
+sp-rpc = { workspace = true }
+sp-runtime = { workspace = true }

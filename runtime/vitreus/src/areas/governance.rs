@@ -1,9 +1,9 @@
 use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
-    EnergyBroker, EnergyItem, MoreThanHalfCouncil, NativeAsset, OriginCaller, Preimage, Runtime,
+    EnergyBrokerExchange, EnergyItem, MoreThanHalfCouncil, OriginCaller, Preimage, Runtime,
     RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee,
     Treasury, TreasuryExtension, DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS,
-    PICO_VTRS, UNITS, VNRG,
+    PICO_VTRS, UNITS,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
@@ -17,7 +17,6 @@ use sp_core::ConstU32;
 use sp_runtime::traits::{AccountIdConversion, IdentityLookup};
 use sp_runtime::{Perbill, Permill};
 use static_assertions::const_assert;
-use vitreus_runtime_common::NativeEnergyExchange;
 
 pub const fn deposit(items: u32, bytes: u32) -> Balance {
     items as Balance * 200 * NANO_VTRS + (bytes as Balance) * PICO_VTRS
@@ -219,12 +218,21 @@ impl OnUnbalanced<NegativeImbalanceOf<Runtime>> for StakingRewardsSink {
     }
 }
 
+parameter_types! {
+    pub storage TreasuryTargetBalance: Balance = 100_000_000 * UNITS;
+    pub storage FeeRecyclingBaseRate: Permill = Permill::from_percent(12);
+    pub storage FeeRecyclingScalingFactor: Permill = Permill::from_percent(2);
+}
+
 impl pallet_treasury_extension::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type EnergyAsset = EnergyItem;
-    type EnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, VNRG>;
+    type EnergyExchange = EnergyBrokerExchange;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = StakingRewardsSink;
+    type TreasuryTargetBalance = TreasuryTargetBalance;
+    type FeeRecyclingBaseRate = FeeRecyclingBaseRate;
+    type FeeRecyclingScalingFactor = FeeRecyclingScalingFactor;
     type WeightInfo = pallet_treasury_extension::weights::SubstrateWeight<Runtime>;
 }
 
