@@ -55,7 +55,7 @@ pub use crate::extension::CheckEnergyFee;
 pub use crate::traits::CustomFee;
 use frame_support::dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo};
 use frame_support::traits::{
-    fungible::{Balanced, Credit, Inspect},
+    fungible::{Balanced, Credit, Inspect, Mutate},
     tokens::{Fortitude, Imbalance, Precision, Preservation},
 };
 pub use pallet::*;
@@ -148,7 +148,18 @@ pub mod pallet {
 
         /// Energy asset.
         type EnergyAsset: Balanced<Self::AccountId>
-            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>;
+            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>
+            + Mutate<Self::AccountId>;
+
+        /// Static Energy asset.
+        type StaticEnergyAsset: Balanced<Self::AccountId>
+            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>
+            + Mutate<Self::AccountId>;
+
+        /// Liquid Energy asset.
+        type LiquidEnergyAsset: Balanced<Self::AccountId>
+            + Inspect<Self::AccountId, Balance = BalanceOf<Self>>
+            + Mutate<Self::AccountId>;
 
         /// A type used for swapping native currency for energy.
         type EnergyExchange: QuotePriceNativeForEnergy<Balance = BalanceOf<Self>>
@@ -442,39 +453,85 @@ impl<T: Config> Pallet<T> {
     /// `T::EnergyExchange`
     fn ensure_sufficient_energy(
         who: &T::AccountId,
-        amount: BalanceOf<T>,
+        mut required: BalanceOf<T>,
     ) -> Result<(), DispatchError> {
-        let current_balance =
-            T::EnergyAsset::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
+        required.saturating_reduce(T::EnergyAsset::reducible_balance(
+            who,
+            Preservation::Expendable,
+            Fortitude::Force,
+        ));
 
-        if current_balance < amount {
-            T::EnergyExchange::swap_tokens_for_exact_tokens(
-                who.clone(),
-                amount.saturating_sub(current_balance),
-                true,
-            )
-            .map(|_| ())
-        } else {
-            Ok(())
+        if required > BalanceOf::<T>::zero() {
+            let amount = Self::exchange_energy::<T::StaticEnergyAsset>(who, required)?;
+            required.saturating_reduce(amount);
         }
+
+        if required > BalanceOf::<T>::zero() {
+            let amount = Self::exchange_energy::<T::LiquidEnergyAsset>(who, required)?;
+            required.saturating_reduce(amount);
+        }
+
+        if required > BalanceOf::<T>::zero() {
+            T::EnergyExchange::swap_tokens_for_exact_tokens(who.clone(), required, true)?;
+        }
+
+        Ok(())
     }
 
-    /// Calculate fee as VTRS and VNRG parts based on the presence of VNRG tokens
+    fn exchange_energy<A>(
+        who: &T::AccountId,
+        required: BalanceOf<T>,
+    ) -> Result<BalanceOf<T>, DispatchError>
+    where
+        A: Inspect<T::AccountId, Balance = BalanceOf<T>> + Mutate<T::AccountId>,
+    {
+        if A::reducible_balance(who, Preservation::Expendable, Fortitude::Force).is_zero() {
+            return Ok(BalanceOf::<T>::zero());
+        }
+
+        let amount = A::burn_from(
+            who,
+            required,
+            Preservation::Expendable,
+            Precision::BestEffort,
+            Fortitude::Force,
+        )?;
+
+        T::EnergyAsset::mint_into(who, amount)
+    }
+
+    /// Calculate fee as native and energy parts based on the presence of energy tokens
     pub fn calculate_fee_parts(
         who: &T::AccountId,
-        amount: BalanceOf<T>,
+        required: BalanceOf<T>,
     ) -> Option<(BalanceOf<T>, BalanceOf<T>)> {
-        let current_balance =
+        let mut total_energy =
             T::EnergyAsset::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
 
-        if current_balance < amount {
+        if total_energy < required {
+            total_energy.saturating_accrue(T::StaticEnergyAsset::reducible_balance(
+                who,
+                Preservation::Expendable,
+                Fortitude::Force,
+            ));
+        }
+
+        if total_energy < required {
+            total_energy.saturating_accrue(T::LiquidEnergyAsset::reducible_balance(
+                who,
+                Preservation::Expendable,
+                Fortitude::Force,
+            ));
+        }
+
+        if total_energy < required {
             T::EnergyExchange::quote_price_tokens_for_exact_tokens(
-                amount.saturating_sub(current_balance),
+                required.saturating_sub(total_energy),
                 true,
             )
-            .map(|amount_in| (current_balance, amount_in))
+            .map(|amount_in| (total_energy, amount_in))
         } else {
-            Some((amount, BalanceOf::<T>::zero()))
+            Some((required, BalanceOf::<T>::zero()))
         }
     }
 

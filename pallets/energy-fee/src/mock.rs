@@ -37,6 +37,8 @@ pub(crate) type AssetId = u32;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
+pub(crate) type StaticEnergyAsset = ItemOf<Assets, ConstU32<2>, AccountId>;
+pub(crate) type LiquidEnergyAsset = ItemOf<Assets, ConstU32<3>, AccountId>;
 
 pub(crate) const VNRG: AssetId = 1;
 pub(crate) const ALICE: AccountId = AccountId20([1u8; 20]);
@@ -220,6 +222,8 @@ impl pallet_energy_fee::Config for Test {
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
     type EnergyAsset = BalancesVNRG;
+    type StaticEnergyAsset = StaticEnergyAsset;
+    type LiquidEnergyAsset = LiquidEnergyAsset;
     type EnergyExchange = MockEnergyExchange;
     type OnWithdrawFee = ();
     type OnEnergyBurn = ();
