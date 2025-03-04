@@ -33,8 +33,8 @@
 use frame_support::{
     pallet_prelude::*,
     traits::{
-        fungible::Inspect,
-        tokens::{Fortitude, Preservation},
+        fungible::{Inspect, Mutate},
+        tokens::{Fortitude, Precision, Preservation},
         Currency, Get, Imbalance, IsType, OnUnbalanced,
     },
 };
@@ -48,9 +48,8 @@ use vitreus_runtime_common::{OnSessionChange, SessionIndex, SwapEnergyForNative}
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-type ExchangeBalanceOf<T, I> = <<T as Config<I>>::EnergyExchange as SwapEnergyForNative<
-    <T as frame_system::Config>::AccountId,
->>::Balance;
+type EnergyBalanceOf<T, I> =
+    <<T as Config<I>>::EnergyAsset as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
 #[cfg(test)]
 mod mock;
@@ -80,10 +79,27 @@ pub mod pallet {
             + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// Energy asset.
-        type EnergyAsset: Inspect<Self::AccountId, Balance = ExchangeBalanceOf<Self, I>>;
+        type EnergyAsset: Inspect<Self::AccountId> + Mutate<Self::AccountId>;
 
-        /// A type used for swapping energy for native currency.
-        type EnergyExchange: SwapEnergyForNative<Self::AccountId>;
+        /// Static Energy asset.
+        type StaticEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>
+            + Mutate<Self::AccountId>;
+
+        /// Liquid Energy asset.
+        type LiquidEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>
+            + Mutate<Self::AccountId>;
+
+        /// A type used for swapping Static Energy for native currency.
+        type StaticEnergyExchange: SwapEnergyForNative<
+            Self::AccountId,
+            Balance = EnergyBalanceOf<Self, I>,
+        >;
+
+        /// A type used for swapping Liquid Energy for native currency.
+        type LiquidEnergyExchange: SwapEnergyForNative<
+            Self::AccountId,
+            Balance = EnergyBalanceOf<Self, I>,
+        >;
 
         /// Funds ratio to be recycled.
         type SpendThreshold: Get<Permill>;
@@ -115,7 +131,7 @@ pub mod pallet {
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config<I>, I: 'static = ()> {
         Recycled { recyled_funds: BalanceOf<T, I> },
-        EnergyExchanged { amount: ExchangeBalanceOf<T, I> },
+        EnergyExchanged { amount: EnergyBalanceOf<T, I> },
     }
 }
 
@@ -127,16 +143,70 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     fn exchange_energy() {
         let account_id = pallet_treasury::Pallet::<T, I>::account_id();
 
-        let amount = T::EnergyAsset::reducible_balance(
+        let _ = Self::convert_energy_to_liquid_energy(&account_id);
+
+        let mut amount = EnergyBalanceOf::<T, I>::zero();
+
+        let static_energy_balance = T::StaticEnergyAsset::reducible_balance(
             &account_id,
             Preservation::Expendable,
             Fortitude::Polite,
         );
 
-        if !amount.is_zero()
-            && T::EnergyExchange::swap_exact_tokens_for_tokens(account_id, amount, false).is_ok()
-        {
-            Self::deposit_event(Event::EnergyExchanged { amount });
+        if !static_energy_balance.is_zero() {
+            let swap_result = T::StaticEnergyExchange::swap_exact_tokens_for_tokens(
+                account_id.clone(),
+                static_energy_balance,
+                false,
+            );
+
+            if swap_result.is_ok() {
+                amount.saturating_accrue(static_energy_balance);
+            }
+        }
+
+        let liquid_energy_balance = T::LiquidEnergyAsset::reducible_balance(
+            &account_id,
+            Preservation::Expendable,
+            Fortitude::Polite,
+        );
+
+        if !liquid_energy_balance.is_zero() {
+            let swap_result = T::LiquidEnergyExchange::swap_exact_tokens_for_tokens(
+                account_id.clone(),
+                liquid_energy_balance,
+                false,
+            );
+
+            if swap_result.is_ok() {
+                amount.saturating_accrue(liquid_energy_balance);
+            }
+        }
+
+        Self::deposit_event(Event::EnergyExchanged { amount });
+    }
+
+    fn convert_energy_to_liquid_energy(
+        account_id: &T::AccountId,
+    ) -> Result<EnergyBalanceOf<T, I>, DispatchError> {
+        let energy_balance = T::EnergyAsset::reducible_balance(
+            account_id,
+            Preservation::Expendable,
+            Fortitude::Polite,
+        );
+
+        if !energy_balance.is_zero() {
+            let burned_amount = T::EnergyAsset::burn_from(
+                account_id,
+                energy_balance,
+                Preservation::Expendable,
+                Precision::Exact,
+                Fortitude::Polite,
+            )?;
+
+            T::LiquidEnergyAsset::mint_into(account_id, burned_amount)
+        } else {
+            Ok(EnergyBalanceOf::<T, I>::zero())
         }
     }
 

@@ -1,9 +1,10 @@
 use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
-    EnergyBrokerExchange, EnergyItem, MoreThanHalfCouncil, OriginCaller, Preimage, Runtime,
-    RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin, Scheduler, TechnicalCommittee,
-    Treasury, TreasuryExtension, DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS,
-    PICO_VTRS, UNITS,
+    EnergyAsset, EnergyBroker, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAsset,
+    NativeEnergyExchange, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent,
+    RuntimeHoldReason, RuntimeOrigin, Scheduler, StaticEnergyAsset, TechnicalCommittee, Treasury,
+    TreasuryExtension, DAYS, HOURS, LNRG, MICRO_VTRS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS,
+    PICO_VTRS, SNRG, UNITS,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
@@ -226,8 +227,11 @@ parameter_types! {
 
 impl pallet_treasury_extension::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type EnergyAsset = EnergyItem;
-    type EnergyExchange = EnergyBrokerExchange;
+    type EnergyAsset = EnergyAsset;
+    type StaticEnergyAsset = StaticEnergyAsset;
+    type LiquidEnergyAsset = LiquidEnergyAsset;
+    type StaticEnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, SNRG>;
+    type LiquidEnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, LNRG>;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = StakingRewardsSink;
     type TreasuryTargetBalance = TreasuryTargetBalance;
