@@ -2812,6 +2812,12 @@ impl_runtime_apis! {
 
             Percent::from_rational(EnergyBroker::current_amount(), EnergyBroker::max_capacity())
         }
+
+        fn paths() -> Vec<(NativeOrAssetId, NativeOrAssetId)> {
+            use pallet_energy_broker::AssetConverter;
+
+            <Runtime as pallet_energy_broker::Config>::AssetConverter::paths()
+        }
     }
 
     impl energy_fee_runtime_api::EnergyFeeApi<Block, AccountId, Balance, RuntimeCall> for Runtime {

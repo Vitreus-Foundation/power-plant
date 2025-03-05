@@ -30,6 +30,9 @@ pub trait FixedPathAssetConverter<T: Config> {
 
 /// A trait for converting between asset pairs.
 pub trait AssetConverter<T: Config> {
+    /// Returns the supported swap paths.
+    fn paths() -> Vec<(T::AssetKind, T::AssetKind)>;
+
     /// Computes the output amount for a given input.
     fn get_amount_out(
         path: &(T::AssetKind, T::AssetKind),
@@ -53,6 +56,13 @@ pub trait AssetConverter<T: Config> {
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 #[tuple_types_custom_trait_bound(FixedPathAssetConverter<T>)]
 impl<T: Config> AssetConverter<T> for Tuple {
+    #[allow(clippy::let_and_return, clippy::vec_init_then_push)]
+    fn paths() -> Vec<(T::AssetKind, T::AssetKind)> {
+        let mut paths = Vec::new();
+        for_tuples!( #( paths.push((Tuple::FROM, Tuple::TO)); )* );
+        paths
+    }
+
     fn get_amount_out(
         path: &(T::AssetKind, T::AssetKind),
         amount_in: T::Balance,

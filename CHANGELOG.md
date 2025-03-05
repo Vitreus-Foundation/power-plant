@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Add support for three energy assets
+- Add runtime API to retrieve supported swap paths
 
 ## [211] - 2025-02-15
 
