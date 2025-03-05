@@ -56,6 +56,7 @@ pub trait AssetConverter<T: Config> {
 #[impl_trait_for_tuples::impl_for_tuples(30)]
 #[tuple_types_custom_trait_bound(FixedPathAssetConverter<T>)]
 impl<T: Config> AssetConverter<T> for Tuple {
+    #[allow(clippy::let_and_return, clippy::vec_init_then_push)]
     fn paths() -> Vec<(T::AssetKind, T::AssetKind)> {
         let mut paths = Vec::new();
         for_tuples!( #( paths.push((Tuple::FROM, Tuple::TO)); )* );
