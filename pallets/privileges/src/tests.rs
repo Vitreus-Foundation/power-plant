@@ -2,6 +2,7 @@ use super::*;
 use crate::mock::*;
 use crate::{Error, PenaltyType};
 use frame_support::{assert_err, assert_ok};
+use substrate_test_utils::assert_eq_uvec;
 
 #[test]
 fn test_data_building() {
@@ -297,15 +298,15 @@ fn test_year_end_data_saving() {
 
         let current_date = Privileges::current_date();
 
-        let assert_year_result = Vec::from([(10, 2113), (20, 1042)]);
+        let expected_points = Vec::from([(10, 2113), (20, 1042)]);
         assert_ok!(Privileges::update_time(
             RuntimeOrigin::root(),
             current_date.current_year + 1,
             current_date.current_month,
             current_date.current_day
         ));
-        assert_eq!(Privileges::year_vip_results(2020).unwrap().len(), 2);
-        assert_eq!(Privileges::year_vip_results(2020).unwrap(), assert_year_result);
+
+        assert_eq_uvec!(VipPoints::<Test>::iter_prefix(2020).collect::<Vec<_>>(), expected_points);
         assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
         assert_eq!(Privileges::vip_members(20).unwrap().points, 0);
     })
@@ -332,7 +333,7 @@ fn test_year_end_data_saving_vipp_results() {
 
         let current_date = Privileges::current_date();
 
-        let assert_year_result = Vec::from([(10, 69350)]);
+        let expected_points = Vec::from([(10, 69350)]);
         assert_ok!(Privileges::update_time(
             RuntimeOrigin::root(),
             current_date.current_year + 1,
@@ -340,8 +341,7 @@ fn test_year_end_data_saving_vipp_results() {
             current_date.current_day
         ));
 
-        assert_eq!(Privileges::year_vipp_results(2020).unwrap().len(), 1);
-        assert_eq!(Privileges::year_vipp_results(2020).unwrap(), assert_year_result);
+        assert_eq_uvec!(VippPoints::<Test>::iter_prefix(2020).collect::<Vec<_>>(), expected_points);
         assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
     })
 }

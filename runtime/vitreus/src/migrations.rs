@@ -7,4 +7,4 @@ pub type Permanent = (
     pallet_energy_generation::migrations::FixCooperatorStake<Runtime>,
 );
 
-pub type Unreleased = ();
+pub type Unreleased = (pallet_privileges::migration::MigrateToV1<Runtime>);

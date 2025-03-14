@@ -94,7 +94,7 @@ use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use pallet_energy_generation::OnVipMembershipHandler;
 use parity_scale_codec::Encode;
-use sp_arithmetic::traits::Saturating;
+use sp_arithmetic::traits::{Saturating, Zero};
 use sp_arithmetic::Perquintill;
 use sp_runtime::{Perbill, SaturatedConversion};
 use sp_std::prelude::*;
@@ -106,6 +106,8 @@ pub mod mock;
 mod tests;
 
 mod contribution_info;
+
+pub mod migration;
 
 pub mod weights;
 
@@ -125,7 +127,10 @@ pub mod pallet {
     use frame_support::traits::UnixTime;
     use frame_system::{ensure_root, ensure_signed};
 
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
     #[pallet::pallet]
+    #[pallet::storage_version(STORAGE_VERSION)]
     #[pallet::without_storage_info]
     pub struct Pallet<T>(_);
 
@@ -155,21 +160,25 @@ pub mod pallet {
     pub type VippMembers<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VippMemberInfo<T>>;
 
     #[pallet::storage]
-    #[pallet::getter(fn year_vip_results)]
-    pub type YearVipResults<T: Config> = StorageMap<
+    #[pallet::getter(fn vip_points)]
+    pub type VipPoints<T: Config> = StorageDoubleMap<
         _,
         Twox64Concat,
-        i32,
-        Vec<(T::AccountId, <T as pallet_energy_generation::Config>::StakeBalance)>,
+        u32,
+        Twox64Concat,
+        T::AccountId,
+        <T as pallet_energy_generation::Config>::StakeBalance,
     >;
 
     #[pallet::storage]
-    #[pallet::getter(fn year_vipp_results)]
-    pub type YearVippResults<T: Config> = StorageMap<
+    #[pallet::getter(fn vipp_points)]
+    pub type VippPoints<T: Config> = StorageDoubleMap<
         _,
         Twox64Concat,
-        i32,
-        Vec<(T::AccountId, <T as pallet_energy_generation::Config>::StakeBalance)>,
+        u32,
+        Twox64Concat,
+        T::AccountId,
+        <T as pallet_energy_generation::Config>::StakeBalance,
     >;
 
     #[pallet::storage]
@@ -265,7 +274,7 @@ pub mod pallet {
                 if current_date.current_month == YEAR_FIRST_MONTH
                     && current_date.current_day == YEAR_FIRST_DAY
                 {
-                    Self::save_year_info(current_date.current_year - 1);
+                    Self::save_year_info(current_date.current_year as u32 - 1);
                 }
 
                 updated_days += 1;
@@ -500,7 +509,7 @@ impl<T: Config> Pallet<T> {
 
             if new_date.current_month == YEAR_FIRST_MONTH && new_date.current_day == YEAR_FIRST_DAY
             {
-                Self::save_year_info(new_date.current_year - 1);
+                Self::save_year_info(new_date.current_year as u32 - 1);
             }
 
             CurrentDate::<T>::put(new_date);
@@ -557,24 +566,20 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Save VIP year information to pay rewards.
-    pub fn save_year_info(current_year: i32) {
-        let mut results = Vec::new();
+    pub fn save_year_info(year: u32) {
         VipMembers::<T>::translate(|account, mut vip_info: VipMemberInfo<T>| {
-            results.push((account, vip_info.points));
-            vip_info.points = <T as pallet_energy_generation::Config>::StakeBalance::default();
+            VipPoints::<T>::insert(year, account, vip_info.points);
+
+            vip_info.points.set_zero();
             Some(vip_info)
         });
 
-        YearVipResults::<T>::insert(current_year, results);
-
-        let mut vipp_results = Vec::new();
         VippMembers::<T>::translate(|account, mut vipp_info: VippMemberInfo<T>| {
-            vipp_results.push((account, vipp_info.points));
-            vipp_info.points = <T as pallet_energy_generation::Config>::StakeBalance::default();
+            VippPoints::<T>::insert(year, account, vipp_info.points);
+
+            vipp_info.points.set_zero();
             Some(vipp_info)
         });
-
-        YearVippResults::<T>::insert(current_year, vipp_results);
     }
 
     /// Calculate VIP points for account.
