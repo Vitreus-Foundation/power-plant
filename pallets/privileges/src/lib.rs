@@ -120,6 +120,8 @@ const FREE_PENALTY_PERIOD_MONTH_NUMBER: u32 = 1;
 const YEAR_FIRST_MONTH: u32 = 1;
 const YEAR_FIRST_DAY: u32 = 1;
 
+type PointsOf<T> = <T as pallet_energy_generation::Config>::StakeBalance;
+
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -206,6 +208,24 @@ pub mod pallet {
             account: T::AccountId,
             /// Penalty of this user.
             penalty: Perbill,
+        },
+        /// VIP points were forcibly updated for a specific account.
+        VipPointsForced {
+            /// The year for which the points were updated.
+            year: u32,
+            /// The account whose VIP points were changed.
+            account: T::AccountId,
+            /// The new VIP points value assigned to the account.
+            points: PointsOf<T>,
+        },
+        /// VIPP points were forcibly updated for a specific account.
+        VippPointsForced {
+            /// The year for which the points were updated.
+            year: u32,
+            /// The account whose VIPP points were changed.
+            account: T::AccountId,
+            /// The new VIPP points value assigned to the account.
+            points: PointsOf<T>,
         },
     }
 
@@ -304,6 +324,66 @@ pub mod pallet {
             let who = ensure_signed(origin.clone())?;
 
             Self::do_change_penalty_type(&who, new_tax_type)
+        }
+
+        /// Force set VIP points.
+        #[pallet::call_index(4)]
+        #[pallet::weight(<T as Config>::WeightInfo::force_set_vip_points())]
+        pub fn force_set_vip_points(
+            origin: OriginFor<T>,
+            year: u32,
+            account: T::AccountId,
+            points: PointsOf<T>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            let current_year = Self::current_date().current_year as u32;
+
+            ensure!(year <= current_year, Error::<T>::NotCorrectDate);
+
+            if year == current_year {
+                VipMembers::<T>::try_mutate(&account, |info| {
+                    info.as_mut()
+                        .ok_or(Error::<T>::AccountHasNotVipStatus)
+                        .map(|info| info.points = points)
+                })?;
+            } else {
+                VipPoints::<T>::insert(year, &account, points);
+            }
+
+            Self::deposit_event(Event::<T>::VipPointsForced { year, account, points });
+
+            Ok(())
+        }
+
+        /// Force set VIPP points.
+        #[pallet::call_index(5)]
+        #[pallet::weight(<T as Config>::WeightInfo::force_set_vipp_points())]
+        pub fn force_set_vipp_points(
+            origin: OriginFor<T>,
+            year: u32,
+            account: T::AccountId,
+            points: PointsOf<T>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            let current_year = Self::current_date().current_year as u32;
+
+            ensure!(year <= current_year, Error::<T>::NotCorrectDate);
+
+            if year == current_year {
+                VippMembers::<T>::try_mutate(&account, |info| {
+                    info.as_mut()
+                        .ok_or(Error::<T>::AccountHasNotVipStatus)
+                        .map(|info| info.points = points)
+                })?;
+            } else {
+                VippPoints::<T>::insert(year, &account, points);
+            }
+
+            Self::deposit_event(Event::<T>::VippPointsForced { year, account, points });
+
+            Ok(())
         }
     }
 

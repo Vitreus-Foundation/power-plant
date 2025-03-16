@@ -12,6 +12,8 @@ pub trait WeightInfo {
     fn set_quarter_revenue() -> Weight;
     fn exit_vip() -> Weight;
     fn change_penalty_type() -> Weight;
+    fn force_set_vip_points() -> Weight;
+    fn force_set_vipp_points() -> Weight;
 }
 
 pub struct SubstrateWeight<T>(PhantomData<T>);
@@ -39,6 +41,18 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
             .saturating_add(T::DbWeight::get().reads(3_u64))
             .saturating_add(T::DbWeight::get().writes(3_u64))
     }
+
+    fn force_set_vip_points() -> Weight {
+        Weight::from_parts(38_924_000, 3643)
+            .saturating_add(T::DbWeight::get().reads(3_u64))
+            .saturating_add(T::DbWeight::get().writes(3_u64))
+    }
+
+    fn force_set_vipp_points() -> Weight {
+        Weight::from_parts(38_924_000, 3643)
+            .saturating_add(T::DbWeight::get().reads(3_u64))
+            .saturating_add(T::DbWeight::get().writes(3_u64))
+    }
 }
 
 impl WeightInfo for () {
@@ -61,6 +75,18 @@ impl WeightInfo for () {
     }
 
     fn change_penalty_type() -> Weight {
+        Weight::from_parts(38_924_000, 3643)
+            .saturating_add(RocksDbWeight::get().reads(3_u64))
+            .saturating_add(RocksDbWeight::get().writes(3_u64))
+    }
+
+    fn force_set_vip_points() -> Weight {
+        Weight::from_parts(38_924_000, 3643)
+            .saturating_add(RocksDbWeight::get().reads(3_u64))
+            .saturating_add(RocksDbWeight::get().writes(3_u64))
+    }
+
+    fn force_set_vipp_points() -> Weight {
         Weight::from_parts(38_924_000, 3643)
             .saturating_add(RocksDbWeight::get().reads(3_u64))
             .saturating_add(RocksDbWeight::get().writes(3_u64))
