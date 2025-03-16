@@ -1,14 +1,14 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 
 use parity_scale_codec::{Decode, Encode};
-use sp_runtime::{FixedU128, Percent};
+use sp_runtime::{FixedU128, Percent, Vec};
 
 sp_api::decl_runtime_apis! {
-    #[api_version(2)]
+    #[api_version(3)]
     pub trait EnergyBrokerApi<AccountId, AssetKind, Balance>
     where
         AccountId: Encode,
-        AssetKind: Encode,
+        AssetKind: Decode + Encode,
         Balance: Decode + Encode,
     {
         /// Estimates energy received from a given amount of native currency.
@@ -40,5 +40,8 @@ sp_api::decl_runtime_apis! {
 
         /// Returns the current warehouse fill level as a percentage.
         fn current_warehouse_level() -> Percent;
+
+        /// Returns the supported swap paths.
+        fn paths() -> Vec<(AssetKind, AssetKind)>;
     }
 }

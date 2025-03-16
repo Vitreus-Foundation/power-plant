@@ -4,6 +4,9 @@
 #![warn(missing_docs)]
 #![allow(clippy::result_unit_err, clippy::too_many_arguments)]
 
+mod converter;
+pub use converter::{AssetConverter, FixedPathAssetConverter};
+
 pub mod migration;
 
 #[cfg(test)]
@@ -21,7 +24,7 @@ use frame_support::{
             Balance,
             Fortitude::Polite,
             Precision::{BestEffort, Exact},
-            Preservation::{self, Expendable, Preserve},
+            Preservation::{Expendable, Preserve},
         },
         Contains, OnUnbalanced,
     },
@@ -81,8 +84,8 @@ pub mod pallet {
             + Mutate<Self::AccountId>
             + Balanced<Self::AccountId>;
 
-        /// A type used for conversion between an energy balance and an asset balance.
-        type BalanceConverter: EnergyBalanceConverter<Self::Balance, Self::AssetKind>;
+        /// A type used for conversion between assets.
+        type AssetConverter: AssetConverter<Self>;
 
         /// Accounts that will not be charged swap fees.
         type FeelessAccounts: Contains<Self::AccountId>;
@@ -324,16 +327,8 @@ pub mod pallet {
                 if include_fee { Self::to_amount_with_fee_deducted(amount_in)? } else { amount_in };
             let fee = amount_in.saturating_sub(exchange_in);
 
-            let amount_out = match path {
-                (asset_in, asset_out) if *asset_in == T::EnergyAsset::get() => {
-                    T::BalanceConverter::energy_to_asset_balance(asset_out.clone(), exchange_in)
-                },
-                (asset_in, asset_out) if *asset_out == T::EnergyAsset::get() => {
-                    T::BalanceConverter::asset_to_energy_balance(asset_in.clone(), exchange_in)
-                },
-                _ => None,
-            }
-            .ok_or(Error::InvalidPath)?;
+            let amount_out =
+                T::AssetConverter::get_amount_out(path, exchange_in).ok_or(Error::InvalidPath)?;
 
             ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
 
@@ -351,16 +346,8 @@ pub mod pallet {
         ) -> Result<(T::Balance, T::Balance), Error<T>> {
             ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
 
-            let exchange_in = match path {
-                (asset_in, asset_out) if *asset_in == T::EnergyAsset::get() => {
-                    T::BalanceConverter::asset_to_energy_balance(asset_out.clone(), amount_out)
-                },
-                (asset_in, asset_out) if *asset_out == T::EnergyAsset::get() => {
-                    T::BalanceConverter::energy_to_asset_balance(asset_in.clone(), amount_out)
-                },
-                _ => None,
-            }
-            .ok_or(Error::InvalidPath)?;
+            let exchange_in =
+                T::AssetConverter::get_amount_in(path, amount_out).ok_or(Error::InvalidPath)?;
 
             // Correct the input amount if it calculates to zero
             // to prevent swap failure when buying energy.
@@ -474,48 +461,38 @@ pub mod pallet {
                 ensure!(free >= amount_in, TokenError::NotExpendable);
             }
 
-            Self::transfer(
+            // transfer from the sender to the broker
+            let mut credit_in = T::Assets::withdraw(
                 asset_in.clone(),
                 sender,
-                &broker_account,
                 amount_in,
-                fee_part,
+                Exact,
                 preservation,
+                Polite,
             )?;
 
-            Self::transfer(
+            T::SwapFeeTarget::on_unbalanced(credit_in.extract(fee_part));
+
+            let (asset_deposited, amount_deposited) =
+                T::AssetConverter::resolve_into_broker(path, &broker_account, credit_in)
+                    .map_err(|_| Error::<T>::BelowMinimum)?;
+
+            // transfer from the broker to the recipient
+            let credit_out = T::Assets::withdraw(
                 asset_out.clone(),
                 &broker_account,
-                recipient,
                 amount_out,
-                Zero::zero(),
+                Exact,
                 Preserve,
+                Polite,
             )?;
+            T::Assets::resolve(recipient, credit_out).map_err(|_| Error::<T>::BelowMinimum)?;
 
-            if asset_in == &T::EnergyAsset::get() {
+            if asset_deposited == T::EnergyAsset::get() {
                 Self::burn_surplus_energy(&broker_account);
 
-                T::OnEnergySell::on_energy_sell(amount_in.saturating_sub(fee_part));
+                T::OnEnergySell::on_energy_sell(amount_deposited);
             }
-
-            Ok(())
-        }
-
-        fn transfer(
-            asset: T::AssetKind,
-            source: &T::AccountId,
-            dest: &T::AccountId,
-            amount: T::Balance,
-            fee_part: T::Balance,
-            preservation: Preservation,
-        ) -> DispatchResult {
-            let mut credit =
-                T::Assets::withdraw(asset, source, amount, Exact, preservation, Polite)?;
-
-            let fee = credit.extract(fee_part);
-
-            T::Assets::resolve(dest, credit).map_err(|_| Error::<T>::BelowMinimum)?;
-            T::SwapFeeTarget::on_unbalanced(fee);
 
             Ok(())
         }
@@ -564,15 +541,6 @@ pub mod pallet {
             }
         }
     }
-}
-
-/// Conversion between energy balance and asset balance.
-pub trait EnergyBalanceConverter<Balance, AssetId> {
-    /// Converts an asset balance into an energy balance.
-    fn asset_to_energy_balance(asset_id: AssetId, balance: Balance) -> Option<Balance>;
-
-    /// Converts an energy balance into an asset balance.
-    fn energy_to_asset_balance(asset_id: AssetId, balance: Balance) -> Option<Balance>;
 }
 
 impl<T: Config> QuotePrice for Pallet<T> {
