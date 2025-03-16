@@ -1791,7 +1791,7 @@ impl parachains_slashing::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ParaDeposit: Balance = 20000 * UNITS;
+    pub const ParaDeposit: Balance = prod_or_fast!(20_000 * UNITS, 1_000 * UNITS);
     pub const ParaDataByteDeposit: Balance = 2;
 }
 
@@ -1806,7 +1806,7 @@ impl paras_registrar::Config for Runtime {
 }
 
 parameter_types! {
-    pub LeasePeriod: BlockNumber = prod_or_fast!(4 * WEEKS, 1 * DAYS, "VITREUS_LEASE_PERIOD");
+    pub LeasePeriod: BlockNumber = prod_or_fast!(4 * WEEKS, 1 * WEEKS, "VITREUS_LEASE_PERIOD");
 }
 
 impl slots::Config for Runtime {
