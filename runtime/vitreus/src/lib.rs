@@ -95,14 +95,15 @@ use frame_support::{
     dispatch::GetDispatchInfo,
     ord_parameter_types, parameter_types,
     traits::{
-        fungible::ItemOf, AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8,
-        ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
+        fungible::ItemOf, fungibles::Credit, AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64,
+        ConstU8, ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
     },
     weights::{
         constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter, WeightToFee,
     },
 };
 use frame_system::{EnsureRoot, EnsureSignedBy};
+use pallet_energy_broker::FixedPathAssetConverter;
 use pallet_energy_fee::{CallFee, CustomFee};
 use pallet_grandpa::{
     fg_primitives, AuthorityId as GrandpaId, AuthorityList as GrandpaAuthorityList,
@@ -124,10 +125,7 @@ use sp_consensus_beefy::{
     mmr::{BeefyDataProvider, MmrLeafVersion},
 };
 use sp_runtime::transaction_validity::InvalidTransaction;
-use vitreus_runtime_common::{
-    ExposureMultiplier, NativeEnergyExchange, QuotePrice, QuotePriceEnergyForNative,
-    QuotePriceNativeForEnergy,
-};
+use vitreus_runtime_common::{ExposureMultiplier, NativeEnergyExchange, QuotePrice};
 use xcm::{
     latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
     VersionedXcm,
@@ -255,7 +253,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 211,
+    spec_version: 212,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 4,
@@ -320,6 +318,16 @@ pub mod vnrg {
     use super::*;
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
 }
+
+parameter_types! {
+    pub const VNRG: AssetId = 0; // Energy
+    pub const SNRG: AssetId = 1; // Static Energy
+    pub const LNRG: AssetId = 2; // Liquid Energy
+}
+
+type EnergyAsset = ItemOf<Assets, VNRG, AccountId>;
+type StaticEnergyAsset = ItemOf<Assets, SNRG, AccountId>;
+type LiquidEnergyAsset = ItemOf<Assets, LNRG, AccountId>;
 
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
@@ -715,7 +723,6 @@ parameter_types! {
     pub const SlashDeferDuration: EraIndex = 0;
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
-    pub const VNRG: AssetId = 1;
     pub const BatterySlotCapacity: Energy = 100_000_000_000;
     pub const MaxCooperations: u32 = 256;
     pub const HistoryDepth: u32 = 84;
@@ -782,7 +789,7 @@ impl pallet_energy_generation::Config for Runtime {
     type BondingDuration = BondingDuration;
     type CollaborativeValidatorReputationTier = CollaborativeValidatorReputationTier;
     type ValidatorReputationTier = ValidatorReputationTier;
-    type EnergyAssetId = VNRG;
+    type EnergyAssetId = LNRG;
     type EraEnergyRateCalculator = DynamicEnergy;
     type HistoryDepth = HistoryDepth;
     type MaxCooperations = MaxCooperations;
@@ -959,27 +966,81 @@ ord_parameter_types! {
         AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
-type EnergyItem = ItemOf<Assets, VNRG, AccountId>;
+pub struct NativeToEnergyConverter;
+impl FixedPathAssetConverter<Runtime> for NativeToEnergyConverter {
+    const FROM: NativeOrAssetId = NativeOrAssetId::Native;
+    const TO: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
 
-pub struct EnergyRate;
-
-impl pallet_energy_broker::EnergyBalanceConverter<Balance, NativeOrAssetId> for EnergyRate {
-    fn asset_to_energy_balance(asset_id: NativeOrAssetId, balance: Balance) -> Option<Balance> {
-        match asset_id {
-            NativeOrAssetId::Native => {
-                DynamicEnergy::exchange_rate().map(|rate| rate.saturating_mul_int(balance))
-            },
-            _ => None,
-        }
+    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
+        DynamicEnergy::exchange_rate().map(|rate| rate.saturating_mul_int(amount_in))
     }
 
-    fn energy_to_asset_balance(asset_id: NativeOrAssetId, balance: Balance) -> Option<Balance> {
-        match asset_id {
-            NativeOrAssetId::Native => DynamicEnergy::exchange_rate()
-                .and_then(FixedPointNumber::reciprocal)
-                .map(|rate| rate.saturating_mul_int(balance)),
-            _ => None,
+    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
+        DynamicEnergy::exchange_rate()
+            .and_then(FixedPointNumber::reciprocal)
+            .map(|rate| rate.saturating_mul_int(amount_out))
+    }
+}
+
+pub struct LiquidEnergyToNativeConverter;
+impl FixedPathAssetConverter<Runtime> for LiquidEnergyToNativeConverter {
+    const FROM: NativeOrAssetId = NativeOrAssetId::WithId(LNRG::get());
+    const TO: NativeOrAssetId = NativeOrAssetId::Native;
+
+    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
+        DynamicEnergy::exchange_rate()
+            .and_then(FixedPointNumber::reciprocal)
+            .map(|rate| rate.saturating_mul_int(amount_in))
+    }
+
+    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
+        DynamicEnergy::exchange_rate().map(|rate| rate.saturating_mul_int(amount_out))
+    }
+
+    fn resolve_into_broker(
+        broker: &AccountId,
+        credit: Credit<AccountId, NativeAndAssets>,
+    ) -> Result<(NativeOrAssetId, Balance), Credit<AccountId, NativeAndAssets>> {
+        use frame_support::traits::fungibles::Balanced;
+
+        let amount = credit.peek();
+        match Assets::deposit(VNRG::get(), broker, amount, Precision::Exact) {
+            Ok(debt) => {
+                drop(credit);
+                drop(debt);
+                Ok((VNRG::get().into(), amount))
+            },
+            Err(_) => Err(credit),
         }
+    }
+}
+
+pub struct StaticEnergyToNativeConverter;
+impl FixedPathAssetConverter<Runtime> for StaticEnergyToNativeConverter {
+    const FROM: NativeOrAssetId = NativeOrAssetId::WithId(SNRG::get());
+    const TO: NativeOrAssetId = NativeOrAssetId::Native;
+
+    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
+        use frame_support::traits::tokens::ConversionFromAssetBalance;
+
+        AssetRate::from_asset_balance(amount_in, SNRG::get()).ok()
+    }
+
+    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
+        use frame_support::traits::tokens::ConversionToAssetBalance;
+
+        AssetRate::to_asset_balance(amount_out, SNRG::get()).ok()
+    }
+
+    fn resolve_into_broker(
+        _broker: &AccountId,
+        credit: Credit<AccountId, NativeAndAssets>,
+    ) -> Result<(NativeOrAssetId, Balance), Credit<AccountId, NativeAndAssets>> {
+        let asset = credit.asset();
+
+        drop(credit);
+
+        Ok((asset, Zero::zero()))
     }
 }
 
@@ -990,7 +1051,8 @@ impl pallet_energy_broker::Config for Runtime {
     type HigherPrecisionBalance = sp_core::U256;
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
-    type BalanceConverter = EnergyRate;
+    type AssetConverter =
+        (NativeToEnergyConverter, LiquidEnergyToNativeConverter, StaticEnergyToNativeConverter);
     type FeelessAccounts = Equals<xcm_config::TreasuryAccount>;
     type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
     type OnEnergySell = DynamicEnergy;
@@ -1027,15 +1089,15 @@ parameter_types! {
     pub GetConstantGasLimit: U256 = U256::from(100_000);
 }
 
-type EnergyBrokerExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, VNRG>;
-
 impl pallet_energy_fee::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type ManageOrigin = MoreThanHalfCouncil;
     type GetConstantFee = GetConstantEnergyFee;
     type CustomFee = EnergyFee;
-    type EnergyAsset = EnergyItem;
-    type EnergyExchange = EnergyBrokerExchange;
+    type EnergyAsset = EnergyAsset;
+    type StaticEnergyAsset = StaticEnergyAsset;
+    type LiquidEnergyAsset = LiquidEnergyAsset;
+    type EnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, VNRG>;
     type OnWithdrawFee = NacManaging;
     type OnEnergyBurn = (EnergyBroker, DynamicEnergy);
     type FeeRecyclingRate = TreasuryExtension;
@@ -1533,7 +1595,7 @@ impl pallet_evm::Config for Runtime {
     type CallOrigin = EnsureAccountId20;
     type WithdrawOrigin = EnsureAccountId20;
     type AddressMapping = IdentityAddressMapping;
-    type Currency = CurrencyAdapter<EnergyItem>;
+    type Currency = CurrencyAdapter<EnergyAsset>;
     type RuntimeEvent = RuntimeEvent;
     type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
@@ -2702,11 +2764,23 @@ impl_runtime_apis! {
 
     impl energy_broker_runtime_api::EnergyBrokerApi<Block, AccountId, NativeOrAssetId, Balance> for Runtime {
         fn estimate_energy_from_native(amount: Balance) -> Option<Balance> {
-            <EnergyBrokerExchange as QuotePriceNativeForEnergy>::quote_price_exact_tokens_for_tokens(amount, true)
+            Self::quote_price_exact_tokens_for_tokens(
+                None,
+                NativeOrAssetId::Native,
+                NativeOrAssetId::WithId(VNRG::get()),
+                amount,
+                true,
+            )
         }
 
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance> {
-            <EnergyBrokerExchange as QuotePriceEnergyForNative>::quote_price_exact_tokens_for_tokens(amount, true)
+            Self::quote_price_exact_tokens_for_tokens(
+                None,
+                NativeOrAssetId::WithId(LNRG::get()),
+                NativeOrAssetId::Native,
+                amount,
+                true,
+            )
         }
 
         fn quote_price_exact_tokens_for_tokens(
@@ -2737,6 +2811,12 @@ impl_runtime_apis! {
             use vitreus_runtime_common::Warehouse;
 
             Percent::from_rational(EnergyBroker::current_amount(), EnergyBroker::max_capacity())
+        }
+
+        fn paths() -> Vec<(NativeOrAssetId, NativeOrAssetId)> {
+            use pallet_energy_broker::AssetConverter;
+
+            <Runtime as pallet_energy_broker::Config>::AssetConverter::paths()
         }
     }
 

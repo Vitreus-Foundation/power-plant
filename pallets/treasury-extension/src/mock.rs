@@ -155,7 +155,10 @@ parameter_types! {
 impl crate::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type EnergyAsset = ();
-    type EnergyExchange = ();
+    type StaticEnergyAsset = ();
+    type LiquidEnergyAsset = ();
+    type StaticEnergyExchange = ();
+    type LiquidEnergyExchange = ();
     type SpendThreshold = SpendThreshold;
     type OnRecycled = ();
     type TreasuryTargetBalance = ();

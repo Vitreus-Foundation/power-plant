@@ -52,7 +52,7 @@ impl<C, Block, AccountId, AssetKind, Balance> EnergyBrokerApiServer<<Block as Bl
 where
     Block: BlockT,
     AccountId: Encode + Send + Sync + 'static,
-    AssetKind: Encode + Send + Sync + 'static,
+    AssetKind: Decode + Encode + Send + Sync + 'static,
     Balance: Decode + Encode + Into<NumberOrHex> + TryFrom<NumberOrHex> + Send + Sync + 'static,
     C: Send + Sync + 'static,
     C: ProvideRuntimeApi<Block> + HeaderBackend<Block>,

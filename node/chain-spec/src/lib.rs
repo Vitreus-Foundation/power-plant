@@ -23,7 +23,8 @@ use vitreus_power_plant_runtime::{
     ImOnlineConfig, ImOnlineId, MaxCooperations, NacManagingConfig, PrivilegesConfig,
     ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
     SimpleVestingConfig, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
-    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, VNRG, WASM_BINARY,
+    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, LNRG, SNRG, VNRG,
+    WASM_BINARY,
 };
 
 /// Node `ChainSpec` extensions.
@@ -352,13 +353,16 @@ pub fn testnet_genesis(
         ethereum: Default::default(),
         energy_broker: EnergyBrokerConfig { energy_capacity: 1_000_000_000_000 },
         assets: AssetsConfig {
-            assets: vec![(VNRG::get(), root_key, false, 1)],
-            metadata: vec![(
-                VNRG::get(),
-                "Energy".as_bytes().to_vec(),
-                "VNRG".as_bytes().to_vec(),
-                18,
-            )],
+            assets: vec![
+                (VNRG::get(), root_key, false, 1),
+                (SNRG::get(), root_key, false, 1),
+                (LNRG::get(), root_key, false, 1),
+            ],
+            metadata: vec![
+                (VNRG::get(), "Energy".as_bytes().to_vec(), "VNRG".as_bytes().to_vec(), 18),
+                (SNRG::get(), "Static Energy".as_bytes().to_vec(), "SNRG".as_bytes().to_vec(), 18),
+                (LNRG::get(), "Liquid Energy".as_bytes().to_vec(), "LNRG".as_bytes().to_vec(), 18),
+            ],
             accounts: endowed_accounts
                 .iter()
                 .cloned()
@@ -511,13 +515,16 @@ fn mainnet_genesis(
         ethereum: Default::default(),
         energy_broker: EnergyBrokerConfig { energy_capacity: 1_000_000_000_000 },
         assets: AssetsConfig {
-            assets: vec![(VNRG::get(), root_key, false, 1)],
-            metadata: vec![(
-                VNRG::get(),
-                "Energy".as_bytes().to_vec(),
-                "VNRG".as_bytes().to_vec(),
-                18,
-            )],
+            assets: vec![
+                (VNRG::get(), treasury(), false, 1),
+                (SNRG::get(), treasury(), false, 1),
+                (LNRG::get(), treasury(), false, 1),
+            ],
+            metadata: vec![
+                (VNRG::get(), "Energy".as_bytes().to_vec(), "VNRG".as_bytes().to_vec(), 18),
+                (SNRG::get(), "Static Energy".as_bytes().to_vec(), "SNRG".as_bytes().to_vec(), 18),
+                (LNRG::get(), "Liquid Energy".as_bytes().to_vec(), "LNRG".as_bytes().to_vec(), 18),
+            ],
             accounts: vec![],
             next_asset_id: Default::default(),
         },

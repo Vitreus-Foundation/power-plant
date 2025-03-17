@@ -21,7 +21,8 @@
 use super::{
     parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
     CouncilCollective, Dmp, DynamicEnergy, ParaId, Runtime, RuntimeCall, RuntimeEvent,
-    RuntimeOrigin, TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet,
+    RuntimeOrigin, TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet, LNRG, SNRG,
+    VNRG,
 };
 use frame_support::{
     parameter_types,
@@ -69,7 +70,6 @@ pub const ETHEREUM_VTRS_ADDRESS: [u8; 20] = prod_or_fast!(
     hex_literal::hex!("27C2E2131DF1310C9bdfAc779316685dB8B1E8bb")
 );
 pub const ASSETS_PALLET_ID: u8 = 5;
-pub const VNRG_ASSET_ID: u128 = 1;
 
 parameter_types! {
     pub const TokenLocation: Location = Here.into_location();
@@ -90,10 +90,15 @@ parameter_types! {
     );
     pub EnergyTokenLocation: Location = Location::new(
         0,
-        [
-            PalletInstance(ASSETS_PALLET_ID),
-            GeneralIndex(VNRG_ASSET_ID),
-        ]
+        [PalletInstance(ASSETS_PALLET_ID), GeneralIndex(VNRG::get())]
+    );
+    pub StaticEnergyTokenLocation: Location = Location::new(
+        0,
+        [PalletInstance(ASSETS_PALLET_ID), GeneralIndex(SNRG::get())]
+    );
+    pub LiquidEnergyTokenLocation: Location = Location::new(
+        0,
+        [PalletInstance(ASSETS_PALLET_ID), GeneralIndex(LNRG::get())]
     );
 }
 
@@ -154,10 +159,14 @@ parameter_types! {
     pub AssetsPalletLocation: Location = PalletInstance(ASSETS_PALLET_ID).into();
 }
 
-pub type EnergyTokenConcreteId = MatchedConvertedConcreteId<
+pub type EnergyTokenMatcher = MatchedConvertedConcreteId<
     super::AssetId,
     Balance,
-    Equals<EnergyTokenLocation>,
+    (
+        Equals<EnergyTokenLocation>,
+        Equals<StaticEnergyTokenLocation>,
+        Equals<LiquidEnergyTokenLocation>,
+    ),
     AsPrefixedGeneralIndex<AssetsPalletLocation, super::AssetId, TryConvertInto>,
     TryConvertInto,
 >;
@@ -167,7 +176,7 @@ pub type EnergyTransactor = FungiblesAdapter<
     // Use this fungibles implementation:
     Assets,
     // Use this currency when it is a fungible asset matching the given location or name:
-    EnergyTokenConcreteId,
+    EnergyTokenMatcher,
     // Convert an XCM Location into a local account id:
     LocationConverter,
     // Our chain's account ID type (we can't get away without mentioning it explicitly):
@@ -188,7 +197,7 @@ impl TransactAsset for EnergyCheckoutTracker {
             "check_out dest: {:?}, what: {:?}",
             _dest, what
         );
-        if let Ok((_, amount)) = EnergyTokenConcreteId::matches_fungibles(what) {
+        if let Ok((_, amount)) = EnergyTokenMatcher::matches_fungibles(what) {
             DynamicEnergy::on_energy_burn(amount);
         }
     }
@@ -232,6 +241,8 @@ pub type XcmRouter = WithUniqueTopic<
 parameter_types! {
     pub const Vtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(TokenLocation::get()) });
     pub Vnrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(EnergyTokenLocation::get()) });
+    pub Snrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(StaticEnergyTokenLocation::get()) });
+    pub Lnrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(LiquidEnergyTokenLocation::get()) });
     pub WrappedVtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(WrappedTokenLocation::get()) });
     pub AssetHub: Location = Parachain(ASSET_HUB_ID).into_location();
     pub BridgeHub: Location = Parachain(BRIDGE_HUB_ID).into_location();
@@ -258,7 +269,12 @@ pub struct EnergyForParachains;
 impl ContainsPair<Asset, Location> for EnergyForParachains {
     fn contains(asset: &Asset, location: &Location) -> bool {
         log::trace!(target: "xcm::contains", "EnergyForParachains asset: {:?}, location: {:?}", asset, location);
-        Vnrg::get().matches(asset) && OnlyParachains::contains(location)
+
+        if !OnlyParachains::contains(location) {
+            return false;
+        }
+
+        Vnrg::get().matches(asset) || Snrg::get().matches(asset) || Lnrg::get().matches(asset)
     }
 }
 

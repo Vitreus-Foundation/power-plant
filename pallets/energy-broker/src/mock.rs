@@ -68,29 +68,6 @@ impl pallet_assets::Config for Test {
     }
 }
 
-pub struct AssetRate;
-impl AssetRate {
-    const RATE: FixedU128 = FixedU128::from_rational(1, 10);
-}
-
-impl EnergyBalanceConverter<u128, NativeOrAssetId> for AssetRate {
-    fn asset_to_energy_balance(asset_id: NativeOrAssetId, balance: u128) -> Option<u128> {
-        match asset_id {
-            NativeOrAssetId::Native => {
-                Self::RATE.reciprocal().map(|x| x.saturating_mul_int(balance))
-            },
-            _ => None,
-        }
-    }
-
-    fn energy_to_asset_balance(asset_id: NativeOrAssetId, balance: u128) -> Option<u128> {
-        match asset_id {
-            NativeOrAssetId::Native => Some(Self::RATE.saturating_mul_int(balance)),
-            _ => None,
-        }
-    }
-}
-
 pub type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<u32>;
 
 type NativeAndAssets = frame_support::traits::fungible::UnionOf<
@@ -107,6 +84,36 @@ parameter_types! {
     pub const FeeAccount: u128 = 99;
 }
 
+const RATE: FixedU128 = FixedU128::from_rational(1, 10);
+
+pub struct MockNativeToEnergyConverter;
+impl FixedPathAssetConverter<Test> for MockNativeToEnergyConverter {
+    const FROM: NativeOrAssetId = NativeOrAssetId::Native;
+    const TO: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+
+    fn get_amount_out(amount_in: u128) -> Option<u128> {
+        RATE.reciprocal().map(|x| x.saturating_mul_int(amount_in))
+    }
+
+    fn get_amount_in(amount_out: u128) -> Option<u128> {
+        Some(RATE.saturating_mul_int(amount_out))
+    }
+}
+
+pub struct MockEnergyToNativeConverter;
+impl FixedPathAssetConverter<Test> for MockEnergyToNativeConverter {
+    const FROM: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+    const TO: NativeOrAssetId = NativeOrAssetId::Native;
+
+    fn get_amount_out(amount_in: u128) -> Option<u128> {
+        Some(RATE.saturating_mul_int(amount_in))
+    }
+
+    fn get_amount_in(amount_out: u128) -> Option<u128> {
+        RATE.reciprocal().map(|x| x.saturating_mul_int(amount_out))
+    }
+}
+
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type ManageOrigin = EnsureRoot<u128>;
@@ -114,7 +121,7 @@ impl Config for Test {
     type HigherPrecisionBalance = sp_core::U256;
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
-    type BalanceConverter = AssetRate;
+    type AssetConverter = (MockNativeToEnergyConverter, MockEnergyToNativeConverter);
     type FeelessAccounts = ();
     type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
     type OnEnergySell = ();
