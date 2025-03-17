@@ -87,7 +87,7 @@ use frame_support::pallet_prelude::BuildGenesisConfig;
 use frame_support::{
     ensure,
     pallet_prelude::{Decode, DispatchResult, TypeInfo},
-    traits::{LockableCurrency, UnixTime},
+    traits::{Currency, LockableCurrency, UnixTime},
     weights::Weight,
 };
 use frame_system::pallet_prelude::OriginFor;
@@ -120,6 +120,8 @@ const FREE_PENALTY_PERIOD_MONTH_NUMBER: u32 = 1;
 const YEAR_FIRST_MONTH: u32 = 1;
 const YEAR_FIRST_DAY: u32 = 1;
 
+type BalanceOf<T> =
+    <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type PointsOf<T> = <T as pallet_energy_generation::Config>::StakeBalance;
 
 #[frame_support::pallet]
@@ -184,6 +186,10 @@ pub mod pallet {
     >;
 
     #[pallet::storage]
+    #[pallet::getter(fn rewards)]
+    pub type Rewards<T: Config> = StorageMap<_, Twox64Concat, u32, RewardsInfo<T>>;
+
+    #[pallet::storage]
     #[pallet::getter(fn current_date)]
     pub type CurrentDate<T: Config> = StorageValue<_, CurrentDateInfo, ValueQuery>;
 
@@ -243,6 +249,8 @@ pub mod pallet {
         NotCorrectDate,
         /// Account hasn't claim balance.
         HasNotClaim,
+        /// Rewards have already been set for the specified year.
+        YearRewardsAlreadySet,
     }
 
     #[pallet::call]
@@ -340,6 +348,7 @@ pub mod pallet {
             let current_year = Self::current_date().current_year as u32;
 
             ensure!(year <= current_year, Error::<T>::NotCorrectDate);
+            ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
 
             if year == current_year {
                 VipMembers::<T>::try_mutate(&account, |info| {
@@ -370,6 +379,7 @@ pub mod pallet {
             let current_year = Self::current_date().current_year as u32;
 
             ensure!(year <= current_year, Error::<T>::NotCorrectDate);
+            ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
 
             if year == current_year {
                 VippMembers::<T>::try_mutate(&account, |info| {
@@ -382,6 +392,36 @@ pub mod pallet {
             }
 
             Self::deposit_event(Event::<T>::VippPointsForced { year, account, points });
+
+            Ok(())
+        }
+
+        /// Set VIP and VIPP rewards.
+        #[pallet::call_index(6)]
+        #[pallet::weight(<T as Config>::WeightInfo::set_rewards())]
+        pub fn set_rewards(
+            origin: OriginFor<T>,
+            year: u32,
+            vip_rewards: BalanceOf<T>,
+            vipp_rewards: BalanceOf<T>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            let current_year = Self::current_date().current_year as u32;
+
+            ensure!(year < current_year, Error::<T>::NotCorrectDate);
+            ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
+
+            let vip_points = VipPoints::<T>::iter_prefix_values(year)
+                .fold(PointsOf::<T>::zero(), |total, points| total.saturating_add(points));
+
+            let vipp_points = VippPoints::<T>::iter_prefix_values(year)
+                .fold(PointsOf::<T>::zero(), |total, points| total.saturating_add(points));
+
+            Rewards::<T>::insert(
+                year,
+                RewardsInfo { vip_points, vip_rewards, vipp_points, vipp_rewards },
+            );
 
             Ok(())
         }
@@ -515,6 +555,10 @@ impl<T: Config> Pallet<T> {
             new_penalty_type,
         });
         Ok(())
+    }
+
+    fn are_rewards_not_set(year: u32) -> bool {
+        !Rewards::<T>::contains_key(year)
     }
 
     /// Assesses whether a user qualifies as a VIP, and whether they are a validator or a cooperator within the network.

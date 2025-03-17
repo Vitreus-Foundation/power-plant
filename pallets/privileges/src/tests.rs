@@ -1,7 +1,7 @@
 use super::*;
 use crate::mock::*;
 use crate::{Error, PenaltyType};
-use frame_support::{assert_err, assert_ok};
+use frame_support::{assert_err, assert_noop, assert_ok};
 use substrate_test_utils::assert_eq_uvec;
 
 #[test]
@@ -619,5 +619,35 @@ fn test_from_validator_to_cooperator() {
 
         assert_ok!(EnergyGeneration::cooperate(RuntimeOrigin::signed(10), vec![(20, 100)]));
         assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 100);
+    })
+}
+
+#[test]
+fn cannot_set_rewards_before_past_year() {
+    ExtBuilder::default().build_and_execute(|| {
+        let current_year = Privileges::current_date().current_year as u32;
+
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), current_year - 1, 100, 100));
+        assert_noop!(
+            Privileges::set_rewards(RuntimeOrigin::root(), current_year, 100, 100),
+            Error::<Test>::NotCorrectDate
+        );
+        assert_noop!(
+            Privileges::set_rewards(RuntimeOrigin::root(), current_year + 1, 100, 100),
+            Error::<Test>::NotCorrectDate
+        );
+    })
+}
+
+#[test]
+fn cannot_set_rewards_twice() {
+    ExtBuilder::default().build_and_execute(|| {
+        let year = Privileges::current_date().current_year as u32 - 1;
+
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), year, 100, 100));
+        assert_noop!(
+            Privileges::set_rewards(RuntimeOrigin::root(), year, 100, 100),
+            Error::<Test>::YearRewardsAlreadySet
+        );
     })
 }
