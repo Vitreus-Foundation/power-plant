@@ -1,6 +1,7 @@
 use super::*;
 use crate::mock::*;
 use crate::{Error, PenaltyType};
+use frame_support::traits::fungible::Inspect;
 use frame_support::{assert_err, assert_noop, assert_ok};
 use substrate_test_utils::assert_eq_uvec;
 
@@ -648,6 +649,62 @@ fn cannot_set_rewards_twice() {
         assert_noop!(
             Privileges::set_rewards(RuntimeOrigin::root(), year, 100, 100),
             Error::<Test>::YearRewardsAlreadySet
+        );
+    })
+}
+
+#[test]
+fn claim_rewards_works() {
+    ExtBuilder::default().build_and_execute(|| {
+        let year = Privileges::current_date().current_year as u32 - 1;
+
+        assert_ok!(Privileges::force_set_vip_points(RuntimeOrigin::root(), year, 1, 100));
+        assert_ok!(Privileges::force_set_vipp_points(RuntimeOrigin::root(), year, 1, 200));
+
+        assert_ok!(Privileges::force_set_vip_points(RuntimeOrigin::root(), year, 2, 300));
+
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), year, 1000, 1000));
+
+        // Account 1 has VIP and VIPP rewards
+        assert_eq!(Privileges::vip_points(year, 1), Some(100));
+        assert_eq!(Privileges::vipp_points(year, 1), Some(200));
+
+        let initial_balance = Balances::balance(&1);
+        let expected_vip_reward = 250; // 100/400 * 1000
+        let expected_vipp_reward = 1000;
+
+        assert_ok!(Privileges::claim_rewards(RuntimeOrigin::signed(1), year));
+        assert_eq!(
+            Balances::balance(&1),
+            initial_balance + expected_vip_reward + expected_vipp_reward
+        );
+        assert_eq!(Privileges::vip_points(year, 1), None);
+        assert_eq!(Privileges::vipp_points(year, 1), None);
+
+        // Account 2 has only VIP rewards
+        assert_eq!(Privileges::vip_points(year, 2), Some(300));
+        assert_eq!(Privileges::vipp_points(year, 2), None);
+
+        let initial_balance = Balances::balance(&2);
+        let expected_vip_reward = 750; // 300/400 * 1000
+        let expected_vipp_reward = 0;
+
+        assert_ok!(Privileges::claim_rewards(RuntimeOrigin::signed(2), year));
+        assert_eq!(
+            Balances::balance(&2),
+            initial_balance + expected_vip_reward + expected_vipp_reward
+        );
+        assert_eq!(Privileges::vip_points(year, 2), None);
+        assert_eq!(Privileges::vipp_points(year, 2), None);
+
+        // No double claiming
+        assert_noop!(
+            Privileges::claim_rewards(RuntimeOrigin::signed(1), year),
+            Error::<Test>::NoRewardsForAccount
+        );
+        assert_noop!(
+            Privileges::claim_rewards(RuntimeOrigin::signed(2), year),
+            Error::<Test>::NoRewardsForAccount
         );
     })
 }

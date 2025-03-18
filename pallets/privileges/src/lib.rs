@@ -87,8 +87,9 @@ use frame_support::pallet_prelude::BuildGenesisConfig;
 use frame_support::{
     ensure,
     pallet_prelude::{Decode, DispatchResult, TypeInfo},
-    traits::{Currency, LockableCurrency, UnixTime},
+    traits::{Currency, Get, UnixTime},
     weights::Weight,
+    PalletId,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
@@ -96,7 +97,7 @@ use pallet_energy_generation::OnVipMembershipHandler;
 use parity_scale_codec::Encode;
 use sp_arithmetic::traits::{Saturating, Zero};
 use sp_arithmetic::Perquintill;
-use sp_runtime::{Perbill, SaturatedConversion};
+use sp_runtime::{traits::AccountIdConversion, Perbill, SaturatedConversion};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -146,10 +147,14 @@ pub mod pallet {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// The currency trait.
-        type Currency: LockableCurrency<Self::AccountId>;
+        type Currency: Currency<Self::AccountId, Balance: From<u64>>;
 
         /// Time used for computing year, quarter durations.
         type UnixTime: UnixTime;
+
+        /// The pallet id.
+        #[pallet::constant]
+        type PalletId: Get<PalletId>;
 
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
@@ -215,6 +220,15 @@ pub mod pallet {
             /// Penalty of this user.
             penalty: Perbill,
         },
+        /// Rewards have been paid to the specified user.
+        RewardsPaid {
+            /// The account that received the rewards.
+            account: T::AccountId,
+            /// The amount of VIP rewards.
+            vip_rewards: BalanceOf<T>,
+            /// The amount of VIPP rewards.
+            vipp_rewards: BalanceOf<T>,
+        },
         /// VIP points were forcibly updated for a specific account.
         VipPointsForced {
             /// The year for which the points were updated.
@@ -247,10 +261,12 @@ pub mod pallet {
         IsNotPenaltyFreePeriod,
         /// Not correct date to set.
         NotCorrectDate,
-        /// Account hasn't claim balance.
-        HasNotClaim,
+        /// No rewards can be claimed by given account.
+        NoRewardsForAccount,
         /// Rewards have already been set for the specified year.
         YearRewardsAlreadySet,
+        /// Error indicating insufficient tokens for a claim.
+        NotEnoughTokensForClaim,
     }
 
     #[pallet::call]
@@ -425,6 +441,43 @@ pub mod pallet {
 
             Ok(())
         }
+
+        /// Make a claim to collect VIP/VIPP rewards.
+        #[pallet::call_index(7)]
+        #[pallet::weight(<T as Config>::WeightInfo::claim_rewards())]
+        pub fn claim_rewards(origin: OriginFor<T>, year: u32) -> DispatchResult {
+            let who = ensure_signed(origin)?;
+
+            let rewards = Self::rewards(year).ok_or(Error::<T>::NoRewardsForAccount)?;
+
+            let vip_rewards = if let Some(vip_points) = VipPoints::<T>::take(year, &who) {
+                Perquintill::from_rational(vip_points, rewards.vip_points) * rewards.vip_rewards
+            } else {
+                return Err(Error::<T>::NoRewardsForAccount.into());
+            };
+
+            let vipp_rewards = if let Some(vipp_points) = VippPoints::<T>::take(year, &who) {
+                Perquintill::from_rational(vipp_points, rewards.vipp_points) * rewards.vipp_rewards
+            } else {
+                BalanceOf::<T>::zero()
+            };
+
+            <T as Config>::Currency::transfer(
+                &Self::account_id(),
+                &who,
+                vip_rewards.saturating_add(vipp_rewards),
+                frame_support::traits::ExistenceRequirement::AllowDeath,
+            )
+            .map_err(|_| Error::<T>::NotEnoughTokensForClaim)?;
+
+            Self::deposit_event(Event::<T>::RewardsPaid {
+                account: who,
+                vip_rewards,
+                vipp_rewards,
+            });
+
+            Ok(())
+        }
     }
 
     #[pallet::genesis_config]
@@ -470,6 +523,11 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+    /// The account ID that holds the rewards.
+    pub fn account_id() -> T::AccountId {
+        T::PalletId::get().into_account_truncating()
+    }
+
     /// Set user privilege as VIP.
     fn do_set_user_privilege(account: &T::AccountId, tax_type: PenaltyType) {
         let now_as_millis_u64 = <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>();

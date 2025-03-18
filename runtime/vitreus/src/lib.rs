@@ -886,10 +886,15 @@ impl pallet_nac_managing::Config for Runtime {
     type VIPPCollectionId = VIPPCollectionId;
 }
 
+parameter_types! {
+    pub const PrivilegesPalletId: PalletId = PalletId(*b"py/prvlg");
+}
+
 impl pallet_privileges::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type UnixTime = Timestamp;
+    type PalletId = PrivilegesPalletId;
     type WeightInfo = pallet_privileges::weights::SubstrateWeight<Runtime>;
 }
 
