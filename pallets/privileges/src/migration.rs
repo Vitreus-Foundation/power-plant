@@ -43,8 +43,14 @@ mod v1 {
     impl<T: Config> UncheckedOnRuntimeUpgrade for VersionUncheckedMigrateToV1<T> {
         #[cfg(feature = "try-runtime")]
         fn pre_upgrade() -> Result<Vec<u8>, sp_runtime::TryRuntimeError> {
-            let vip = YearVipResults::<T>::iter().flat_map(|(_, results)| results).count();
-            let vipp = YearVippResults::<T>::iter().flat_map(|(_, results)| results).count();
+            let vip = YearVipResults::<T>::iter()
+                .flat_map(|(_, results)| results)
+                .filter(|(_, points)| !points.is_zero())
+                .count();
+            let vipp = YearVippResults::<T>::iter()
+                .flat_map(|(_, results)| results)
+                .filter(|(_, points)| !points.is_zero())
+                .count();
 
             Ok((vip as u32, vipp as u32).encode())
         }
@@ -53,23 +59,45 @@ mod v1 {
             let mut weight: Weight = Weight::zero();
 
             for (year, results) in YearVipResults::<T>::drain() {
-                weight.saturating_accrue(T::DbWeight::get().reads_writes(1, results.len() as u64));
+                let total = results.len();
 
-                log::info!("Migrating {} VIP results for the year {}", results.len(), year);
-
+                let mut migrated = 0;
                 for (account, points) in results {
-                    VipPoints::<T>::insert(year as u32, account, points);
+                    if !points.is_zero() {
+                        VipPoints::<T>::insert(year as u32, account, points);
+                        migrated += 1;
+                    }
                 }
+
+                log::info!(
+                    "Migrated {} out of {} VIP results for the year {}",
+                    migrated,
+                    total,
+                    year
+                );
+
+                weight.saturating_accrue(T::DbWeight::get().reads_writes(1, migrated));
             }
 
             for (year, results) in YearVippResults::<T>::drain() {
-                weight.saturating_accrue(T::DbWeight::get().reads_writes(1, results.len() as u64));
+                let total = results.len();
 
-                log::info!("Migrating {} VIPP results for the year {}", results.len(), year);
-
+                let mut migrated = 0;
                 for (account, points) in results {
-                    VippPoints::<T>::insert(year as u32, account, points);
+                    if !points.is_zero() {
+                        VippPoints::<T>::insert(year as u32, account, points);
+                        migrated += 1;
+                    }
                 }
+
+                log::info!(
+                    "Migrated {} out of {} VIPP results for the year {}",
+                    migrated,
+                    total,
+                    year
+                );
+
+                weight.saturating_accrue(T::DbWeight::get().reads_writes(1, migrated));
             }
 
             weight
