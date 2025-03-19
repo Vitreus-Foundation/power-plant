@@ -9,6 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Add new extrinsics to `pallet-privileges`: `force_set_vip_points`, `force_set_vipp_points`, `set_rewards`, `claim_rewards` 
+- Add TechnicalCommittee treasury
 
 ### Changed
 
