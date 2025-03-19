@@ -443,9 +443,11 @@ pub mod pallet {
         }
 
         /// Make a claim to collect VIP/VIPP rewards.
+        ///
+        /// Refunds the transaction fees upon successful execution.
         #[pallet::call_index(7)]
         #[pallet::weight(<T as Config>::WeightInfo::claim_rewards())]
-        pub fn claim_rewards(origin: OriginFor<T>, year: u32) -> DispatchResult {
+        pub fn claim_rewards(origin: OriginFor<T>, year: u32) -> DispatchResultWithPostInfo {
             let who = ensure_signed(origin)?;
 
             let rewards = Self::rewards(year).ok_or(Error::<T>::NoRewardsForAccount)?;
@@ -476,7 +478,7 @@ pub mod pallet {
                 vipp_rewards,
             });
 
-            Ok(())
+            Ok(Pays::No.into())
         }
     }
 
