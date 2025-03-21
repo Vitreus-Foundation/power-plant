@@ -1,7 +1,9 @@
 use super::*;
 use crate::mock::*;
 use crate::{Error, PenaltyType};
-use frame_support::{assert_err, assert_ok};
+use frame_support::traits::fungible::Inspect;
+use frame_support::{assert_err, assert_noop, assert_ok};
+use substrate_test_utils::assert_eq_uvec;
 
 #[test]
 fn test_data_building() {
@@ -297,15 +299,15 @@ fn test_year_end_data_saving() {
 
         let current_date = Privileges::current_date();
 
-        let assert_year_result = Vec::from([(10, 2113), (20, 1042)]);
+        let expected_points = Vec::from([(10, 2113), (20, 1042)]);
         assert_ok!(Privileges::update_time(
             RuntimeOrigin::root(),
             current_date.current_year + 1,
             current_date.current_month,
             current_date.current_day
         ));
-        assert_eq!(Privileges::year_vip_results(2020).unwrap().len(), 2);
-        assert_eq!(Privileges::year_vip_results(2020).unwrap(), assert_year_result);
+
+        assert_eq_uvec!(VipPoints::<Test>::iter_prefix(2020).collect::<Vec<_>>(), expected_points);
         assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
         assert_eq!(Privileges::vip_members(20).unwrap().points, 0);
     })
@@ -332,7 +334,7 @@ fn test_year_end_data_saving_vipp_results() {
 
         let current_date = Privileges::current_date();
 
-        let assert_year_result = Vec::from([(10, 69350)]);
+        let expected_points = Vec::from([(10, 69350)]);
         assert_ok!(Privileges::update_time(
             RuntimeOrigin::root(),
             current_date.current_year + 1,
@@ -340,8 +342,7 @@ fn test_year_end_data_saving_vipp_results() {
             current_date.current_day
         ));
 
-        assert_eq!(Privileges::year_vipp_results(2020).unwrap().len(), 1);
-        assert_eq!(Privileges::year_vipp_results(2020).unwrap(), assert_year_result);
+        assert_eq_uvec!(VippPoints::<Test>::iter_prefix(2020).collect::<Vec<_>>(), expected_points);
         assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
     })
 }
@@ -619,5 +620,91 @@ fn test_from_validator_to_cooperator() {
 
         assert_ok!(EnergyGeneration::cooperate(RuntimeOrigin::signed(10), vec![(20, 100)]));
         assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 100);
+    })
+}
+
+#[test]
+fn cannot_set_rewards_before_past_year() {
+    ExtBuilder::default().build_and_execute(|| {
+        let current_year = Privileges::current_date().current_year as u32;
+
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), current_year - 1, 100, 100));
+        assert_noop!(
+            Privileges::set_rewards(RuntimeOrigin::root(), current_year, 100, 100),
+            Error::<Test>::NotCorrectDate
+        );
+        assert_noop!(
+            Privileges::set_rewards(RuntimeOrigin::root(), current_year + 1, 100, 100),
+            Error::<Test>::NotCorrectDate
+        );
+    })
+}
+
+#[test]
+fn cannot_set_rewards_twice() {
+    ExtBuilder::default().build_and_execute(|| {
+        let year = Privileges::current_date().current_year as u32 - 1;
+
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), year, 100, 100));
+        assert_noop!(
+            Privileges::set_rewards(RuntimeOrigin::root(), year, 100, 100),
+            Error::<Test>::YearRewardsAlreadySet
+        );
+    })
+}
+
+#[test]
+fn claim_rewards_works() {
+    ExtBuilder::default().build_and_execute(|| {
+        let year = Privileges::current_date().current_year as u32 - 1;
+
+        assert_ok!(Privileges::force_set_vip_points(RuntimeOrigin::root(), year, 1, 100));
+        assert_ok!(Privileges::force_set_vipp_points(RuntimeOrigin::root(), year, 1, 200));
+
+        assert_ok!(Privileges::force_set_vip_points(RuntimeOrigin::root(), year, 2, 300));
+
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), year, 1000, 1000));
+
+        // Account 1 has VIP and VIPP rewards
+        assert_eq!(Privileges::vip_points(year, 1), Some(100));
+        assert_eq!(Privileges::vipp_points(year, 1), Some(200));
+
+        let initial_balance = Balances::balance(&1);
+        let expected_vip_reward = 250; // 100/400 * 1000
+        let expected_vipp_reward = 1000;
+
+        assert_ok!(Privileges::claim_rewards(RuntimeOrigin::signed(1), year));
+        assert_eq!(
+            Balances::balance(&1),
+            initial_balance + expected_vip_reward + expected_vipp_reward
+        );
+        assert_eq!(Privileges::vip_points(year, 1), None);
+        assert_eq!(Privileges::vipp_points(year, 1), None);
+
+        // Account 2 has only VIP rewards
+        assert_eq!(Privileges::vip_points(year, 2), Some(300));
+        assert_eq!(Privileges::vipp_points(year, 2), None);
+
+        let initial_balance = Balances::balance(&2);
+        let expected_vip_reward = 750; // 300/400 * 1000
+        let expected_vipp_reward = 0;
+
+        assert_ok!(Privileges::claim_rewards(RuntimeOrigin::signed(2), year));
+        assert_eq!(
+            Balances::balance(&2),
+            initial_balance + expected_vip_reward + expected_vipp_reward
+        );
+        assert_eq!(Privileges::vip_points(year, 2), None);
+        assert_eq!(Privileges::vipp_points(year, 2), None);
+
+        // No double claiming
+        assert_noop!(
+            Privileges::claim_rewards(RuntimeOrigin::signed(1), year),
+            Error::<Test>::NoRewardsForAccount
+        );
+        assert_noop!(
+            Privileges::claim_rewards(RuntimeOrigin::signed(2), year),
+            Error::<Test>::NoRewardsForAccount
+        );
     })
 }
