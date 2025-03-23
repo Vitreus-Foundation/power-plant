@@ -1241,6 +1241,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::TechnicalCommittee(..)
             | RuntimeCall::TechnicalMembership(..)
             | RuntimeCall::Treasury(..)
+            | RuntimeCall::TechnicalCommitteeTreasury(..)
             | RuntimeCall::Democracy(..)
             | RuntimeCall::Elections(..)
             | RuntimeCall::Session(..)
@@ -1926,6 +1927,7 @@ construct_runtime!(
         Elections: pallet_elections_phragmen = 54,
         Multisig: pallet_multisig = 55,
         DemocracyExtension: pallet_democracy_extension = 56,
+        TechnicalCommitteeTreasury: pallet_treasury::<Instance1> = 58,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,

@@ -1,15 +1,20 @@
 use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
-    EnergyAsset, EnergyBroker, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAsset,
-    NativeEnergyExchange, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent,
-    RuntimeHoldReason, RuntimeOrigin, Scheduler, StaticEnergyAsset, TechnicalCommittee, Treasury,
-    TreasuryExtension, DAYS, HOURS, LNRG, MICRO_VTRS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS,
-    PICO_VTRS, SNRG, UNITS,
+    EnergyAsset, EnergyBroker, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAndAssets,
+    NativeAsset, NativeEnergyExchange, NativeOrAssetId, OriginCaller, Preimage, Runtime,
+    RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin, Scheduler, StaticEnergyAsset,
+    TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, LNRG, MICRO_VTRS, MILLI_VTRS,
+    MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, SNRG, UNITS, VNRG,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
-use frame_support::traits::tokens::{PayFromAccount, UnityAssetBalanceConversion};
-use frame_support::traits::{Currency, EitherOf, LinearStoragePrice, LockIdentifier, OnUnbalanced};
+use frame_support::traits::tokens::{
+    pay::{PayAssetFromAccount, PayFromAccount},
+    UnityAssetBalanceConversion, UnityOrOuterConversion,
+};
+use frame_support::traits::{
+    Currency, EitherOf, Equals, LinearStoragePrice, LockIdentifier, OnUnbalanced,
+};
 use frame_support::{parameter_types, traits::EitherOfDiverse, weights::Weight, PalletId};
 use frame_system::{EnsureRoot, EnsureWithSuccess};
 use pallet_treasury::NegativeImbalanceOf;
@@ -21,6 +26,17 @@ use static_assertions::const_assert;
 
 pub const fn deposit(items: u32, bytes: u32) -> Balance {
     items as Balance * 200 * NANO_VTRS + (bytes as Balance) * PICO_VTRS
+}
+
+pub struct TreasuryAccountId<R, I: 'static = ()>(sp_std::marker::PhantomData<(R, I)>);
+impl<R, I> sp_runtime::traits::TypedGet for TreasuryAccountId<R, I>
+where
+    R: pallet_treasury::Config<I>,
+{
+    type Type = <R as frame_system::Config>::AccountId;
+    fn get() -> Self::Type {
+        <pallet_treasury::Pallet<R, I>>::account_id()
+    }
 }
 
 parameter_types! {
@@ -195,8 +211,52 @@ impl pallet_treasury::Config for Runtime {
     type AssetKind = ();
     type Beneficiary = AccountId;
     type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
-    type Paymaster = PayFromAccount<Balances, pallet_treasury::TreasuryAccountId<Runtime>>;
+    type Paymaster = PayFromAccount<Balances, TreasuryAccountId<Runtime>>;
     type BalanceConverter = UnityAssetBalanceConversion;
+    type PayoutPeriod = PayoutSpendPeriod;
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
+}
+
+parameter_types! {
+    pub const TechnicalCommitteeTreasuryPalletId: PalletId = PalletId(*b"py/tctsr");
+    pub const TechnicalCommitteeSpendOriginMaxAmount: Balance = 1_000_000 * UNITS;
+}
+
+pub type TechnicalCommitteeTreasury = pallet_treasury::Instance1;
+impl pallet_treasury::Config<TechnicalCommitteeTreasury> for Runtime {
+    type Currency = Balances;
+    type RejectOrigin = EitherOfDiverse<
+        EnsureRoot<AccountId>,
+        pallet_collective::EnsureProportionMoreThan<AccountId, TechnicalCollective, 1, 2>,
+    >;
+    type RuntimeEvent = RuntimeEvent;
+    type SpendPeriod = SpendPeriod;
+    type Burn = Burn;
+    type PalletId = TechnicalCommitteeTreasuryPalletId;
+    type BurnDestination = ();
+    type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
+    type SpendFunds = ();
+    type MaxApprovals = MaxApprovals;
+    type SpendOrigin = EitherOf<
+        frame_system::EnsureRootWithSuccess<AccountId, RootSpendOriginMaxAmount>,
+        EnsureWithSuccess<
+            pallet_collective::EnsureProportionAtLeast<AccountId, TechnicalCollective, 2, 3>,
+            AccountId,
+            TechnicalCommitteeSpendOriginMaxAmount,
+        >,
+    >;
+    type AssetKind = NativeOrAssetId;
+    type Beneficiary = AccountId;
+    type BeneficiaryLookup = IdentityLookup<Self::Beneficiary>;
+    type Paymaster = PayAssetFromAccount<
+        NativeAndAssets,
+        TreasuryAccountId<Runtime, TechnicalCommitteeTreasury>,
+    >;
+    type BalanceConverter = UnityOrOuterConversion<
+        Equals<NativeAsset>,
+        pallet_dynamic_energy::ConversionFromEnergyBalance<Runtime, Equals<VNRG>>,
+    >;
     type PayoutPeriod = PayoutSpendPeriod;
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = ();

@@ -1,7 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::all)]
 
-use frame_support::traits::{tokens::Balance, Get, UnixTime};
+use frame_support::traits::{
+    tokens::{Balance, ConversionFromAssetBalance},
+    Contains, Get, UnixTime,
+};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -499,6 +502,35 @@ impl<T: Config> Pallet<T> {
 
         Saturating::saturating_add(weight * value, (Perbill::one() - weight) * old_value)
     }
+}
+
+pub struct ConversionFromEnergyBalance<T, C>(core::marker::PhantomData<(T, C)>);
+impl<AssetBalance, AssetId, OutBalance, T, C>
+    ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance>
+    for ConversionFromEnergyBalance<T, C>
+where
+    T: Config,
+    C: Contains<AssetId>,
+    AssetBalance: Balance + Into<OutBalance>,
+{
+    type Error = ();
+
+    fn from_asset_balance(
+        balance: AssetBalance,
+        asset_id: AssetId,
+    ) -> Result<OutBalance, Self::Error> {
+        if C::contains(&asset_id) {
+            Pallet::<T>::exchange_rate()
+                .and_then(FixedPointNumber::reciprocal)
+                .map(|rate| rate.saturating_mul_int(balance).into())
+        } else {
+            None
+        }
+        .ok_or(())
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn ensure_successful(_: AssetId) {}
 }
 
 impl<T: Config> OnEnergyBurn<EnergyOf<T>> for Pallet<T> {
