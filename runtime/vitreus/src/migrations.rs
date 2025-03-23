@@ -7,8 +7,10 @@ pub type Permanent = (
     pallet_energy_generation::migrations::FixCooperatorStake<Runtime>,
 );
 
-pub type Unreleased =
+pub type V0213 =
     (InitTechnicalCommitteeTreasury, pallet_privileges::migration::MigrateToV1<Runtime>);
+
+pub type Unreleased = ();
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {
