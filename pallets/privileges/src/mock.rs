@@ -268,10 +268,15 @@ impl pallet_authorship::Config for Test {
     type EventHandler = pallet_energy_generation::Pallet<Test>;
 }
 
+parameter_types! {
+    pub const PrivilegesPalletId: PalletId = PalletId(*b"py/prvlg");
+}
+
 impl pallet_privileges::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type UnixTime = Timestamp;
+    type PalletId = PrivilegesPalletId;
     type WeightInfo = ();
 }
 
@@ -632,6 +637,8 @@ impl ExtBuilder {
                 (81, self.balance_factor * 2000),
                 // This allows us to have a total_payout different from 0.
                 (999, 1_000_000_000_000),
+                // Rewards
+                (Privileges::account_id(), 1_000_000),
             ],
         }
         .assimilate_storage(&mut storage);
