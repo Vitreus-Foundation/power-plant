@@ -253,7 +253,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 212,
+    spec_version: 213,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 4,
@@ -886,10 +886,15 @@ impl pallet_nac_managing::Config for Runtime {
     type VIPPCollectionId = VIPPCollectionId;
 }
 
+parameter_types! {
+    pub const PrivilegesPalletId: PalletId = PalletId(*b"py/prvlg");
+}
+
 impl pallet_privileges::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type UnixTime = Timestamp;
+    type PalletId = PrivilegesPalletId;
     type WeightInfo = pallet_privileges::weights::SubstrateWeight<Runtime>;
 }
 
@@ -1236,6 +1241,7 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::TechnicalCommittee(..)
             | RuntimeCall::TechnicalMembership(..)
             | RuntimeCall::Treasury(..)
+            | RuntimeCall::TechnicalCommitteeTreasury(..)
             | RuntimeCall::Democracy(..)
             | RuntimeCall::Elections(..)
             | RuntimeCall::Session(..)
@@ -1791,7 +1797,7 @@ impl parachains_slashing::Config for Runtime {
 }
 
 parameter_types! {
-    pub const ParaDeposit: Balance = 20000 * UNITS;
+    pub const ParaDeposit: Balance = prod_or_fast!(20_000 * UNITS, 1_000 * UNITS);
     pub const ParaDataByteDeposit: Balance = 2;
 }
 
@@ -1806,7 +1812,7 @@ impl paras_registrar::Config for Runtime {
 }
 
 parameter_types! {
-    pub LeasePeriod: BlockNumber = prod_or_fast!(4 * WEEKS, 1 * DAYS, "VITREUS_LEASE_PERIOD");
+    pub LeasePeriod: BlockNumber = prod_or_fast!(4 * WEEKS, 1 * WEEKS, "VITREUS_LEASE_PERIOD");
 }
 
 impl slots::Config for Runtime {
@@ -1921,6 +1927,7 @@ construct_runtime!(
         Elections: pallet_elections_phragmen = 54,
         Multisig: pallet_multisig = 55,
         DemocracyExtension: pallet_democracy_extension = 56,
+        TechnicalCommitteeTreasury: pallet_treasury::<Instance1> = 58,
 
         // Parachains pallets
         ParachainsOrigin: parachains_origin::{Pallet, Origin} = 60,
@@ -2027,6 +2034,7 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 #[rustfmt::skip]
 pub type Migrations = (
     migrations::Unreleased,
+    migrations::V0213,
     migrations::Permanent,
 );
 

@@ -1,7 +1,10 @@
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(clippy::all)]
 
-use frame_support::traits::{tokens::Balance, Get, UnixTime};
+use frame_support::traits::{
+    tokens::{Balance, ConversionFromAssetBalance},
+    Contains, Get, UnixTime,
+};
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
@@ -176,6 +179,10 @@ pub mod pallet {
     pub type EnergyGeneration<T: Config> =
         StorageMap<_, Twox64Concat, SessionIndex, EnergyOf<T>, ValueQuery>;
 
+    /// The minimum energy generation per session.
+    #[pallet::storage]
+    pub type MinimumEnergyGeneration<T: Config> = StorageValue<_, EnergyOf<T>>;
+
     /// The default smooth factor.
     /// Set to 1 to ignore past values and disable smoothing.
     #[pallet::type_value]
@@ -192,6 +199,8 @@ pub mod pallet {
         EnergySaleForceSet { amount: Option<EnergyOf<T>> },
         /// The total stake was forcibly set.
         TotalStakeForceSet { amount: Option<StakeOf<T>> },
+        /// The minimum energy generation was set.
+        MinimumEnergyGenerationSet { amount: Option<EnergyOf<T>> },
         /// The smooth factor for generation rate was updated.
         GenerationRateSmoothFactorUpdated { value: u32 },
         /// The smooth factor for exchange rate was updated.
@@ -337,6 +346,21 @@ pub mod pallet {
 
             Ok(())
         }
+
+        /// Set the minimum energy generation.
+        #[pallet::call_index(7)]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
+        pub fn set_minimum_energy_generation(
+            origin: OriginFor<T>,
+            amount: Option<EnergyOf<T>>,
+        ) -> DispatchResult {
+            T::ManageOrigin::ensure_origin(origin)?;
+
+            MinimumEnergyGeneration::<T>::set(amount);
+            Self::deposit_event(Event::MinimumEnergyGenerationSet { amount });
+
+            Ok(())
+        }
     }
 }
 
@@ -453,7 +477,7 @@ impl<T: Config> Pallet<T> {
     }
 
     fn calculate_generation_rate(energy_burn: EnergyOf<T>) -> Option<EnergyOf<T>> {
-        Some(energy_burn)
+        Some(energy_burn.max(MinimumEnergyGeneration::<T>::get().unwrap_or_default()))
     }
 
     /// Calculates exchange rate by the following rule:
@@ -499,6 +523,35 @@ impl<T: Config> Pallet<T> {
 
         Saturating::saturating_add(weight * value, (Perbill::one() - weight) * old_value)
     }
+}
+
+pub struct ConversionFromEnergyBalance<T, C>(core::marker::PhantomData<(T, C)>);
+impl<AssetBalance, AssetId, OutBalance, T, C>
+    ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance>
+    for ConversionFromEnergyBalance<T, C>
+where
+    T: Config,
+    C: Contains<AssetId>,
+    AssetBalance: Balance + Into<OutBalance>,
+{
+    type Error = ();
+
+    fn from_asset_balance(
+        balance: AssetBalance,
+        asset_id: AssetId,
+    ) -> Result<OutBalance, Self::Error> {
+        if C::contains(&asset_id) {
+            Pallet::<T>::exchange_rate()
+                .and_then(FixedPointNumber::reciprocal)
+                .map(|rate| rate.saturating_mul_int(balance).into())
+        } else {
+            None
+        }
+        .ok_or(())
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn ensure_successful(_: AssetId) {}
 }
 
 impl<T: Config> OnEnergyBurn<EnergyOf<T>> for Pallet<T> {

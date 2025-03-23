@@ -413,6 +413,7 @@ pub fn testnet_genesis(
         },
         technical_membership: Default::default(),
         treasury: Default::default(),
+        technical_committee_treasury: Default::default(),
         elections: Default::default(),
         dynamic_energy: DynamicEnergyConfig {
             energy_burn: 10_000_000_000,
@@ -573,6 +574,7 @@ fn mainnet_genesis(
         technical_committee: genesis::technical_committee_config(),
         technical_membership: Default::default(),
         treasury: Default::default(),
+        technical_committee_treasury: Default::default(),
         elections: Default::default(),
         dynamic_energy: DynamicEnergyConfig {
             energy_burn: 10_000_000_000,

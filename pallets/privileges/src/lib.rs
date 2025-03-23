@@ -87,16 +87,17 @@ use frame_support::pallet_prelude::BuildGenesisConfig;
 use frame_support::{
     ensure,
     pallet_prelude::{Decode, DispatchResult, TypeInfo},
-    traits::{LockableCurrency, UnixTime},
+    traits::{Currency, Get, UnixTime},
     weights::Weight,
+    PalletId,
 };
 use frame_system::pallet_prelude::OriginFor;
 pub use pallet::*;
 use pallet_energy_generation::OnVipMembershipHandler;
 use parity_scale_codec::Encode;
-use sp_arithmetic::traits::Saturating;
+use sp_arithmetic::traits::{Saturating, Zero};
 use sp_arithmetic::Perquintill;
-use sp_runtime::{Perbill, SaturatedConversion};
+use sp_runtime::{traits::AccountIdConversion, Perbill, SaturatedConversion};
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
 
@@ -106,6 +107,8 @@ pub mod mock;
 mod tests;
 
 mod contribution_info;
+
+pub mod migration;
 
 pub mod weights;
 
@@ -118,6 +121,10 @@ const FREE_PENALTY_PERIOD_MONTH_NUMBER: u32 = 1;
 const YEAR_FIRST_MONTH: u32 = 1;
 const YEAR_FIRST_DAY: u32 = 1;
 
+type BalanceOf<T> =
+    <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
+type PointsOf<T> = <T as pallet_energy_generation::Config>::StakeBalance;
+
 #[frame_support::pallet]
 pub mod pallet {
     use super::*;
@@ -125,7 +132,10 @@ pub mod pallet {
     use frame_support::traits::UnixTime;
     use frame_system::{ensure_root, ensure_signed};
 
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
     #[pallet::pallet]
+    #[pallet::storage_version(STORAGE_VERSION)]
     #[pallet::without_storage_info]
     pub struct Pallet<T>(_);
 
@@ -137,10 +147,14 @@ pub mod pallet {
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// The currency trait.
-        type Currency: LockableCurrency<Self::AccountId>;
+        type Currency: Currency<Self::AccountId, Balance: From<u64>>;
 
         /// Time used for computing year, quarter durations.
         type UnixTime: UnixTime;
+
+        /// The pallet id.
+        #[pallet::constant]
+        type PalletId: Get<PalletId>;
 
         /// Weight information for extrinsic.
         type WeightInfo: WeightInfo;
@@ -155,22 +169,30 @@ pub mod pallet {
     pub type VippMembers<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, VippMemberInfo<T>>;
 
     #[pallet::storage]
-    #[pallet::getter(fn year_vip_results)]
-    pub type YearVipResults<T: Config> = StorageMap<
+    #[pallet::getter(fn vip_points)]
+    pub type VipPoints<T: Config> = StorageDoubleMap<
         _,
         Twox64Concat,
-        i32,
-        Vec<(T::AccountId, <T as pallet_energy_generation::Config>::StakeBalance)>,
+        u32,
+        Twox64Concat,
+        T::AccountId,
+        <T as pallet_energy_generation::Config>::StakeBalance,
     >;
 
     #[pallet::storage]
-    #[pallet::getter(fn year_vipp_results)]
-    pub type YearVippResults<T: Config> = StorageMap<
+    #[pallet::getter(fn vipp_points)]
+    pub type VippPoints<T: Config> = StorageDoubleMap<
         _,
         Twox64Concat,
-        i32,
-        Vec<(T::AccountId, <T as pallet_energy_generation::Config>::StakeBalance)>,
+        u32,
+        Twox64Concat,
+        T::AccountId,
+        <T as pallet_energy_generation::Config>::StakeBalance,
     >;
+
+    #[pallet::storage]
+    #[pallet::getter(fn rewards)]
+    pub type Rewards<T: Config> = StorageMap<_, Twox64Concat, u32, RewardsInfo<T>>;
 
     #[pallet::storage]
     #[pallet::getter(fn current_date)]
@@ -198,6 +220,33 @@ pub mod pallet {
             /// Penalty of this user.
             penalty: Perbill,
         },
+        /// Rewards have been paid to the specified user.
+        RewardsPaid {
+            /// The account that received the rewards.
+            account: T::AccountId,
+            /// The amount of VIP rewards.
+            vip_rewards: BalanceOf<T>,
+            /// The amount of VIPP rewards.
+            vipp_rewards: BalanceOf<T>,
+        },
+        /// VIP points were forcibly updated for a specific account.
+        VipPointsForced {
+            /// The year for which the points were updated.
+            year: u32,
+            /// The account whose VIP points were changed.
+            account: T::AccountId,
+            /// The new VIP points value assigned to the account.
+            points: PointsOf<T>,
+        },
+        /// VIPP points were forcibly updated for a specific account.
+        VippPointsForced {
+            /// The year for which the points were updated.
+            year: u32,
+            /// The account whose VIPP points were changed.
+            account: T::AccountId,
+            /// The new VIPP points value assigned to the account.
+            points: PointsOf<T>,
+        },
     }
 
     #[pallet::error]
@@ -212,8 +261,12 @@ pub mod pallet {
         IsNotPenaltyFreePeriod,
         /// Not correct date to set.
         NotCorrectDate,
-        /// Account hasn't claim balance.
-        HasNotClaim,
+        /// No rewards can be claimed by given account.
+        NoRewardsForAccount,
+        /// Rewards have already been set for the specified year.
+        YearRewardsAlreadySet,
+        /// Error indicating insufficient tokens for a claim.
+        NotEnoughTokensForClaim,
     }
 
     #[pallet::call]
@@ -265,7 +318,7 @@ pub mod pallet {
                 if current_date.current_month == YEAR_FIRST_MONTH
                     && current_date.current_day == YEAR_FIRST_DAY
                 {
-                    Self::save_year_info(current_date.current_year - 1);
+                    Self::save_year_info(current_date.current_year as u32 - 1);
                 }
 
                 updated_days += 1;
@@ -295,6 +348,137 @@ pub mod pallet {
             let who = ensure_signed(origin.clone())?;
 
             Self::do_change_penalty_type(&who, new_tax_type)
+        }
+
+        /// Force set VIP points.
+        #[pallet::call_index(4)]
+        #[pallet::weight(<T as Config>::WeightInfo::force_set_vip_points())]
+        pub fn force_set_vip_points(
+            origin: OriginFor<T>,
+            year: u32,
+            account: T::AccountId,
+            points: PointsOf<T>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            let current_year = Self::current_date().current_year as u32;
+
+            ensure!(year <= current_year, Error::<T>::NotCorrectDate);
+            ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
+
+            if year == current_year {
+                VipMembers::<T>::try_mutate(&account, |info| {
+                    info.as_mut()
+                        .ok_or(Error::<T>::AccountHasNotVipStatus)
+                        .map(|info| info.points = points)
+                })?;
+            } else {
+                VipPoints::<T>::insert(year, &account, points);
+            }
+
+            Self::deposit_event(Event::<T>::VipPointsForced { year, account, points });
+
+            Ok(())
+        }
+
+        /// Force set VIPP points.
+        #[pallet::call_index(5)]
+        #[pallet::weight(<T as Config>::WeightInfo::force_set_vipp_points())]
+        pub fn force_set_vipp_points(
+            origin: OriginFor<T>,
+            year: u32,
+            account: T::AccountId,
+            points: PointsOf<T>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            let current_year = Self::current_date().current_year as u32;
+
+            ensure!(year <= current_year, Error::<T>::NotCorrectDate);
+            ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
+
+            if year == current_year {
+                VippMembers::<T>::try_mutate(&account, |info| {
+                    info.as_mut()
+                        .ok_or(Error::<T>::AccountHasNotVipStatus)
+                        .map(|info| info.points = points)
+                })?;
+            } else {
+                VippPoints::<T>::insert(year, &account, points);
+            }
+
+            Self::deposit_event(Event::<T>::VippPointsForced { year, account, points });
+
+            Ok(())
+        }
+
+        /// Set VIP and VIPP rewards.
+        #[pallet::call_index(6)]
+        #[pallet::weight(<T as Config>::WeightInfo::set_rewards())]
+        pub fn set_rewards(
+            origin: OriginFor<T>,
+            year: u32,
+            vip_rewards: BalanceOf<T>,
+            vipp_rewards: BalanceOf<T>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+
+            let current_year = Self::current_date().current_year as u32;
+
+            ensure!(year < current_year, Error::<T>::NotCorrectDate);
+            ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
+
+            let vip_points = VipPoints::<T>::iter_prefix_values(year)
+                .fold(PointsOf::<T>::zero(), |total, points| total.saturating_add(points));
+
+            let vipp_points = VippPoints::<T>::iter_prefix_values(year)
+                .fold(PointsOf::<T>::zero(), |total, points| total.saturating_add(points));
+
+            Rewards::<T>::insert(
+                year,
+                RewardsInfo { vip_points, vip_rewards, vipp_points, vipp_rewards },
+            );
+
+            Ok(())
+        }
+
+        /// Make a claim to collect VIP/VIPP rewards.
+        ///
+        /// Refunds the transaction fees upon successful execution.
+        #[pallet::call_index(7)]
+        #[pallet::weight(<T as Config>::WeightInfo::claim_rewards())]
+        pub fn claim_rewards(origin: OriginFor<T>, year: u32) -> DispatchResultWithPostInfo {
+            let who = ensure_signed(origin)?;
+
+            let rewards = Self::rewards(year).ok_or(Error::<T>::NoRewardsForAccount)?;
+
+            let vip_rewards = if let Some(vip_points) = VipPoints::<T>::take(year, &who) {
+                Perquintill::from_rational(vip_points, rewards.vip_points) * rewards.vip_rewards
+            } else {
+                return Err(Error::<T>::NoRewardsForAccount.into());
+            };
+
+            let vipp_rewards = if let Some(vipp_points) = VippPoints::<T>::take(year, &who) {
+                Perquintill::from_rational(vipp_points, rewards.vipp_points) * rewards.vipp_rewards
+            } else {
+                BalanceOf::<T>::zero()
+            };
+
+            <T as Config>::Currency::transfer(
+                &Self::account_id(),
+                &who,
+                vip_rewards.saturating_add(vipp_rewards),
+                frame_support::traits::ExistenceRequirement::AllowDeath,
+            )
+            .map_err(|_| Error::<T>::NotEnoughTokensForClaim)?;
+
+            Self::deposit_event(Event::<T>::RewardsPaid {
+                account: who,
+                vip_rewards,
+                vipp_rewards,
+            });
+
+            Ok(Pays::No.into())
         }
     }
 
@@ -341,6 +525,11 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+    /// The account ID that holds the rewards.
+    pub fn account_id() -> T::AccountId {
+        T::PalletId::get().into_account_truncating()
+    }
+
     /// Set user privilege as VIP.
     fn do_set_user_privilege(account: &T::AccountId, tax_type: PenaltyType) {
         let now_as_millis_u64 = <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>();
@@ -428,6 +617,10 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
+    fn are_rewards_not_set(year: u32) -> bool {
+        !Rewards::<T>::contains_key(year)
+    }
+
     /// Assesses whether a user qualifies as a VIP, and whether they are a validator or a cooperator within the network.
     fn is_legit_for_vip(account: &T::AccountId) -> bool {
         // Check account validator status.
@@ -500,7 +693,7 @@ impl<T: Config> Pallet<T> {
 
             if new_date.current_month == YEAR_FIRST_MONTH && new_date.current_day == YEAR_FIRST_DAY
             {
-                Self::save_year_info(new_date.current_year - 1);
+                Self::save_year_info(new_date.current_year as u32 - 1);
             }
 
             CurrentDate::<T>::put(new_date);
@@ -557,24 +750,20 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Save VIP year information to pay rewards.
-    pub fn save_year_info(current_year: i32) {
-        let mut results = Vec::new();
+    pub fn save_year_info(year: u32) {
         VipMembers::<T>::translate(|account, mut vip_info: VipMemberInfo<T>| {
-            results.push((account, vip_info.points));
-            vip_info.points = <T as pallet_energy_generation::Config>::StakeBalance::default();
+            VipPoints::<T>::insert(year, account, vip_info.points);
+
+            vip_info.points.set_zero();
             Some(vip_info)
         });
 
-        YearVipResults::<T>::insert(current_year, results);
-
-        let mut vipp_results = Vec::new();
         VippMembers::<T>::translate(|account, mut vipp_info: VippMemberInfo<T>| {
-            vipp_results.push((account, vipp_info.points));
-            vipp_info.points = <T as pallet_energy_generation::Config>::StakeBalance::default();
+            VippPoints::<T>::insert(year, account, vipp_info.points);
+
+            vipp_info.points.set_zero();
             Some(vipp_info)
         });
-
-        YearVippResults::<T>::insert(current_year, vipp_results);
     }
 
     /// Calculate VIP points for account.

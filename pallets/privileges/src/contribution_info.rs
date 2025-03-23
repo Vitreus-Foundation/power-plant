@@ -134,6 +134,23 @@ pub struct VippMemberInfo<T: Config> {
     pub active_vipp_threshold: Vec<(T::ItemId, T::StakeBalance)>,
 }
 
+/// Information about VIP and VIPP rewards.
+#[derive(Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct RewardsInfo<T: Config> {
+    /// VIP points accumulated during the year.
+    pub vip_points: PointsOf<T>,
+
+    /// VIP rewards allocated for the year.
+    pub vip_rewards: BalanceOf<T>,
+
+    /// VIPP points accumulated during the year.
+    pub vipp_points: PointsOf<T>,
+
+    /// VIPP rewards allocated for the year.
+    pub vipp_rewards: BalanceOf<T>,
+}
+
 impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> for Pallet<T> {
     fn mint_vipp(who: &T::AccountId, amount: T::StakeBalance, item_id: T::ItemId) {
         Self::mint_new_vipp_nft(who, amount, item_id);
