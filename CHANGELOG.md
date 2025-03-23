@@ -4,6 +4,20 @@ Changelog for the Vitreus runtime.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [213] - 2025-03-23
+
+### Added
+
+- Add new extrinsics to `pallet-privileges`: `force_set_vip_points`, `force_set_vipp_points`, `set_rewards`, `claim_rewards` 
+- Add TechnicalCommittee treasury
+- Add lower bound for energy generation
+
+### Changed
+
+- Reduce treasury spending limit to 500k VTRS for Council motions
+- Lower `ParaDeposit` to 1000 VTRS on testnet
+- Raise `LeasePeriod` to 1 week on testnet
+
 ## [212] - 2025-03-05
 
 ### Added
