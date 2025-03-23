@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 
+- Reduce treasury spending limit to 500k VTRS for Council motions
 - Lower `ParaDeposit` to 1000 VTRS on testnet
 - Raise `LeasePeriod` to 1 week on testnet
 
