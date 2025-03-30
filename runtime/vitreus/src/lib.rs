@@ -1036,7 +1036,8 @@ impl FixedPathAssetConverter<Runtime> for StaticEnergyToNativeConverter {
         _broker: &AccountId,
         credit: Credit<AccountId, NativeAndAssets>,
     ) -> Result<(), Credit<AccountId, NativeAndAssets>> {
-        Ok(drop(credit))
+        drop(credit);
+        Ok(())
     }
 }
 
@@ -1068,7 +1069,8 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToEnergyConverter {
         _broker: &AccountId,
         credit: Credit<AccountId, NativeAndAssets>,
     ) -> Result<(), Credit<AccountId, NativeAndAssets>> {
-        Ok(drop(credit))
+        drop(credit);
+        Ok(())
     }
 }
 
@@ -1100,7 +1102,8 @@ impl FixedPathAssetConverter<Runtime> for StaticEnergyToEnergyConverter {
         _broker: &AccountId,
         credit: Credit<AccountId, NativeAndAssets>,
     ) -> Result<(), Credit<AccountId, NativeAndAssets>> {
-        Ok(drop(credit))
+        drop(credit);
+        Ok(())
     }
 }
 
