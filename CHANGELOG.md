@@ -4,6 +4,16 @@ Changelog for the Vitreus runtime.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Added
+
+- Add energy conversion from LNRG and SNRG to VNRG
+
+### Changed
+
+- Refactor `pallet-energy-broker`
+
 ## [213] - 2025-03-23
 
 ### Added

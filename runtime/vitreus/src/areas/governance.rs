@@ -255,7 +255,7 @@ impl pallet_treasury::Config<TechnicalCommitteeTreasury> for Runtime {
     >;
     type BalanceConverter = UnityOrOuterConversion<
         Equals<NativeAsset>,
-        pallet_dynamic_energy::ConversionFromEnergyBalance<Runtime, Equals<VNRG>>,
+        pallet_dynamic_energy::DynamicEnergyConversion<Runtime, Equals<VNRG>>,
     >;
     type PayoutPeriod = PayoutSpendPeriod;
     #[cfg(feature = "runtime-benchmarks")]
