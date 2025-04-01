@@ -2,7 +2,7 @@
 #![warn(clippy::all)]
 
 use frame_support::traits::{
-    tokens::{Balance, ConversionFromAssetBalance},
+    tokens::{Balance, ConversionFromAssetBalance, ConversionToAssetBalance},
     Contains, Get, UnixTime,
 };
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
@@ -525,35 +525,6 @@ impl<T: Config> Pallet<T> {
     }
 }
 
-pub struct ConversionFromEnergyBalance<T, C>(core::marker::PhantomData<(T, C)>);
-impl<AssetBalance, AssetId, OutBalance, T, C>
-    ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance>
-    for ConversionFromEnergyBalance<T, C>
-where
-    T: Config,
-    C: Contains<AssetId>,
-    AssetBalance: Balance + Into<OutBalance>,
-{
-    type Error = ();
-
-    fn from_asset_balance(
-        balance: AssetBalance,
-        asset_id: AssetId,
-    ) -> Result<OutBalance, Self::Error> {
-        if C::contains(&asset_id) {
-            Pallet::<T>::exchange_rate()
-                .and_then(FixedPointNumber::reciprocal)
-                .map(|rate| rate.saturating_mul_int(balance).into())
-        } else {
-            None
-        }
-        .ok_or(())
-    }
-
-    #[cfg(feature = "runtime-benchmarks")]
-    fn ensure_successful(_: AssetId) {}
-}
-
 impl<T: Config> OnEnergyBurn<EnergyOf<T>> for Pallet<T> {
     fn on_energy_burn(amount: EnergyOf<T>) {
         SessionEnergyBurn::<T>::mutate(|total| total.saturating_accrue(amount));
@@ -605,5 +576,50 @@ impl<T: Config> EraEnergyRateCalculator<EnergyOf<T>> for Pallet<T> {
         log::trace!(target: LOG_TARGET, "Energy generated in era {:?}: {:?}", era, total);
 
         Some(total)
+    }
+}
+
+pub struct DynamicEnergyConversion<T, C>(core::marker::PhantomData<(T, C)>);
+
+impl<AssetBalance, AssetId, OutBalance, T, C>
+    ConversionFromAssetBalance<AssetBalance, AssetId, OutBalance> for DynamicEnergyConversion<T, C>
+where
+    T: Config,
+    C: Contains<AssetId>,
+    AssetBalance: Balance + Into<OutBalance>,
+{
+    type Error = ();
+
+    fn from_asset_balance(
+        balance: AssetBalance,
+        asset_id: AssetId,
+    ) -> Result<OutBalance, Self::Error> {
+        let rate = if C::contains(&asset_id) { Pallet::<T>::exchange_rate() } else { None };
+
+        rate.and_then(FixedPointNumber::reciprocal)
+            .map(|rate| rate.saturating_mul_int(balance).into())
+            .ok_or(())
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn ensure_successful(_: AssetId) {}
+}
+
+impl<InBalance, AssetId, AssetBalance, T, C>
+    ConversionToAssetBalance<InBalance, AssetId, AssetBalance> for DynamicEnergyConversion<T, C>
+where
+    T: Config,
+    C: Contains<AssetId>,
+    InBalance: Balance + Into<AssetBalance>,
+{
+    type Error = ();
+
+    fn to_asset_balance(
+        balance: InBalance,
+        asset_id: AssetId,
+    ) -> Result<AssetBalance, Self::Error> {
+        let rate = if C::contains(&asset_id) { Pallet::<T>::exchange_rate() } else { None };
+
+        rate.map(|rate| rate.saturating_mul_int(balance).into()).ok_or(())
     }
 }

@@ -312,6 +312,11 @@ pub mod pallet {
             AccountIdConversion::<T::AccountId>::into_account_truncating(&ID)
         }
 
+        /// Returns the swap fee for a given swap path.
+        pub fn swap_fee(path: &(T::AssetKind, T::AssetKind)) -> u32 {
+            T::AssetConverter::swap_fee(path).unwrap_or_else(T::SwapFee::get)
+        }
+
         /// Calculates amount out.
         ///
         /// Given an input amount and swap path, returns the output amount
@@ -323,8 +328,11 @@ pub mod pallet {
         ) -> Result<(T::Balance, T::Balance), Error<T>> {
             ensure!(amount_in > Zero::zero(), Error::<T>::ZeroAmount);
 
-            let exchange_in =
-                if include_fee { Self::to_amount_with_fee_deducted(amount_in)? } else { amount_in };
+            let exchange_in = if include_fee {
+                Self::to_amount_with_fee_deducted(amount_in, Self::swap_fee(path))?
+            } else {
+                amount_in
+            };
             let fee = amount_in.saturating_sub(exchange_in);
 
             let amount_out =
@@ -354,7 +362,7 @@ pub mod pallet {
             let exchange_in = exchange_in.max(1u8.into());
 
             let amount_in = if include_fee {
-                Self::to_amount_with_fee_included(exchange_in)?
+                Self::to_amount_with_fee_included(exchange_in, Self::swap_fee(path))?
             } else {
                 exchange_in
             };
@@ -441,14 +449,10 @@ pub mod pallet {
             fee_part: T::Balance,
             keep_alive: bool,
         ) -> DispatchResult {
-            let (asset_in, asset_out) = path;
+            let (asset_in, _) = path;
             let (amount_in, amount_out) = amounts;
 
             let broker_account = Self::account_id();
-
-            let reserve =
-                T::Assets::reducible_balance(asset_out.clone(), &broker_account, Preserve, Polite);
-            ensure!(reserve >= amount_out, Error::<T>::InsufficientLiquidity);
 
             let preservation = match keep_alive {
                 true => Preserve,
@@ -460,6 +464,8 @@ pub mod pallet {
                     T::Assets::reducible_balance(asset_in.clone(), sender, preservation, Polite);
                 ensure!(free >= amount_in, TokenError::NotExpendable);
             }
+
+            let energy_before_swap = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
 
             // transfer from the sender to the broker
             let mut credit_in = T::Assets::withdraw(
@@ -473,35 +479,32 @@ pub mod pallet {
 
             T::SwapFeeTarget::on_unbalanced(credit_in.extract(fee_part));
 
-            let (asset_deposited, amount_deposited) =
-                T::AssetConverter::resolve_into_broker(path, &broker_account, credit_in)
-                    .map_err(|_| Error::<T>::BelowMinimum)?;
+            T::AssetConverter::resolve(path, &broker_account, credit_in)
+                .map_err(|_| Error::<T>::BelowMinimum)?;
 
             // transfer from the broker to the recipient
-            let credit_out = T::Assets::withdraw(
-                asset_out.clone(),
-                &broker_account,
-                amount_out,
-                Exact,
-                Preserve,
-                Polite,
-            )?;
+            let credit_out = T::AssetConverter::withdraw(path, &broker_account, amount_out)
+                .map_err(|_| Error::<T>::InsufficientLiquidity)?;
+
             T::Assets::resolve(recipient, credit_out).map_err(|_| Error::<T>::BelowMinimum)?;
 
-            if asset_deposited == T::EnergyAsset::get() {
+            let energy_after_swap = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
+
+            if energy_after_swap > energy_before_swap {
                 Self::burn_surplus_energy(&broker_account);
 
-                T::OnEnergySell::on_energy_sell(amount_deposited);
+                T::OnEnergySell::on_energy_sell(energy_after_swap - energy_before_swap);
             }
 
             Ok(())
         }
 
-        fn to_amount_with_fee_deducted(amount: T::Balance) -> Result<T::Balance, Error<T>> {
+        fn to_amount_with_fee_deducted(
+            amount: T::Balance,
+            fee: u32,
+        ) -> Result<T::Balance, Error<T>> {
             T::HigherPrecisionBalance::from(amount)
-                .checked_mul(
-                    &(T::HigherPrecisionBalance::from(1000u32) - (T::SwapFee::get().into())),
-                )
+                .checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - fee.into()))
                 .ok_or(Error::<T>::Overflow)?
                 .checked_div(&T::HigherPrecisionBalance::from(1000u32))
                 .ok_or(Error::<T>::Overflow)?
@@ -509,13 +512,14 @@ pub mod pallet {
                 .map_err(|_| Error::<T>::Overflow)
         }
 
-        fn to_amount_with_fee_included(amount: T::Balance) -> Result<T::Balance, Error<T>> {
+        fn to_amount_with_fee_included(
+            amount: T::Balance,
+            fee: u32,
+        ) -> Result<T::Balance, Error<T>> {
             T::HigherPrecisionBalance::from(amount)
                 .checked_mul(&T::HigherPrecisionBalance::from(1000u32))
                 .ok_or(Error::<T>::Overflow)?
-                .checked_div(
-                    &(T::HigherPrecisionBalance::from(1000u32) - (T::SwapFee::get().into())),
-                )
+                .checked_div(&(T::HigherPrecisionBalance::from(1000u32) - fee.into()))
                 .ok_or(Error::<T>::Overflow)?
                 .try_into()
                 .map_err(|_| Error::<T>::Overflow)

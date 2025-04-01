@@ -49,7 +49,8 @@ use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect,
     imbalance::{ResolveAssetTo, ResolveTo},
     nonfungibles_v2::{Inspect, InspectEnumerable},
-    DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
+    ConversionFromAssetBalance, ConversionToAssetBalance, DepositConsequence, Fortitude, Precision,
+    Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, Equals, ExistenceRequirement, Imbalance, ProcessMessage,
@@ -95,8 +96,10 @@ use frame_support::{
     dispatch::GetDispatchInfo,
     ord_parameter_types, parameter_types,
     traits::{
-        fungible::ItemOf, fungibles::Credit, AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64,
-        ConstU8, ExtrinsicCall, FindAuthor, Hooks, KeyOwnerProofSystem,
+        fungible::ItemOf,
+        fungibles::{Balanced, Credit},
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8, ExtrinsicCall, FindAuthor,
+        Hooks, KeyOwnerProofSystem,
     },
     weights::{
         constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter, WeightToFee,
@@ -971,49 +974,45 @@ ord_parameter_types! {
         AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
+pub type DynamicEnergyConversion =
+    pallet_dynamic_energy::DynamicEnergyConversion<Runtime, (Equals<VNRG>, Equals<LNRG>)>;
+
 pub struct NativeToEnergyConverter;
 impl FixedPathAssetConverter<Runtime> for NativeToEnergyConverter {
-    const FROM: NativeOrAssetId = NativeOrAssetId::Native;
-    const TO: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+    const SOURCE: NativeOrAssetId = NativeOrAssetId::Native;
+    const TARGET: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
 
     fn get_amount_out(amount_in: Balance) -> Option<Balance> {
-        DynamicEnergy::exchange_rate().map(|rate| rate.saturating_mul_int(amount_in))
+        DynamicEnergyConversion::to_asset_balance(amount_in, Self::TARGET).ok()
     }
 
     fn get_amount_in(amount_out: Balance) -> Option<Balance> {
-        DynamicEnergy::exchange_rate()
-            .and_then(FixedPointNumber::reciprocal)
-            .map(|rate| rate.saturating_mul_int(amount_out))
+        DynamicEnergyConversion::from_asset_balance(amount_out, Self::TARGET).ok()
     }
 }
 
 pub struct LiquidEnergyToNativeConverter;
 impl FixedPathAssetConverter<Runtime> for LiquidEnergyToNativeConverter {
-    const FROM: NativeOrAssetId = NativeOrAssetId::WithId(LNRG::get());
-    const TO: NativeOrAssetId = NativeOrAssetId::Native;
+    const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(LNRG::get());
+    const TARGET: NativeOrAssetId = NativeOrAssetId::Native;
 
     fn get_amount_out(amount_in: Balance) -> Option<Balance> {
-        DynamicEnergy::exchange_rate()
-            .and_then(FixedPointNumber::reciprocal)
-            .map(|rate| rate.saturating_mul_int(amount_in))
+        DynamicEnergyConversion::from_asset_balance(amount_in, Self::SOURCE).ok()
     }
 
     fn get_amount_in(amount_out: Balance) -> Option<Balance> {
-        DynamicEnergy::exchange_rate().map(|rate| rate.saturating_mul_int(amount_out))
+        DynamicEnergyConversion::to_asset_balance(amount_out, Self::SOURCE).ok()
     }
 
-    fn resolve_into_broker(
+    fn resolve(
         broker: &AccountId,
         credit: Credit<AccountId, NativeAndAssets>,
-    ) -> Result<(NativeOrAssetId, Balance), Credit<AccountId, NativeAndAssets>> {
-        use frame_support::traits::fungibles::Balanced;
-
-        let amount = credit.peek();
-        match Assets::deposit(VNRG::get(), broker, amount, Precision::Exact) {
+    ) -> Result<(), Credit<AccountId, NativeAndAssets>> {
+        match Assets::deposit(VNRG::get(), broker, credit.peek(), Precision::Exact) {
             Ok(debt) => {
                 drop(credit);
                 drop(debt);
-                Ok((VNRG::get().into(), amount))
+                Ok(())
             },
             Err(_) => Err(credit),
         }
@@ -1022,30 +1021,89 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToNativeConverter {
 
 pub struct StaticEnergyToNativeConverter;
 impl FixedPathAssetConverter<Runtime> for StaticEnergyToNativeConverter {
-    const FROM: NativeOrAssetId = NativeOrAssetId::WithId(SNRG::get());
-    const TO: NativeOrAssetId = NativeOrAssetId::Native;
+    const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(SNRG::get());
+    const TARGET: NativeOrAssetId = NativeOrAssetId::Native;
 
     fn get_amount_out(amount_in: Balance) -> Option<Balance> {
-        use frame_support::traits::tokens::ConversionFromAssetBalance;
-
         AssetRate::from_asset_balance(amount_in, SNRG::get()).ok()
     }
 
     fn get_amount_in(amount_out: Balance) -> Option<Balance> {
-        use frame_support::traits::tokens::ConversionToAssetBalance;
-
         AssetRate::to_asset_balance(amount_out, SNRG::get()).ok()
     }
 
-    fn resolve_into_broker(
+    fn resolve(
         _broker: &AccountId,
         credit: Credit<AccountId, NativeAndAssets>,
-    ) -> Result<(NativeOrAssetId, Balance), Credit<AccountId, NativeAndAssets>> {
-        let asset = credit.asset();
-
+    ) -> Result<(), Credit<AccountId, NativeAndAssets>> {
         drop(credit);
+        Ok(())
+    }
+}
 
-        Ok((asset, Zero::zero()))
+pub struct LiquidEnergyToEnergyConverter;
+impl FixedPathAssetConverter<Runtime> for LiquidEnergyToEnergyConverter {
+    const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(LNRG::get());
+    const TARGET: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+
+    fn swap_fee() -> Option<u32> {
+        Some(0)
+    }
+
+    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
+        Some(amount_in)
+    }
+
+    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
+        Some(amount_out)
+    }
+
+    fn withdraw(
+        _broker: &AccountId,
+        value: Balance,
+    ) -> Result<Credit<AccountId, NativeAndAssets>, DispatchError> {
+        Ok(NativeAndAssets::issue(Self::TARGET, value))
+    }
+
+    fn resolve(
+        _broker: &AccountId,
+        credit: Credit<AccountId, NativeAndAssets>,
+    ) -> Result<(), Credit<AccountId, NativeAndAssets>> {
+        drop(credit);
+        Ok(())
+    }
+}
+
+pub struct StaticEnergyToEnergyConverter;
+impl FixedPathAssetConverter<Runtime> for StaticEnergyToEnergyConverter {
+    const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(SNRG::get());
+    const TARGET: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+
+    fn swap_fee() -> Option<u32> {
+        Some(0)
+    }
+
+    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
+        Some(amount_in)
+    }
+
+    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
+        Some(amount_out)
+    }
+
+    fn withdraw(
+        _broker: &AccountId,
+        value: Balance,
+    ) -> Result<Credit<AccountId, NativeAndAssets>, DispatchError> {
+        Ok(NativeAndAssets::issue(Self::TARGET, value))
+    }
+
+    fn resolve(
+        _broker: &AccountId,
+        credit: Credit<AccountId, NativeAndAssets>,
+    ) -> Result<(), Credit<AccountId, NativeAndAssets>> {
+        drop(credit);
+        Ok(())
     }
 }
 
@@ -1056,8 +1114,13 @@ impl pallet_energy_broker::Config for Runtime {
     type HigherPrecisionBalance = sp_core::U256;
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
-    type AssetConverter =
-        (NativeToEnergyConverter, LiquidEnergyToNativeConverter, StaticEnergyToNativeConverter);
+    type AssetConverter = (
+        NativeToEnergyConverter,
+        LiquidEnergyToNativeConverter,
+        StaticEnergyToNativeConverter,
+        LiquidEnergyToEnergyConverter,
+        StaticEnergyToEnergyConverter,
+    );
     type FeelessAccounts = Equals<xcm_config::TreasuryAccount>;
     type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
     type OnEnergySell = DynamicEnergy;

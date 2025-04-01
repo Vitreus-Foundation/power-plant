@@ -88,8 +88,8 @@ const RATE: FixedU128 = FixedU128::from_rational(1, 10);
 
 pub struct MockNativeToEnergyConverter;
 impl FixedPathAssetConverter<Test> for MockNativeToEnergyConverter {
-    const FROM: NativeOrAssetId = NativeOrAssetId::Native;
-    const TO: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+    const SOURCE: NativeOrAssetId = NativeOrAssetId::Native;
+    const TARGET: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
 
     fn get_amount_out(amount_in: u128) -> Option<u128> {
         RATE.reciprocal().map(|x| x.saturating_mul_int(amount_in))
@@ -102,8 +102,8 @@ impl FixedPathAssetConverter<Test> for MockNativeToEnergyConverter {
 
 pub struct MockEnergyToNativeConverter;
 impl FixedPathAssetConverter<Test> for MockEnergyToNativeConverter {
-    const FROM: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
-    const TO: NativeOrAssetId = NativeOrAssetId::Native;
+    const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+    const TARGET: NativeOrAssetId = NativeOrAssetId::Native;
 
     fn get_amount_out(amount_in: u128) -> Option<u128> {
         Some(RATE.saturating_mul_int(amount_in))
