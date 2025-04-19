@@ -1,13 +1,17 @@
-use super::*;
 use chain_spec::{devnet_config, devnet_keys::alith};
-use ethereum::{TransactionAction, TransactionSignature, TransactionV2};
+use ethereum::{LegacyTransaction, TransactionAction, TransactionSignature, TransactionV2};
 use fp_self_contained::SelfContainedCall;
 use frame_support::{
     dispatch::{DispatchClass, GetDispatchInfo},
-    traits::Hooks,
+    traits::{Get, Hooks},
 };
-use pallet_energy_fee::DefaultFeeMultiplier;
-use sp_runtime::{BuildStorage, FixedU128, Perquintill};
+use pallet_energy_fee::{CallFee, CustomFee, DefaultFeeMultiplier};
+use sp_runtime::{
+    transaction_validity::InvalidTransaction, BuildStorage, FixedPointNumber, FixedU128,
+    Perquintill,
+};
+
+use super::*;
 
 pub fn devnet_ext() -> sp_io::TestExternalities {
     sp_io::TestExternalities::new(devnet_config().build_storage().unwrap())

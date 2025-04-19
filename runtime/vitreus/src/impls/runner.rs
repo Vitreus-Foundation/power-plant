@@ -6,7 +6,6 @@ use frame_support::traits::{fungible::Inspect, Currency};
 use pallet_energy_fee::{CallFee, CustomFee};
 use pallet_evm::{runner::stack::Runner, AddressMapping, Call};
 use pallet_evm::{CallInfo, CreateInfo, Runner as EvmRunner, RunnerError};
-use pallet_nac_managing;
 use pallet_transaction_payment::OnChargeTransaction;
 use sp_core::{H160, H256, U256};
 use sp_runtime::traits::Dispatchable;

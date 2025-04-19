@@ -15,6 +15,8 @@ pub type Unreleased = ();
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {
     fn on_runtime_upgrade() -> Weight {
+        use frame_support::traits::{Currency, ExistenceRequirement};
+
         if !System::account_exists(&TechnicalCommitteeTreasury::account_id()) {
             let amount = <Balances as Currency<_>>::minimum_balance();
             let res = <Balances as Currency<_>>::transfer(

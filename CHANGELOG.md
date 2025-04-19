@@ -13,6 +13,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Changed
 
 - Refactor `pallet-energy-broker`
+- Refactor `vitreus-power-plant-runtime`
 
 ## [213] - 2025-03-23
 

@@ -18,12 +18,6 @@
 
 #![allow(clippy::match_like_matches_macro, clippy::type_complexity)]
 
-use super::{
-    parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
-    CouncilCollective, Dmp, DynamicEnergy, ParaId, Runtime, RuntimeCall, RuntimeEvent,
-    RuntimeOrigin, TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet, LNRG, SNRG,
-    VNRG,
-};
 use frame_support::{
     parameter_types,
     traits::{tokens::imbalance::ResolveTo, Contains, ContainsPair, Equals, Everything, Nothing},
@@ -31,6 +25,7 @@ use frame_support::{
 };
 use frame_system::EnsureRoot;
 use origin_conversion::SignedToAccountKey20;
+use polkadot_primitives::Id as ParaId;
 use polkadot_runtime_common::{
     paras_registrar, prod_or_fast,
     xcm_sender::{ChildParachainRouter, ExponentialPrice},
@@ -50,6 +45,12 @@ use xcm_builder::{
 use xcm_executor::{
     traits::{MatchesFungibles, TransactAsset, WithOriginFilter},
     XcmExecutor,
+};
+
+use super::{
+    parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
+    CouncilCollective, Dmp, DynamicEnergy, Runtime, RuntimeCall, RuntimeEvent, RuntimeOrigin,
+    TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet, LNRG, SNRG, VNRG,
 };
 
 // TODO: use constants from `vitreus-runtime-constants` crate

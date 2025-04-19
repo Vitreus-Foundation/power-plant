@@ -1085,20 +1085,19 @@ mod tech_addresses {
     use vitreus_power_plant_runtime::AccountId;
 
     pub fn treasury() -> AccountId {
-        vitreus_power_plant_runtime::areas::TreasuryPalletId::get().into_account_truncating()
+        vitreus_power_plant_runtime::TreasuryPalletId::get().into_account_truncating()
     }
 
     pub fn staking_rewards() -> AccountId {
-        vitreus_power_plant_runtime::areas::StakingRewardsPalletId::get().into_account_truncating()
+        vitreus_power_plant_runtime::StakingRewardsPalletId::get().into_account_truncating()
     }
 
     pub fn liquidity() -> AccountId {
-        vitreus_power_plant_runtime::areas::LiquidityPalletId::get().into_account_truncating()
+        vitreus_power_plant_runtime::LiquidityPalletId::get().into_account_truncating()
     }
 
     pub fn liquidity_reserves() -> AccountId {
-        vitreus_power_plant_runtime::areas::LiquidityReservesPalletId::get()
-            .into_account_truncating()
+        vitreus_power_plant_runtime::LiquidityReservesPalletId::get().into_account_truncating()
     }
 }
 
