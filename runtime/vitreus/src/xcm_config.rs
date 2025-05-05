@@ -20,13 +20,13 @@
 
 use super::{
     parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
-    CouncilCollective, Dmp, DynamicEnergy, ParaId, Runtime, RuntimeCall, RuntimeEvent,
-    RuntimeOrigin, TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet, LNRG, SNRG,
-    VNRG,
+    CouncilCollective, Dmp, DynamicEnergy, EnergyAsset, EnergyBroker, ParaId, Runtime, RuntimeCall,
+    RuntimeEvent, RuntimeOrigin, TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet,
+    LNRG, SNRG, VNRG,
 };
 use frame_support::{
     parameter_types,
-    traits::{tokens::imbalance::ResolveTo, Contains, ContainsPair, Equals, Everything, Nothing},
+    traits::{Contains, ContainsPair, Equals, Everything, Nothing},
     weights::{ConstantMultiplier, Weight},
 };
 use frame_system::EnsureRoot;
@@ -171,8 +171,8 @@ pub type EnergyTokenMatcher = MatchedConvertedConcreteId<
     TryConvertInto,
 >;
 
-/// Means for transacting VNRG.
-pub type EnergyTransactor = FungiblesAdapter<
+/// Means for transacting energy.
+pub type EnergyTransactor = energy::EnergyAdapter<
     // Use this fungibles implementation:
     Assets,
     // Use this currency when it is a fungible asset matching the given location or name:
@@ -185,23 +185,9 @@ pub type EnergyTransactor = FungiblesAdapter<
     NoChecking,
     // The account to use for tracking teleports.
     CheckAccount,
+    // Track burned energy.
+    (DynamicEnergy, EnergyBroker),
 >;
-
-pub struct EnergyCheckoutTracker;
-impl TransactAsset for EnergyCheckoutTracker {
-    fn check_out(_dest: &Location, what: &Asset, _context: &XcmContext) {
-        use vitreus_runtime_common::OnEnergyBurn;
-
-        log::trace!(
-            target: "xcm::energy_checkout_tracker",
-            "check_out dest: {:?}, what: {:?}",
-            _dest, what
-        );
-        if let Ok((_, amount)) = EnergyTokenMatcher::matches_fungibles(what) {
-            DynamicEnergy::on_energy_burn(amount);
-        }
-    }
-}
 
 /// The means that we convert an the XCM message origin location into a local dispatch origin.
 type LocalOriginConverter = (
@@ -223,7 +209,7 @@ parameter_types! {
     /// calculations getting too crazy.
     pub const MaxInstructions: u32 = 100;
     /// The asset ID for the asset that we use to pay for message delivery fees.
-    pub FeeAssetId: AssetId = AssetId(TokenLocation::get());
+    pub FeeAssetId: AssetId = AssetId(EnergyTokenLocation::get());
     /// The base fee for the message delivery fees.
     pub const BaseDeliveryFee: u128 = 1_000_000_000;
 }
@@ -252,12 +238,6 @@ parameter_types! {
     pub const MaxAssetsIntoHolding: u32 = 64;
 }
 
-pub type TrustedTeleporters = (
-    xcm_builder::Case<VtrsForAssetHub>,
-    xcm_builder::Case<VtrsForBridgeHub>,
-    xcm_builder::Case<WrappedVtrsForAssetHub>,
-);
-
 pub struct OnlyParachains;
 impl Contains<Location> for OnlyParachains {
     fn contains(loc: &Location) -> bool {
@@ -277,6 +257,13 @@ impl ContainsPair<Asset, Location> for EnergyForParachains {
         Vnrg::get().matches(asset) || Snrg::get().matches(asset) || Lnrg::get().matches(asset)
     }
 }
+
+pub type TrustedTeleporters = (
+    EnergyForParachains,
+    xcm_builder::Case<VtrsForAssetHub>,
+    xcm_builder::Case<VtrsForBridgeHub>,
+    xcm_builder::Case<WrappedVtrsForAssetHub>,
+);
 
 /// The barriers one of which must be passed for an XCM message to be executed.
 pub type Barrier = TrailingSetTopicAsId<(
@@ -396,8 +383,7 @@ pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
-    type AssetTransactor =
-        (LocalAssetTransactor, WrappedTokenTransactor, EnergyTransactor, EnergyCheckoutTracker);
+    type AssetTransactor = (LocalAssetTransactor, WrappedTokenTransactor, EnergyTransactor);
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
     type IsTeleporter = TrustedTeleporters;
@@ -406,10 +392,10 @@ impl xcm_executor::Config for XcmConfig {
     type Weigher = FixedWeightBounds<FixedXcmWeight, RuntimeCall, MaxInstructions>;
     type Trader = UsingComponents<
         WeightToFee,
-        TokenLocation,
+        EnergyTokenLocation,
         AccountId,
-        Balances,
-        ResolveTo<TreasuryAccount, Balances>,
+        EnergyAsset,
+        energy::OnUnbalancedEnergy<AccountId, EnergyAsset, (DynamicEnergy, EnergyBroker)>,
     >;
     type ResponseHandler = XcmPallet;
     type AssetTrap = XcmPallet;
@@ -421,7 +407,12 @@ impl xcm_executor::Config for XcmConfig {
     type MaxAssetsIntoHolding = MaxAssetsIntoHolding;
     type FeeManager = XcmFeeManagerFromComponents<
         WaivedLocations,
-        fee_handler::XcmFeeToAccount<Self::AssetTransactor, AccountId, TreasuryAccount>,
+        energy::EnergyFeeHandler<
+            super::AssetId,
+            Balance,
+            EnergyTokenMatcher,
+            (DynamicEnergy, EnergyBroker),
+        >,
     >;
     type MessageExporter = ();
     type UniversalAliases = Nothing;
@@ -467,7 +458,7 @@ impl pallet_xcm::Config for Runtime {
     // Anyone can execute XCM messages locally.
     type ExecuteXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
     type XcmExecuteFilter = Everything;
-    type XcmExecutor = executor_adapter::XcmExecutor<XcmExecutor<XcmConfig>, EnergyForParachains>;
+    type XcmExecutor = XcmExecutor<XcmConfig>;
     type XcmTeleportFilter = Everything;
     // Anyone is able to use reserve transfers regardless of who they are and what they want to
     // transfer.
@@ -491,53 +482,173 @@ impl pallet_xcm::Config for Runtime {
     type AdminOrigin = EnsureRoot<AccountId>;
 }
 
-mod executor_adapter {
-    use super::*;
+mod energy {
+    use frame_support::traits::{
+        fungible::{Balanced, Credit, Inspect},
+        fungibles, Get, Imbalance, OnUnbalanced,
+    };
     use sp_std::marker::PhantomData;
+    use vitreus_runtime_common::OnEnergyBurn;
     use xcm::latest::Assets;
-    use xcm_executor::traits::XcmAssetTransfers;
+    use xcm_builder::{AssetChecking, HandleFee};
+    use xcm_executor::traits::{ConvertLocation, FeeReason};
 
-    pub struct XcmExecutor<Executor, IsTeleporter>(PhantomData<(Executor, IsTeleporter)>);
+    use super::*;
 
-    impl<Executor: ExecuteXcm<Call>, Call, IsTeleporter> ExecuteXcm<Call>
-        for XcmExecutor<Executor, IsTeleporter>
+    pub struct EnergyAdapter<
+        Assets,
+        Matcher,
+        AccountIdConverter,
+        AccountId,
+        CheckAsset,
+        CheckingAccount,
+        OnBurn,
+    >(
+        PhantomData<(
+            Assets,
+            Matcher,
+            AccountIdConverter,
+            AccountId,
+            CheckAsset,
+            CheckingAccount,
+            OnBurn,
+        )>,
+    );
+    impl<
+            Assets: fungibles::Mutate<AccountId>,
+            Matcher: MatchesFungibles<Assets::AssetId, Assets::Balance>,
+            AccountIdConverter: ConvertLocation<AccountId>,
+            AccountId: Eq + Clone, /* can't get away without it since Currency is generic over it. */
+            CheckAsset: AssetChecking<Assets::AssetId>,
+            CheckingAccount: Get<AccountId>,
+            OnBurn: OnEnergyBurn<Assets::Balance>,
+        > TransactAsset
+        for EnergyAdapter<
+            Assets,
+            Matcher,
+            AccountIdConverter,
+            AccountId,
+            CheckAsset,
+            CheckingAccount,
+            OnBurn,
+        >
     {
-        type Prepared = Executor::Prepared;
-
-        fn prepare(message: Xcm<Call>) -> Result<Self::Prepared, Xcm<Call>> {
-            Executor::prepare(message)
+        fn can_check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
+            // Prevent the transfer of energy assets into the relaychain.
+            Err(XcmError::Unimplemented)
         }
 
-        fn execute(
-            origin: impl Into<Location>,
-            pre: Self::Prepared,
-            id: &mut XcmHash,
-            weight_credit: Weight,
-        ) -> Outcome {
-            Executor::execute(origin, pre, id, weight_credit)
+        fn check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) {}
+
+        fn can_check_out(dest: &Location, what: &Asset, context: &XcmContext) -> XcmResult {
+            FungiblesAdapter::<
+                Assets,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckAsset,
+                CheckingAccount,
+            >::can_check_out(dest, what, context)
         }
 
-        fn prepare_and_execute(
-            origin: impl Into<Location>,
-            message: Xcm<Call>,
-            id: &mut XcmHash,
-            weight_limit: Weight,
-            weight_credit: Weight,
-        ) -> Outcome {
-            Executor::prepare_and_execute(origin, message, id, weight_limit, weight_credit)
+        fn check_out(dest: &Location, what: &Asset, context: &XcmContext) {
+            FungiblesAdapter::<
+                Assets,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckAsset,
+                CheckingAccount,
+            >::check_out(dest, what, context);
+
+            if let Ok((_, amount)) = Matcher::matches_fungibles(what) {
+                OnBurn::on_energy_burn(amount);
+            }
         }
 
-        fn charge_fees(location: impl Into<Location>, fees: Assets) -> XcmResult {
-            Executor::charge_fees(location, fees)
+        fn deposit_asset(what: &Asset, who: &Location, context: Option<&XcmContext>) -> XcmResult {
+            FungiblesAdapter::<
+                Assets,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckAsset,
+                CheckingAccount,
+            >::deposit_asset(what, who, context)
+        }
+
+        fn withdraw_asset(
+            what: &Asset,
+            who: &Location,
+            maybe_context: Option<&XcmContext>,
+        ) -> Result<xcm_executor::AssetsInHolding, XcmError> {
+            FungiblesAdapter::<
+                Assets,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckAsset,
+                CheckingAccount,
+            >::withdraw_asset(what, who, maybe_context)
+        }
+
+        fn internal_transfer_asset(
+            what: &Asset,
+            from: &Location,
+            to: &Location,
+            context: &XcmContext,
+        ) -> Result<xcm_executor::AssetsInHolding, XcmError> {
+            FungiblesAdapter::<
+                Assets,
+                Matcher,
+                AccountIdConverter,
+                AccountId,
+                CheckAsset,
+                CheckingAccount,
+            >::internal_transfer_asset(what, from, to, context)
         }
     }
 
-    impl<Executor: XcmAssetTransfers, IsTeleporter: ContainsPair<Asset, Location>> XcmAssetTransfers
-        for XcmExecutor<Executor, IsTeleporter>
+    pub struct EnergyFeeHandler<AssetId, Balance, Matcher, OnBurn>(
+        PhantomData<(AssetId, Balance, Matcher, OnBurn)>,
+    );
+    impl<
+            AssetId,
+            Balance,
+            Matcher: MatchesFungibles<AssetId, Balance>,
+            OnBurn: OnEnergyBurn<Balance>,
+        > HandleFee for EnergyFeeHandler<AssetId, Balance, Matcher, OnBurn>
     {
-        type IsReserve = Executor::IsReserve;
-        type IsTeleporter = (Executor::IsTeleporter, IsTeleporter);
-        type AssetTransactor = Executor::AssetTransactor;
+        fn handle_fee(fee: Assets, _context: Option<&XcmContext>, _reason: FeeReason) -> Assets {
+            let mut assets = fee.into_inner();
+
+            assets.retain(|asset| {
+                if let Ok((_, amount)) = Matcher::matches_fungibles(asset) {
+                    OnBurn::on_energy_burn(amount);
+                    false
+                } else {
+                    true
+                }
+            });
+
+            Assets::from_sorted_and_deduplicated_skip_checks(assets)
+        }
+    }
+
+    pub struct OnUnbalancedEnergy<AccountId, Fungible, OnBurn>(
+        PhantomData<(AccountId, Fungible, OnBurn)>,
+    );
+    impl<
+            AccountId,
+            Fungible: Balanced<AccountId> + Inspect<AccountId>,
+            OnBurn: OnEnergyBurn<Fungible::Balance>,
+        > OnUnbalanced<Credit<AccountId, Fungible>>
+        for OnUnbalancedEnergy<AccountId, Fungible, OnBurn>
+    {
+        fn on_nonzero_unbalanced(credit: Credit<AccountId, Fungible>) {
+            OnBurn::on_energy_burn(credit.peek());
+            drop(credit);
+        }
     }
 }
 
@@ -755,41 +866,6 @@ mod currency_adapter {
                 AccountId,
                 CheckedAccount,
             >::internal_transfer_asset(asset, from, to, context)
-        }
-    }
-}
-
-mod fee_handler {
-    use super::*;
-    use frame_support::traits::Get;
-    use sp_std::marker::PhantomData;
-    use xcm::latest::Assets;
-    use xcm_builder::HandleFee;
-    use xcm_executor::traits::{FeeReason, TransactAsset};
-
-    pub struct XcmFeeToAccount<AssetTransactor, AccountId, ReceiverAccount>(
-        PhantomData<(AssetTransactor, AccountId, ReceiverAccount)>,
-    );
-
-    impl<
-            AssetTransactor: TransactAsset,
-            AccountId: Clone + Into<[u8; 20]>,
-            ReceiverAccount: Get<AccountId>,
-        > HandleFee for XcmFeeToAccount<AssetTransactor, AccountId, ReceiverAccount>
-    {
-        fn handle_fee(fee: Assets, context: Option<&XcmContext>, _reason: FeeReason) -> Assets {
-            let dest = AccountKey20 { network: None, key: ReceiverAccount::get().into() }.into();
-            for asset in fee.into_inner() {
-                if let Err(e) = AssetTransactor::deposit_asset(&asset, &dest, context) {
-                    log::trace!(
-                        target: "xcm::fees",
-                        "`AssetTransactor::deposit_asset` returned error: {:?}. Burning fee: {:?}. \
-                        They might be burned.",
-                        e, asset,
-                    );
-                }
-            }
-            Assets::new()
         }
     }
 }
