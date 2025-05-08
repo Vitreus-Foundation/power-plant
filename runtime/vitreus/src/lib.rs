@@ -722,8 +722,7 @@ parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
     pub const SessionsPerEra: SessionIndex = prod_or_fast!(4, 1);
     pub const BondingDuration: EraIndex = prod_or_fast!(42, 5);
-    // TODO: consider removing, since the slash defer feature was removed
-    pub const SlashDeferDuration: EraIndex = 0;
+    pub const SlashDeferDuration: EraIndex = prod_or_fast!(36, 0);
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const BatterySlotCapacity: Energy = 100_000_000_000;
