@@ -157,9 +157,7 @@ pub use paras_sudo_wrapper::Call as ParasSudoWrapperCall;
 pub use areas::{deposit, CouncilCollective, TechnicalCollective};
 
 mod precompiles;
-mod helpers {
-    pub mod runner;
-}
+
 pub mod areas;
 pub mod migrations;
 mod weights;
@@ -1469,7 +1467,12 @@ parameter_types! {
         Weight::from_parts(weight_per_gas(
                 BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK
                 ),
-            0,
+            // Non-zero proof_size enables PoV (Proof of Validity) tracking in the EVM runner.
+            // This ensures `effective_gas` accounts for storage proof costs, not just EVM opcodes.
+            // The ratio MAX_POV_SIZE / BLOCK_GAS_LIMIT (5MB / 75M ≈ 0.07) rounds to 0, but using
+            // 1 activates the weight_limit branch in the runtime API (gas_to_weight().proof_size() > 0),
+            // which creates WeightInfo in the runner for proper proof_size accounting.
+            1,
         );
 }
 
@@ -2142,6 +2145,7 @@ fn transact_with_new_gas_limit(
 
 // user doesn't have NAC to dispatch transaction
 const ACCESS_RESTRICTED: u8 = u8::MAX;
+const EVM_CALL_ACCESS_LEVEL: u8 = 1;
 
 impl fp_self_contained::SelfContainedCall for RuntimeCall {
     type SignedInfo = H160;
@@ -2192,7 +2196,7 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                     }
                 }
 
-                if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
+                if !NacManaging::user_has_access(account_id, EVM_CALL_ACCESS_LEVEL) {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
                 };
 
@@ -2210,6 +2214,11 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
     ) -> Option<Result<(), TransactionValidityError>> {
         match self {
             RuntimeCall::Ethereum(call) => {
+                let account_id =
+                    <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
+                if !NacManaging::user_has_access(account_id, EVM_CALL_ACCESS_LEVEL) {
+                    return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
+                }
                 call.pre_dispatch_self_contained(info, dispatch_info, len)
             },
             _ => None,

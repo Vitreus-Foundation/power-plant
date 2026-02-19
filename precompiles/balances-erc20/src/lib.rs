@@ -389,7 +389,7 @@ where
     #[precompile::fallback]
     #[precompile::payable]
     fn deposit(handle: &mut impl PrecompileHandle) -> EvmResult {
-        // Deposit only makes sense for the native currency.
+        // Early-returns in runtime where is_native_currency() == false.
         if !Metadata::is_native_currency() {
             return Err(RevertReason::UnknownSelector.into());
         }
@@ -428,7 +428,7 @@ where
 
     #[precompile::public("withdraw(uint256)")]
     fn withdraw(handle: &mut impl PrecompileHandle, value: U256) -> EvmResult {
-        // Withdraw only makes sense for the native currency.
+        // Early-returns in runtime where is_native_currency() == false.
         if !Metadata::is_native_currency() {
             return Err(RevertReason::UnknownSelector.into());
         }

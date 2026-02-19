@@ -328,7 +328,7 @@ pub mod pallet {
                 who,
                 fee,
                 Precision::Exact,
-                Preservation::Expendable,
+                Preservation::Preserve,
                 Fortitude::Force,
             )
             .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
@@ -408,7 +408,7 @@ pub mod pallet {
                 &account_id,
                 const_energy_fee,
                 Precision::Exact,
-                Preservation::Expendable,
+                Preservation::Preserve,
                 Fortitude::Force,
             )
             .inspect(|_| {
@@ -440,10 +440,11 @@ pub mod pallet {
             None
         }
 
-        // TODO: investigate whether we need this (and check if it influences the chain behaviour)
-        fn pay_priority_fee(_tip: Self::LiquidityInfo) {
-            // Default Ethereum behaviour: issue the tip to the block author.
-        }
+        /// Intentionally no-op: Vitreus uses a constant fee model where all
+        /// transactions pay the same VNRG fee regardless of gas used or priority.
+        /// EIP-1559 priority fees (tips) are accepted in transaction fields but
+        /// not distributed to block authors. This is by design.
+        fn pay_priority_fee(_tip: Self::LiquidityInfo) {}
     }
 }
 
@@ -457,7 +458,7 @@ impl<T: Config> Pallet<T> {
     ) -> Result<(), DispatchError> {
         required.saturating_reduce(T::EnergyAsset::reducible_balance(
             who,
-            Preservation::Expendable,
+            Preservation::Preserve,
             Fortitude::Force,
         ));
 
@@ -506,7 +507,7 @@ impl<T: Config> Pallet<T> {
         required: BalanceOf<T>,
     ) -> Option<(BalanceOf<T>, BalanceOf<T>)> {
         let mut total_energy =
-            T::EnergyAsset::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
+            T::EnergyAsset::reducible_balance(who, Preservation::Preserve, Fortitude::Force);
 
         if total_energy < required {
             total_energy.saturating_accrue(T::StaticEnergyAsset::reducible_balance(
