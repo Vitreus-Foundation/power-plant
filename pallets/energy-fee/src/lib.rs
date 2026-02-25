@@ -328,7 +328,7 @@ pub mod pallet {
                 who,
                 fee,
                 Precision::Exact,
-                Preservation::Preserve,
+                Preservation::Expendable,
                 Fortitude::Force,
             )
             .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
@@ -408,7 +408,7 @@ pub mod pallet {
                 &account_id,
                 const_energy_fee,
                 Precision::Exact,
-                Preservation::Preserve,
+                Preservation::Expendable,
                 Fortitude::Force,
             )
             .inspect(|_| {
@@ -458,7 +458,7 @@ impl<T: Config> Pallet<T> {
     ) -> Result<(), DispatchError> {
         required.saturating_reduce(T::EnergyAsset::reducible_balance(
             who,
-            Preservation::Preserve,
+            Preservation::Expendable,
             Fortitude::Force,
         ));
 
@@ -507,7 +507,7 @@ impl<T: Config> Pallet<T> {
         required: BalanceOf<T>,
     ) -> Option<(BalanceOf<T>, BalanceOf<T>)> {
         let mut total_energy =
-            T::EnergyAsset::reducible_balance(who, Preservation::Preserve, Fortitude::Force);
+            T::EnergyAsset::reducible_balance(who, Preservation::Expendable, Fortitude::Force);
 
         if total_energy < required {
             total_energy.saturating_accrue(T::StaticEnergyAsset::reducible_balance(
