@@ -1467,12 +1467,7 @@ parameter_types! {
         Weight::from_parts(weight_per_gas(
                 BLOCK_GAS_LIMIT, NORMAL_DISPATCH_RATIO, WEIGHT_MILLISECS_PER_BLOCK
                 ),
-            // Non-zero proof_size enables PoV (Proof of Validity) tracking in the EVM runner.
-            // This ensures `effective_gas` accounts for storage proof costs, not just EVM opcodes.
-            // The ratio MAX_POV_SIZE / BLOCK_GAS_LIMIT (5MB / 75M ≈ 0.07) rounds to 0, but using
-            // 1 activates the weight_limit branch in the runtime API (gas_to_weight().proof_size() > 0),
-            // which creates WeightInfo in the runner for proper proof_size accounting.
-            1,
+            0,
         );
 }
 
