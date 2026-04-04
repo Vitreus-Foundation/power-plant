@@ -29,6 +29,7 @@ impl Erc20Metadata for NativeErc20Metadata {
     /// Must return `true` only if it represents the main native currency of
     /// the network. It must be the currency used in `pallet_evm`.
     fn is_native_currency() -> bool {
+        // In the EVM environment native currency is VNRG
         false
     }
 }
