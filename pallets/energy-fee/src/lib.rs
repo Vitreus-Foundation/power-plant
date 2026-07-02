@@ -440,10 +440,11 @@ pub mod pallet {
             None
         }
 
-        // TODO: investigate whether we need this (and check if it influences the chain behaviour)
-        fn pay_priority_fee(_tip: Self::LiquidityInfo) {
-            // Default Ethereum behaviour: issue the tip to the block author.
-        }
+        /// Intentionally no-op: Vitreus uses a constant fee model where all
+        /// transactions pay the same VNRG fee regardless of gas used or priority.
+        /// EIP-1559 priority fees (tips) are accepted in transaction fields but
+        /// not distributed to block authors. This is by design.
+        fn pay_priority_fee(_tip: Self::LiquidityInfo) {}
     }
 }
 

@@ -45,16 +45,14 @@ use polkadot_runtime_parachains::{
 use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
-    fungible,
     fungible::Inspect as FungibleInspect,
     imbalance::{ResolveAssetTo, ResolveTo},
     nonfungibles_v2::{Inspect, InspectEnumerable},
-    ConversionFromAssetBalance, ConversionToAssetBalance, DepositConsequence, Fortitude, Precision,
-    Preservation, Provenance, WithdrawConsequence,
+    ConversionFromAssetBalance, ConversionToAssetBalance, Fortitude, Precision, Preservation,
 };
 use frame_support::traits::{
-    Currency, EitherOfDiverse, Equals, ExistenceRequirement, Imbalance, ProcessMessage,
-    ProcessMessageError, SignedImbalance, WithdrawReasons,
+    Currency, EitherOfDiverse, Equals, ExistenceRequirement, ProcessMessage, ProcessMessageError,
+    WithdrawReasons,
 };
 use parity_scale_codec::{Compact, Decode, Encode, MaxEncodedLen};
 use sp_api::impl_runtime_apis;
@@ -74,9 +72,10 @@ use sp_runtime::{
     },
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
+        ValidTransactionBuilder,
     },
     ApplyExtrinsicResult, ConsensusEngineId, FixedI128, FixedPointNumber, FixedU128, FixedU64,
-    Perbill, Percent, Permill, Saturating,
+    Perbill, Percent, Permill,
 };
 use sp_staking::{EraIndex, SessionIndex};
 use sp_std::{
@@ -115,9 +114,14 @@ use pallet_reputation::{ReputationTier, RANKS_PER_TIER, REPUTATION_POINTS_PER_DA
 use pallet_transaction_payment::{FeeDetails, InclusionFee};
 // Frontier
 use fp_account::EthereumSignature;
-use fp_evm::weight_per_gas;
+use fp_evm::{
+    weight_per_gas, CheckEvmTransaction, CheckEvmTransactionConfig, TransactionValidationError,
+};
 use fp_rpc::TransactionStatus;
-use pallet_ethereum::{Call::transact, PostLogContent, Transaction as EthereumTransaction};
+use pallet_ethereum::{
+    Call::transact, PostLogContent, Transaction as EthereumTransaction,
+    TransactionData as EthereumTransactionData,
+};
 use pallet_evm::{
     Account as EVMAccount, AddressMapping, EnsureAccountId20, FeeCalculator, GasWeightMapping,
     IdentityAddressMapping, Runner,
@@ -157,9 +161,7 @@ pub use paras_sudo_wrapper::Call as ParasSudoWrapperCall;
 pub use areas::{deposit, CouncilCollective, TechnicalCollective};
 
 mod precompiles;
-mod helpers {
-    pub mod runner;
-}
+
 pub mod areas;
 pub mod migrations;
 mod weights;
@@ -256,7 +258,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 213,
+    spec_version: 214,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 4,
@@ -1473,181 +1475,257 @@ parameter_types! {
         );
 }
 
-pub struct CurrencyAdapter<T>(core::marker::PhantomData<T>);
+pub struct VitreusEvmRunner;
 
-impl<T> Currency<AccountId> for CurrencyAdapter<T>
-where
-    T: fungible::Inspect<AccountId> + fungible::Balanced<AccountId> + fungible::Mutate<AccountId>,
-{
-    type Balance = <T as fungible::Inspect<AccountId>>::Balance;
-    type PositiveImbalance = fungible::Debt<AccountId, T>;
-    type NegativeImbalance = fungible::Credit<AccountId, T>;
+fn evm_gas_fee_bound(max_fee_per_gas: Option<U256>, gas_limit: U256) -> U256 {
+    max_fee_per_gas.unwrap_or_default().saturating_mul(gas_limit)
+}
 
-    fn total_balance(who: &AccountId) -> Self::Balance {
-        T::total_balance(who)
-    }
+fn can_pay_fixed_evm_fee(account_id: &AccountId, amount: Balance) -> bool {
+    if let Some((_, fee_vtrs_amount)) = EnergyFee::calculate_fee_parts(account_id, amount) {
+        let vtrs_balance =
+            Balances::reducible_balance(account_id, Preservation::Protect, Fortitude::Polite);
 
-    fn can_slash(who: &AccountId, value: Self::Balance) -> bool {
-        if value.is_zero() {
-            return true;
-        }
-        Self::free_balance(who) >= value
-    }
-
-    fn total_issuance() -> Self::Balance {
-        T::total_issuance()
-    }
-
-    fn minimum_balance() -> Self::Balance {
-        T::minimum_balance()
-    }
-
-    fn burn(amount: Self::Balance) -> Self::PositiveImbalance {
-        if amount.is_zero() {
-            return Self::PositiveImbalance::zero();
-        }
-        T::rescind(amount)
-    }
-
-    fn issue(amount: Self::Balance) -> Self::NegativeImbalance {
-        if amount.is_zero() {
-            return Self::NegativeImbalance::zero();
-        }
-        T::issue(amount)
-    }
-
-    fn free_balance(who: &AccountId) -> Self::Balance {
-        T::reducible_balance(who, Preservation::Preserve, Fortitude::Polite)
-    }
-
-    fn ensure_can_withdraw(
-        who: &AccountId,
-        amount: Self::Balance,
-        _reasons: WithdrawReasons,
-        _new_balance: Self::Balance,
-    ) -> DispatchResult {
-        if amount.is_zero() {
-            return Ok(());
-        }
-        T::can_withdraw(who, amount).into_result(true).map(|_| ())
-    }
-
-    fn transfer(
-        source: &AccountId,
-        dest: &AccountId,
-        value: Self::Balance,
-        existence_requirement: ExistenceRequirement,
-    ) -> DispatchResult {
-        if value.is_zero() {
-            return Ok(());
-        }
-
-        let preservation = match existence_requirement {
-            ExistenceRequirement::KeepAlive => Preservation::Preserve,
-            ExistenceRequirement::AllowDeath => Preservation::Expendable,
-        };
-        T::transfer(source, dest, value, preservation).map(|_| ())
-    }
-
-    fn slash(who: &AccountId, value: Self::Balance) -> (Self::NegativeImbalance, Self::Balance) {
-        if value.is_zero() {
-            return (Self::NegativeImbalance::zero(), Zero::zero());
-        }
-
-        let imbalance = T::withdraw(
-            who,
-            value,
-            Precision::BestEffort,
-            Preservation::Preserve,
-            Fortitude::Force,
-        )
-        .unwrap_or_else(|_| Self::NegativeImbalance::zero());
-
-        let remaining = value.saturating_sub(imbalance.peek());
-
-        (imbalance, remaining)
-    }
-
-    fn deposit_into_existing(
-        who: &AccountId,
-        value: Self::Balance,
-    ) -> Result<Self::PositiveImbalance, DispatchError> {
-        if value.is_zero() {
-            return Ok(Self::PositiveImbalance::zero());
-        }
-        T::deposit(who, value, Precision::Exact)
-    }
-
-    fn deposit_creating(who: &AccountId, value: Self::Balance) -> Self::PositiveImbalance {
-        if value.is_zero() {
-            return Self::PositiveImbalance::zero();
-        }
-        T::deposit(who, value, Precision::Exact).unwrap_or_else(|_| Self::PositiveImbalance::zero())
-    }
-
-    fn withdraw(
-        who: &AccountId,
-        value: Self::Balance,
-        _reasons: WithdrawReasons,
-        liveness: ExistenceRequirement,
-    ) -> Result<Self::NegativeImbalance, DispatchError> {
-        if value.is_zero() {
-            return Ok(Self::NegativeImbalance::zero());
-        }
-
-        let preservation = match liveness {
-            ExistenceRequirement::KeepAlive => Preservation::Preserve,
-            ExistenceRequirement::AllowDeath => Preservation::Expendable,
-        };
-        T::withdraw(who, value, Precision::Exact, preservation, Fortitude::Polite)
-    }
-
-    fn make_free_balance_be(
-        who: &AccountId,
-        balance: Self::Balance,
-    ) -> SignedImbalance<Self::Balance, Self::PositiveImbalance> {
-        T::set_balance(who, balance);
-        SignedImbalance::Positive(Self::PositiveImbalance::zero())
+        fee_vtrs_amount <= vtrs_balance
+    } else {
+        false
     }
 }
 
-impl<T: fungible::Inspect<AccountId>> fungible::Inspect<AccountId> for CurrencyAdapter<T> {
-    type Balance = T::Balance;
-
-    fn total_issuance() -> Self::Balance {
-        T::total_issuance()
+fn evm_account_for_validation(
+    source: H160,
+    mut account: EVMAccount,
+    value: U256,
+    gas_fee_bound: U256,
+) -> Result<EVMAccount, ()> {
+    if account.balance < value {
+        return Err(());
     }
 
-    fn minimum_balance() -> Self::Balance {
-        T::minimum_balance()
+    let account_id = <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(source);
+    if !can_pay_fixed_evm_fee(&account_id, EnergyFee::ethereum_fee()) {
+        return Err(());
     }
 
-    fn total_balance(who: &AccountId) -> Self::Balance {
-        T::total_balance(who)
+    account.balance = account.balance.saturating_add(gas_fee_bound);
+    Ok(account)
+}
+
+impl Runner<Runtime> for VitreusEvmRunner {
+    type Error = pallet_evm::Error<Runtime>;
+
+    fn validate(
+        source: H160,
+        target: Option<H160>,
+        input: Vec<u8>,
+        value: U256,
+        gas_limit: u64,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
+        nonce: Option<U256>,
+        access_list: Vec<(H160, Vec<H256>)>,
+        is_transactional: bool,
+        weight_limit: Option<Weight>,
+        proof_size_base_cost: Option<u64>,
+        evm_config: &pallet_evm::EvmConfig,
+    ) -> Result<(), pallet_evm::RunnerError<Self::Error>> {
+        let (base_fee, mut weight) =
+            <Runtime as pallet_evm::Config>::FeeCalculator::min_gas_price();
+        let (source_account, inner_weight) = pallet_evm::Pallet::<Runtime>::account_basic(&source);
+        weight = weight.saturating_add(inner_weight);
+
+        let gas_fee_bound = evm_gas_fee_bound(max_fee_per_gas, U256::from(gas_limit));
+        let source_account =
+            evm_account_for_validation(source, source_account, value, gas_fee_bound).map_err(
+                |_| pallet_evm::RunnerError {
+                    error: pallet_evm::Error::<Runtime>::BalanceLow,
+                    weight,
+                },
+            )?;
+
+        CheckEvmTransaction::<Self::Error>::new(
+            CheckEvmTransactionConfig {
+                evm_config,
+                block_gas_limit: <Runtime as pallet_evm::Config>::BlockGasLimit::get(),
+                base_fee,
+                chain_id: <Runtime as pallet_evm::Config>::ChainId::get(),
+                is_transactional,
+            },
+            fp_evm::CheckEvmTransactionInput {
+                chain_id: Some(<Runtime as pallet_evm::Config>::ChainId::get()),
+                to: target,
+                input,
+                nonce: nonce.unwrap_or(source_account.nonce),
+                gas_limit: gas_limit.into(),
+                gas_price: None,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                value,
+                access_list,
+            },
+            weight_limit,
+            proof_size_base_cost,
+        )
+        .validate_in_block_for(&source_account)
+        .and_then(|v| v.with_base_fee())
+        .and_then(|v| v.with_balance_for(&source_account))
+        .map_err(|error| pallet_evm::RunnerError { error, weight })?;
+
+        Ok(())
     }
 
-    fn balance(who: &AccountId) -> Self::Balance {
-        T::balance(who)
+    fn call(
+        source: H160,
+        target: H160,
+        input: Vec<u8>,
+        value: U256,
+        gas_limit: u64,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
+        nonce: Option<U256>,
+        access_list: Vec<(H160, Vec<H256>)>,
+        is_transactional: bool,
+        validate: bool,
+        weight_limit: Option<Weight>,
+        proof_size_base_cost: Option<u64>,
+        config: &pallet_evm::EvmConfig,
+    ) -> Result<fp_evm::CallInfo, pallet_evm::RunnerError<Self::Error>> {
+        if validate {
+            Self::validate(
+                source,
+                Some(target),
+                input.clone(),
+                value,
+                gas_limit,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                nonce,
+                access_list.clone(),
+                is_transactional,
+                weight_limit,
+                proof_size_base_cost,
+                config,
+            )?;
+        }
+
+        <pallet_evm::runner::stack::Runner<Runtime> as Runner<Runtime>>::call(
+            source,
+            target,
+            input,
+            value,
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            nonce,
+            access_list,
+            is_transactional,
+            false,
+            weight_limit,
+            proof_size_base_cost,
+            config,
+        )
     }
 
-    fn reducible_balance(
-        who: &AccountId,
-        preservation: Preservation,
-        force: Fortitude,
-    ) -> Self::Balance {
-        T::reducible_balance(who, preservation, force)
+    fn create(
+        source: H160,
+        init: Vec<u8>,
+        value: U256,
+        gas_limit: u64,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
+        nonce: Option<U256>,
+        access_list: Vec<(H160, Vec<H256>)>,
+        is_transactional: bool,
+        validate: bool,
+        weight_limit: Option<Weight>,
+        proof_size_base_cost: Option<u64>,
+        config: &pallet_evm::EvmConfig,
+    ) -> Result<fp_evm::CreateInfo, pallet_evm::RunnerError<Self::Error>> {
+        if validate {
+            Self::validate(
+                source,
+                None,
+                init.clone(),
+                value,
+                gas_limit,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                nonce,
+                access_list.clone(),
+                is_transactional,
+                weight_limit,
+                proof_size_base_cost,
+                config,
+            )?;
+        }
+
+        <pallet_evm::runner::stack::Runner<Runtime> as Runner<Runtime>>::create(
+            source,
+            init,
+            value,
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            nonce,
+            access_list,
+            is_transactional,
+            false,
+            weight_limit,
+            proof_size_base_cost,
+            config,
+        )
     }
 
-    fn can_deposit(
-        who: &AccountId,
-        amount: Self::Balance,
-        provenance: Provenance,
-    ) -> DepositConsequence {
-        T::can_deposit(who, amount, provenance)
-    }
+    fn create2(
+        source: H160,
+        init: Vec<u8>,
+        salt: H256,
+        value: U256,
+        gas_limit: u64,
+        max_fee_per_gas: Option<U256>,
+        max_priority_fee_per_gas: Option<U256>,
+        nonce: Option<U256>,
+        access_list: Vec<(H160, Vec<H256>)>,
+        is_transactional: bool,
+        validate: bool,
+        weight_limit: Option<Weight>,
+        proof_size_base_cost: Option<u64>,
+        config: &pallet_evm::EvmConfig,
+    ) -> Result<fp_evm::CreateInfo, pallet_evm::RunnerError<Self::Error>> {
+        if validate {
+            Self::validate(
+                source,
+                None,
+                init.clone(),
+                value,
+                gas_limit,
+                max_fee_per_gas,
+                max_priority_fee_per_gas,
+                nonce,
+                access_list.clone(),
+                is_transactional,
+                weight_limit,
+                proof_size_base_cost,
+                config,
+            )?;
+        }
 
-    fn can_withdraw(who: &AccountId, amount: Self::Balance) -> WithdrawConsequence<Self::Balance> {
-        T::can_withdraw(who, amount)
+        <pallet_evm::runner::stack::Runner<Runtime> as Runner<Runtime>>::create2(
+            source,
+            init,
+            salt,
+            value,
+            gas_limit,
+            max_fee_per_gas,
+            max_priority_fee_per_gas,
+            nonce,
+            access_list,
+            is_transactional,
+            false,
+            weight_limit,
+            proof_size_base_cost,
+            config,
+        )
     }
 }
 
@@ -1663,13 +1741,13 @@ impl pallet_evm::Config for Runtime {
     type CallOrigin = EnsureAccountId20;
     type WithdrawOrigin = EnsureAccountId20;
     type AddressMapping = IdentityAddressMapping;
-    type Currency = CurrencyAdapter<EnergyAsset>;
+    type Currency = Balances;
     type RuntimeEvent = RuntimeEvent;
     type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
     type ChainId = EVMChainId;
     type BlockGasLimit = BlockGasLimit;
-    type Runner = pallet_evm::runner::stack::Runner<Self>;
+    type Runner = VitreusEvmRunner;
     type OnChargeTransaction = EnergyFee;
     type OnCreate = ();
     type FindAuthor = FindAuthorTruncated<Babe>;
@@ -2142,6 +2220,144 @@ fn transact_with_new_gas_limit(
 
 // user doesn't have NAC to dispatch transaction
 const ACCESS_RESTRICTED: u8 = u8::MAX;
+const EVM_CALL_ACCESS_LEVEL: u8 = 1;
+
+pub struct VitreusInvalidTransactionWrapper(InvalidTransaction);
+
+impl From<TransactionValidationError> for VitreusInvalidTransactionWrapper {
+    fn from(validation_error: TransactionValidationError) -> Self {
+        match validation_error {
+            TransactionValidationError::GasLimitTooLow => {
+                Self(InvalidTransaction::Custom(TransactionValidationError::GasLimitTooLow as u8))
+            },
+            TransactionValidationError::GasLimitTooHigh => {
+                Self(InvalidTransaction::Custom(TransactionValidationError::GasLimitTooHigh as u8))
+            },
+            TransactionValidationError::PriorityFeeTooHigh => Self(InvalidTransaction::Custom(
+                TransactionValidationError::PriorityFeeTooHigh as u8,
+            )),
+            TransactionValidationError::BalanceTooLow => Self(InvalidTransaction::Payment),
+            TransactionValidationError::TxNonceTooLow => Self(InvalidTransaction::Stale),
+            TransactionValidationError::TxNonceTooHigh => Self(InvalidTransaction::Future),
+            TransactionValidationError::InvalidFeeInput => {
+                Self(InvalidTransaction::Custom(TransactionValidationError::InvalidFeeInput as u8))
+            },
+            TransactionValidationError::InvalidChainId => {
+                Self(InvalidTransaction::Custom(TransactionValidationError::InvalidChainId as u8))
+            },
+            TransactionValidationError::InvalidSignature => {
+                Self(InvalidTransaction::Custom(TransactionValidationError::InvalidSignature as u8))
+            },
+            TransactionValidationError::GasPriceTooLow => {
+                Self(InvalidTransaction::Custom(TransactionValidationError::GasPriceTooLow as u8))
+            },
+            TransactionValidationError::UnknownError => {
+                Self(InvalidTransaction::Custom(TransactionValidationError::UnknownError as u8))
+            },
+        }
+    }
+}
+
+fn validate_ethereum_transaction_in_pool(
+    origin: H160,
+    transaction: &EthereumTransaction,
+) -> TransactionValidity {
+    let transaction_data: EthereumTransactionData = transaction.into();
+    let transaction_nonce = transaction_data.nonce;
+    let (weight_limit, proof_size_base_cost) = Ethereum::transaction_weight(&transaction_data);
+    let (base_fee, _) = <Runtime as pallet_evm::Config>::FeeCalculator::min_gas_price();
+    let (who, _) = pallet_evm::Pallet::<Runtime>::account_basic(&origin);
+    let gas_fee_bound = evm_gas_fee_bound(
+        transaction_data.max_fee_per_gas.or(transaction_data.gas_price),
+        transaction_data.gas_limit,
+    );
+    let who = evm_account_for_validation(origin, who, transaction_data.value, gas_fee_bound)
+        .map_err(|_| InvalidTransaction::Payment)?;
+
+    CheckEvmTransaction::<VitreusInvalidTransactionWrapper>::new(
+        CheckEvmTransactionConfig {
+            evm_config: <Runtime as pallet_evm::Config>::config(),
+            block_gas_limit: <Runtime as pallet_evm::Config>::BlockGasLimit::get(),
+            base_fee,
+            chain_id: <Runtime as pallet_evm::Config>::ChainId::get(),
+            is_transactional: true,
+        },
+        transaction_data.clone().into(),
+        weight_limit,
+        proof_size_base_cost,
+    )
+    .validate_in_pool_for(&who)
+    .and_then(|v| v.with_chain_id())
+    .and_then(|v| v.with_base_fee())
+    .and_then(|v| v.with_balance_for(&who))
+    .map_err(|e| e.0)?;
+
+    if !pallet_evm::AccountCodes::<Runtime>::get(origin).is_empty() {
+        return Err(InvalidTransaction::BadSigner.into());
+    }
+
+    let priority = match (
+        transaction_data.gas_price,
+        transaction_data.max_fee_per_gas,
+        transaction_data.max_priority_fee_per_gas,
+    ) {
+        (Some(gas_price), None, None) => gas_price.saturating_sub(base_fee).unique_saturated_into(),
+        (None, Some(_), None) => 0,
+        (None, Some(max_fee_per_gas), Some(max_priority_fee_per_gas)) => max_fee_per_gas
+            .saturating_sub(base_fee)
+            .min(max_priority_fee_per_gas)
+            .unique_saturated_into(),
+        _ => return Err(InvalidTransaction::Payment.into()),
+    };
+
+    let mut builder = ValidTransactionBuilder::default()
+        .and_provides((origin, transaction_nonce))
+        .priority(priority);
+
+    if transaction_nonce > who.nonce {
+        if let Some(prev_nonce) = transaction_nonce.checked_sub(1.into()) {
+            builder = builder.and_requires((origin, prev_nonce));
+        }
+    }
+
+    builder.build()
+}
+
+fn validate_ethereum_transaction_in_block(
+    origin: H160,
+    transaction: &EthereumTransaction,
+) -> Result<(), TransactionValidityError> {
+    let transaction_data: EthereumTransactionData = transaction.into();
+    let (weight_limit, proof_size_base_cost) = Ethereum::transaction_weight(&transaction_data);
+    let (base_fee, _) = <Runtime as pallet_evm::Config>::FeeCalculator::min_gas_price();
+    let (who, _) = pallet_evm::Pallet::<Runtime>::account_basic(&origin);
+    let gas_fee_bound = evm_gas_fee_bound(
+        transaction_data.max_fee_per_gas.or(transaction_data.gas_price),
+        transaction_data.gas_limit,
+    );
+    let who = evm_account_for_validation(origin, who, transaction_data.value, gas_fee_bound)
+        .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))?;
+
+    CheckEvmTransaction::<VitreusInvalidTransactionWrapper>::new(
+        CheckEvmTransactionConfig {
+            evm_config: <Runtime as pallet_evm::Config>::config(),
+            block_gas_limit: <Runtime as pallet_evm::Config>::BlockGasLimit::get(),
+            base_fee,
+            chain_id: <Runtime as pallet_evm::Config>::ChainId::get(),
+            is_transactional: true,
+        },
+        transaction_data.into(),
+        weight_limit,
+        proof_size_base_cost,
+    )
+    .validate_in_block_for(&who)
+    .and_then(|v| v.with_chain_id())
+    .and_then(|v| v.with_base_fee())
+    .and_then(|v| v.with_balance_for(&who))
+    .map_err(|e| TransactionValidityError::Invalid(e.0))?;
+
+    Ok(())
+}
 
 impl fp_self_contained::SelfContainedCall for RuntimeCall {
     type SignedInfo = H160;
@@ -2174,29 +2390,27 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                 if let CallFee::EVM(amount) =
                     EnergyFee::dispatch_info_to_fee(self, Some(dispatch_info), None)
                 {
-                    let (_, fee_vtrs_amount) =
-                        if let Some(parts) = EnergyFee::calculate_fee_parts(&account_id, amount) {
-                            parts
-                        } else {
-                            return Some(Err(InvalidTransaction::Payment.into()));
-                        };
-
-                    let vtrs_balance = Balances::reducible_balance(
-                        &account_id,
-                        Preservation::Protect,
-                        Fortitude::Polite,
-                    );
-
-                    if fee_vtrs_amount > vtrs_balance {
+                    if !can_pay_fixed_evm_fee(&account_id, amount) {
                         return Some(Err(InvalidTransaction::Payment.into()));
                     }
                 }
 
-                if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
+                if !NacManaging::user_has_access(account_id, EVM_CALL_ACCESS_LEVEL) {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
                 };
 
-                call.validate_self_contained(info, dispatch_info, len)
+                match call {
+                    pallet_ethereum::Call::transact { transaction } => {
+                        if let Err(e) =
+                            frame_system::CheckWeight::<Runtime>::do_validate(dispatch_info, len)
+                        {
+                            return Some(Err(e));
+                        }
+
+                        Some(validate_ethereum_transaction_in_pool(*info, transaction))
+                    },
+                    _ => None,
+                }
             },
             _ => None,
         }
@@ -2210,7 +2424,24 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
     ) -> Option<Result<(), TransactionValidityError>> {
         match self {
             RuntimeCall::Ethereum(call) => {
-                call.pre_dispatch_self_contained(info, dispatch_info, len)
+                let account_id =
+                    <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
+                if !NacManaging::user_has_access(account_id, EVM_CALL_ACCESS_LEVEL) {
+                    return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
+                }
+                match call {
+                    pallet_ethereum::Call::transact { transaction } => {
+                        if let Err(e) = frame_system::CheckWeight::<Runtime>::do_pre_dispatch(
+                            dispatch_info,
+                            len,
+                        ) {
+                            return Some(Err(e));
+                        }
+
+                        Some(validate_ethereum_transaction_in_block(*info, transaction))
+                    },
+                    _ => None,
+                }
             },
             _ => None,
         }

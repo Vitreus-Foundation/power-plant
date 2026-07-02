@@ -10,7 +10,29 @@ pub type Permanent = (
 pub type V0213 =
     (InitTechnicalCommitteeTreasury, pallet_privileges::migration::MigrateToV1<Runtime>);
 
-pub type Unreleased = ();
+pub type Unreleased = (SetPrecompileCode,);
+
+pub struct SetPrecompileCode;
+impl frame_support::traits::OnRuntimeUpgrade for SetPrecompileCode {
+    fn on_runtime_upgrade() -> Weight {
+        use sp_core::H160;
+
+        let precompile_address = H160::from_low_u64_be(2048);
+
+        // fe = INVALID opcode — prevents accidental execution as a contract
+        let dummy_code: sp_std::vec::Vec<u8> = sp_std::vec![0xfe];
+
+        pallet_evm::AccountCodes::<Runtime>::insert(precompile_address, &dummy_code);
+
+        log::info!(
+            "SetPrecompileCode: wrote {} byte(s) to EVM AccountCodes for 0x{:x}",
+            dummy_code.len(),
+            precompile_address,
+        );
+
+        <Runtime as frame_system::Config>::DbWeight::get().writes(1)
+    }
+}
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {

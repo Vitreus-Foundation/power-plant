@@ -1,4 +1,6 @@
 use pallet_evm_precompile_balances_erc20::{Erc20BalancesPrecompile, Erc20Metadata};
+use pallet_evm_precompile_blake2::Blake2F;
+use pallet_evm_precompile_bn128::{Bn128Add, Bn128Mul, Bn128Pairing};
 use pallet_evm_precompile_modexp::Modexp;
 use pallet_evm_precompile_sha3fips::Sha3FIPS256;
 use pallet_evm_precompile_simple::{ECRecover, ECRecoverPublicKey, Identity, Ripemd160, Sha256};
@@ -27,8 +29,7 @@ impl Erc20Metadata for NativeErc20Metadata {
     /// Must return `true` only if it represents the main native currency of
     /// the network. It must be the currency used in `pallet_evm`.
     fn is_native_currency() -> bool {
-        // In the EVM environment native currency is VNRG
-        false
+        true
     }
 }
 
@@ -43,10 +44,21 @@ type VitreusPrecompilesAt<R> = (
     PrecompileAt<AddressU64<3>, Ripemd160, EthereumPrecompilesChecks>,
     PrecompileAt<AddressU64<4>, Identity, EthereumPrecompilesChecks>,
     PrecompileAt<AddressU64<5>, Modexp, EthereumPrecompilesChecks>,
+    PrecompileAt<AddressU64<6>, Bn128Add, EthereumPrecompilesChecks>,
+    PrecompileAt<AddressU64<7>, Bn128Mul, EthereumPrecompilesChecks>,
+    PrecompileAt<AddressU64<8>, Bn128Pairing, EthereumPrecompilesChecks>,
+    PrecompileAt<AddressU64<9>, Blake2F, EthereumPrecompilesChecks>,
     // Non-Vitreus specific nor Ethereum precompiles :
     PrecompileAt<AddressU64<1024>, Sha3FIPS256, (CallableByContract, CallableByPrecompile)>,
     PrecompileAt<AddressU64<1025>, ECRecoverPublicKey, (CallableByContract, CallableByPrecompile)>,
     // Vitreus specific precompiles:
+    // NOTE: DELEGATECALL is intentionally NOT accepted for this stateful custom precompile.
+    // A precompile reachable via DELEGATECALL runs with `context.address` = the calling
+    // contract, which lets any contract emit spoofed Transfer/Approval events for the native
+    // token and is the class of issue Moonbeam disabled for custom precompiles after a critical
+    // bounty (they only re-enabled DELEGATECALL for the standard Ethereum precompiles). The
+    // bridge does not need it: the router calls this precompile via normal CALL for payouts and
+    // reaches it through the NativeProxy `transferFrom` (also a normal CALL) for pull-ins.
     PrecompileAt<
         AddressU64<2048>,
         Erc20BalancesPrecompile<R, NativeErc20Metadata>,
