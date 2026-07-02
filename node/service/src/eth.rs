@@ -56,6 +56,10 @@ pub struct EthConfiguration {
     #[arg(long)]
     pub enable_dev_signer: bool,
 
+    /// Enables internal debug RPC methods when unsafe RPCs are allowed.
+    #[arg(long = "eth-debug-rpc")]
+    pub enable_debug_rpc: bool,
+
     /// The dynamic-fee pallet target gas price set by block author
     #[arg(long, default_value = "1")]
     pub target_gas_price: u64,
