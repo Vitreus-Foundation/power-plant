@@ -29,8 +29,7 @@ impl Erc20Metadata for NativeErc20Metadata {
     /// Must return `true` only if it represents the main native currency of
     /// the network. It must be the currency used in `pallet_evm`.
     fn is_native_currency() -> bool {
-        // In the EVM environment native currency is VNRG
-        false
+        true
     }
 }
 
@@ -53,9 +52,8 @@ type VitreusPrecompilesAt<R> = (
     PrecompileAt<AddressU64<1024>, Sha3FIPS256, (CallableByContract, CallableByPrecompile)>,
     PrecompileAt<AddressU64<1025>, ECRecoverPublicKey, (CallableByContract, CallableByPrecompile)>,
     // Vitreus specific precompiles:
-    // AcceptDelegateCall enables contracts to proxy transfer/transferFrom
-    // via DELEGATECALL, preserving msg.sender context for pallet_balances dispatch.
-    // Required for Hyperlane bridge warp routes and similar DeFi integrations.
+    // AcceptDelegateCall is required for bridge/proxy integrations that call the ERC20 precompile
+    // through router contracts while preserving the EVM caller context.
     PrecompileAt<
         AddressU64<2048>,
         Erc20BalancesPrecompile<R, NativeErc20Metadata>,

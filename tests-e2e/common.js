@@ -97,4 +97,4 @@ export const BALTHAR = keyring
 export const CHARLETH = keyring
     .addFromUri("0x0b6e18cafb6ed99687ec547bd28139cafdd2bffe70e6b688025de6b445aa5c5b")
 
-export const ERC20_BALANCES_CONTRACT_ADDR = numToAddress(2050)
+export const ERC20_BALANCES_CONTRACT_ADDR = numToAddress(2048)

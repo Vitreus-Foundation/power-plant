@@ -227,9 +227,14 @@ where
         let owner: Runtime::AccountId = Runtime::AddressMapping::into_account_id(owner);
         let spender: Runtime::AccountId = Runtime::AddressMapping::into_account_id(spender);
 
-        Ok(ApprovesStorage::<Runtime, Instance>::get(owner, spender)
-            .unwrap_or_default()
-            .into())
+        let allowance =
+            ApprovesStorage::<Runtime, Instance>::get(owner, spender).unwrap_or_default();
+
+        if allowance == Bounded::max_value() {
+            Ok(U256::MAX)
+        } else {
+            Ok(allowance.into())
+        }
     }
 
     #[precompile::public("approve(address,uint256)")]
@@ -248,8 +253,7 @@ where
             let caller: Runtime::AccountId =
                 Runtime::AddressMapping::into_account_id(handle.context().caller);
             let spender: Runtime::AccountId = Runtime::AddressMapping::into_account_id(spender);
-            // Amount saturate if too high.
-            let value = Self::u256_to_amount(value).unwrap_or_else(|_| Bounded::max_value());
+            let value = Self::u256_to_approval_amount(value);
 
             ApprovesStorage::<Runtime, Instance>::insert(caller, spender, value);
         }
@@ -325,34 +329,38 @@ where
             let to: Runtime::AccountId = Runtime::AddressMapping::into_account_id(to);
             let value = Self::u256_to_amount(value).in_field("value")?;
 
+            let mut spend_allowance = None;
+
             // If caller is "from", it can spend as much as it wants.
             if caller != from {
-                ApprovesStorage::<Runtime, Instance>::mutate(from.clone(), caller, |entry| {
-                    // Get current allowed value, exit if None.
-                    let allowed = entry.ok_or(revert("spender not allowed"))?;
+                let allowed =
+                    ApprovesStorage::<Runtime, Instance>::get(from.clone(), caller.clone())
+                        .ok_or(revert("spender not allowed"))?;
 
+                if allowed != Bounded::max_value() {
+                    // Get current allowed value, exit if None.
                     // Remove "value" from allowed, exit if underflow.
                     let allowed = allowed
                         .checked_sub(&value)
                         .ok_or_else(|| revert("trying to spend more than allowed"))?;
-
-                    // Update allowed value.
-                    *entry = Some(allowed);
-
-                    EvmResult::Ok(())
-                })?;
+                    spend_allowance = Some((caller, allowed));
+                }
             }
 
             // Build call with origin. Here origin is the "from"/owner field.
             // Dispatch call (if enough gas).
             RuntimeHelper::<Runtime>::try_dispatch(
                 handle,
-                Some(from).into(),
+                Some(from.clone()).into(),
                 pallet_balances::Call::<Runtime, Instance>::transfer_allow_death {
                     dest: Runtime::Lookup::unlookup(to),
                     value,
                 },
             )?;
+
+            if let Some((spender, allowed)) = spend_allowance {
+                ApprovesStorage::<Runtime, Instance>::insert(from, spender, allowed);
+            }
         }
 
         log3(
@@ -489,5 +497,9 @@ where
         value
             .try_into()
             .map_err(|_| RevertReason::value_is_too_large("balance type").into())
+    }
+
+    pub(crate) fn u256_to_approval_amount(value: U256) -> BalanceOf<Runtime, Instance> {
+        Self::u256_to_amount(value).unwrap_or_else(|_| Bounded::max_value())
     }
 }
