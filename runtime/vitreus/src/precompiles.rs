@@ -52,12 +52,17 @@ type VitreusPrecompilesAt<R> = (
     PrecompileAt<AddressU64<1024>, Sha3FIPS256, (CallableByContract, CallableByPrecompile)>,
     PrecompileAt<AddressU64<1025>, ECRecoverPublicKey, (CallableByContract, CallableByPrecompile)>,
     // Vitreus specific precompiles:
-    // AcceptDelegateCall is required for bridge/proxy integrations that call the ERC20 precompile
-    // through router contracts while preserving the EVM caller context.
+    // NOTE: DELEGATECALL is intentionally NOT accepted for this stateful custom precompile.
+    // A precompile reachable via DELEGATECALL runs with `context.address` = the calling
+    // contract, which lets any contract emit spoofed Transfer/Approval events for the native
+    // token and is the class of issue Moonbeam disabled for custom precompiles after a critical
+    // bounty (they only re-enabled DELEGATECALL for the standard Ethereum precompiles). The
+    // bridge does not need it: the router calls this precompile via normal CALL for payouts and
+    // reaches it through the NativeProxy `transferFrom` (also a normal CALL) for pull-ins.
     PrecompileAt<
         AddressU64<2048>,
         Erc20BalancesPrecompile<R, NativeErc20Metadata>,
-        (AcceptDelegateCall, CallableByContract, CallableByPrecompile),
+        (CallableByContract, CallableByPrecompile),
     >,
 );
 
