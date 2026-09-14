@@ -14254,6 +14254,7 @@ dependencies = [
  "pallet-grandpa",
  "pallet-hotfix-sufficients",
  "pallet-im-online",
+ "pallet-launchpad",
  "pallet-manual-bridge",
  "pallet-membership",
  "pallet-message-queue",
