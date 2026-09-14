@@ -13,12 +13,13 @@ mod benchmarks {
 
     #[benchmark]
     fn request_funds() {
-        let amount = 100u32.into();
-        let caller: T::AccountId = whitelisted_caller();
+        // Unsigned call: `who` is the beneficiary, `amount` must be within `MaxAmount`.
+        let amount: T::Balance = 100u32.into();
+        let who: T::AccountId = whitelisted_caller();
         #[extrinsic_call]
-        request_funds(RawOrigin::Signed(caller.clone()), amount);
+        request_funds(RawOrigin::None, who.clone(), amount);
 
-        assert!(Requests::<T>::contains_key(&caller));
+        assert!(Requests::<T>::contains_key(&who));
     }
 
     impl_benchmark_test_suite!(Faucet, crate::mock::new_test_ext(), crate::mock::Test);

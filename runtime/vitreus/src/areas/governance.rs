@@ -215,7 +215,33 @@ impl pallet_treasury::Config for Runtime {
     type BalanceConverter = UnityAssetBalanceConversion;
     type PayoutPeriod = PayoutSpendPeriod;
     #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BenchmarkHelper = TreasuryBenchmarkHelper;
+}
+
+/// `pallet_treasury::ArgumentsFactory` for both treasury instances. The default
+/// `()` needs `FromEntropy`, which neither `AccountId20` nor `NativeOrAssetId`
+/// implements. The asset kind is always the native one so the instance's
+/// `BalanceConverter` (unity for native) and `Paymaster` succeed as they would
+/// on-chain.
+#[cfg(feature = "runtime-benchmarks")]
+pub struct TreasuryBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_treasury::ArgumentsFactory<(), AccountId> for TreasuryBenchmarkHelper {
+    fn create_asset_kind(_seed: u32) {}
+    fn create_beneficiary(seed: [u8; 32]) -> AccountId {
+        let mut id = [0u8; 20];
+        id.copy_from_slice(&seed[..20]);
+        AccountId::from(id)
+    }
+}
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_treasury::ArgumentsFactory<NativeOrAssetId, AccountId> for TreasuryBenchmarkHelper {
+    fn create_asset_kind(_seed: u32) -> NativeOrAssetId {
+        NativeOrAssetId::Native
+    }
+    fn create_beneficiary(seed: [u8; 32]) -> AccountId {
+        <Self as pallet_treasury::ArgumentsFactory<(), AccountId>>::create_beneficiary(seed)
+    }
 }
 
 parameter_types! {
@@ -259,7 +285,7 @@ impl pallet_treasury::Config<TechnicalCommitteeTreasury> for Runtime {
     >;
     type PayoutPeriod = PayoutSpendPeriod;
     #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BenchmarkHelper = TreasuryBenchmarkHelper;
 }
 
 parameter_types! {
