@@ -1178,6 +1178,92 @@ impl pallet_energy_broker::Config for Runtime {
     type BurnedEnergySessionsCount = BurnedEnergySessionsCount;
 }
 
+// ---- pallet-vitreus-dex: testnet-runtime only -------------------------------
+//
+// The DEX is wired under `testnet-runtime` for this submission so the
+// mainnet runtime is unchanged by it. The DEX has an internal security audit
+// (pallets/vitreus-dex/SECURITY_AUDIT.md) and its test suite, but no
+// third-party audit yet; enabling it on mainnet is a separate decision and a
+// separate PR. Index: VitreusDex 43.
+#[cfg(feature = "testnet-runtime")]
+mod testnet_pallets {
+    use super::*;
+
+    parameter_types! {
+        pub const DefaultBidWindowBlocks: BlockNumber = 10;
+        pub const DefaultSettlementWindowBlocks: BlockNumber = 5;
+        pub const DefaultSolverBondAmount: Balance = 1_000 * UNITS;
+    }
+
+    /// Asset ids `[2^64, 2^65)` are reserved for launchpad tokens. Pools for them
+    /// can only be created through `ReservedPoolSeeder` (D2 of LAUNCHPAD_SPEC.md).
+    pub const LAUNCHPAD_ASSET_ID_START: u128 = 1u128 << 64;
+    pub const LAUNCHPAD_ASSET_ID_END: u128 = 1u128 << 65;
+
+    pub struct LaunchpadReservedAssets;
+    impl frame_support::traits::Contains<NativeOrAssetId> for LaunchpadReservedAssets {
+        fn contains(asset: &NativeOrAssetId) -> bool {
+            match asset {
+                NativeOrAssetId::WithId(id) => {
+                    let id = u128::from(*id);
+                    (LAUNCHPAD_ASSET_ID_START..LAUNCHPAD_ASSET_ID_END).contains(&id)
+                },
+                NativeOrAssetId::Native => false,
+            }
+        }
+    }
+
+    impl pallet_vitreus_dex::Config for Runtime {
+        type RuntimeEvent = RuntimeEvent;
+        type ManageOrigin = EnsureRoot<AccountId>;
+        type Balance = Balance;
+        type HigherPrecisionBalance = sp_core::U256;
+        type AssetKind = NativeOrAssetId;
+        type Assets = NativeAndAssets;
+        type NativeAsset = NativeAsset;
+        type EnergyAsset = VNRG;
+        type ReservedAssets = LaunchpadReservedAssets;
+        type ExcessRecipient = xcm_config::TreasuryAccount;
+        // D4: protocol fees default to the runtime Treasury; governance can
+        // redirect them with `set_protocol_fee_recipient` (see LAUNCHPAD_SPEC §5.2 D4
+        // for why this is storage, not a constant).
+        type DefaultProtocolFeeRecipient = xcm_config::TreasuryAccount;
+        type CreatorFeeRecipient = LaunchpadCreators;
+        type DefaultBidWindowBlocks = DefaultBidWindowBlocks;
+        type DefaultSettlementWindowBlocks = DefaultSettlementWindowBlocks;
+        type DefaultSolverBondAmount = DefaultSolverBondAmount;
+        type WeightInfo = pallet_vitreus_dex::weights::SubstrateWeight<Runtime>;
+        #[cfg(feature = "runtime-benchmarks")]
+        type BenchmarkHelper = DexBenchmarkHelper;
+    }
+
+    /// D4: resolves a launch asset's creator fee recipient for the DEX through
+    /// the launchpad, so `set_creator_fee_recipient` moves the DEX claim right
+    /// with no propagation.
+    pub struct LaunchpadCreators;
+    impl pallet_vitreus_dex::CreatorFeeRecipient<NativeOrAssetId, AccountId> for LaunchpadCreators {
+        fn creator_fee_recipient(_: &NativeOrAssetId) -> Option<AccountId> {
+            None
+        }
+    }
+
+    /// DEX benchmark helper: plain `WithId(seed)` assets, and the ability to prime `LaunchpadCreators` for an
+    /// asset by planting a launch record, so `claim_pool_creator_fees` measures
+    /// its real path.
+    #[cfg(feature = "runtime-benchmarks")]
+    pub struct DexBenchmarkHelper;
+    #[cfg(feature = "runtime-benchmarks")]
+    impl pallet_vitreus_dex::BenchmarkHelper<NativeOrAssetId, AccountId> for DexBenchmarkHelper {
+        fn asset_kind(seed: u32) -> NativeOrAssetId {
+            NativeOrAssetId::WithId(seed.into())
+        }
+
+        fn set_creator(_: &NativeOrAssetId, _: &AccountId) -> bool {
+            false
+        }
+    }
+}
+
 parameter_types! {
     pub const ExpectedSessionDuration: u32 = EPOCH_DURATION_IN_BLOCKS * SECS_PER_BLOCK as u32;
     pub const AnnualPercentageRate: u32 = 100; // 10%
@@ -1361,6 +1447,8 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Multisig(..)
             | RuntimeCall::Proxy(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
+            #[cfg(feature = "testnet-runtime")]
+            RuntimeCall::VitreusDex(..) => CallFee::Regular(Self::custom_fee()),
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
             | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
@@ -2023,6 +2111,8 @@ construct_runtime!(
         EnergyBroker: pallet_energy_broker = 40,
         Privileges: pallet_privileges = 41,
         DynamicEnergy: pallet_dynamic_energy = 42,
+        #[cfg(feature = "testnet-runtime")]
+        VitreusDex: pallet_vitreus_dex = 43,
         Proxy: pallet_proxy = 44,
 
         // Governance-related pallets
@@ -2293,6 +2383,7 @@ mod benches {
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
+        [pallet_vitreus_dex, VitreusDex]
     );
 }
 

@@ -14257,6 +14257,7 @@ dependencies = [
  "pallet-uniques",
  "pallet-utility",
  "pallet-vesting",
+ "pallet-vitreus-dex",
  "pallet-xcm",
  "parity-scale-codec",
  "polkadot-primitives",
