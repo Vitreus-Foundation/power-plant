@@ -38,6 +38,7 @@ fc-cli = { workspace = true, default-features = true }
 fc-db = { workspace = true, default-features = true }
 
 chain-spec = { workspace = true, default-features = true }
+frame-benchmarking-cli = { workspace = true, default-features = true, optional = true }
 vitreus-service = { workspace = true, default-features = false, features = ["sql", "txpool", "with-rocksdb-weights"], optional = true }
 vitreus-power-plant-runtime = { workspace = true, default-features = true }
 
@@ -55,6 +56,8 @@ cli = [
 	"vitreus-service",
 ]
 runtime-benchmarks = [
+	"frame-benchmarking-cli",
+	"frame-benchmarking-cli/runtime-benchmarks",
 	"polkadot-node-metrics/runtime-benchmarks",
 	"vitreus-power-plant-runtime/runtime-benchmarks",
 	"vitreus-service/runtime-benchmarks",
