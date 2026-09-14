@@ -336,8 +336,14 @@ pub fn run() -> Result<()> {
 
             let runner = cli.create_runner(cmd)?;
             match cmd {
-                BenchmarkCmd::Pallet(cmd) => runner
-                    .sync_run(|config| cmd.run::<Block, ()>(config).map_err(Error::SubstrateCli)),
+                // stable2407: `run` takes the block hasher, not the block, and is
+                // deprecated in favour of `run_with_spec` (polkadot-sdk#3512).
+                BenchmarkCmd::Pallet(cmd) => runner.sync_run(|config| {
+                    cmd.run_with_spec::<vitreus_service::runtime_traits::HashingFor<Block>, ()>(
+                        Some(config.chain_spec),
+                    )
+                    .map_err(Error::SubstrateCli)
+                }),
                 BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
                     let (client, _, _, _, _) =
                         vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
