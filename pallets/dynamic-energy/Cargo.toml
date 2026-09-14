@@ -30,5 +30,9 @@ std = [
     "sp-runtime/std",
     "vitreus-runtime-common/std",
 ]
-runtime-benchmarks = []
+runtime-benchmarks = [
+    "frame-support/runtime-benchmarks",
+    "frame-system/runtime-benchmarks",
+    "sp-runtime/runtime-benchmarks",
+]
 try-runtime = ["frame-support/try-runtime"]
