@@ -1,0 +1,58 @@
+[package]
+name = "pallet-launchpad"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+description = "Bonding-curve token launchpad graduating into VitreusDEX (pallets/LAUNCHPAD_SPEC.md)"
+
+[package.metadata.docs.rs]
+targets = ["x86_64-unknown-linux-gnu"]
+
+[dependencies]
+log = { workspace = true }
+parity-scale-codec = { workspace = true, default-features = false }
+frame-support = { workspace = true, default-features = false }
+frame-system = { workspace = true, default-features = false }
+frame-benchmarking = { workspace = true, default-features = false, optional = true }
+scale-info = { workspace = true, default-features = false, features = ["derive"] }
+sp-core = { workspace = true, default-features = false }
+sp-io = { workspace = true, default-features = false }
+sp-std = { workspace = true, default-features = false }
+sp-runtime = { workspace = true, default-features = false }
+pallet-vitreus-dex = { workspace = true, default-features = false }
+
+[dev-dependencies]
+pallet-balances = { workspace = true, features = ["std"] }
+pallet-assets = { workspace = true, features = ["std"] }
+pallet-utility = { workspace = true, features = ["std"] }
+pallet-proxy = { workspace = true, features = ["std"] }
+pallet-multisig = { workspace = true, features = ["std"] }
+primitive-types = { workspace = true, default-features = false, features = ["codec", "scale-info", "num-traits"] }
+
+[features]
+default = ["std"]
+std = [
+    "parity-scale-codec/std",
+    "frame-benchmarking?/std",
+    "frame-support/std",
+    "frame-system/std",
+    "log/std",
+    "scale-info/std",
+    "sp-core/std",
+    "sp-io/std",
+    "sp-std/std",
+    "sp-runtime/std",
+    "pallet-vitreus-dex/std",
+]
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+    "frame-support/runtime-benchmarks",
+    "frame-system/runtime-benchmarks",
+    "sp-runtime/runtime-benchmarks",
+    "pallet-vitreus-dex/runtime-benchmarks",
+]
+try-runtime = [
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "sp-runtime/try-runtime",
+]

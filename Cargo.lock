@@ -7027,6 +7027,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-launchpad"
+version = "0.1.0"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-assets",
+ "pallet-balances",
+ "pallet-multisig",
+ "pallet-proxy",
+ "pallet-utility",
+ "pallet-vitreus-dex",
+ "parity-scale-codec",
+ "primitive-types",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-manual-bridge"
 version = "0.1.0"
 dependencies = [
