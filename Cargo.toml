@@ -88,6 +88,7 @@ members = [
     "rpc",
     "rpc/node-rpc-server",
     "pallets/claiming",
+    "pallets/vitreus-dex",
     "pallets/energy-fee",
     "pallets/energy-fee/runtime-api",
     "pallets/energy-fee/rpc",
@@ -371,6 +372,7 @@ pallet-evm-precompile-balances-erc20 = { path = "precompiles/balances-erc20", de
 
 # Vitreus pallets
 pallet-claiming = { path = "pallets/claiming", default-features = false }
+pallet-vitreus-dex = { path = "pallets/vitreus-dex", default-features = false }
 pallet-democracy-extension = { path = "pallets/democracy-extension", default-features = false }
 pallet-dynamic-energy = { path = "pallets/dynamic-energy", default-features = false }
 pallet-energy-broker = { path = "pallets/energy-broker", default-features = false }
