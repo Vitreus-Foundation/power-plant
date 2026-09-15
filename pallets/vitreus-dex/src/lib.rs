@@ -1894,11 +1894,22 @@ pub mod pallet {
         ///
         /// Deterministic in the pair, so it can be computed before the pool
         /// exists — which is exactly why `seed_reserved_pool_for` sweeps it.
+        ///
+        /// D8 (Finding 13): the seed is `blake2_256` of the pair key, not the
+        /// key itself. `into_sub_account_truncating` keeps only the first
+        /// `size_of::<AccountId>()` bytes of `"modl" ++ PalletId ++ seed`;
+        /// with the raw key as the seed an AccountId20 runtime kept eight
+        /// bytes of it — `04 00 44 01` and the low four bytes of the second
+        /// asset id for a native pair, so chain asset `n` and launch asset
+        /// `2^64 + n` shared one pool account, and for a `(WithId, WithId)`
+        /// pair the second asset never featured at all. Eight bytes of a
+        /// hash do not collide. (Finding 6's length prefixes addressed
+        /// ambiguity *within* the key; the key was then truncated anyway.)
         pub fn pool_account_for(asset_a: T::AssetKind, asset_b: T::AssetKind) -> T::AccountId {
             let pair = Self::canonical_pair(asset_a, asset_b);
-            // Finding 6: length-prefix each asset encoding to avoid truncation collisions.
             let pair_key = (pair.0.encode(), pair.1.encode());
-            PALLET_ID.into_sub_account_truncating(&pair_key)
+            let seed = sp_io::hashing::blake2_256(&pair_key.encode());
+            PALLET_ID.into_sub_account_truncating(seed)
         }
 
         /// Write a fresh, empty pool record for an already-canonical `pair`.

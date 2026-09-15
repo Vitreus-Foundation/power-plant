@@ -8,7 +8,7 @@
 
 A comprehensive security audit was performed on the `pallet-vitreus-dex` AMM pallet for the Vitreus blockchain. The audit covered integer safety, access control, AMM math correctness, LP share calculations, slippage protection, pool account security, edge cases, fee logic, energy hooks, locked positions, reserve manipulation, and first-depositor attacks.
 
-**12 findings were identified and resolved — 1 Critical, 4 High, 4 Medium, 3 Low.**
+**12 findings were identified and resolved — 1 Critical, 4 High, 4 Medium, 3 Low.** A thirteenth, Critical, was found and fixed on 2026-09-15 (below); it is a truncation Finding 6 did not address.
 
 All 11 unit tests pass. The full runtime (`vitreus-power-plant-runtime` with `testnet-runtime` feature) compiles cleanly.
 
@@ -46,6 +46,16 @@ The following categories were reviewed:
 11. **Reserve Manipulation** — `sync_reserves()` reconciles storage with actual balances, neutralizing direct-transfer attacks.
 12. **First Depositor Attack** — `MINIMUM_LIQUIDITY` shares permanently locked, preventing share-price manipulation.
 
+### Finding 13 (2026-09-15) — CRITICAL — Pool Sub-Account Collision on AccountId20
+
+**Found by** deriving pool accounts off-chain to label holders on the site, and noticing the derivation only ever used four bytes of an asset id.
+
+**Description.** `pool_account_for` seeded `into_sub_account_truncating` with the pair key itself. That helper keeps the first `size_of::<AccountId>()` bytes of `"modl" ++ PalletId ++ SCALE(seed)`; twelve of those are the prefix, so on the AccountId20 runtime **eight bytes of the pair key survived**: for `(Native, WithId(x))` the bytes `04 00 44 01` and the low four bytes of `x`, so chain asset `n` and launch asset `2^64 + n` shared one pool account (on the dev chain: VTRS/SNRG with VTRS/GLASS); for `(WithId(a), WithId(b))` the bytes `44 01` and the low six bytes of `a` — the second asset never featured, so every pool whose lower-id asset is USDC shared one account. Nothing guarded it: `insert_new_pool` wrote the same `pool_account` for the second pool, `sync_reserves` then read the first pool's balances as the second's, and the graduation sweep (FM-02) would have delivered the first pool's reserves to `ExcessRecipient`. Governance creating a VTRS/VNRG pool after launch 0 graduated was enough; the chain's three energy assets are ids 0, 1 and 2 — the first three launches. In the pallet's own mock (16-byte accounts) four bytes of the key survive and every native pair collides, which is how the red test shows the consequence: the first depositor into a second native pool withdraws 899,000 of the first pool's 1,000,000 VTRS (`d8_second_pool_on_a_shared_account_would_read_the_first_pools_reserves`).
+
+**Relation to Finding 6.** Finding 6 length-prefixed the two asset encodings so that different pairs could not produce the same *concatenation*. That is ambiguity within the key; the key was then truncated to eight bytes regardless, which is the collision here. Finding 6's fix is kept and is still necessary for the hashed key to be unambiguous.
+
+**Fix.** The seed is `blake2_256(pair_key)`; eight bytes of a hash do not collide. Tests: `d8_distinct_pairs_derive_distinct_pool_accounts`, `d8_second_pool_on_a_shared_account_would_read_the_first_pools_reserves` (red before, green after). On the fork, `migrations::v2::MigrateToV2` (storage version 1 → 2) moves each existing pool's reserves from the old account to the new one and rewrites `pool_account`, with a `pre_upgrade` check that no two pools already share an old account — that state is the bug, and cannot be attributed after the fact (`d8_migration_v2_moves_reserves_to_the_hash_derived_account`). The upstream submission ships the fix with no migration: no chain upstream has a pre-D8 pool.
+
 ## Test Results
 
 ```
@@ -67,4 +77,4 @@ test result: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 
 ## Conclusion
 
-All 12 findings have been resolved. The pallet compiles cleanly within the full `vitreus-power-plant-runtime` (testnet-runtime feature). All 11 unit tests pass. The fixes follow established AMM security patterns (Uniswap V2 minimum liquidity, pair canonicalization, reserve syncing) adapted to the Substrate/FRAME environment.
+All 13 findings have been resolved. The pallet compiles cleanly within the full `vitreus-power-plant-runtime` (testnet-runtime feature). All 11 unit tests pass. The fixes follow established AMM security patterns (Uniswap V2 minimum liquidity, pair canonicalization, reserve syncing) adapted to the Substrate/FRAME environment.

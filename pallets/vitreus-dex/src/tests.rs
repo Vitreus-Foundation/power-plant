@@ -1821,3 +1821,94 @@ fn d6_add_liquidity_matches_optimal_amount_against_synced_reserves() {
         assert_eq!(pool.reserve_b, 72_760);
     });
 }
+
+// ---------------------------------------------------------------------------
+// D8: pool accounts must be unique per pair.
+//
+// `into_sub_account_truncating` keeps the first `size_of::<AccountId>()`
+// bytes of "modl" ++ PalletId ++ SCALE(seed): twelve bytes of prefix, then
+// whatever is left. With the pair key itself as the seed, an AccountId20
+// runtime keeps eight bytes of it — `04 00 44 01` plus the low four bytes of
+// the second asset id for a native pair, so `WithId(1)` and `WithId(2^64+1)`
+// (chain asset 1 and launch 1) share one account, and for a `(WithId,
+// WithId)` pair the second asset never appears at all. In this mock the
+// account is sixteen bytes, four of the key survive, and every native pair
+// collides. The hash-derived account (the fix) has neither problem.
+// ---------------------------------------------------------------------------
+
+/// Two pools, one account: the second pool's `sync_reserves` reads the
+/// first pool's deposits as its own reserves, and a swap on the empty pool
+/// pays out of the full one.
+#[test]
+fn d8_distinct_pairs_derive_distinct_pool_accounts() {
+    new_test_ext().execute_with(|| {
+        let a = VitreusDex::pool_account_for(native(), usdc());
+        let b = VitreusDex::pool_account_for(native(), vnrg());
+        assert_ne!(a, b, "VTRS/USDC and VTRS/VNRG must not share a pool account");
+        let c = VitreusDex::pool_account_for(usdc(), vnrg());
+        assert_ne!(a, c);
+        assert_ne!(b, c);
+        // Order-independent, as before.
+        assert_eq!(VitreusDex::pool_account_for(vnrg(), native()), b);
+    });
+}
+
+#[test]
+fn d8_second_pool_on_a_shared_account_would_read_the_first_pools_reserves() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(VitreusDex::create_pool(RuntimeOrigin::root(), native(), usdc(), 3));
+        assert_ok!(VitreusDex::add_liquidity(
+            RuntimeOrigin::signed(ALICE),
+            native(),
+            usdc(),
+            1_000_000,
+            10_000,
+            0,
+            0,
+        ));
+        let usdc_pool = Pools::<Test>::get(VitreusDex::canonical_pair(native(), usdc())).unwrap();
+        assert_eq!((usdc_pool.reserve_a, usdc_pool.reserve_b), (1_000_000, 10_000));
+
+        // A second native-quoted pool. Before D8 it was written with the same
+        // pool_account, and syncing it counted Alice's VTRS as its reserve.
+        assert_ok!(VitreusDex::create_pool(RuntimeOrigin::root(), native(), vnrg(), 3));
+        let vnrg_pair = VitreusDex::canonical_pair(native(), vnrg());
+        let vnrg_pool = Pools::<Test>::get(vnrg_pair.clone()).unwrap();
+
+        // The consequence first, so the red run shows it. Bob makes the first
+        // deposit into the VNRG pool and withdraws it. Before D8 the shared
+        // account made the VNRG pool's synced reserves (1_000_000 VTRS from
+        // Alice's USDC deposit, plus Bob's), so Bob's shares — all of the
+        // pool's — cashed out Alice's VTRS along with his own.
+        let bob_before = Balances::free_balance(BOB);
+        assert_ok!(VitreusDex::add_liquidity(
+            RuntimeOrigin::signed(BOB),
+            native(),
+            vnrg(),
+            10_000,
+            10_000,
+            0,
+            0,
+        ));
+        let bob_shares = LiquidityPositions::<Test>::get(BOB, vnrg_pair.clone()).unwrap().shares;
+        assert_ok!(VitreusDex::remove_liquidity(RuntimeOrigin::signed(BOB), native(), vnrg(), bob_shares, 0, 0));
+        let bob_after = Balances::free_balance(BOB);
+        assert!(
+            bob_after <= bob_before,
+            "Bob deposited 10_000 VTRS into an empty pool and withdrew {} more than he had; the USDC pool's account went from 1_000_000 to {}",
+            bob_after - bob_before,
+            Balances::free_balance(usdc_pool.pool_account),
+        );
+        // The USDC pool still holds every unit Alice deposited, and its
+        // record is untouched.
+        assert_eq!(Balances::free_balance(usdc_pool.pool_account), 1_000_000);
+        let usdc_pool_after = Pools::<Test>::get(VitreusDex::canonical_pair(native(), usdc())).unwrap();
+        assert_eq!((usdc_pool_after.reserve_a, usdc_pool_after.reserve_b), (1_000_000, 10_000));
+
+        // And the reason: the two pools have their own accounts. The VNRG
+        // pool's holds only what Bob's round trip left behind (the locked
+        // MINIMUM_LIQUIDITY's share), never Alice's million.
+        assert_ne!(vnrg_pool.pool_account, usdc_pool.pool_account);
+        assert!(Balances::free_balance(vnrg_pool.pool_account) <= 10_000);
+    });
+}
