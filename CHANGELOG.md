@@ -9,12 +9,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Added
 
 - Add energy conversion from LNRG and SNRG to VNRG
+- Add `pallet-vitreus-dex` on testnet
+- Add `pallet-launchpad` on testnet
 
 ### Changed
 
 - Refactor `pallet-energy-broker`
 - Refactor and update XCM configuration to use VNRG as the fee payment asset
 - Set slash defer duration to 6 days
+
+### Fixed
+
+- Fix the `runtime-benchmarks` build and the `benchmark` CLI subcommand
 
 ## [213] - 2025-03-23
 
