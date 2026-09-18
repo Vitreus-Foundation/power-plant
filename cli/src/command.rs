@@ -336,8 +336,7 @@ pub fn run() -> Result<()> {
 
             let runner = cli.create_runner(cmd)?;
             match cmd {
-                // stable2407: `run` takes the block hasher, not the block, and is
-                // deprecated in favour of `run_with_spec` (polkadot-sdk#3512).
+                // stable2407: `run` is deprecated; use `run_with_spec` (polkadot-sdk#3512).
                 BenchmarkCmd::Pallet(cmd) => runner.sync_run(|config| {
                     cmd.run_with_spec::<vitreus_service::runtime_traits::HashingFor<Block>, ()>(
                         Some(config.chain_spec),

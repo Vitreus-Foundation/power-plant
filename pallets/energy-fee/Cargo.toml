@@ -27,7 +27,7 @@ pallet-assets = { workspace = true, features = ["std"] }
 pallet-balances = { workspace = true }
 pallet-ethereum = { workspace = true }
 pallet-reputation = { workspace = true }
-pallet-timestamp = { workspace = true, features = ["std"] }
+pallet-timestamp = { workspace = true }
 pallet-nfts = { workspace = true }
 ethereum-types = { workspace = true }
 fp-account = { workspace = true }

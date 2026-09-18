@@ -27,6 +27,7 @@ thiserror = { workspace = true, default-features = true }
 polkadot-node-metrics = { workspace = true, default-features = true }
 polkadot-node-primitives = { workspace = true, default-features = true }
 
+frame-benchmarking-cli = { workspace = true, default-features = true, optional = true }
 sc-cli = { workspace = true, default-features = true, optional = true }
 sc-service = { workspace = true, default-features = true, optional = true }
 sc-storage-monitor = { workspace = true, default-features = true }
@@ -38,7 +39,6 @@ fc-cli = { workspace = true, default-features = true }
 fc-db = { workspace = true, default-features = true }
 
 chain-spec = { workspace = true, default-features = true }
-frame-benchmarking-cli = { workspace = true, default-features = true, optional = true }
 vitreus-service = { workspace = true, default-features = false, features = ["sql", "txpool", "with-rocksdb-weights"], optional = true }
 vitreus-power-plant-runtime = { workspace = true, default-features = true }
 
