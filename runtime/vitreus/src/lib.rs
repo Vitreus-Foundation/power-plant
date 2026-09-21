@@ -1561,7 +1561,9 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Proxy(..)
             | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
             #[cfg(feature = "testnet-runtime")]
-            RuntimeCall::VitreusDex(..) => CallFee::Regular(Self::custom_fee()),
+            RuntimeCall::VitreusDex(..) | RuntimeCall::Launchpad(..) => {
+                CallFee::Regular(Self::custom_fee())
+            },
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
             | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
