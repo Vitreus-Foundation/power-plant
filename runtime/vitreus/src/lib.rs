@@ -1178,11 +1178,12 @@ impl pallet_energy_broker::Config for Runtime {
 // ---- pallet-vitreus-dex and pallet-launchpad: testnet-runtime only ---------
 //
 // Both pallets are wired under `testnet-runtime` for this submission so the
-// mainnet runtime is unchanged by it. The DEX has an internal security audit
-// (pallets/vitreus-dex/SECURITY_AUDIT.md) and its test suite, but no
-// third-party audit yet; enabling it on mainnet is a separate decision and a
-// separate PR. The launchpad additionally needs permissionless asset creation,
-// which mainnet forbids. Indices: VitreusDex 43, Launchpad 57.
+// mainnet runtime is unchanged by it. They live in power-plant-experimental
+// (pinned git deps); the DEX has an internal security audit and its test
+// suite there, but no third-party audit yet; enabling it on mainnet is a
+// separate decision and a separate PR. The launchpad additionally needs
+// permissionless asset creation, which mainnet forbids. Indices:
+// VitreusDex 43, Launchpad 57.
 #[cfg(feature = "testnet-runtime")]
 mod testnet_pallets {
     use super::*;
@@ -1227,6 +1228,7 @@ mod testnet_pallets {
         // for why this is storage, not a constant).
         type DefaultProtocolFeeRecipient = xcm_config::TreasuryAccount;
         type CreatorFeeRecipient = LaunchpadCreators;
+        type TreasurySink = ();
         type DefaultBidWindowBlocks = DefaultBidWindowBlocks;
         type DefaultSettlementWindowBlocks = DefaultSettlementWindowBlocks;
         type DefaultSolverBondAmount = DefaultSolverBondAmount;
@@ -1285,6 +1287,7 @@ mod testnet_pallets {
                         virtual_quote: UNITS,
                         curve_fee_bps: 100,
                         protocol_share_bps: 5_000,
+                        treasury_share_bps: 0,
                         pool_fee_tier: 3,
                     },
                     params_hash: Default::default(),
@@ -1330,6 +1333,7 @@ mod testnet_pallets {
             graduation_target: 3_000 * UNITS,
             curve_fee_bps: 100,
             protocol_share_bps: 5_000,
+            treasury_share_bps: 0,
             pool_fee_tier: 3,
             creation_fee: 1 * UNITS,
         };
@@ -1352,6 +1356,7 @@ mod testnet_pallets {
         type IntoAssetKind = LaunchpadAssetKind;
         type Dex = VitreusDex;
         type Treasury = DexProtocolFeeRecipient;
+        type CurveTreasurySink = ();
         type PalletId = LaunchpadPalletId;
         type TotalSupply = LaunchpadTotalSupply;
         type Sellable = LaunchpadSellable;

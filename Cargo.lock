@@ -7029,19 +7029,14 @@ dependencies = [
 [[package]]
 name = "pallet-launchpad"
 version = "0.1.0"
+source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=db128abf70e5df32ccf1598c150727a4e6ce18a8#db128abf70e5df32ccf1598c150727a4e6ce18a8"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "log",
- "pallet-assets",
- "pallet-balances",
- "pallet-multisig",
- "pallet-proxy",
- "pallet-utility",
  "pallet-vitreus-dex",
  "parity-scale-codec",
- "primitive-types",
  "scale-info",
  "sp-core",
  "sp-io",
@@ -7541,16 +7536,14 @@ dependencies = [
 [[package]]
 name = "pallet-vitreus-dex"
 version = "0.1.0"
+source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=db128abf70e5df32ccf1598c150727a4e6ce18a8#db128abf70e5df32ccf1598c150727a4e6ce18a8"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
  "frame-system",
  "impl-trait-for-tuples",
  "log",
- "pallet-assets",
- "pallet-balances",
  "parity-scale-codec",
- "primitive-types",
  "scale-info",
  "sp-api",
  "sp-arithmetic",
