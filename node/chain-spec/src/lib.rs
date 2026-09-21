@@ -440,6 +440,7 @@ pub fn testnet_genesis(
         paras: Default::default(),
         xcm_pallet: Default::default(),
         beefy: Default::default(),
+        vitreus_dex: Default::default(),
     }
 }
 
