@@ -1182,8 +1182,8 @@ impl pallet_energy_broker::Config for Runtime {
 // (pinned git deps); the DEX has an internal security audit and its test
 // suite there, but no third-party audit yet; enabling it on mainnet is a
 // separate decision and a separate PR. The launchpad additionally needs
-// permissionless asset creation, which mainnet forbids. Indices:
-// VitreusDex 43, Launchpad 57.
+// permissionless asset creation, which mainnet forbids.
+// Indices: VitreusDex 210, Launchpad 211 (block 210–219).
 #[cfg(feature = "testnet-runtime")]
 mod testnet_pallets {
     use super::*;
@@ -2224,8 +2224,6 @@ construct_runtime!(
         EnergyBroker: pallet_energy_broker = 40,
         Privileges: pallet_privileges = 41,
         DynamicEnergy: pallet_dynamic_energy = 42,
-        #[cfg(feature = "testnet-runtime")]
-        VitreusDex: pallet_vitreus_dex = 43,
         Proxy: pallet_proxy = 44,
 
         // Governance-related pallets
@@ -2241,8 +2239,6 @@ construct_runtime!(
         Elections: pallet_elections_phragmen = 54,
         Multisig: pallet_multisig = 55,
         DemocracyExtension: pallet_democracy_extension = 56,
-        #[cfg(feature = "testnet-runtime")]
-        Launchpad: pallet_launchpad = 57,
         TechnicalCommitteeTreasury: pallet_treasury::<Instance1> = 58,
 
         // Parachains pallets
@@ -2279,6 +2275,11 @@ construct_runtime!(
         // refer to block<N>. See https://github.com/polkadot-fellows/runtimes/issues/160 for details.
         Mmr: pallet_mmr = 201,
         MmrLeaf: pallet_beefy_mmr = 202,
+
+        #[cfg(feature = "testnet-runtime")]
+        VitreusDex: pallet_vitreus_dex = 210,
+        #[cfg(feature = "testnet-runtime")]
+        Launchpad: pallet_launchpad = 211,
 
         #[cfg(feature = "testnet-runtime")]
         Faucet: pallet_faucet = 240,
