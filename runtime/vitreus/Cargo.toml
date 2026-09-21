@@ -127,14 +127,12 @@ pallet-nac-managing = { workspace = true }
 pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-simple-vesting = { workspace = true }
-# Both wired under testnet-runtime only for this submission (see the
-# `testnet_pallets` module in src/lib.rs). The dependencies themselves cannot
-# be optional: construct_runtime! references the crate path even for a
-# #[cfg]-gated entry, as with pallet-faucet.
-pallet-vitreus-dex = { workspace = true }
-pallet-launchpad = { workspace = true }
 pallet-treasury-extension = { workspace = true }
 vitreus-runtime-common = { workspace = true }
+
+# Experimental vitreus pallets
+pallet-vitreus-dex = { workspace = true }
+pallet-launchpad = { workspace = true }
 
 # Runtime API
 dynamic-energy-runtime-api = { workspace = true }
@@ -339,10 +337,6 @@ std = [
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
-    "pallet-asset-rate/runtime-benchmarks",
-    "pallet-dynamic-energy/runtime-benchmarks",
-    "polkadot-runtime-common/runtime-benchmarks",
-    "polkadot-runtime-parachains/runtime-benchmarks",
     "frame-system-benchmarking/runtime-benchmarks",
     "frame-system/runtime-benchmarks",
     "pallet-asset-rate/runtime-benchmarks",

@@ -1175,208 +1175,6 @@ impl pallet_energy_broker::Config for Runtime {
     type BurnedEnergySessionsCount = BurnedEnergySessionsCount;
 }
 
-// ---- pallet-vitreus-dex and pallet-launchpad: testnet-runtime only ---------
-//
-// Both pallets are wired under `testnet-runtime` for this submission so the
-// mainnet runtime is unchanged by it. They live in power-plant-experimental
-// (pinned git deps); the DEX has an internal security audit and its test
-// suite there, but no third-party audit yet; enabling it on mainnet is a
-// separate decision and a separate PR. The launchpad additionally needs
-// permissionless asset creation, which mainnet forbids.
-// Indices: VitreusDex 210, Launchpad 211 (block 210–219).
-#[cfg(feature = "testnet-runtime")]
-mod testnet_pallets {
-    use super::*;
-
-    parameter_types! {
-        pub const DefaultBidWindowBlocks: BlockNumber = 10;
-        pub const DefaultSettlementWindowBlocks: BlockNumber = 5;
-        pub const DefaultSolverBondAmount: Balance = 1_000 * UNITS;
-    }
-
-    /// Asset ids `[2^64, 2^65)` are reserved for launchpad tokens. Pools for them
-    /// can only be created through `ReservedPoolSeeder` (D2 of LAUNCHPAD_SPEC.md).
-    pub const LAUNCHPAD_ASSET_ID_START: u128 = 1u128 << 64;
-    pub const LAUNCHPAD_ASSET_ID_END: u128 = 1u128 << 65;
-
-    pub struct LaunchpadReservedAssets;
-    impl frame_support::traits::Contains<NativeOrAssetId> for LaunchpadReservedAssets {
-        fn contains(asset: &NativeOrAssetId) -> bool {
-            match asset {
-                NativeOrAssetId::WithId(id) => {
-                    let id = u128::from(*id);
-                    (LAUNCHPAD_ASSET_ID_START..LAUNCHPAD_ASSET_ID_END).contains(&id)
-                },
-                NativeOrAssetId::Native => false,
-            }
-        }
-    }
-
-    impl pallet_vitreus_dex::Config for Runtime {
-        type RuntimeEvent = RuntimeEvent;
-        type ManageOrigin = EnsureRoot<AccountId>;
-        type Balance = Balance;
-        type HigherPrecisionBalance = sp_core::U256;
-        type AssetKind = NativeOrAssetId;
-        type Assets = NativeAndAssets;
-        type NativeAsset = NativeAsset;
-        type EnergyAsset = VNRG;
-        type ReservedAssets = LaunchpadReservedAssets;
-        type ExcessRecipient = xcm_config::TreasuryAccount;
-        // D4: protocol fees default to the runtime Treasury; governance can
-        // redirect them with `set_protocol_fee_recipient` (see LAUNCHPAD_SPEC §5.2 D4
-        // for why this is storage, not a constant).
-        type DefaultProtocolFeeRecipient = xcm_config::TreasuryAccount;
-        type CreatorFeeRecipient = LaunchpadCreators;
-        type TreasurySink = ();
-        type DefaultBidWindowBlocks = DefaultBidWindowBlocks;
-        type DefaultSettlementWindowBlocks = DefaultSettlementWindowBlocks;
-        type DefaultSolverBondAmount = DefaultSolverBondAmount;
-        type WeightInfo = pallet_vitreus_dex::weights::SubstrateWeight<Runtime>;
-        #[cfg(feature = "runtime-benchmarks")]
-        type BenchmarkHelper = DexBenchmarkHelper;
-    }
-
-    /// D4: resolves a launch asset's creator fee recipient for the DEX through
-    /// the launchpad, so `set_creator_fee_recipient` moves the DEX claim right
-    /// with no propagation.
-    pub struct LaunchpadCreators;
-    impl pallet_vitreus_dex::CreatorFeeRecipient<NativeOrAssetId, AccountId> for LaunchpadCreators {
-        fn creator_fee_recipient(asset: &NativeOrAssetId) -> Option<AccountId> {
-            match asset {
-                NativeOrAssetId::WithId(id) => Launchpad::creator_fee_recipient_for(*id),
-                NativeOrAssetId::Native => None,
-            }
-        }
-    }
-
-    /// D4: the launchpad pays its protocol share (curve fees, creation-fee
-    /// surplus, rescue remainder) to wherever the DEX pays its protocol fees,
-    /// so all protocol revenue lands in one governance-settable place.
-    pub struct DexProtocolFeeRecipient;
-    impl frame_support::traits::Get<AccountId> for DexProtocolFeeRecipient {
-        fn get() -> AccountId {
-            VitreusDex::protocol_fee_recipient()
-        }
-    }
-
-    /// DEX benchmark helper: plain `WithId(seed)` assets, and the ability to prime `LaunchpadCreators` for an
-    /// asset by planting a launch record, so `claim_pool_creator_fees` measures
-    /// its real path.
-    #[cfg(feature = "runtime-benchmarks")]
-    pub struct DexBenchmarkHelper;
-    #[cfg(feature = "runtime-benchmarks")]
-    impl pallet_vitreus_dex::BenchmarkHelper<NativeOrAssetId, AccountId> for DexBenchmarkHelper {
-        fn asset_kind(seed: u32) -> NativeOrAssetId {
-            NativeOrAssetId::WithId(seed.into())
-        }
-
-        fn set_creator(asset: &NativeOrAssetId, who: &AccountId) -> bool {
-            let NativeOrAssetId::WithId(asset_id) = asset else { return false };
-            let id = pallet_launchpad::NextLaunchId::<Runtime>::get();
-            pallet_launchpad::Launches::<Runtime>::insert(
-                id,
-                pallet_launchpad::Launch::<Runtime> {
-                    asset_id: *asset_id,
-                    creator: who.clone(),
-                    creator_fee_recipient: who.clone(),
-                    escrow: Launchpad::escrow_account(id),
-                    created_at: System::block_number(),
-                    curve: pallet_launchpad::CurveParams {
-                        graduation_target: 3 * UNITS,
-                        virtual_quote: UNITS,
-                        curve_fee_bps: 100,
-                        protocol_share_bps: 5_000,
-                        treasury_share_bps: 0,
-                        pool_fee_tier: 3,
-                    },
-                    params_hash: Default::default(),
-                },
-            );
-            pallet_launchpad::AssetToLaunch::<Runtime>::insert(*asset_id, id);
-            pallet_launchpad::NextLaunchId::<Runtime>::put(id + 1);
-            true
-        }
-    }
-
-    // ---- pallet-launchpad ------------------------------------------------------
-    //
-    // The launchpad creates launch tokens through `fungibles::Create`, the force
-    // path of pallet_assets that does not consult `CreateOrigin`. Under
-    // testnet-runtime `CreateOrigin` is `EnsureSigned`, so nothing is circumvented;
-    // under mainnet-runtime it is `EnsureNever` — the Foundation's decision that
-    // there is no permissionless asset creation — which is one of the two reasons
-    // this module is testnet-only.
-
-    parameter_types! {
-        pub const LaunchpadPalletId: PalletId = PalletId(*b"vtrs/lpd");
-        /// S: 1B tokens at 18 decimals.
-        pub const LaunchpadTotalSupply: Balance = 1_000_000_000 * UNITS;
-        /// 80 % sold on the curve; the remaining 20 % seeds the pool.
-        pub const LaunchpadSellable: Balance = 800_000_000 * UNITS;
-        /// VT_FLOOR: virtual token reserve left at sell-out (m = 16 price multiple).
-        pub const LaunchpadVirtualTokenFloor: Balance = 266_666_667 * UNITS;
-        /// Same range LaunchpadReservedAssets guards on the DEX side: [2^64, 2^65).
-        pub LaunchpadAssetBase: AssetId = AssetId::try_from(LAUNCHPAD_ASSET_ID_START)
-            .expect("launchpad asset-id base must fit AssetId");
-        pub const LaunchpadMinGraduationTarget: Balance = 3 * UNITS;
-        pub const LaunchpadMaxGraduationTarget: Balance = 3_000_000_000 * UNITS;
-        /// 2·ED + metadata deposits the escrow pays (base + per-byte × name + symbol).
-        pub const LaunchpadMinCreationFee: Balance = 2 * EXISTENTIAL_DEPOSIT + 100 + 2 * 50 * 2;
-        pub const LaunchpadRescueDelay: BlockNumber = 7 * DAYS;
-        /// Byte caps on launch presentation metadata (§2.9). Stored verbatim,
-        /// never validated; the caps are the only thing bounding the write.
-        pub const LaunchpadUriLimit: u32 = 256;
-        pub const LaunchpadDescriptionLimit: u32 = 1_024;
-        /// Placeholder governance terms; `set_params` changes them for future launches.
-        pub LaunchpadDefaultParams: pallet_launchpad::LaunchParams<Balance> = pallet_launchpad::LaunchParams {
-            graduation_target: 3_000 * UNITS,
-            curve_fee_bps: 100,
-            protocol_share_bps: 5_000,
-            treasury_share_bps: 0,
-            pool_fee_tier: 3,
-            creation_fee: 1 * UNITS,
-        };
-    }
-
-    pub struct LaunchpadAssetKind;
-    impl sp_runtime::traits::Convert<AssetId, NativeOrAssetId> for LaunchpadAssetKind {
-        fn convert(id: AssetId) -> NativeOrAssetId {
-            NativeOrAssetId::WithId(id)
-        }
-    }
-
-    impl pallet_launchpad::Config for Runtime {
-        type RuntimeEvent = RuntimeEvent;
-        type LaunchManageOrigin = EnsureRoot<AccountId>;
-        type AssetId = AssetId;
-        type Currency = Balances;
-        type LaunchAssets = Assets;
-        type NativeAssetKind = NativeAsset;
-        type IntoAssetKind = LaunchpadAssetKind;
-        type Dex = VitreusDex;
-        type Treasury = DexProtocolFeeRecipient;
-        type CurveTreasurySink = ();
-        type PalletId = LaunchpadPalletId;
-        type TotalSupply = LaunchpadTotalSupply;
-        type Sellable = LaunchpadSellable;
-        type VirtualTokenFloor = LaunchpadVirtualTokenFloor;
-        type LaunchAssetBase = LaunchpadAssetBase;
-        type MinGraduationTarget = LaunchpadMinGraduationTarget;
-        type MaxGraduationTarget = LaunchpadMaxGraduationTarget;
-        type MaxCurveFeeBps = frame_support::traits::ConstU16<500>;
-        type MinProtocolShareBps = frame_support::traits::ConstU16<5_000>;
-        type MinCreationFee = LaunchpadMinCreationFee;
-        type RescueDelay = LaunchpadRescueDelay;
-        type StringLimit = AssetsStringLimit;
-        type UriLimit = LaunchpadUriLimit;
-        type DescriptionLimit = LaunchpadDescriptionLimit;
-        type DefaultLaunchParams = LaunchpadDefaultParams;
-        type BuyHook = ();
-        type WeightInfo = pallet_launchpad::weights::SubstrateWeight<Runtime>;
-    }
-}
-
 parameter_types! {
     pub const ExpectedSessionDuration: u32 = EPOCH_DURATION_IN_BLOCKS * SECS_PER_BLOCK as u32;
     pub const AnnualPercentageRate: u32 = 100; // 10%
@@ -2158,6 +1956,175 @@ impl auctions::Config for Runtime {
     type Randomness = pallet_babe::RandomnessFromOneEpochAgo<Runtime>;
     type InitiateOrigin = MoreThanHalfCouncil;
     type WeightInfo = weights::runtime_common_auctions::WeightInfo<Runtime>;
+}
+
+// VitreusDex / Launchpad: testnet only.
+#[cfg(feature = "testnet-runtime")]
+mod launchpad {
+    use super::*;
+
+    parameter_types! {
+        pub const DefaultBidWindowBlocks: BlockNumber = 10;
+        pub const DefaultSettlementWindowBlocks: BlockNumber = 5;
+        pub const DefaultSolverBondAmount: Balance = 1_000 * UNITS;
+    }
+
+    /// Launchpad token ids. `create_pool` cannot touch this range.
+    pub const LAUNCHPAD_ASSET_ID_START: u128 = 1u128 << 64;
+    pub const LAUNCHPAD_ASSET_ID_END: u128 = 1u128 << 65;
+
+    pub struct LaunchpadReservedAssets;
+    impl frame_support::traits::Contains<NativeOrAssetId> for LaunchpadReservedAssets {
+        fn contains(asset: &NativeOrAssetId) -> bool {
+            match asset {
+                NativeOrAssetId::WithId(id) => {
+                    (LAUNCHPAD_ASSET_ID_START..LAUNCHPAD_ASSET_ID_END).contains(id)
+                },
+                NativeOrAssetId::Native => false,
+            }
+        }
+    }
+
+    impl pallet_vitreus_dex::Config for Runtime {
+        type RuntimeEvent = RuntimeEvent;
+        type ManageOrigin = EnsureRoot<AccountId>;
+        type Balance = Balance;
+        type HigherPrecisionBalance = sp_core::U256;
+        type AssetKind = NativeOrAssetId;
+        type Assets = NativeAndAssets;
+        type NativeAsset = NativeAsset;
+        type EnergyAsset = VNRG;
+        type ReservedAssets = LaunchpadReservedAssets;
+        type ExcessRecipient = xcm_config::TreasuryAccount;
+        type DefaultProtocolFeeRecipient = xcm_config::TreasuryAccount;
+        type CreatorFeeRecipient = LaunchpadCreators;
+        type TreasurySink = ();
+        type DefaultBidWindowBlocks = DefaultBidWindowBlocks;
+        type DefaultSettlementWindowBlocks = DefaultSettlementWindowBlocks;
+        type DefaultSolverBondAmount = DefaultSolverBondAmount;
+        type WeightInfo = pallet_vitreus_dex::weights::SubstrateWeight<Runtime>;
+        #[cfg(feature = "runtime-benchmarks")]
+        type BenchmarkHelper = DexBenchmarkHelper;
+    }
+
+    pub struct LaunchpadCreators;
+    impl pallet_vitreus_dex::CreatorFeeRecipient<NativeOrAssetId, AccountId> for LaunchpadCreators {
+        fn creator_fee_recipient(asset: &NativeOrAssetId) -> Option<AccountId> {
+            match asset {
+                NativeOrAssetId::WithId(id) => Launchpad::creator_fee_recipient_for(*id),
+                NativeOrAssetId::Native => None,
+            }
+        }
+    }
+
+    /// Launchpad protocol fees follow the DEX recipient.
+    pub struct DexProtocolFeeRecipient;
+    impl frame_support::traits::Get<AccountId> for DexProtocolFeeRecipient {
+        fn get() -> AccountId {
+            VitreusDex::protocol_fee_recipient()
+        }
+    }
+
+    /// Plants a launch record so `claim_pool_creator_fees` hits `LaunchpadCreators`.
+    #[cfg(feature = "runtime-benchmarks")]
+    pub struct DexBenchmarkHelper;
+    #[cfg(feature = "runtime-benchmarks")]
+    impl pallet_vitreus_dex::BenchmarkHelper<NativeOrAssetId, AccountId> for DexBenchmarkHelper {
+        fn asset_kind(seed: u32) -> NativeOrAssetId {
+            NativeOrAssetId::WithId(seed.into())
+        }
+
+        fn set_creator(asset: &NativeOrAssetId, who: &AccountId) -> bool {
+            let NativeOrAssetId::WithId(asset_id) = asset else { return false };
+            let id = pallet_launchpad::NextLaunchId::<Runtime>::get();
+            pallet_launchpad::Launches::<Runtime>::insert(
+                id,
+                pallet_launchpad::Launch::<Runtime> {
+                    asset_id: *asset_id,
+                    creator: *who,
+                    creator_fee_recipient: *who,
+                    escrow: Launchpad::escrow_account(id),
+                    created_at: System::block_number(),
+                    curve: pallet_launchpad::CurveParams {
+                        graduation_target: 3 * UNITS,
+                        virtual_quote: UNITS,
+                        curve_fee_bps: 100,
+                        protocol_share_bps: 5_000,
+                        treasury_share_bps: 0,
+                        pool_fee_tier: 3,
+                    },
+                    params_hash: Default::default(),
+                },
+            );
+            pallet_launchpad::AssetToLaunch::<Runtime>::insert(*asset_id, id);
+            pallet_launchpad::NextLaunchId::<Runtime>::put(id + 1);
+            true
+        }
+    }
+
+    parameter_types! {
+        pub const LaunchpadPalletId: PalletId = PalletId(*b"vtrs/lpd");
+        pub const LaunchpadTotalSupply: Balance = 1_000_000_000 * UNITS;
+        /// 80 % sold on the curve; the remaining 20 % seeds the pool.
+        pub const LaunchpadSellable: Balance = 800_000_000 * UNITS;
+        /// Virtual token reserve left at sell-out (16× price multiple).
+        pub const LaunchpadVirtualTokenFloor: Balance = 266_666_667 * UNITS;
+        pub const LaunchpadAssetBase: AssetId = LAUNCHPAD_ASSET_ID_START;
+        pub const LaunchpadMinGraduationTarget: Balance = 3 * UNITS;
+        pub const LaunchpadMaxGraduationTarget: Balance = 3_000_000_000 * UNITS;
+        /// 2·ED + metadata deposits the escrow pays (base + per-byte × name + symbol).
+        pub const LaunchpadMinCreationFee: Balance = 2 * EXISTENTIAL_DEPOSIT + 100 + 2 * 50 * 2;
+        pub const LaunchpadRescueDelay: BlockNumber = 7 * DAYS;
+        /// Stored verbatim, never validated; the cap is the only bound on the write.
+        pub const LaunchpadUriLimit: u32 = 256;
+        pub const LaunchpadDescriptionLimit: u32 = 1_024;
+        /// Default terms; `set_params` changes them for future launches.
+        pub LaunchpadDefaultParams: pallet_launchpad::LaunchParams<Balance> = pallet_launchpad::LaunchParams {
+            graduation_target: 3_000 * UNITS,
+            curve_fee_bps: 100,
+            protocol_share_bps: 5_000,
+            treasury_share_bps: 0,
+            pool_fee_tier: 3,
+            creation_fee: 1 * UNITS,
+        };
+    }
+
+    pub struct LaunchpadAssetKind;
+    impl sp_runtime::traits::Convert<AssetId, NativeOrAssetId> for LaunchpadAssetKind {
+        fn convert(id: AssetId) -> NativeOrAssetId {
+            NativeOrAssetId::WithId(id)
+        }
+    }
+
+    impl pallet_launchpad::Config for Runtime {
+        type RuntimeEvent = RuntimeEvent;
+        type LaunchManageOrigin = EnsureRoot<AccountId>;
+        type AssetId = AssetId;
+        type Currency = Balances;
+        type LaunchAssets = Assets;
+        type NativeAssetKind = NativeAsset;
+        type IntoAssetKind = LaunchpadAssetKind;
+        type Dex = VitreusDex;
+        type Treasury = DexProtocolFeeRecipient;
+        type CurveTreasurySink = ();
+        type PalletId = LaunchpadPalletId;
+        type TotalSupply = LaunchpadTotalSupply;
+        type Sellable = LaunchpadSellable;
+        type VirtualTokenFloor = LaunchpadVirtualTokenFloor;
+        type LaunchAssetBase = LaunchpadAssetBase;
+        type MinGraduationTarget = LaunchpadMinGraduationTarget;
+        type MaxGraduationTarget = LaunchpadMaxGraduationTarget;
+        type MaxCurveFeeBps = frame_support::traits::ConstU16<500>;
+        type MinProtocolShareBps = frame_support::traits::ConstU16<5_000>;
+        type MinCreationFee = LaunchpadMinCreationFee;
+        type RescueDelay = LaunchpadRescueDelay;
+        type StringLimit = AssetsStringLimit;
+        type UriLimit = LaunchpadUriLimit;
+        type DescriptionLimit = LaunchpadDescriptionLimit;
+        type DefaultLaunchParams = LaunchpadDefaultParams;
+        type BuyHook = ();
+        type WeightInfo = pallet_launchpad::weights::SubstrateWeight<Runtime>;
+    }
 }
 
 parameter_types! {
