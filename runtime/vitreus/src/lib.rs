@@ -205,11 +205,7 @@ pub type DigestItem = generic::DigestItem;
 /// Asset ID.
 pub type AssetId = u128;
 
-/// `pallet_assets` benchmarks build an `AssetIdParameter` from a `u32`; the
-/// default helper `()` only covers `Compact<u32>`. Provide the conversion for
-/// the production `Compact<u128>` so benchmarks measure the same types the
-/// chain runs (a narrower `AssetId` under `runtime-benchmarks` changes key and
-/// value sizes, and therefore the weights).
+/// Maps the `u32` benchmark seed to production `Compact<u128>` (`()` only covers `Compact<u32>`).
 #[cfg(feature = "runtime-benchmarks")]
 pub struct AssetsBenchmarkHelper;
 #[cfg(feature = "runtime-benchmarks")]
@@ -878,21 +874,22 @@ impl pallet_nfts::Config for Runtime {
     type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
 }
 
-/// Key type the nfts benchmarks generate their signer under.
 #[cfg(feature = "runtime-benchmarks")]
 const NFTS_BENCH_KEY_TYPE: sp_core::crypto::KeyTypeId = sp_core::crypto::KeyTypeId(*b"nftb");
 
-/// `pallet_nfts::BenchmarkHelper` for Ethereum-style keys. `()` only covers
-/// sr25519 / `AccountId32`; here `OffchainSignature = EthereumSignature`, whose
-/// `verify` recovers the key from `keccak_256(message)` and compares the derived
-/// address, so signing is `ecdsa_sign_prehashed` over the same hash. The
-/// `EthereumSigner` handed back by `signer()` is only an address, so `sign`
-/// looks the generated key up again in the keystore by that address.
+/// Ethereum keys for NFT benchmarks (`()` is sr25519/`AccountId32` only).
+/// Signs `keccak_256(message)` via `ecdsa_sign_prehashed`; looks up the keystore key by address.
 #[cfg(feature = "runtime-benchmarks")]
 pub struct NftsBenchmarkHelper;
 #[cfg(feature = "runtime-benchmarks")]
-impl pallet_nfts::BenchmarkHelper<CollectionId, ItemId, fp_account::EthereumSigner, AccountId, Signature>
-    for NftsBenchmarkHelper
+impl
+    pallet_nfts::BenchmarkHelper<
+        CollectionId,
+        ItemId,
+        fp_account::EthereumSigner,
+        AccountId,
+        Signature,
+    > for NftsBenchmarkHelper
 {
     fn collection(i: u16) -> CollectionId {
         i.into()
@@ -2490,6 +2487,15 @@ extern crate frame_benchmarking;
 #[cfg(feature = "runtime-benchmarks")]
 impl frame_system_benchmarking::Config for Runtime {}
 
+#[cfg(all(feature = "runtime-benchmarks", feature = "mainnet-runtime"))]
+mod benches {
+    define_benchmarks!(
+        [frame_system, SystemBench::<Runtime>]
+        [pallet_evm, EVM]
+        [pallet_treasury_extension, TreasuryExtension]
+    );
+}
+
 #[cfg(all(feature = "runtime-benchmarks", feature = "testnet-runtime"))]
 mod benches {
     define_benchmarks!(
@@ -2498,15 +2504,6 @@ mod benches {
         [pallet_treasury_extension, TreasuryExtension]
         [pallet_vitreus_dex, VitreusDex]
         [pallet_launchpad, Launchpad]
-    );
-}
-
-#[cfg(all(feature = "runtime-benchmarks", not(feature = "testnet-runtime")))]
-mod benches {
-    define_benchmarks!(
-        [frame_system, SystemBench::<Runtime>]
-        [pallet_evm, EVM]
-        [pallet_treasury_extension, TreasuryExtension]
     );
 }
 

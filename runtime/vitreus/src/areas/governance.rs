@@ -218,11 +218,8 @@ impl pallet_treasury::Config for Runtime {
     type BenchmarkHelper = TreasuryBenchmarkHelper;
 }
 
-/// `pallet_treasury::ArgumentsFactory` for both treasury instances. The default
-/// `()` needs `FromEntropy`, which neither `AccountId20` nor `NativeOrAssetId`
-/// implements. The asset kind is always the native one so the instance's
-/// `BalanceConverter` (unity for native) and `Paymaster` succeed as they would
-/// on-chain.
+/// Benchmark args for both treasuries: `()` needs `FromEntropy`, which `AccountId20` /
+/// `NativeOrAssetId` lack. Always uses the native asset kind.
 #[cfg(feature = "runtime-benchmarks")]
 pub struct TreasuryBenchmarkHelper;
 #[cfg(feature = "runtime-benchmarks")]

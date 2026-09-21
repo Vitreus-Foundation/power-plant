@@ -13,9 +13,9 @@ mod benchmarks {
 
     #[benchmark]
     fn request_funds() {
-        // Unsigned call: `who` is the beneficiary, `amount` must be within `MaxAmount`.
         let amount: T::Balance = 100u32.into();
         let who: T::AccountId = whitelisted_caller();
+
         #[extrinsic_call]
         request_funds(RawOrigin::None, who.clone(), amount);
 
