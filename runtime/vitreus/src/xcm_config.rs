@@ -430,11 +430,6 @@ parameter_types! {
     pub const CouncilBodyId: BodyId = BodyId::Executive;
 }
 
-#[cfg(feature = "runtime-benchmarks")]
-parameter_types! {
-    pub ReachableDest: Option<Location> = Some(Parachain(1000).into());
-}
-
 /// Type to convert the council origin to a Plurality `Location` value.
 pub type CouncilToPlurality = BackingToPlurality<
     RuntimeOrigin,
@@ -477,8 +472,6 @@ impl pallet_xcm::Config for Runtime {
     type MaxRemoteLockConsumers = ConstU32<0>;
     type RemoteLockConsumerIdentifier = ();
     type WeightInfo = crate::weights::pallet_xcm::WeightInfo<Runtime>;
-    #[cfg(feature = "runtime-benchmarks")]
-    type ReachableDest = ReachableDest;
     type AdminOrigin = EnsureRoot<AccountId>;
 }
 

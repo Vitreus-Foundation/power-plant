@@ -7325,6 +7325,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-session",
  "parity-scale-codec",
+ "rand_chacha 0.3.1",
  "scale-info",
  "serde",
  "sp-application-crypto",
@@ -8782,6 +8783,7 @@ dependencies = [
  "sp-staking",
  "staging-xcm",
  "staging-xcm-executor",
+ "static_assertions",
 ]
 
 [[package]]
@@ -14110,6 +14112,7 @@ dependencies = [
  "clap 4.5.20",
  "fc-cli",
  "fc-db",
+ "frame-benchmarking-cli",
  "futures",
  "log",
  "polkadot-node-metrics",

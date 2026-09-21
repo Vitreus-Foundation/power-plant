@@ -27,6 +27,7 @@ thiserror = { workspace = true, default-features = true }
 polkadot-node-metrics = { workspace = true, default-features = true }
 polkadot-node-primitives = { workspace = true, default-features = true }
 
+frame-benchmarking-cli = { workspace = true, default-features = true, optional = true }
 sc-cli = { workspace = true, default-features = true, optional = true }
 sc-service = { workspace = true, default-features = true, optional = true }
 sc-storage-monitor = { workspace = true, default-features = true }
@@ -55,6 +56,8 @@ cli = [
 	"vitreus-service",
 ]
 runtime-benchmarks = [
+	"frame-benchmarking-cli",
+	"frame-benchmarking-cli/runtime-benchmarks",
 	"polkadot-node-metrics/runtime-benchmarks",
 	"vitreus-power-plant-runtime/runtime-benchmarks",
 	"vitreus-service/runtime-benchmarks",

@@ -203,11 +203,17 @@ pub type Hash = H256;
 pub type DigestItem = generic::DigestItem;
 
 /// Asset ID.
-#[cfg(not(feature = "runtime-benchmarks"))]
 pub type AssetId = u128;
 
+/// Maps the `u32` benchmark seed to production `Compact<u128>` (`()` only covers `Compact<u32>`).
 #[cfg(feature = "runtime-benchmarks")]
-pub type AssetId = u32;
+pub struct AssetsBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_assets::BenchmarkHelper<Compact<AssetId>> for AssetsBenchmarkHelper {
+    fn create_asset_id_parameter(id: u32) -> Compact<AssetId> {
+        Compact(id.into())
+    }
+}
 
 /// Origin for council voting
 type MoreThanHalfCouncil = EitherOfDiverse<
@@ -505,7 +511,7 @@ impl pallet_assets::Config for Runtime {
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BenchmarkHelper = AssetsBenchmarkHelper;
 }
 
 impl pallet_assets_freezer::Config for Runtime {
@@ -864,8 +870,48 @@ impl pallet_nfts::Config for Runtime {
     type OffchainSignature = Signature;
     type OffchainPublic = <Signature as Verify>::Signer;
     #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
+    type Helper = NftsBenchmarkHelper;
     type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+const NFTS_BENCH_KEY_TYPE: sp_core::crypto::KeyTypeId = sp_core::crypto::KeyTypeId(*b"nftb");
+
+/// Ethereum keys for NFT benchmarks (`()` is sr25519/`AccountId32` only).
+/// Signs `keccak_256(message)` via `ecdsa_sign_prehashed`; looks up the keystore key by address.
+#[cfg(feature = "runtime-benchmarks")]
+pub struct NftsBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl
+    pallet_nfts::BenchmarkHelper<
+        CollectionId,
+        ItemId,
+        fp_account::EthereumSigner,
+        AccountId,
+        Signature,
+    > for NftsBenchmarkHelper
+{
+    fn collection(i: u16) -> CollectionId {
+        i.into()
+    }
+    fn item(i: u16) -> ItemId {
+        i.into()
+    }
+    fn signer() -> (fp_account::EthereumSigner, AccountId) {
+        let public = sp_io::crypto::ecdsa_generate(NFTS_BENCH_KEY_TYPE, None);
+        let signer = fp_account::EthereumSigner::from(public);
+        (signer, signer.into_account())
+    }
+    fn sign(signer: &fp_account::EthereumSigner, message: &[u8]) -> Signature {
+        let public = sp_io::crypto::ecdsa_public_keys(NFTS_BENCH_KEY_TYPE)
+            .into_iter()
+            .find(|pk| fp_account::EthereumSigner::from(*pk) == *signer)
+            .expect("signer() generated this key in the benchmark keystore");
+        let hash = sp_io::hashing::keccak_256(message);
+        let signature = sp_io::crypto::ecdsa_sign_prehashed(NFTS_BENCH_KEY_TYPE, &public, &hash)
+            .expect("keystore holds the key it just returned");
+        EthereumSignature::new(signature)
+    }
 }
 
 parameter_types! {
@@ -948,7 +994,7 @@ impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BenchmarkHelper = AssetsBenchmarkHelper;
 }
 
 pub type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<AssetId>;
@@ -2236,8 +2282,24 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
 extern crate frame_benchmarking;
 
 #[cfg(feature = "runtime-benchmarks")]
+impl frame_system_benchmarking::Config for Runtime {}
+
+#[cfg(all(feature = "runtime-benchmarks", feature = "mainnet-runtime"))]
 mod benches {
-    define_benchmarks!([pallet_evm, EVM]);
+    define_benchmarks!(
+        [frame_system, SystemBench::<Runtime>]
+        [pallet_evm, EVM]
+        [pallet_treasury_extension, TreasuryExtension]
+    );
+}
+
+#[cfg(all(feature = "runtime-benchmarks", feature = "testnet-runtime"))]
+mod benches {
+    define_benchmarks!(
+        [frame_system, SystemBench::<Runtime>]
+        [pallet_evm, EVM]
+        [pallet_treasury_extension, TreasuryExtension]
+    );
 }
 
 impl_runtime_apis! {
@@ -2962,11 +3024,10 @@ impl_runtime_apis! {
         ) {
             use frame_benchmarking::{Benchmarking, BenchmarkList};
             use frame_support::traits::StorageInfoTrait;
-            use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
+            use frame_system_benchmarking::Pallet as SystemBench;
 
             let mut list = Vec::<BenchmarkList>::new();
             list_benchmarks!(list, extra);
-            list_benchmark!(list, extra, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
 
             let storage_info = AllPalletsWithSystem::storage_info();
             (list, storage_info)
@@ -2975,16 +3036,15 @@ impl_runtime_apis! {
         fn dispatch_benchmark(
             config: frame_benchmarking::BenchmarkConfig
         ) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
-            use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
-            use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
-            impl frame_system_benchmarking::Config for Runtime {}
+            use frame_benchmarking::{Benchmarking, BenchmarkBatch};
+            use frame_support::traits::{TrackedStorageKey, WhitelistedStorageKeys};
+            use frame_system_benchmarking::Pallet as SystemBench;
 
-            let whitelist: Vec<TrackedStorageKey> = vec![];
+            let whitelist: Vec<TrackedStorageKey> = AllPalletsWithSystem::whitelisted_storage_keys();
 
             let mut batches = Vec::<BenchmarkBatch>::new();
             let params = (&config, &whitelist);
-
-            add_benchmark!(params, batches, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
+            add_benchmarks!(params, batches);
 
             if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
             Ok(batches)
