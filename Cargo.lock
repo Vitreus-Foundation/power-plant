@@ -7027,6 +7027,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-launch-treasury"
+version = "0.1.0"
+source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=db128abf70e5df32ccf1598c150727a4e6ce18a8#db128abf70e5df32ccf1598c150727a4e6ce18a8"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-launchpad",
+ "pallet-vitreus-dex",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-launchpad"
 version = "0.1.0"
 source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=db128abf70e5df32ccf1598c150727a4e6ce18a8#db128abf70e5df32ccf1598c150727a4e6ce18a8"
@@ -14247,6 +14266,7 @@ dependencies = [
  "pallet-grandpa",
  "pallet-hotfix-sufficients",
  "pallet-im-online",
+ "pallet-launch-treasury",
  "pallet-launchpad",
  "pallet-manual-bridge",
  "pallet-membership",

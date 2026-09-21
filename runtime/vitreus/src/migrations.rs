@@ -10,6 +10,13 @@ pub type Permanent = (
 pub type V0213 =
     (InitTechnicalCommitteeTreasury, pallet_privileges::migration::MigrateToV1<Runtime>);
 
+// Not a storage migration: the treasury pallet is new, so frame-executive
+// initialises its on-chain storage version from the in-code one. This funds
+// the pallet's vault with its existential deposit once, from the Treasury, so
+// the first routed fee is not withheld (LAUNCH_TREASURY_SPEC §9.6); idempotent.
+#[cfg(feature = "testnet-runtime")]
+pub type Unreleased = (crate::launch_treasury::FundLaunchTreasuryVault,);
+#[cfg(not(feature = "testnet-runtime"))]
 pub type Unreleased = ();
 
 pub struct InitTechnicalCommitteeTreasury;

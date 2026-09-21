@@ -387,6 +387,9 @@ pallet-treasury-extension = { path = "pallets/treasury-extension", default-featu
 # Experimental vitreus pallets
 pallet-vitreus-dex = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "db128abf70e5df32ccf1598c150727a4e6ce18a8", default-features = false }
 pallet-launchpad = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "db128abf70e5df32ccf1598c150727a4e6ce18a8", default-features = false }
+# Same rev as the two above: the treasury crate depends on both, and two revs
+# would be two copies of each. db128ab = experimental main after PR #2.
+pallet-launch-treasury = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "db128abf70e5df32ccf1598c150727a4e6ce18a8", default-features = false }
 
 # Runtime API
 dynamic-energy-runtime-api = { path = "pallets/dynamic-energy/runtime-api", default-features = false }

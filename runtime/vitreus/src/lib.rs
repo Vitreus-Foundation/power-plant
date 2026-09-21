@@ -162,6 +162,10 @@ mod helpers {
 }
 pub mod areas;
 pub mod migrations;
+// Validator-backed treasuries for launch tokens, index 212 (pallet-launch-treasury
+// in power-plant-experimental). Testnet only, like the launchpad it serves.
+#[cfg(feature = "testnet-runtime")]
+pub mod launch_treasury;
 mod weights;
 mod xcm_config;
 
@@ -1958,7 +1962,7 @@ impl auctions::Config for Runtime {
     type WeightInfo = weights::runtime_common_auctions::WeightInfo<Runtime>;
 }
 
-// VitreusDex / Launchpad: testnet only.
+// VitreusDex / Launchpad / LaunchTreasury: testnet only. Indices 210, 211, 212.
 #[cfg(feature = "testnet-runtime")]
 mod launchpad {
     use super::*;
@@ -1998,7 +2002,9 @@ mod launchpad {
         type ExcessRecipient = xcm_config::TreasuryAccount;
         type DefaultProtocolFeeRecipient = xcm_config::TreasuryAccount;
         type CreatorFeeRecipient = LaunchpadCreators;
-        type TreasurySink = ();
+        // D9: the treasury slice of every swap in a launch token's pool goes to
+        // that launch's vault.
+        type TreasurySink = LaunchTreasury;
         type DefaultBidWindowBlocks = DefaultBidWindowBlocks;
         type DefaultSettlementWindowBlocks = DefaultSettlementWindowBlocks;
         type DefaultSolverBondAmount = DefaultSolverBondAmount;
@@ -2049,8 +2055,8 @@ mod launchpad {
                         graduation_target: 3 * UNITS,
                         virtual_quote: UNITS,
                         curve_fee_bps: 100,
-                        protocol_share_bps: 5_000,
-                        treasury_share_bps: 0,
+                        protocol_share_bps: 2_500,
+                        treasury_share_bps: 2_500,
                         pool_fee_tier: 3,
                     },
                     params_hash: Default::default(),
@@ -2079,11 +2085,13 @@ mod launchpad {
         pub const LaunchpadUriLimit: u32 = 256;
         pub const LaunchpadDescriptionLimit: u32 = 1_024;
         /// Default terms; `set_params` changes them for future launches.
+        /// Curve fee split creator 50 / protocol 25 / treasury 25
+        /// (LAUNCH_TREASURY_SPEC §2.6); existing launches keep their snapshot.
         pub LaunchpadDefaultParams: pallet_launchpad::LaunchParams<Balance> = pallet_launchpad::LaunchParams {
             graduation_target: 3_000 * UNITS,
             curve_fee_bps: 100,
-            protocol_share_bps: 5_000,
-            treasury_share_bps: 0,
+            protocol_share_bps: 2_500,
+            treasury_share_bps: 2_500,
             pool_fee_tier: 3,
             creation_fee: 1 * UNITS,
         };
@@ -2106,7 +2114,8 @@ mod launchpad {
         type IntoAssetKind = LaunchpadAssetKind;
         type Dex = VitreusDex;
         type Treasury = DexProtocolFeeRecipient;
-        type CurveTreasurySink = ();
+        // L1: the treasury share of every curve fee goes to the launch's vault.
+        type CurveTreasurySink = LaunchTreasury;
         type PalletId = LaunchpadPalletId;
         type TotalSupply = LaunchpadTotalSupply;
         type Sellable = LaunchpadSellable;
@@ -2249,6 +2258,9 @@ construct_runtime!(
         VitreusDex: pallet_vitreus_dex = 210,
         #[cfg(feature = "testnet-runtime")]
         Launchpad: pallet_launchpad = 211,
+        // testnet only: see the launch_treasury module.
+        #[cfg(feature = "testnet-runtime")]
+        LaunchTreasury: pallet_launch_treasury = 212,
 
         #[cfg(feature = "testnet-runtime")]
         Faucet: pallet_faucet = 240,
@@ -2479,6 +2491,7 @@ mod benches {
         [pallet_treasury_extension, TreasuryExtension]
         [pallet_vitreus_dex, VitreusDex]
         [pallet_launchpad, Launchpad]
+        [pallet_launch_treasury, LaunchTreasury]
     );
 }
 
