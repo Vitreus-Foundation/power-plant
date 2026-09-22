@@ -7027,6 +7027,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "pallet-launchpad"
+version = "0.1.0"
+source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=db128abf70e5df32ccf1598c150727a4e6ce18a8#db128abf70e5df32ccf1598c150727a4e6ce18a8"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "log",
+ "pallet-vitreus-dex",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
+]
+
+[[package]]
 name = "pallet-manual-bridge"
 version = "0.1.0"
 dependencies = [
@@ -7513,6 +7531,26 @@ dependencies = [
  "parity-scale-codec",
  "scale-info",
  "sp-runtime",
+]
+
+[[package]]
+name = "pallet-vitreus-dex"
+version = "0.1.0"
+source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=db128abf70e5df32ccf1598c150727a4e6ce18a8#db128abf70e5df32ccf1598c150727a4e6ce18a8"
+dependencies = [
+ "frame-benchmarking",
+ "frame-support",
+ "frame-system",
+ "impl-trait-for-tuples",
+ "log",
+ "parity-scale-codec",
+ "scale-info",
+ "sp-api",
+ "sp-arithmetic",
+ "sp-core",
+ "sp-io",
+ "sp-runtime",
+ "sp-std",
 ]
 
 [[package]]
@@ -14209,6 +14247,7 @@ dependencies = [
  "pallet-grandpa",
  "pallet-hotfix-sufficients",
  "pallet-im-online",
+ "pallet-launchpad",
  "pallet-manual-bridge",
  "pallet-membership",
  "pallet-message-queue",
@@ -14235,6 +14274,7 @@ dependencies = [
  "pallet-uniques",
  "pallet-utility",
  "pallet-vesting",
+ "pallet-vitreus-dex",
  "pallet-xcm",
  "parity-scale-codec",
  "polkadot-primitives",
