@@ -1,6 +1,7 @@
 //! VitreusDex / Launchpad / LaunchTreasury: testnet-only runtime wiring.
 
 use super::*;
+use pallet_launch_treasury::{TreasuryExchange, TreasuryStaking, TreasuryTerms};
 
 parameter_types! {
     pub const DefaultBidWindowBlocks: BlockNumber = 10;
@@ -37,8 +38,6 @@ impl pallet_vitreus_dex::Config for Runtime {
     type ExcessRecipient = xcm_config::TreasuryAccount;
     type DefaultProtocolFeeRecipient = xcm_config::TreasuryAccount;
     type CreatorFeeRecipient = LaunchpadCreators;
-    // D9: the treasury slice of every swap in a launch token's pool goes to
-    // that launch's vault.
     type TreasurySink = LaunchTreasury;
     type DefaultBidWindowBlocks = DefaultBidWindowBlocks;
     type DefaultSettlementWindowBlocks = DefaultSettlementWindowBlocks;
@@ -120,8 +119,8 @@ parameter_types! {
     pub const LaunchpadUriLimit: u32 = 256;
     pub const LaunchpadDescriptionLimit: u32 = 1_024;
     /// Default terms; `set_params` changes them for future launches.
-    /// Curve fee split creator 50 / protocol 25 / treasury 25
-    /// (LAUNCH_TREASURY_SPEC §2.6); existing launches keep their snapshot.
+    /// Curve fee split creator 50 / protocol 25 / treasury 25; existing
+    /// launches keep their snapshot.
     pub LaunchpadDefaultParams: pallet_launchpad::LaunchParams<Balance> = pallet_launchpad::LaunchParams {
         graduation_target: 3_000 * UNITS,
         curve_fee_bps: 100,
@@ -149,7 +148,6 @@ impl pallet_launchpad::Config for Runtime {
     type IntoAssetKind = LaunchpadAssetKind;
     type Dex = VitreusDex;
     type Treasury = DexProtocolFeeRecipient;
-    // L1: the treasury share of every curve fee goes to the launch's vault.
     type CurveTreasurySink = LaunchTreasury;
     type PalletId = LaunchpadPalletId;
     type TotalSupply = LaunchpadTotalSupply;
@@ -170,19 +168,10 @@ impl pallet_launchpad::Config for Runtime {
     type WeightInfo = pallet_launchpad::weights::SubstrateWeight<Runtime>;
 }
 
-// ---- pallet-launch-treasury -------------------------------------------
-//
-// Validator-backed treasuries (pallets/LAUNCH_TREASURY_SPEC.md). The
-// vault stakes through `energy-generation` by dispatching its extrinsics
-// as `Signed(vault)` (spec §3.3: the pallet has no in-runtime staking
-// trait) and sells LNRG through the energy broker's `Swap`.
-
-use pallet_launch_treasury::{TreasuryExchange, TreasuryStaking, TreasuryTerms};
-
 parameter_types! {
     pub const LaunchTreasuryPalletId: PalletId = PalletId(*b"vtrs/lpt");
     pub LnrgAssetKind: NativeOrAssetId = NativeOrAssetId::WithId(LNRG::get());
-    /// Spec §5.1 defaults. `dormancy_blocks` is snapshotted per treasury.
+    /// `dormancy_blocks` is snapshotted per treasury.
     pub LaunchTreasuryDefaultTerms: TreasuryTerms<Balance, BlockNumber> = TreasuryTerms {
         dormancy_blocks: 90 * DAYS,
         min_stake: 1 * UNITS,
@@ -202,9 +191,10 @@ impl sp_runtime::traits::Convert<NativeOrAssetId, Option<AssetId>> for AssetIdOf
     }
 }
 
-/// `energy-generation` for the vault: the stash is its own controller
-/// and payee, every call is the pallet's own `pub fn` dispatched with
-/// `RawOrigin::Signed(vault)`, and every error is the pallet's own.
+/// Stakes the vault through `energy-generation`. The pallet has no
+/// in-runtime staking trait, so every call is the pallet's own `pub fn`
+/// dispatched as `RawOrigin::Signed(vault)`. The stash is its own
+/// controller and payee, and every error is the pallet's own.
 pub struct EnergyGenerationStaking;
 impl EnergyGenerationStaking {
     fn ledger(stash: &AccountId) -> Option<pallet_energy_generation::StakingLedger<Runtime>> {
@@ -215,6 +205,7 @@ impl EnergyGenerationStaking {
         frame_system::RawOrigin::Signed(*stash).into()
     }
 }
+
 impl TreasuryStaking<AccountId, Balance> for EnergyGenerationStaking {
     fn is_bonded(stash: &AccountId) -> bool {
         pallet_energy_generation::Bonded::<Runtime>::contains_key(stash)
@@ -283,9 +274,9 @@ impl TreasuryStaking<AccountId, Balance> for EnergyGenerationStaking {
     }
 }
 
-/// The energy broker for the vault: an LNRG → VTRS quote and sale at
-/// the protocol rate, and the broker's own VTRS as the depth a sale is
-/// sized under (spec §6.4). The broker sells with `keep_alive` (R8).
+/// Sells the vault's LNRG through the energy broker's `Swap`: an
+/// LNRG → VTRS quote and sale at the protocol rate, sized under the
+/// broker's own VTRS. The broker sells with `keep_alive`.
 pub struct EnergyBrokerExchange;
 impl TreasuryExchange<AccountId, Balance> for EnergyBrokerExchange {
     fn quote(lnrg: Balance) -> Option<Balance> {

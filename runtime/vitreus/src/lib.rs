@@ -2083,7 +2083,6 @@ construct_runtime!(
         VitreusDex: pallet_vitreus_dex = 210,
         #[cfg(feature = "testnet-runtime")]
         Launchpad: pallet_launchpad = 211,
-        // testnet only: see the launchpad module.
         #[cfg(feature = "testnet-runtime")]
         LaunchTreasury: pallet_launch_treasury = 212,
 
