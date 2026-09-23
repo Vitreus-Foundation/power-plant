@@ -15,7 +15,7 @@ pub type V0213 =
 // the pallet's vault with its existential deposit once, from the Treasury, so
 // the first routed fee is not withheld (LAUNCH_TREASURY_SPEC §9.6); idempotent.
 #[cfg(feature = "testnet-runtime")]
-pub type Unreleased = (crate::launch_treasury::FundLaunchTreasuryVault,);
+pub type Unreleased = (crate::launchpad::FundLaunchTreasuryVault,);
 #[cfg(not(feature = "testnet-runtime"))]
 pub type Unreleased = ();
 

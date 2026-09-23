@@ -162,10 +162,6 @@ mod helpers {
 }
 pub mod areas;
 pub mod migrations;
-// Validator-backed treasuries for launch tokens, index 212 (pallet-launch-treasury
-// in power-plant-experimental). Testnet only, like the launchpad it serves.
-#[cfg(feature = "testnet-runtime")]
-pub mod launch_treasury;
 mod weights;
 mod xcm_config;
 
@@ -2087,7 +2083,7 @@ construct_runtime!(
         VitreusDex: pallet_vitreus_dex = 210,
         #[cfg(feature = "testnet-runtime")]
         Launchpad: pallet_launchpad = 211,
-        // testnet only: see the launch_treasury module.
+        // testnet only: see the launchpad module.
         #[cfg(feature = "testnet-runtime")]
         LaunchTreasury: pallet_launch_treasury = 212,
 
