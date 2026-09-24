@@ -195,7 +195,7 @@ fn approve_saturating() {
                 )
                 .expect_cost(0)
                 .expect_no_logs()
-                .execute_returns(U256::from(u128::MAX));
+                .execute_returns(U256::MAX);
         });
 }
 
@@ -406,6 +406,90 @@ fn transfer_from_above_allowance() {
                     },
                 )
                 .execute_reverts(|output| output == b"trying to spend more than allowed");
+        });
+}
+
+#[test]
+fn transfer_from_failed_dispatch_preserves_allowance() {
+    ExtBuilder::default()
+        .with_balances(vec![(CryptoAlith.into(), 100)])
+        .build()
+        .execute_with(|| {
+            precompiles()
+                .prepare_test(
+                    CryptoAlith,
+                    Precompile1,
+                    PCall::approve { spender: Address(Bob.into()), value: 500.into() },
+                )
+                .execute_some();
+
+            precompiles()
+                .prepare_test(
+                    Bob,
+                    Precompile1,
+                    PCall::transfer_from {
+                        from: Address(CryptoAlith.into()),
+                        to: Address(Bob.into()),
+                        value: 400.into(),
+                    },
+                )
+                .execute_reverts(|output| {
+                    output == b"Dispatched call failed with error: Arithmetic(Underflow)"
+                });
+
+            precompiles()
+                .prepare_test(
+                    CryptoAlith,
+                    Precompile1,
+                    PCall::allowance {
+                        owner: Address(CryptoAlith.into()),
+                        spender: Address(Bob.into()),
+                    },
+                )
+                .expect_cost(0)
+                .expect_no_logs()
+                .execute_returns(U256::from(500u64));
+        });
+}
+
+#[test]
+fn transfer_from_unlimited_allowance_is_not_decremented() {
+    ExtBuilder::default()
+        .with_balances(vec![(CryptoAlith.into(), 1000)])
+        .build()
+        .execute_with(|| {
+            precompiles()
+                .prepare_test(
+                    CryptoAlith,
+                    Precompile1,
+                    PCall::approve { spender: Address(Bob.into()), value: U256::MAX },
+                )
+                .execute_some();
+
+            precompiles()
+                .prepare_test(
+                    Bob,
+                    Precompile1,
+                    PCall::transfer_from {
+                        from: Address(CryptoAlith.into()),
+                        to: Address(Bob.into()),
+                        value: 400.into(),
+                    },
+                )
+                .execute_some();
+
+            precompiles()
+                .prepare_test(
+                    CryptoAlith,
+                    Precompile1,
+                    PCall::allowance {
+                        owner: Address(CryptoAlith.into()),
+                        spender: Address(Bob.into()),
+                    },
+                )
+                .expect_cost(0)
+                .expect_no_logs()
+                .execute_returns(U256::MAX);
         });
 }
 
@@ -796,7 +880,7 @@ fn permit_valid() {
                         s: rs.s.b32().into(),
                     },
                 )
-                .expect_cost(0) // TODO: Test db read/write costs
+                .expect_cost(1756)
                 .expect_log(log3(
                     Precompile1,
                     SELECTOR_LOG_APPROVAL,
@@ -1201,7 +1285,7 @@ fn permit_valid_with_metamask_signed_data() {
                         s: s_real.into(),
                     },
                 )
-                .expect_cost(0) // TODO: Test db read/write costs
+                .expect_cost(1756)
                 .expect_log(log3(
                     Precompile1,
                     SELECTOR_LOG_APPROVAL,

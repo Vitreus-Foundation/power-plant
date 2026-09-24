@@ -49,7 +49,7 @@ polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot-sdk",
 substrate-build-script-utils = { workspace = true, default-features = true }
 
 [features]
-default = ["with-rocksdb-weights", "rocksdb", "sql", "txpool"]
+default = ["with-rocksdb-weights", "rocksdb", "sql", "txpool", "rpc-binary-search-estimate"]
 
 # Configure the native runtimes to use.
 mainnet-native = [
@@ -360,6 +360,8 @@ pallet-dynamic-fee = { git = "https://github.com/polkadot-evm/frontier", branch 
 pallet-ethereum = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-evm = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-evm-chain-id = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
+pallet-evm-precompile-blake2 = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
+pallet-evm-precompile-bn128 = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-evm-precompile-modexp = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-evm-precompile-sha3fips = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }
 pallet-evm-precompile-simple = { git = "https://github.com/polkadot-evm/frontier", branch = "stable2407", default-features = false }

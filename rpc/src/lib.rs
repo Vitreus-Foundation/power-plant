@@ -6,7 +6,7 @@ use jsonrpsee::RpcModule;
 
 // Substrate
 use sc_client_api::{backend::StorageProvider, client::BlockchainEvents, AuxStore, UsageProvider};
-use sc_rpc::SubscriptionTaskExecutor;
+use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
 use sc_service::TransactionPool;
 use sc_transaction_pool::ChainApi;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
@@ -67,6 +67,7 @@ pub fn create_full<C, P, A, CT, CIDP, B>(
             fc_mapping_sync::EthereumBlockNotification<Block>,
         >,
     >,
+    deny_unsafe: DenyUnsafe,
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
     C: ProvideRuntimeApi<Block>
@@ -110,6 +111,7 @@ where
         eth,
         subscription_task_executor,
         pubsub_notification_sinks,
+        deny_unsafe,
     )?;
 
     Ok(io)

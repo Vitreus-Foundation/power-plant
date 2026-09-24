@@ -9,7 +9,7 @@ use sc_client_api::{
 };
 use sc_network::service::traits::NetworkService;
 use sc_network_sync::SyncingService;
-use sc_rpc::SubscriptionTaskExecutor;
+use sc_rpc::{DenyUnsafe, SubscriptionTaskExecutor};
 use sc_transaction_pool::{ChainApi, Pool};
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
@@ -40,6 +40,8 @@ pub struct EthDeps<B: BlockT, C, P, A: ChainApi, CT, CIDP> {
     pub is_authority: bool,
     /// Whether to enable dev signer
     pub enable_dev_signer: bool,
+    /// Whether to expose internal debug RPC methods when unsafe RPCs are allowed.
+    pub enable_debug_rpc: bool,
     /// Network service
     pub network: Arc<dyn NetworkService>,
     /// Chain syncing service
@@ -76,6 +78,7 @@ impl<B: BlockT, C, P, A: ChainApi, CT: Clone, CIDP: Clone> Clone for EthDeps<B, 
             converter: self.converter.clone(),
             is_authority: self.is_authority,
             enable_dev_signer: self.enable_dev_signer,
+            enable_debug_rpc: self.enable_debug_rpc,
             network: self.network.clone(),
             sync: self.sync.clone(),
             frontier_backend: self.frontier_backend.clone(),
@@ -104,6 +107,7 @@ pub fn create_eth<B, C, BE, P, A, CT, CIDP, EC>(
             fc_mapping_sync::EthereumBlockNotification<B>,
         >,
     >,
+    deny_unsafe: DenyUnsafe,
 ) -> Result<RpcModule<()>, Box<dyn std::error::Error + Send + Sync>>
 where
     B: BlockT,
@@ -119,8 +123,8 @@ where
     EC: EthConfig<B, C>,
 {
     use fc_rpc::{
-        Eth, EthApiServer, EthDevSigner, EthFilter, EthFilterApiServer, EthPubSub,
-        EthPubSubApiServer, EthSigner, Net, NetApiServer, Web3, Web3ApiServer,
+        Debug, DebugApiServer, Eth, EthApiServer, EthDevSigner, EthFilter, EthFilterApiServer,
+        EthPubSub, EthPubSubApiServer, EthSigner, Net, NetApiServer, Web3, Web3ApiServer,
     };
     #[cfg(feature = "txpool")]
     use fc_rpc::{TxPool, TxPoolApiServer};
@@ -132,6 +136,7 @@ where
         converter,
         is_authority,
         enable_dev_signer,
+        enable_debug_rpc,
         network,
         sync,
         frontier_backend,
@@ -173,6 +178,18 @@ where
         .replace_config::<EC>()
         .into_rpc(),
     )?;
+
+    if enable_debug_rpc && deny_unsafe.check_if_safe().is_ok() {
+        io.merge(
+            Debug::<B, C, BE>::new(
+                client.clone(),
+                frontier_backend.clone(),
+                storage_override.clone(),
+                block_data_cache.clone(),
+            )
+            .into_rpc(),
+        )?;
+    }
 
     if let Some(filter_pool) = filter_pool {
         io.merge(

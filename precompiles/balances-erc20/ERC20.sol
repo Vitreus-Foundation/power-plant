@@ -89,7 +89,7 @@ interface IERC20 {
 /// @title Native currency wrapper interface.
 /// @dev Allow compatibility with dApps expecting this precompile to be
 /// a WETH-like contract.
-/// Moonbase address : 0x0000000000000000000000000000000000000802
+/// Vitreus address : 0x0000000000000000000000000000000000000800
 interface WrappedNativeCurrency {
     /// @dev Provide compatibility for contracts that expect wETH design.
     /// Returns funds to sender as this precompile tokens and the native tokens are the same.

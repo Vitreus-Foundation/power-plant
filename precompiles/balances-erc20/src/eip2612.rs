@@ -104,6 +104,8 @@ where
     ) -> EvmResult {
         // NoncesStorage: Blake2_128(16) + contract(20) + Blake2_128(16) + owner(20) + nonce(32)
         handle.record_db_read::<Runtime>(104)?;
+        handle.record_cost(RuntimeHelper::<Runtime>::db_write_gas_cost().saturating_mul(2))?;
+        handle.record_log_costs_manual(3, 32)?;
 
         let owner: H160 = owner.into();
         let spender: H160 = spender.into();
@@ -135,8 +137,9 @@ where
 
         {
             let amount =
-                Erc20BalancesPrecompile::<Runtime, Metadata, Instance>::u256_to_amount(value)
-                    .unwrap_or_else(|_| Bounded::max_value());
+                Erc20BalancesPrecompile::<Runtime, Metadata, Instance>::u256_to_approval_amount(
+                    value,
+                );
 
             let owner: Runtime::AccountId = Runtime::AddressMapping::into_account_id(owner);
             let spender: Runtime::AccountId = Runtime::AddressMapping::into_account_id(spender);

@@ -124,3 +124,37 @@ fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
         );
     })
 }
+
+#[test]
+fn evm_account_basic_reports_vtrs_balance() {
+    devnet_ext().execute_with(|| {
+        let alith_h160 = H160::from(alith().0);
+        let (account, _) = pallet_evm::Pallet::<Runtime>::account_basic(&alith_h160);
+        let vtrs_balance =
+            Balances::reducible_balance(&alith(), Preservation::Preserve, Fortitude::Polite);
+
+        assert_eq!(account.balance, U256::from(vtrs_balance));
+    })
+}
+
+#[test]
+fn evm_validation_account_offsets_gas_fee_but_not_value() {
+    devnet_ext().execute_with(|| {
+        let alith_h160 = H160::from(alith().0);
+        let low_vtrs_account = EVMAccount { balance: 10.into(), nonce: 0.into() };
+
+        let account =
+            evm_account_for_validation(alith_h160, low_vtrs_account, 5.into(), 1_000.into())
+                .expect("Alith can pay the fixed EVM fee through energy assets");
+
+        assert_eq!(account.balance, U256::from(1_010));
+
+        assert!(evm_account_for_validation(
+            alith_h160,
+            EVMAccount { balance: 10.into(), nonce: 0.into() },
+            11.into(),
+            1_000.into()
+        )
+        .is_err());
+    })
+}

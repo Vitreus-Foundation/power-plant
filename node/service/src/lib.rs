@@ -874,6 +874,7 @@ pub fn new_full<
         };
 
         let node_name = name.clone();
+        let enable_debug_rpc = eth_config.enable_debug_rpc;
 
         move |deny_unsafe, subscription_executor: polkadot_rpc::SubscriptionTaskExecutor| {
             let eth_deps = vitreus_rpc::EthDeps {
@@ -883,6 +884,7 @@ pub fn new_full<
                 converter: Some(TransactionConverter),
                 is_authority,
                 enable_dev_signer,
+                enable_debug_rpc,
                 network: network.clone(),
                 sync: sync_service.clone(),
                 frontier_backend: match &*frontier_backend {
@@ -910,6 +912,7 @@ pub fn new_full<
                 deps,
                 subscription_executor,
                 pubsub_notification_sinks.clone(),
+                deny_unsafe,
             )
             .map_err(Into::into)
         }
