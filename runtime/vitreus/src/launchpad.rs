@@ -403,31 +403,3 @@ impl LaunchTreasuryBenchmarkHelper {
         <EnergyGenerationStaking as TreasuryStaking<AccountId, Balance>>::is_cooperable(v)
     }
 }
-
-/// Funds the vault with its existential deposit once, from the
-/// Treasury, so `OnNewAccount` starts its reputation record at the
-/// upgrade block (spec §2.2, §7.4) rather than at the first fee.
-pub struct FundLaunchTreasuryVault;
-impl frame_support::traits::OnRuntimeUpgrade for FundLaunchTreasuryVault {
-    fn on_runtime_upgrade() -> Weight {
-        let vault = LaunchTreasury::vault();
-        if frame_system::Pallet::<Runtime>::providers(&vault) > 0 {
-            // Already holds at least its ED: nothing for the first fee
-            // to withhold (`VaultFunded`, pallet §9.6).
-            pallet_launch_treasury::VaultFunded::<Runtime>::put(true);
-            return <Runtime as frame_system::Config>::DbWeight::get().reads_writes(1, 1);
-        }
-        let ed = <Runtime as pallet_balances::Config>::ExistentialDeposit::get();
-        let res = <Balances as frame_support::traits::fungible::Mutate<AccountId>>::transfer(
-            &xcm_config::TreasuryAccount::get(),
-            &vault,
-            ed,
-            frame_support::traits::tokens::Preservation::Preserve,
-        );
-        log::info!(target: "runtime::launch-treasury", "vault funded: {:?}", res.map(|_| ()));
-        if res.is_ok() {
-            pallet_launch_treasury::VaultFunded::<Runtime>::put(true);
-        }
-        <Runtime as frame_system::Config>::DbWeight::get().reads_writes(3, 4)
-    }
-}

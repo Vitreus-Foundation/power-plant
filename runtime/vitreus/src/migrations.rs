@@ -13,7 +13,11 @@ pub type V0213 =
 #[cfg(feature = "mainnet-runtime")]
 pub type Unreleased = ();
 #[cfg(feature = "testnet-runtime")]
-pub type Unreleased = (crate::launchpad::FundLaunchTreasuryVault,);
+pub type Unreleased = (
+    // Funds the launch-treasury vault with the ED once from the Treasury, so the
+    // first routed fee isn't withheld. Idempotent.
+    pallet_launch_treasury::migrations::FundVault<Runtime, xcm_config::TreasuryAccount>,
+);
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {

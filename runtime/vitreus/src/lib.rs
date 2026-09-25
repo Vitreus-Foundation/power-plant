@@ -166,7 +166,7 @@ mod weights;
 mod xcm_config;
 
 #[cfg(feature = "testnet-runtime")]
-pub mod launchpad;
+mod launchpad;
 
 #[cfg(all(test, feature = "testnet-runtime"))]
 mod tests;
