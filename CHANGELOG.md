@@ -11,6 +11,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 - Add energy conversion from LNRG and SNRG to VNRG
 - Add `pallet-vitreus-dex` on testnet
 - Add `pallet-launchpad` on testnet
+- Add `pallet-launch-treasury` on testnet
 
 ### Changed
 
