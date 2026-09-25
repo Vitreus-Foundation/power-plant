@@ -65,12 +65,9 @@ impl SubstrateCli for Cli {
 
     fn load_spec(&self, id: &str) -> std::result::Result<Box<dyn ChainSpec>, String> {
         Ok(match id {
-            #[cfg(feature = "mainnet-native")]
-            "mainnet" => Box::new(chain_spec::mainnet_config()),
-            #[cfg(feature = "mainnet-native")]
-            "stagenet" => Box::new(chain_spec::stagenet_config()),
-            #[cfg(feature = "testnet-native")]
-            "testnet" => Box::new(chain_spec::testnet_config()),
+            "mainnet" => Box::new(chain_spec::mainnet_config()?),
+            "stagenet" => Box::new(chain_spec::stagenet_config()?),
+            "testnet" => Box::new(chain_spec::testnet_config()?),
             #[cfg(feature = "testnet-native")]
             "dev" => Box::new(chain_spec::development_config()),
             #[cfg(feature = "testnet-native")]
