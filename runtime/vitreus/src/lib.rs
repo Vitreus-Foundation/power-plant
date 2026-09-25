@@ -265,7 +265,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     spec_name: create_runtime_str!("vitreus-power-plant"),
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 213,
+    spec_version: 214,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 4,
@@ -2158,8 +2158,9 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
 #[rustfmt::skip]
 pub type Migrations = (
-    migrations::Unreleased,
     migrations::V0213,
+    migrations::V0214,
+    migrations::Unreleased,
     migrations::Permanent,
 );
 
