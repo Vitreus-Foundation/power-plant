@@ -12,7 +12,7 @@ fn alith() -> AccountId {
     AccountId::from(hex_literal::hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"))
 }
 
-pub fn new_test_ext() -> sp_io::TestExternalities {
+fn new_test_ext() -> sp_io::TestExternalities {
     sp_io::TestExternalities::new(
         RuntimeGenesisConfig {
             balances: BalancesConfig { balances: vec![(alith(), 1_000_000 * vtrs::UNITS)] },
@@ -42,9 +42,7 @@ fn mock_signature() -> TransactionSignature {
 #[test]
 fn configured_base_extrinsic_weight_is_evm_compatible() {
     let min_ethereum_transaction_weight = WeightPerGas::get() * 21_000;
-    let base_extrinsic = <Runtime as frame_system::Config>::BlockWeights::get()
-        .get(frame_support::dispatch::DispatchClass::Normal)
-        .base_extrinsic;
+    let base_extrinsic = BlockWeights::get().get(DispatchClass::Normal).base_extrinsic;
     assert!(base_extrinsic.ref_time() <= min_ethereum_transaction_weight.ref_time());
 }
 
