@@ -1,5 +1,4 @@
 use super::*;
-use chain_spec::{devnet_config, devnet_keys::alith};
 use ethereum::{TransactionAction, TransactionSignature, TransactionV2};
 use fp_self_contained::SelfContainedCall;
 use frame_support::{
@@ -9,8 +8,25 @@ use frame_support::{
 use pallet_energy_fee::DefaultFeeMultiplier;
 use sp_runtime::{BuildStorage, FixedU128, Perquintill};
 
-pub fn devnet_ext() -> sp_io::TestExternalities {
-    sp_io::TestExternalities::new(devnet_config().build_storage().unwrap())
+fn alith() -> AccountId {
+    AccountId::from(hex_literal::hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"))
+}
+
+pub fn new_test_ext() -> sp_io::TestExternalities {
+    sp_io::TestExternalities::new(
+        RuntimeGenesisConfig {
+            balances: BalancesConfig { balances: vec![(alith(), 1_000_000 * vtrs::UNITS)] },
+            assets: AssetsConfig {
+                assets: vec![(VNRG::get(), alith(), false, 1)],
+                accounts: vec![(VNRG::get(), alith(), 100_000_000_000_000_000_000)],
+                ..Default::default()
+            },
+            nac_managing: NacManagingConfig { accounts: vec![(alith(), 2)], owners: vec![alith()] },
+            ..Default::default()
+        }
+        .build_storage()
+        .unwrap(),
+    )
 }
 
 fn mock_signature() -> TransactionSignature {
@@ -34,7 +50,7 @@ fn configured_base_extrinsic_weight_is_evm_compatible() {
 
 #[test]
 fn fee_multiplier_update_works() {
-    devnet_ext().execute_with(|| {
+    new_test_ext().execute_with(|| {
         let max_block_weight =
             BlockWeights::get().per_class.get(DispatchClass::Normal).max_total.unwrap();
         let block_weight_a = max_block_weight / 2;
@@ -94,7 +110,7 @@ fn fee_multiplier_update_works() {
 
 #[test]
 fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
-    devnet_ext().execute_with(|| {
+    new_test_ext().execute_with(|| {
         let sample_tx = TransactionV2::Legacy(LegacyTransaction {
             nonce: Default::default(),
             gas_price: 1.into(),
