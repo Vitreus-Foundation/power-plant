@@ -111,6 +111,20 @@ fn fee_multiplier_update_works() {
 #[test]
 fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
     new_test_ext().execute_with(|| {
+        // A sender without energy buys it with VTRS. Without a rate the fee can't be quoted at all,
+        // and `InvalidTransaction::Payment` would come from that instead of the VTRS balance check.
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+        assert!(
+            <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
+                NativeOrAssetId::Native,
+                NativeOrAssetId::WithId(VNRG::get()),
+                1,
+                true,
+            )
+            .is_some(),
+            "VTRS -> VNRG must be quotable",
+        );
+
         let sample_tx = TransactionV2::Legacy(LegacyTransaction {
             nonce: Default::default(),
             gas_price: 1.into(),
