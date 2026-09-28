@@ -570,7 +570,7 @@ pub mod pallet {
                     Polite,
                 );
 
-                if let Ok(amount) = res {
+                if let Some(amount) = res.ok().filter(|amount| !amount.is_zero()) {
                     Self::deposit_event(Event::EnergyBurned { amount });
                 }
             }
