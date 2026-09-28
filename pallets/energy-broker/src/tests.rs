@@ -213,6 +213,16 @@ fn swap_with_amount_out_min_works() {
             Some(amount_out),
             true
         ));
+
+        // A zero minimum is the same as none.
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            ALICE,
+            (NATIVE_TOKEN, ENERGY_TOKEN),
+            amount_in,
+            Some(0),
+            true
+        ));
     });
 }
 
@@ -230,6 +240,19 @@ fn swap_with_amount_in_max_works() {
                 (NATIVE_TOKEN, ENERGY_TOKEN),
                 amount_out,
                 Some(amount_in - 1),
+                true
+            ),
+            Error::<Test>::ProvidedMaximumNotSufficientForSwap
+        );
+
+        // A zero maximum cannot cover any swap.
+        assert_noop!(
+            EnergyBroker::swap_tokens_for_exact_tokens(
+                RuntimeOrigin::signed(ALICE),
+                ALICE,
+                (NATIVE_TOKEN, ENERGY_TOKEN),
+                amount_out,
+                Some(0),
                 true
             ),
             Error::<Test>::ProvidedMaximumNotSufficientForSwap

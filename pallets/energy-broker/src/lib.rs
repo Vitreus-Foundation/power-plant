@@ -405,10 +405,6 @@ pub mod pallet {
             amount_out_min: Option<T::Balance>,
             keep_alive: bool,
         ) -> Result<T::Balance, DispatchError> {
-            if let Some(amount_out_min) = amount_out_min {
-                ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
-            }
-
             let include_fee = !T::FeelessAccounts::contains(&sender);
             let (amount_out, fee) = Self::get_amount_out(amount_in, &path, include_fee)?;
 
@@ -440,10 +436,6 @@ pub mod pallet {
             amount_in_max: Option<T::Balance>,
             keep_alive: bool,
         ) -> Result<T::Balance, DispatchError> {
-            if let Some(amount_in_max) = amount_in_max {
-                ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
-            }
-
             let include_fee = !T::FeelessAccounts::contains(&sender);
             let (amount_in, fee) = Self::get_amount_in(amount_out, &path, include_fee)?;
 
