@@ -299,6 +299,7 @@ pub mod pallet {
             keep_alive: bool,
         ) -> DispatchResult {
             T::ManageOrigin::ensure_origin(origin)?;
+            ensure!(!amount.is_zero(), Error::<T>::ZeroAmount);
 
             let source = T::Lookup::lookup(source)?;
             let preservation = match keep_alive {

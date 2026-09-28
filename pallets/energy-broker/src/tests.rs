@@ -650,6 +650,10 @@ fn force_add_liquidity_works() {
             ),
             DispatchError::BadOrigin
         );
+        assert_noop!(
+            EnergyBroker::force_add_liquidity(RuntimeOrigin::root(), ALICE, ENERGY_TOKEN, 0, true),
+            Error::<Test>::ZeroAmount
+        );
 
         assert_ok!(EnergyBroker::force_add_liquidity(
             RuntimeOrigin::root(),
