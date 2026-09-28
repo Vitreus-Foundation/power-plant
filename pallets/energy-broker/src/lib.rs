@@ -184,7 +184,7 @@ pub mod pallet {
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
-        /// Initial energy capacity.
+        /// Initial energy capacity. Zero sets no override, so the capacity follows the energy burn.
         pub energy_capacity: T::Balance,
     }
 
@@ -192,7 +192,9 @@ pub mod pallet {
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
             EnergyCapacity::<T>::put(self.energy_capacity);
-            EnergyCapacityOverride::<T>::put(self.energy_capacity);
+            if !self.energy_capacity.is_zero() {
+                EnergyCapacityOverride::<T>::put(self.energy_capacity);
+            }
         }
     }
 
@@ -302,7 +304,10 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Force set the energy capacity.
+        /// Override the energy capacity, starting from the next session.
+        ///
+        /// `Some(amount)` sets the capacity to `amount`, which must be non-zero; `None` removes the
+        /// override so the capacity follows the energy burn again.
         #[pallet::call_index(11)]
         #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn force_set_capacity(
@@ -310,6 +315,7 @@ pub mod pallet {
             amount: Option<T::Balance>,
         ) -> DispatchResult {
             T::ManageOrigin::ensure_origin(origin)?;
+            ensure!(amount != Some(Zero::zero()), Error::<T>::ZeroAmount);
 
             EnergyCapacityOverride::<T>::set(amount);
             Self::deposit_event(Event::EnergyCapacityForceSet { amount });
