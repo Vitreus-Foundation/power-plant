@@ -203,19 +203,20 @@ pub mod pallet {
 
     #[pallet::error]
     pub enum Error<T> {
-        /// An overflow happened.
+        /// An arithmetic overflow happened, or the swap fee is 100% or more.
         Overflow,
         /// Amount can't be zero.
         ZeroAmount,
-        /// The destination account cannot exist with the swapped funds.
-        BelowMinimum,
+        /// The broker could not take the swap input.
+        DepositFailed,
         /// Insufficient liquidity in the energy broker.
         InsufficientLiquidity,
         /// Calculated amount out is less than provided minimum amount.
         ProvidedMinimumNotSufficientForSwap,
         /// Provided maximum amount is not sufficient for swap.
         ProvidedMaximumNotSufficientForSwap,
-        /// The provided path contains an invalid asset.
+        /// The path is not supported, or its converter cannot price the swap, e.g. because no
+        /// exchange rate is set.
         InvalidPath,
     }
 
@@ -502,7 +503,7 @@ pub mod pallet {
             T::SwapFeeTarget::on_unbalanced(credit_in.extract(fee_part));
 
             T::AssetConverter::resolve(path, &broker_account, credit_in)
-                .map_err(|_| Error::<T>::BelowMinimum)?;
+                .map_err(|_| Error::<T>::DepositFailed)?;
 
             // before the payout below, so the sale counts only what the converter just deposited.
             let energy_deposited = T::Assets::balance(T::EnergyAsset::get(), &broker_account)
