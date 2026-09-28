@@ -33,7 +33,7 @@ use frame_support::{
 };
 use sp_runtime::{
     traits::{
-        AccountIdConversion, CheckedDiv, CheckedMul, Ensure, Get, IntegerSquareRoot, One,
+        AccountIdConversion, Bounded, CheckedDiv, CheckedMul, Ensure, Get, IntegerSquareRoot, One,
         StaticLookup, Zero,
     },
     DispatchError, Saturating, TokenError, Vec,
@@ -181,16 +181,21 @@ pub mod pallet {
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
-        /// Initial energy capacity. Zero sets no override, so the capacity follows the energy burn.
-        pub energy_capacity: T::Balance,
+        /// `Some(amount)` fixes the capacity at a non-zero `amount` until `force_set_capacity`
+        /// changes it; `None` lets it follow the energy burn, unlimited until the first burn.
+        pub energy_capacity: Option<T::Balance>,
     }
 
     #[pallet::genesis_build]
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
-            EnergyCapacity::<T>::put(self.energy_capacity);
-            if !self.energy_capacity.is_zero() {
-                EnergyCapacityOverride::<T>::put(self.energy_capacity);
+            match self.energy_capacity {
+                Some(capacity) => {
+                    assert!(!capacity.is_zero(), "energy capacity must be non-zero");
+                    EnergyCapacity::<T>::put(capacity);
+                    EnergyCapacityOverride::<T>::put(capacity);
+                },
+                None => EnergyCapacity::<T>::put(T::Balance::max_value()),
             }
         }
     }

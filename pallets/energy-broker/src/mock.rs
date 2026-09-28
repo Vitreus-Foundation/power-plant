@@ -216,7 +216,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     .assimilate_storage(&mut t)
     .unwrap();
 
-    pallet_energy_broker::GenesisConfig::<Test> { energy_capacity: INITIAL_ENERGY_CAPACITY }
+    pallet_energy_broker::GenesisConfig::<Test> { energy_capacity: Some(INITIAL_ENERGY_CAPACITY) }
         .assimilate_storage(&mut t)
         .unwrap();
 
