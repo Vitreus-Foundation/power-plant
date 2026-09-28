@@ -52,6 +52,9 @@ pub mod pallet {
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
+    /// Denominator of swap fees: a fee of 10 takes 10 / 1000 of the input amount, i.e. 1%.
+    const FEE_DENOMINATOR: u32 = 1000;
+
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]
     pub struct Pallet<T>(_);
@@ -211,7 +214,16 @@ pub mod pallet {
     }
 
     #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn integrity_test() {
+            for path in T::AssetConverter::paths() {
+                assert!(
+                    Self::swap_fee(&path) < FEE_DENOMINATOR,
+                    "swap fee for {path:?} must be below {FEE_DENOMINATOR}"
+                );
+            }
+        }
+    }
 
     /// Pallet's callable functions.
     #[pallet::call]
@@ -509,10 +521,12 @@ pub mod pallet {
             amount: T::Balance,
             fee: u32,
         ) -> Result<T::Balance, Error<T>> {
+            let exchange_share = FEE_DENOMINATOR.checked_sub(fee).ok_or(Error::<T>::Overflow)?;
+
             T::HigherPrecisionBalance::from(amount)
-                .checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - fee.into()))
+                .checked_mul(&T::HigherPrecisionBalance::from(exchange_share))
                 .ok_or(Error::<T>::Overflow)?
-                .checked_div(&T::HigherPrecisionBalance::from(1000u32))
+                .checked_div(&T::HigherPrecisionBalance::from(FEE_DENOMINATOR))
                 .ok_or(Error::<T>::Overflow)?
                 .try_into()
                 .map_err(|_| Error::<T>::Overflow)
@@ -522,10 +536,12 @@ pub mod pallet {
             amount: T::Balance,
             fee: u32,
         ) -> Result<T::Balance, Error<T>> {
+            let exchange_share = FEE_DENOMINATOR.checked_sub(fee).ok_or(Error::<T>::Overflow)?;
+
             T::HigherPrecisionBalance::from(amount)
-                .checked_mul(&T::HigherPrecisionBalance::from(1000u32))
+                .checked_mul(&T::HigherPrecisionBalance::from(FEE_DENOMINATOR))
                 .ok_or(Error::<T>::Overflow)?
-                .checked_div(&(T::HigherPrecisionBalance::from(1000u32) - fee.into()))
+                .checked_div(&T::HigherPrecisionBalance::from(exchange_share))
                 .ok_or(Error::<T>::Overflow)?
                 .try_into()
                 .map_err(|_| Error::<T>::Overflow)
