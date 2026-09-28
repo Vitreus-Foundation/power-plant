@@ -1183,7 +1183,6 @@ impl pallet_energy_broker::Config for Runtime {
     type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
     type OnEnergySell = DynamicEnergy;
     type SwapFee = SwapFee;
-    type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
     type BurnedEnergySessionsCount = BurnedEnergySessionsCount;
 }

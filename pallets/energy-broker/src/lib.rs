@@ -104,10 +104,6 @@ pub mod pallet {
         #[pallet::constant]
         type SwapFee: Get<u32>;
 
-        /// Identifier of native asset.
-        #[pallet::constant]
-        type NativeAsset: Get<Self::AssetKind>;
-
         /// Identifier of energy asset.
         #[pallet::constant]
         type EnergyAsset: Get<Self::AssetKind>;

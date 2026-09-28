@@ -79,7 +79,6 @@ type NativeAndAssets = frame_support::traits::fungible::UnionOf<
 >;
 
 parameter_types! {
-    pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
     pub const VNRG: u32 = 1;
     pub const SNRG: u32 = 2;
     pub const FeeAccount: u128 = 99;
@@ -185,7 +184,6 @@ impl Config for Test {
     type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
     type OnEnergySell = RecordEnergySell;
     type SwapFee = ConstU32<20>; // means 2%
-    type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
     type BurnedEnergySessionsCount = ();
 }
