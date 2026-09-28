@@ -113,6 +113,7 @@ pub mod pallet {
         type EnergyAsset: Get<Self::AssetKind>;
 
         /// The count of sessions used for calculating burned energy.
+        /// Decreasing it requires a migration, or stale entries stay in `TotalEnergyBurn` forever.
         #[pallet::constant]
         type BurnedEnergySessionsCount: Get<u32>;
     }
