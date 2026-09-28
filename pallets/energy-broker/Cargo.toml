@@ -15,10 +15,6 @@ frame-support = { workspace = true, default-features = false }
 frame-system = { workspace = true, default-features = false }
 frame-benchmarking = { workspace = true, default-features = false, optional = true }
 scale-info = { workspace = true, default-features = false, features = ["derive"] }
-sp-api = { workspace = true, default-features = false }
-sp-core = { workspace = true, default-features = false }
-sp-io = { workspace = true, default-features = false }
-sp-std = { workspace = true, default-features = false }
 sp-runtime = { workspace = true, default-features = false }
 sp-arithmetic = { workspace = true, default-features = false }
 vitreus-runtime-common = { workspace = true, default-features = false }
@@ -26,7 +22,9 @@ vitreus-runtime-common = { workspace = true, default-features = false }
 [dev-dependencies]
 pallet-balances = { workspace = true, features = ["std"] }
 pallet-assets = { workspace = true, features = ["std"] }
-primitive-types = { workspace = true, default-features = false, features = ["codec", "scale-info", "num-traits"] }
+primitive-types = { workspace = true, features = ["num-traits"] }
+sp-core = { workspace = true, features = ["std"] }
+sp-io = { workspace = true, features = ["std"] }
 
 [features]
 default = ["std"]
@@ -35,15 +33,20 @@ std = [
     "frame-benchmarking?/std",
     "frame-support/std",
     "frame-system/std",
+    "log/std",
     "scale-info/std",
-    "sp-std/std",
     "sp-runtime/std",
     "sp-arithmetic/std",
     "vitreus-runtime-common/std",
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
+    "frame-support/runtime-benchmarks",
     "frame-system/runtime-benchmarks",
     "sp-runtime/runtime-benchmarks",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "sp-runtime/try-runtime",
+]
