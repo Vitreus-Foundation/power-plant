@@ -18,6 +18,7 @@ mod mock;
 pub use pallet::*;
 
 use frame_support::{
+    storage::with_storage_layer,
     traits::{
         fungibles::{Balanced, Credit, Inspect, Mutate},
         tokens::{
@@ -613,14 +614,16 @@ impl<T: Config> Swap<T::AccountId> for Pallet<T> {
         keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError> {
         if let Ok([asset_in, asset_out]) = <[T::AssetKind; 2]>::try_from(path) {
-            Self::do_swap_exact_tokens_for_tokens(
-                sender,
-                send_to,
-                (asset_in, asset_out),
-                amount_in,
-                amount_out_min,
-                keep_alive,
-            )
+            with_storage_layer(|| {
+                Self::do_swap_exact_tokens_for_tokens(
+                    sender,
+                    send_to,
+                    (asset_in, asset_out),
+                    amount_in,
+                    amount_out_min,
+                    keep_alive,
+                )
+            })
         } else {
             Err(Error::<T>::InvalidPath.into())
         }
@@ -635,14 +638,16 @@ impl<T: Config> Swap<T::AccountId> for Pallet<T> {
         keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError> {
         if let Ok([asset_in, asset_out]) = <[T::AssetKind; 2]>::try_from(path) {
-            Self::do_swap_tokens_for_exact_tokens(
-                sender,
-                send_to,
-                (asset_in, asset_out),
-                amount_out,
-                amount_in_max,
-                keep_alive,
-            )
+            with_storage_layer(|| {
+                Self::do_swap_tokens_for_exact_tokens(
+                    sender,
+                    send_to,
+                    (asset_in, asset_out),
+                    amount_out,
+                    amount_in_max,
+                    keep_alive,
+                )
+            })
         } else {
             Err(Error::<T>::InvalidPath.into())
         }
