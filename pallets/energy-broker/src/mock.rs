@@ -5,7 +5,7 @@ use crate as pallet_energy_broker;
 
 use frame_support::{
     construct_runtime, derive_impl, parameter_types,
-    traits::{tokens::imbalance::ResolveAssetTo, AsEnsureOriginWithArg, ConstU128, ConstU32},
+    traits::{tokens::imbalance::ResolveAssetTo, AsEnsureOriginWithArg, ConstU128, ConstU32, Equals},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use sp_arithmetic::{FixedPointNumber, FixedU128};
@@ -82,6 +82,7 @@ parameter_types! {
     pub const VNRG: u32 = 1;
     pub const SNRG: u32 = 2;
     pub const FeeAccount: u128 = 99;
+    pub const FeelessAccount: u128 = BOB;
 }
 
 const RATE: FixedU128 = FixedU128::from_rational(1, 10);
@@ -180,12 +181,12 @@ impl Config for Test {
         MockEnergyToNativeConverter,
         MockStaticEnergyToEnergyConverter,
     );
-    type FeelessAccounts = ();
+    type FeelessAccounts = Equals<FeelessAccount>;
     type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
     type OnEnergySell = RecordEnergySell;
     type SwapFee = ConstU32<20>; // means 2%
     type EnergyAsset = VNRG;
-    type BurnedEnergySessionsCount = ();
+    type BurnedEnergySessionsCount = ConstU32<2>;
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
