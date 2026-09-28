@@ -16,7 +16,6 @@ frame-system = { workspace = true, default-features = false }
 frame-benchmarking = { workspace = true, default-features = false, optional = true }
 scale-info = { workspace = true, default-features = false, features = ["derive"] }
 sp-runtime = { workspace = true, default-features = false }
-sp-arithmetic = { workspace = true, default-features = false }
 vitreus-runtime-common = { workspace = true, default-features = false }
 
 [dev-dependencies]
@@ -36,7 +35,6 @@ std = [
     "log/std",
     "scale-info/std",
     "sp-runtime/std",
-    "sp-arithmetic/std",
     "vitreus-runtime-common/std",
 ]
 runtime-benchmarks = [

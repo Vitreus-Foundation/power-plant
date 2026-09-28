@@ -33,10 +33,7 @@ use frame_support::{
     PalletId,
 };
 use sp_runtime::{
-    traits::{
-        AccountIdConversion, Bounded, CheckedDiv, CheckedMul, Ensure, Get, IntegerSquareRoot, One,
-        StaticLookup, Zero,
-    },
+    traits::{AccountIdConversion, Bounded, CheckedDiv, CheckedMul, Ensure, Get, StaticLookup, Zero},
     DispatchError, Saturating, TokenError, Vec,
 };
 use vitreus_runtime_common::{
@@ -50,7 +47,6 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
-    use sp_arithmetic::traits::Unsigned;
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
 
@@ -73,10 +69,7 @@ pub mod pallet {
         type Balance: Balance;
 
         /// A type used for calculations concerning the `Balance` type to avoid possible overflows.
-        type HigherPrecisionBalance: IntegerSquareRoot
-            + One
-            + Ensure
-            + Unsigned
+        type HigherPrecisionBalance: Ensure
             + From<u32>
             + From<Self::Balance>
             + TryInto<Self::Balance>;

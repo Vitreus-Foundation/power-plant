@@ -8,8 +8,7 @@ use frame_support::{
     traits::{tokens::imbalance::ResolveAssetTo, AsEnsureOriginWithArg, ConstU128, ConstU32, Equals},
 };
 use frame_system::{EnsureRoot, EnsureSigned};
-use sp_arithmetic::{FixedPointNumber, FixedU128};
-use sp_runtime::{traits::IdentityLookup, BuildStorage};
+use sp_runtime::{traits::IdentityLookup, BuildStorage, FixedPointNumber, FixedU128};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
