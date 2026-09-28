@@ -798,7 +798,7 @@ fn swap_trait_rolls_back_a_failed_swap() {
                 recipient,
                 true
             ),
-            Error::<Test>::BelowMinimum
+            DispatchError::Token(TokenError::CannotCreate)
         );
     });
 }
