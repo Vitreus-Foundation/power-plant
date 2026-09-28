@@ -221,6 +221,11 @@ pub mod pallet {
     #[pallet::hooks]
     impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
         fn integrity_test() {
+            assert!(
+                T::BurnedEnergySessionsCount::get() > 0,
+                "BurnedEnergySessionsCount must be non-zero"
+            );
+
             for path in T::AssetConverter::paths() {
                 assert!(
                     Self::swap_fee(&path) < FEE_DENOMINATOR,
