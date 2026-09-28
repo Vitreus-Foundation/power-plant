@@ -81,6 +81,7 @@ type NativeAndAssets = frame_support::traits::fungible::UnionOf<
 parameter_types! {
     pub const NativeAsset: NativeOrAssetId = NativeOrAssetId::Native;
     pub const VNRG: u32 = 1;
+    pub const SNRG: u32 = 2;
     pub const FeeAccount: u128 = 99;
 }
 
@@ -114,6 +115,60 @@ impl FixedPathAssetConverter<Test> for MockEnergyToNativeConverter {
     }
 }
 
+pub struct MockStaticEnergyToEnergyConverter;
+impl FixedPathAssetConverter<Test> for MockStaticEnergyToEnergyConverter {
+    const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(SNRG::get());
+    const TARGET: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+
+    fn swap_fee() -> Option<u32> {
+        Some(0)
+    }
+
+    fn get_amount_out(amount_in: u128) -> Option<u128> {
+        Some(amount_in)
+    }
+
+    fn get_amount_in(amount_out: u128) -> Option<u128> {
+        Some(amount_out)
+    }
+
+    fn reducible_balance(_broker: &u128) -> u128 {
+        u128::MAX
+    }
+
+    fn withdraw(
+        _broker: &u128,
+        value: u128,
+    ) -> Result<Credit<u128, NativeAndAssets>, DispatchError> {
+        Ok(<NativeAndAssets as Balanced<u128>>::issue(Self::TARGET, value))
+    }
+
+    fn resolve(
+        _broker: &u128,
+        credit: Credit<u128, NativeAndAssets>,
+    ) -> Result<(), Credit<u128, NativeAndAssets>> {
+        drop(credit);
+        Ok(())
+    }
+}
+
+parameter_types! {
+    /// Accumulates what `do_swap` reports as an energy sale. Lives in the test externalities, so
+    /// every `new_test_ext` starts from zero.
+    pub storage RecordedEnergySale: u128 = 0;
+}
+
+pub struct RecordEnergySell;
+impl OnEnergySell<u128> for RecordEnergySell {
+    fn on_energy_sell(amount: u128) {
+        RecordedEnergySale::set(&RecordedEnergySale::get().saturating_add(amount));
+    }
+}
+
+pub(crate) fn energy_sold() -> u128 {
+    RecordedEnergySale::get()
+}
+
 impl Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type ManageOrigin = EnsureRoot<u128>;
@@ -121,10 +176,14 @@ impl Config for Test {
     type HigherPrecisionBalance = sp_core::U256;
     type AssetKind = NativeOrAssetId;
     type Assets = NativeAndAssets;
-    type AssetConverter = (MockNativeToEnergyConverter, MockEnergyToNativeConverter);
+    type AssetConverter = (
+        MockNativeToEnergyConverter,
+        MockEnergyToNativeConverter,
+        MockStaticEnergyToEnergyConverter,
+    );
     type FeelessAccounts = ();
     type SwapFeeTarget = ResolveAssetTo<FeeAccount, Self::Assets>;
-    type OnEnergySell = ();
+    type OnEnergySell = RecordEnergySell;
     type SwapFee = ConstU32<20>; // means 2%
     type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
@@ -146,11 +205,12 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     .unwrap();
 
     pallet_assets::GenesisConfig::<Test> {
-        assets: vec![(VNRG::get(), 42, false, 20)],
+        assets: vec![(VNRG::get(), 42, false, 20), (SNRG::get(), 42, false, 20)],
         accounts: vec![
             (VNRG::get(), EnergyBroker::account_id(), INITIAL_ENERGY_BALANCE),
             (VNRG::get(), FeeAccount::get(), 20),
             (VNRG::get(), ALICE, 5000),
+            (SNRG::get(), ALICE, 5000),
         ],
         ..Default::default()
     }

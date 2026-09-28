@@ -465,7 +465,10 @@ pub mod pallet {
                 ensure!(free >= amount_in, TokenError::NotExpendable);
             }
 
-            let energy_before_swap = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
+            let liquidity = T::AssetConverter::reducible_balance(path, &broker_account);
+            ensure!(liquidity >= amount_out, Error::<T>::InsufficientLiquidity);
+
+            let energy_before_input = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
 
             // transfer from the sender to the broker
             let mut credit_in = T::Assets::withdraw(
@@ -482,18 +485,21 @@ pub mod pallet {
             T::AssetConverter::resolve(path, &broker_account, credit_in)
                 .map_err(|_| Error::<T>::BelowMinimum)?;
 
-            // transfer from the broker to the recipient
+            // before the payout below, so the sale counts only what the converter just deposited.
+            let energy_deposited = T::Assets::balance(T::EnergyAsset::get(), &broker_account)
+                .saturating_sub(energy_before_input);
+
+            // transfer from the broker to the recipient; can only fail if a converter reported more
+            // than it can supply
             let credit_out = T::AssetConverter::withdraw(path, &broker_account, amount_out)
                 .map_err(|_| Error::<T>::InsufficientLiquidity)?;
 
             T::Assets::resolve(recipient, credit_out).map_err(|_| Error::<T>::BelowMinimum)?;
 
-            let energy_after_swap = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
-
-            if energy_after_swap > energy_before_swap {
+            if !energy_deposited.is_zero() {
                 Self::burn_surplus_energy(&broker_account);
 
-                T::OnEnergySell::on_energy_sell(energy_after_swap - energy_before_swap);
+                T::OnEnergySell::on_energy_sell(energy_deposited);
             }
 
             Ok(())

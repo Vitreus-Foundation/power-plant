@@ -7,6 +7,7 @@ use sp_runtime::{DispatchError, TokenError};
 
 const NATIVE_TOKEN: NativeOrAssetId = NativeOrAssetId::Native;
 const ENERGY_TOKEN: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+const STATIC_ENERGY_TOKEN: NativeOrAssetId = NativeOrAssetId::WithId(SNRG::get());
 
 fn balance(owner: u128) -> u128 {
     <<Test as Config>::Assets>::balance(NATIVE_TOKEN, &owner)
@@ -14,6 +15,10 @@ fn balance(owner: u128) -> u128 {
 
 fn energy_balance(owner: u128) -> u128 {
     <<Test as Config>::Assets>::balance(ENERGY_TOKEN, &owner)
+}
+
+fn static_energy_balance(owner: u128) -> u128 {
+    <<Test as Config>::Assets>::balance(STATIC_ENERGY_TOKEN, &owner)
 }
 
 fn get_ed() -> u128 {
@@ -333,6 +338,36 @@ fn can_not_swap_without_liquidity() {
     });
 }
 
+/// The mirror of `can_not_swap_without_liquidity`: a conversion mints its output, so the broker
+/// holding none of it must not stop the swap. This is why the liquidity check goes through
+/// `AssetConverter::reducible_balance` instead of reading the broker's balance directly.
+#[test]
+fn conversion_does_not_require_liquidity() {
+    new_test_ext().execute_with(|| {
+        let broker = EnergyBroker::account_id();
+        let amount = 1000;
+
+        // Leave the broker with far less energy than the swap must produce.
+        <Test as Config>::Assets::set_balance(ENERGY_TOKEN, &broker, get_energy_ed());
+        assert!(energy_balance(broker) < amount);
+
+        let alice_energy_before = energy_balance(ALICE);
+        let alice_static_before = static_energy_balance(ALICE);
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            ALICE,
+            (STATIC_ENERGY_TOKEN, ENERGY_TOKEN),
+            amount,
+            None,
+            false,
+        ));
+
+        assert_eq!(static_energy_balance(ALICE), alice_static_before - amount);
+        assert_eq!(energy_balance(ALICE), alice_energy_before + amount);
+    });
+}
+
 #[test]
 fn can_not_swap_zero_amount() {
     new_test_ext().execute_with(|| {
@@ -396,6 +431,63 @@ fn can_not_swap_zero_amount() {
             ),
             Error::<Test>::ZeroAmount
         );
+    });
+}
+
+#[test]
+fn energy_sale_is_recorded_for_a_real_trade() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(energy_sold(), 0);
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            ALICE,
+            (ENERGY_TOKEN, NATIVE_TOKEN),
+            1000,
+            None,
+            true,
+        ));
+
+        assert!(energy_sold() > 0);
+    });
+}
+
+#[test]
+fn energy_sale_is_not_recorded_when_recipient_is_the_broker() {
+    new_test_ext().execute_with(|| {
+        let broker = EnergyBroker::account_id();
+        let amount = 1000;
+
+        let broker_energy_before = energy_balance(broker);
+        let capacity_before = EnergyCapacity::<Test>::get();
+        assert_eq!(energy_sold(), 0);
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            broker,
+            (STATIC_ENERGY_TOKEN, ENERGY_TOKEN),
+            amount,
+            None,
+            false,
+        ));
+
+        // The minted output did land on the broker, so the swap really happened ...
+        assert_eq!(energy_balance(broker), broker_energy_before + amount);
+        // ... and it was still not counted as a sale.
+        assert_eq!(energy_sold(), 0);
+        assert_eq!(EnergyCapacity::<Test>::get(), capacity_before);
+
+        // Same swap to an ordinary recipient: also not a sale.
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            ALICE,
+            (STATIC_ENERGY_TOKEN, ENERGY_TOKEN),
+            amount,
+            None,
+            false,
+        ));
+
+        assert_eq!(energy_sold(), 0);
     });
 }
 
