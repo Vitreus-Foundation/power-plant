@@ -674,7 +674,8 @@ impl<T: Config> OnSessionChange for Pallet<T> {
             TotalEnergyBurn::<T>::mutate(|total| total.saturating_accrue(burned));
         }
 
-        if let Some(index) = index.checked_sub(T::BurnedEnergySessionsCount::get() + 1) {
+        let window = T::BurnedEnergySessionsCount::get();
+        if let Some(index) = index.checked_sub(window.saturating_add(1)) {
             if let Some(old_burned) = EnergyBurn::<T>::take(index) {
                 TotalEnergyBurn::<T>::mutate(|total| total.saturating_reduce(old_burned));
             }
