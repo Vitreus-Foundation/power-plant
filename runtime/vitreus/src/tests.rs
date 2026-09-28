@@ -1,5 +1,4 @@
 use super::*;
-use chain_spec::{devnet_config, devnet_keys::alith};
 use ethereum::{TransactionAction, TransactionSignature, TransactionV2};
 use fp_self_contained::SelfContainedCall;
 use frame_support::{
@@ -9,8 +8,25 @@ use frame_support::{
 use pallet_energy_fee::DefaultFeeMultiplier;
 use sp_runtime::{BuildStorage, FixedU128, Perquintill};
 
-pub fn devnet_ext() -> sp_io::TestExternalities {
-    sp_io::TestExternalities::new(devnet_config().build_storage().unwrap())
+fn alith() -> AccountId {
+    AccountId::from(hex_literal::hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"))
+}
+
+fn new_test_ext() -> sp_io::TestExternalities {
+    sp_io::TestExternalities::new(
+        RuntimeGenesisConfig {
+            balances: BalancesConfig { balances: vec![(alith(), 1_000_000 * vtrs::UNITS)] },
+            assets: AssetsConfig {
+                assets: vec![(VNRG::get(), alith(), false, 1)],
+                accounts: vec![(VNRG::get(), alith(), 100_000_000_000_000_000_000)],
+                ..Default::default()
+            },
+            nac_managing: NacManagingConfig { accounts: vec![(alith(), 2)], owners: vec![alith()] },
+            ..Default::default()
+        }
+        .build_storage()
+        .unwrap(),
+    )
 }
 
 fn mock_signature() -> TransactionSignature {
@@ -26,15 +42,13 @@ fn mock_signature() -> TransactionSignature {
 #[test]
 fn configured_base_extrinsic_weight_is_evm_compatible() {
     let min_ethereum_transaction_weight = WeightPerGas::get() * 21_000;
-    let base_extrinsic = <Runtime as frame_system::Config>::BlockWeights::get()
-        .get(frame_support::dispatch::DispatchClass::Normal)
-        .base_extrinsic;
+    let base_extrinsic = BlockWeights::get().get(DispatchClass::Normal).base_extrinsic;
     assert!(base_extrinsic.ref_time() <= min_ethereum_transaction_weight.ref_time());
 }
 
 #[test]
 fn fee_multiplier_update_works() {
-    devnet_ext().execute_with(|| {
+    new_test_ext().execute_with(|| {
         let max_block_weight =
             BlockWeights::get().per_class.get(DispatchClass::Normal).max_total.unwrap();
         let block_weight_a = max_block_weight / 2;
@@ -94,7 +108,21 @@ fn fee_multiplier_update_works() {
 
 #[test]
 fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
-    devnet_ext().execute_with(|| {
+    new_test_ext().execute_with(|| {
+        // A sender without energy buys it with VTRS. Without a rate the fee can't be quoted at all,
+        // and `InvalidTransaction::Payment` would come from that instead of the VTRS balance check.
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+        assert!(
+            <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
+                NativeOrAssetId::Native,
+                NativeOrAssetId::WithId(VNRG::get()),
+                1,
+                true,
+            )
+            .is_some(),
+            "VTRS -> VNRG must be quotable",
+        );
+
         let sample_tx = TransactionV2::Legacy(LegacyTransaction {
             nonce: Default::default(),
             gas_price: 1.into(),

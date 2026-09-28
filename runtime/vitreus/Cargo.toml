@@ -145,7 +145,6 @@ nfts-runtime-api = { workspace = true }
 vitreus-utility-runtime-api = { workspace = true }
 
 [dev-dependencies]
-chain-spec = { workspace = true }
 energy-generation-runtime-api = { workspace = true, default-features = true }
 
 [build-dependencies]
