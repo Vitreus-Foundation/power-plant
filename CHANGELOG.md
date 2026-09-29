@@ -4,6 +4,17 @@ Changelog for the Vitreus runtime.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
+## [Unreleased]
+
+### Changed
+
+- Improve validation and error reporting in `pallet-energy-broker`
+
+### Fixed
+
+- Fix energy sale tracking in `pallet-energy-broker`
+- Roll back failed `pallet-energy-broker` swaps made by other pallets
+
 ## [214] - 2026-09-25
 
 ### Added
