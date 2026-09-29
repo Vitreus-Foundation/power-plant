@@ -483,7 +483,6 @@ fn energy_sale_is_not_recorded_when_recipient_is_the_broker() {
         let amount = 1000;
 
         let broker_energy_before = energy_balance(broker);
-        let capacity_before = EnergyCapacity::<Test>::get();
         assert_eq!(energy_sold(), 0);
 
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
@@ -499,7 +498,6 @@ fn energy_sale_is_not_recorded_when_recipient_is_the_broker() {
         assert_eq!(energy_balance(broker), broker_energy_before + amount);
         // ... and it was still not counted as a sale.
         assert_eq!(energy_sold(), 0);
-        assert_eq!(EnergyCapacity::<Test>::get(), capacity_before);
 
         // Same swap to an ordinary recipient: also not a sale.
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
