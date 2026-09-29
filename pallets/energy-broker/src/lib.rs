@@ -26,7 +26,6 @@ use frame_support::{
             Fortitude::Polite,
             Precision::{BestEffort, Exact},
             Preservation::{Expendable, Preserve},
-            Provenance,
         },
         Contains, OnUnbalanced,
     },
@@ -465,7 +464,7 @@ pub mod pallet {
             fee_part: T::Balance,
             keep_alive: bool,
         ) -> DispatchResult {
-            let (asset_in, asset_out) = path;
+            let (asset_in, _) = path;
             let (amount_in, amount_out) = amounts;
 
             let broker_account = Self::account_id();
@@ -510,10 +509,9 @@ pub mod pallet {
             let credit_out = T::AssetConverter::withdraw(path, &broker_account, amount_out)
                 .map_err(|_| Error::<T>::InsufficientLiquidity)?;
 
-            T::Assets::can_deposit(asset_out.clone(), recipient, amount_out, Provenance::Extant)
-                .into_result()?;
-            // `can_deposit` above passed, so this cannot fail.
-            T::Assets::resolve(recipient, credit_out).map_err(|_| DispatchError::Corruption)?;
+            // Unlike `resolve`, `deposit` reports why the recipient cannot take the output.
+            let debt = T::Assets::deposit(credit_out.asset(), recipient, credit_out.peek(), Exact)?;
+            let _ = credit_out.offset(debt);
 
             if !energy_deposited.is_zero() {
                 Self::burn_surplus_energy(&broker_account);
