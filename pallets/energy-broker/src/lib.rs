@@ -132,7 +132,7 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// A successful call of the `ForceAddLiquidity` extrinsic will create this event.
+        /// Liquidity was added to the broker by `force_add_liquidity`.
         LiquidityAdded {
             /// The account that the liquidity was taken from.
             source: T::AccountId,
@@ -141,31 +141,31 @@ pub mod pallet {
             /// The amount that was added.
             amount: T::Balance,
         },
-        /// Assets have been converted from one to another. Both `SwapExactTokenForToken`
-        /// and `SwapTokenForExactToken` will generate this event.
+        /// A swap was executed, by a swap extrinsic or on behalf of another pallet.
         SwapExecuted {
-            /// Which account was the instigator of the swap.
+            /// The account the input was taken from.
             who: T::AccountId,
-            /// The account that the assets were transferred to.
+            /// The account that received the output.
             recipient: T::AccountId,
             /// The swapped assets.
             path: (T::AssetKind, T::AssetKind),
-            /// The amount of the first asset that was swapped.
+            /// The amount of the first asset taken from `who`, the fee included.
             amount_in: T::Balance,
             /// The amount of the second asset that was received.
             amount_out: T::Balance,
         },
-        /// Some energy was burned.
+        /// Energy above the warehouse capacity was burned.
         EnergyBurned {
             /// The amount that was burned.
             amount: T::Balance,
         },
-        /// The energy capacity was forcibly set.
+        /// The capacity override was set, or removed with `None`; it applies from the next session.
         EnergyCapacityForceSet {
-            /// The capacity.
+            /// The override, or `None` to derive the capacity from the energy burned in the last
+            /// `BurnedEnergySessionsCount` sessions.
             amount: Option<T::Balance>,
         },
-        /// The energy capacity was updated.
+        /// The capacity was set for the new session, possibly unchanged.
         EnergyCapacityUpdated {
             /// The capacity.
             amount: T::Balance,
