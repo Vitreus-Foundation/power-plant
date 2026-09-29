@@ -5,7 +5,9 @@ use crate as pallet_energy_broker;
 
 use frame_support::{
     construct_runtime, derive_impl, parameter_types,
-    traits::{tokens::imbalance::ResolveAssetTo, AsEnsureOriginWithArg, ConstU128, ConstU32, Equals},
+    traits::{
+        tokens::imbalance::ResolveAssetTo, AsEnsureOriginWithArg, ConstU128, ConstU32, Equals,
+    },
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use sp_runtime::{traits::IdentityLookup, BuildStorage, FixedPointNumber, FixedU128};

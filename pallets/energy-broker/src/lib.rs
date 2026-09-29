@@ -32,7 +32,9 @@ use frame_support::{
     PalletId,
 };
 use sp_runtime::{
-    traits::{AccountIdConversion, Bounded, CheckedDiv, CheckedMul, Ensure, Get, StaticLookup, Zero},
+    traits::{
+        AccountIdConversion, Bounded, CheckedDiv, CheckedMul, Ensure, Get, StaticLookup, Zero,
+    },
     DispatchError, Saturating, TokenError, Vec,
 };
 use vitreus_runtime_common::{
