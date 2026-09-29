@@ -176,7 +176,8 @@ pub mod pallet {
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
         /// `Some(amount)` fixes the capacity at a non-zero `amount` until `force_set_capacity`
-        /// changes it; `None` lets it follow the energy burn, unlimited until the first burn.
+        /// changes it. `None` leaves it unlimited until some energy is burned, and from then on
+        /// derives it from the energy burned in the last `BurnedEnergySessionsCount` sessions.
         pub energy_capacity: Option<T::Balance>,
     }
 
@@ -310,7 +311,8 @@ pub mod pallet {
         /// Override the energy capacity, starting from the next session.
         ///
         /// `Some(amount)` sets the capacity to `amount`, which must be non-zero; `None` removes the
-        /// override so the capacity follows the energy burn again.
+        /// override, so the capacity is derived from the energy burned in the last
+        /// `BurnedEnergySessionsCount` sessions.
         #[pallet::call_index(11)]
         #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn force_set_capacity(
