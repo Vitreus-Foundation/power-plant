@@ -54,7 +54,10 @@ jobs:
           sudo apt-get install -y protobuf-compiler libclang-dev libssl-dev
 
       # Before build and test: check mode reports compile errors and lints sooner.
+      # Clippy lints only native code, so it skips the wasm build; `cargo build` does it.
       - run: cargo clippy --locked --features ${{ matrix.feature }} --workspace --all-targets -- --deny warnings
+        env:
+          SKIP_WASM_BUILD: 1
 
       - run: cargo build --locked --features ${{ matrix.feature }}
 
