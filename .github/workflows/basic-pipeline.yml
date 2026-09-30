@@ -3,20 +3,40 @@ name: Code Hygiene
 on:
   workflow_dispatch:
   pull_request:
-    branches:
-      - develop
-      - testnet
-      - stagenet
-      - mainnet
+
+permissions:
+  contents: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  rust:
-    name: "cargo check"
+  fmt:
+    name: "cargo fmt"
     runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # The toolchain from rust-toolchain.toml: every option in rustfmt.toml is stable.
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          components: rustfmt
+          cache: false
+
+      - run: cargo fmt -- --check
+
+  rust:
+    name: "cargo clippy, build, test"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [testnet-native, mainnet-native]
 
     env:
       CARGO_TERM_COLOR: always
@@ -27,29 +47,15 @@ jobs:
       - uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           target: wasm32-unknown-unknown
-          components: rustfmt clippy rust-src
+          components: clippy rust-src
 
-      - run: sudo apt-get install protobuf-compiler jq ripgrep libclang-dev libssl-dev -y
+      - run: |
+          sudo apt-get update
+          sudo apt-get install -y protobuf-compiler libclang-dev libssl-dev
 
-      - name: Set feature flag
-        id: feature
-        run: |
-          if [[ "${{ github.ref_name }}" == "mainnet" ]]; then
-            echo "FEATURE_FLAG=mainnet-native" >> $GITHUB_ENV
-          elif [[ "${{ github.ref_name }}" == "stagenet" ]]; then
-            echo "FEATURE_FLAG=mainnet-native" >> $GITHUB_ENV
-          else
-            echo "FEATURE_FLAG=testnet-native" >> $GITHUB_ENV
-          fi
+      # Before build and test: check mode reports compile errors and lints sooner.
+      - run: cargo clippy --locked --features ${{ matrix.feature }} --workspace --all-targets -- --deny warnings
 
-      - run: cargo build --locked --features $FEATURE_FLAG
+      - run: cargo build --locked --features ${{ matrix.feature }}
 
-      - run: cargo test --features $FEATURE_FLAG --workspace --locked
-
-      - name: Check format
-        run: |
-          rustup toolchain add nightly-x86_64-unknown-linux-gnu
-          rustup component add --toolchain nightly-x86_64-unknown-linux-gnu rustfmt
-          cargo +nightly fmt -- --check
-
-      - run: cargo clippy --features $FEATURE_FLAG --all-targets -- --deny warnings
+      - run: cargo test --features ${{ matrix.feature }} --workspace --locked
