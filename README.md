@@ -161,6 +161,22 @@ cargo test -p pallet-energy-broker
 - Ensure comprehensive test coverage
 - Include benchmarks for new features
 
+### Changelog and runtime releases
+
+In a regular PR:
+
+- add entries for your changes to [CHANGELOG.md](CHANGELOG.md) under `[Unreleased]`, or tick
+  "Does not require a CHANGELOG entry" in the PR description;
+- add storage migrations to `migrations::Unreleased`;
+- don't change `spec_version`.
+
+A runtime release is a "Runtime version N" PR that does all of this at once:
+
+- moves the `[Unreleased]` entries of CHANGELOG.md into a new `## [N] - YYYY-MM-DD` section right
+  below the (now empty) `## [Unreleased]`;
+- bumps `spec_version` to N;
+- moves the `Unreleased` migrations into `V0<N>`.
+
 ## Documentation
 
 - [Pallet Documentation](./pallets/ExtrinsicLib.md)
