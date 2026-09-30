@@ -138,7 +138,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 }
 
 pub(crate) fn total() -> u64 {
-    crate::CurrencyOf::<Test, ()>::free_balance(&Claiming::claim_account_id())
+    crate::CurrencyOf::<Test, ()>::free_balance(Claiming::claim_account_id())
 }
 
 pub(crate) fn alice() -> libsecp256k1::SecretKey {

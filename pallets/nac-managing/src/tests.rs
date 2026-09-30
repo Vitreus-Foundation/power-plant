@@ -29,7 +29,7 @@ const VANGUARD_1_REPUTATION_POINT: u64 = 7398066;
 fn get_claimed(collection_id: CollectionId, item_id: ItemId) -> BalanceOf<Test> {
     let claimed_raw =
         Nfts::system_attribute(&collection_id, Some(&item_id), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-            .unwrap_or(vec![]);
+            .unwrap_or_default();
     BalanceOf::<Test>::decode(&mut claimed_raw.as_slice()).unwrap_or(BalanceOf::<Test>::default())
 }
 
@@ -137,8 +137,8 @@ fn on_claim_should_work() {
 
         assert_ok!(NacManaging::create_collection(&owner));
 
-        NacManaging::do_mint(item_id, owner.clone()).expect("Minting failed");
-        NacManaging::update_nft_info(&collection_id, &item_id, nac_level, owner.clone())
+        NacManaging::do_mint(item_id, owner).expect("Minting failed");
+        NacManaging::update_nft_info(&collection_id, &item_id, nac_level, owner)
             .expect("Error updating nft info");
 
         let claimed = get_claimed(collection_id, item_id);
