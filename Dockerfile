@@ -1,6 +1,6 @@
 # Stage 1: Build the application
 
-FROM rust:1.83 AS builder
+FROM rust:1.84.1 AS builder
 
 ARG PROFILE=release
 ARG BUILD_FEATURES
