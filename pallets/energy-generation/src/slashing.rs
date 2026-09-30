@@ -156,7 +156,7 @@ impl SlashingSpans {
         let old_idx = self
             .iter()
             .skip(1) // skip ongoing span.
-            .position(|span| span.length.map_or(false, |len| span.start + len <= window_start));
+            .position(|span| span.length.is_some_and(|len| span.start + len <= window_start));
 
         let earliest_span_index = self.span_index - self.prior.len() as SpanIndex;
         let pruned = match old_idx {
