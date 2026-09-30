@@ -44,16 +44,16 @@ pub struct OtherSessionHandler;
 impl OneSessionHandler<AccountId> for OtherSessionHandler {
     type Key = UintAuthorityId;
 
-    fn on_genesis_session<'a, I: 'a>(_: I)
+    fn on_genesis_session<'a, I>(_: I)
     where
-        I: Iterator<Item = (&'a AccountId, Self::Key)>,
+        I: 'a + Iterator<Item = (&'a AccountId, Self::Key)>,
         AccountId: 'a,
     {
     }
 
-    fn on_new_session<'a, I: 'a>(_: bool, _: I, _: I)
+    fn on_new_session<'a, I>(_: bool, _: I, _: I)
     where
-        I: Iterator<Item = (&'a AccountId, Self::Key)>,
+        I: 'a + Iterator<Item = (&'a AccountId, Self::Key)>,
         AccountId: 'a,
     {
     }
@@ -843,11 +843,13 @@ pub(crate) fn on_offence_in_era(
 ) {
     let bonded_eras = crate::BondedEras::<Test>::get();
     for &(bonded_era, start_session) in bonded_eras.iter() {
-        if bonded_era == era {
-            let _ = PowerPlant::on_offence(offenders, slash_fraction, start_session);
-            return;
-        } else if bonded_era > era {
-            break;
+        match bonded_era.cmp(&era) {
+            sp_std::cmp::Ordering::Equal => {
+                let _ = PowerPlant::on_offence(offenders, slash_fraction, start_session);
+                return;
+            },
+            sp_std::cmp::Ordering::Greater => break,
+            sp_std::cmp::Ordering::Less => continue,
         }
     }
 

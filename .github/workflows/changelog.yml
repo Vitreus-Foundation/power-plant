@@ -1,0 +1,41 @@
+name: Changelog
+
+on:
+  pull_request:
+    # The mainline and hotfix branches only, not stacked PRs into feature branches.
+    branches: [develop, 'hotfix/**']
+    # `edited` re-runs the checks when the PR description changes, e.g. when the
+    # "Does not require a CHANGELOG entry" box gets ticked.
+    types: [opened, reopened, synchronize, edited]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changelog:
+    name: "CHANGELOG"
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      # HEAD is GitHub's merge commit for the PR; its first parent, HEAD^1, is the base branch.
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Check CHANGELOG.md is updated
+        # Ticking "Does not require a CHANGELOG entry" (see pull_request_template.md) skips this
+        # step. The body is only read here, in the expression, never inside the script.
+        if: ${{ !contains(github.event.pull_request.body, '[x] Does not require a CHANGELOG entry') }}
+        run: python3 .github/scripts/changelog.py updated --base HEAD^1
+
+      - name: Check CHANGELOG and spec_version
+        # Always runs, even when CHANGELOG.md is unchanged and the box is ticked: a PR that only
+        # bumps spec_version in lib.rs must fail here. `!cancelled()` also runs it after the
+        # previous step fails, so both problems show up at once.
+        if: ${{ !cancelled() }}
+        run: python3 .github/scripts/changelog.py check --base HEAD^1

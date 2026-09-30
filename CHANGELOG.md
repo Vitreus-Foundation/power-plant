@@ -2,7 +2,10 @@
 
 Changelog for the Vitreus runtime.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
+The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+Versions are the runtime's `spec_version`, not [Semantic Versioning](https://semver.org/).
+
+## [Unreleased]
 
 ## [Unreleased]
 

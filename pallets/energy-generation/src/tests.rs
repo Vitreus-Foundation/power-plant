@@ -1336,7 +1336,7 @@ fn bond_extra_works() {
         );
 
         // Call the bond_extra function with a large number, should handle it
-        assert_ok!(PowerPlant::bond_extra(RuntimeOrigin::signed(11), Balance::max_value()));
+        assert_ok!(PowerPlant::bond_extra(RuntimeOrigin::signed(11), Balance::MAX));
         // The full amount of the funds should now be in the total and active
         assert_eq!(
             PowerPlant::ledger(10),
@@ -1519,10 +1519,9 @@ fn many_unbond_calls_should_work() {
 
         // even though the number of unlocked chunks is the same as `MaxUnlockingChunks`,
         // unbonding works as expected.
-        for i in current_era..(current_era + max_unlocking_chunks) - 1 {
+        for era in current_era..(current_era + max_unlocking_chunks) - 1 {
             // There is only 1 chunk per era, so we need to be in a new era to create a chunk.
-            current_era = i;
-            mock::start_active_era(current_era);
+            mock::start_active_era(era);
             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(10), 1));
         }
 
@@ -2246,7 +2245,6 @@ fn reward_validator_slashing_validator_does_not_overflow() {
         ErasEnergyPerStakeCurrency::<Test>::insert(0, FixedU128::from_u32(1));
         mock::start_active_era(1);
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 0));
-        assert!(Assets::balance(VNRG::get(), 10) <= Balance::MAX);
 
         // Set staker
         let _ = Balances::make_free_balance_be(&11, stake);
@@ -2420,7 +2418,7 @@ fn offence_deselects_validator_even_when_slash_is_zero() {
 
             on_offence_now(
                 &[OffenceDetails {
-                    offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                     reporters: vec![],
                 }],
                 &[Perbill::from_percent(0)],
@@ -2817,7 +2815,7 @@ fn only_slash_for_max_in_era() {
 
         on_offence_now(
             &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                 reporters: vec![],
             }],
             &[Perbill::from_percent(50)],
@@ -2833,7 +2831,7 @@ fn only_slash_for_max_in_era() {
 
         on_offence_now(
             &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                 reporters: vec![],
             }],
             &[Perbill::from_percent(25)],
@@ -2848,7 +2846,7 @@ fn only_slash_for_max_in_era() {
 
         on_offence_now(
             &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                 reporters: vec![],
             }],
             &[Perbill::from_percent(60)],
