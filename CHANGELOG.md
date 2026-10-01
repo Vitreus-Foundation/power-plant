@@ -7,6 +7,10 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- Add `max_amount_out` to the EnergyBroker runtime API to query how much a swap path can supply
+
 ### Changed
 
 - Improve validation and error reporting in `pallet-energy-broker`

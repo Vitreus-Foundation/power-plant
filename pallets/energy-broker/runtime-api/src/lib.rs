@@ -4,7 +4,7 @@ use parity_scale_codec::{Decode, Encode};
 use sp_runtime::{FixedU128, Percent, Vec};
 
 sp_api::decl_runtime_apis! {
-    #[api_version(3)]
+    #[api_version(4)]
     pub trait EnergyBrokerApi<AccountId, AssetKind, Balance>
     where
         AccountId: Encode,
@@ -18,6 +18,9 @@ sp_api::decl_runtime_apis! {
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance>;
 
         /// Quotes the amount of `asset2` resulting from swapping the exact `amount` of `asset1`.
+        ///
+        /// Does not account for available liquidity. The most `asset2` the path can supply is
+        /// [`Self::max_amount_out`].
         fn quote_price_exact_tokens_for_tokens(
             who: Option<AccountId>,
             asset1: AssetKind,
@@ -27,6 +30,9 @@ sp_api::decl_runtime_apis! {
         ) -> Option<Balance>;
 
         /// Quotes the amount of `asset1` required to obtain the exact `amount` of `asset2`.
+        ///
+        /// Does not account for available liquidity. The most `asset2` the path can supply is
+        /// [`Self::max_amount_out`].
         fn quote_price_tokens_for_exact_tokens(
             who: Option<AccountId>,
             asset1: AssetKind,
@@ -43,5 +49,11 @@ sp_api::decl_runtime_apis! {
 
         /// Returns the supported swap paths.
         fn paths() -> Vec<(AssetKind, AssetKind)>;
+
+        /// The maximum amount of `asset2` the path `(asset1, asset2)` can currently supply.
+        ///
+        /// A path not in [`Self::paths`] returns zero. An unbounded path returns
+        /// `Balance::max_value()`.
+        fn max_amount_out(asset1: AssetKind, asset2: AssetKind) -> Balance;
     }
 }

@@ -342,6 +342,14 @@ pub mod pallet {
             T::AssetConverter::swap_fee(path).unwrap_or_else(T::SwapFee::get)
         }
 
+        /// The maximum amount of the output asset that `path` can currently supply.
+        ///
+        /// An unsupported path returns zero. A path that mints its output is unbounded and returns
+        /// `Balance::max_value()`.
+        pub fn max_amount_out(path: &(T::AssetKind, T::AssetKind)) -> T::Balance {
+            T::AssetConverter::reducible_balance(path, &Self::account_id())
+        }
+
         /// Calculates amount out.
         ///
         /// Given an input amount and swap path, returns the output amount
@@ -482,7 +490,7 @@ pub mod pallet {
                 ensure!(free >= amount_in, TokenError::NotExpendable);
             }
 
-            let liquidity = T::AssetConverter::reducible_balance(path, &broker_account);
+            let liquidity = Self::max_amount_out(path);
             ensure!(liquidity >= amount_out, Error::<T>::InsufficientLiquidity);
 
             let energy_before_input = T::Assets::balance(T::EnergyAsset::get(), &broker_account);

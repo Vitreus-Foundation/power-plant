@@ -288,11 +288,7 @@ impl TreasuryExchange<AccountId, Balance> for EnergyBrokerExchange {
         )
     }
     fn depth() -> Balance {
-        use frame_support::traits::{
-            fungible::Inspect as _,
-            tokens::{Fortitude::Polite, Preservation::Preserve},
-        };
-        Balances::reducible_balance(&EnergyBroker::account_id(), Preserve, Polite)
+        EnergyBroker::max_amount_out(&(LnrgAssetKind::get(), NativeOrAssetId::Native))
     }
     fn sell(who: &AccountId, lnrg: Balance, min_native: Balance) -> Result<Balance, DispatchError> {
         <EnergyBroker as vitreus_runtime_common::Swap<AccountId>>::swap_exact_tokens_for_tokens(
