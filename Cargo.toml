@@ -413,3 +413,10 @@ vitreus-cli = { path = "cli" }
 vitreus-runtime-common = { path = "runtime/common", default-features = false }
 vitreus-power-plant-runtime = { path = "runtime/vitreus", default-features = false }
 vitreus-service = { path = "node/service", default-features = false }
+
+# Release runtimes are built by srtool with `PROFILE=production`. The wasm gets wasm-builder's
+# built-in production profile, so for the wasm this section only makes the name valid.
+[profile.production]
+inherits = "release"
+lto = true
+codegen-units = 1
