@@ -393,6 +393,63 @@ fn conversion_does_not_require_liquidity() {
 }
 
 #[test]
+fn max_amount_out_works() {
+    new_test_ext().execute_with(|| {
+        let broker = EnergyBroker::account_id();
+
+        // The broker's energy, less the deposit that keeps its account alive.
+        assert_eq!(
+            EnergyBroker::max_amount_out(&(NATIVE_TOKEN, ENERGY_TOKEN)),
+            INITIAL_ENERGY_BALANCE - get_energy_ed()
+        );
+
+        <Test as Config>::Assets::set_balance(ENERGY_TOKEN, &broker, get_energy_ed());
+        assert_eq!(EnergyBroker::max_amount_out(&(NATIVE_TOKEN, ENERGY_TOKEN)), 0);
+
+        assert_eq!(EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, ENERGY_TOKEN)), u128::MAX);
+
+        assert_eq!(EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, NATIVE_TOKEN)), 0);
+    });
+}
+
+/// `max_amount_out` is exactly the limit `do_swap` enforces: a swap for that much goes through,
+/// one unit more fails.
+#[test]
+fn can_swap_up_to_max_amount_out() {
+    new_test_ext().execute_with(|| {
+        let broker = EnergyBroker::account_id();
+        let liquidity = 100;
+
+        for path in [(NATIVE_TOKEN, ENERGY_TOKEN), (ENERGY_TOKEN, NATIVE_TOKEN)] {
+            set_balances(broker, liquidity + get_ed(), liquidity + get_energy_ed());
+            assert_eq!(EnergyBroker::max_amount_out(&path), liquidity);
+
+            assert_noop!(
+                EnergyBroker::swap_tokens_for_exact_tokens(
+                    RuntimeOrigin::signed(ALICE),
+                    ALICE,
+                    path.clone(),
+                    liquidity + 1,
+                    None,
+                    true
+                ),
+                Error::<Test>::InsufficientLiquidity
+            );
+
+            assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
+                RuntimeOrigin::signed(ALICE),
+                ALICE,
+                path.clone(),
+                liquidity,
+                None,
+                true
+            ));
+            assert_eq!(EnergyBroker::max_amount_out(&path), 0);
+        }
+    });
+}
+
+#[test]
 fn can_not_swap_zero_amount() {
     new_test_ext().execute_with(|| {
         assert_noop!(

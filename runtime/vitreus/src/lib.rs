@@ -2996,6 +2996,10 @@ impl_runtime_apis! {
 
             <Runtime as pallet_energy_broker::Config>::AssetConverter::paths()
         }
+
+        fn max_amount_out(asset1: NativeOrAssetId, asset2: NativeOrAssetId) -> Balance {
+            EnergyBroker::max_amount_out(&(asset1, asset2))
+        }
     }
 
     impl energy_fee_runtime_api::EnergyFeeApi<Block, AccountId, Balance, RuntimeCall> for Runtime {
