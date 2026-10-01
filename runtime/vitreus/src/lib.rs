@@ -168,7 +168,7 @@ mod xcm_config;
 #[cfg(feature = "testnet-runtime")]
 mod launchpad;
 
-#[cfg(all(test, feature = "testnet-runtime"))]
+#[cfg(test)]
 mod tests;
 
 use precompiles::VitreusPrecompiles;
