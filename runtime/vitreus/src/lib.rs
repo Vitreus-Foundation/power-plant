@@ -173,6 +173,26 @@ mod tests;
 
 use precompiles::VitreusPrecompiles;
 
+// `#[sp_version::runtime_version]` bakes `spec_name` into the wasm section and accepts only a
+// string literal, so each network has its own literal. The remaining fields are supplied once.
+macro_rules! decl_runtime_version {
+    ($($fields:tt)*) => {
+        #[cfg(feature = "mainnet-runtime")]
+        #[sp_version::runtime_version]
+        pub const VERSION: RuntimeVersion = RuntimeVersion {
+            spec_name: create_runtime_str!("vitreus-power-plant"),
+            $($fields)*
+        };
+
+        #[cfg(feature = "testnet-runtime")]
+        #[sp_version::runtime_version]
+        pub const VERSION: RuntimeVersion = RuntimeVersion {
+            spec_name: create_runtime_str!("vitreus-power-plant-testnet"),
+            $($fields)*
+        };
+    };
+}
+
 /// Type of block number.
 pub type BlockNumber = u32;
 
@@ -260,9 +280,8 @@ pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
         allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryVRFSlots,
     };
 
-#[sp_version::runtime_version]
-pub const VERSION: RuntimeVersion = RuntimeVersion {
-    spec_name: create_runtime_str!("vitreus-power-plant"),
+// Each network gets its own `spec_name`, see `decl_runtime_version!` above.
+decl_runtime_version! {
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
     spec_version: 214,
@@ -270,7 +289,7 @@ pub const VERSION: RuntimeVersion = RuntimeVersion {
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 4,
     state_version: 1,
-};
+}
 
 // Time measurmement primitive
 pub type Moment = u64;
