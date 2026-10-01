@@ -7,8 +7,6 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
-## [Unreleased]
-
 ### Changed
 
 - Improve validation and error reporting in `pallet-energy-broker`
