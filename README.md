@@ -72,7 +72,7 @@ Vitreus consists of several specialized pallets working in harmony:
 
 ### Prerequisites
 
-- Rust 1.74 or later
+- Rust 1.84.1 or later
 - `wasm32-unknown-unknown` target
 - Node.js (for testing)
 
