@@ -223,7 +223,7 @@ mod energy_broker {
         let alith_input_before = asset_balance(&input, &alith());
         let broker_vnrg_before = asset_balance(&vnrg, &broker);
         let broker_input_before = asset_balance(&input, &broker);
-        let broker_native_before = Balances::free_balance(&broker);
+        let broker_native_before = Balances::free_balance(broker);
         let sale_before = energy_sale();
 
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
@@ -250,7 +250,7 @@ mod energy_broker {
         // Minted, not drawn: none of the broker's holdings move.
         assert_eq!(asset_balance(&vnrg, &broker), broker_vnrg_before);
         assert_eq!(asset_balance(&input, &broker), broker_input_before);
-        assert_eq!(Balances::free_balance(&broker), broker_native_before);
+        assert_eq!(Balances::free_balance(broker), broker_native_before);
 
         // Converting between energy assets is not a trade, so it must not feed the rate.
         assert_eq!(energy_sale(), sale_before);
