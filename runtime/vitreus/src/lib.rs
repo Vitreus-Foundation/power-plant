@@ -1106,6 +1106,11 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToEnergyConverter {
         Some(amount_out)
     }
 
+    /// The output is minted, so it is unbounded.
+    fn reducible_balance(_broker: &AccountId) -> Balance {
+        Balance::MAX
+    }
+
     fn withdraw(
         _broker: &AccountId,
         value: Balance,
@@ -1137,6 +1142,11 @@ impl FixedPathAssetConverter<Runtime> for StaticEnergyToEnergyConverter {
 
     fn get_amount_in(amount_out: Balance) -> Option<Balance> {
         Some(amount_out)
+    }
+
+    /// The output is minted, so it is unbounded.
+    fn reducible_balance(_broker: &AccountId) -> Balance {
+        Balance::MAX
     }
 
     fn withdraw(
@@ -1173,7 +1183,6 @@ impl pallet_energy_broker::Config for Runtime {
     type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
     type OnEnergySell = DynamicEnergy;
     type SwapFee = SwapFee;
-    type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
     type BurnedEnergySessionsCount = BurnedEnergySessionsCount;
 }

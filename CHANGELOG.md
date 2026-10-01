@@ -7,6 +7,15 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Changed
+
+- Improve validation and error reporting in `pallet-energy-broker`
+
+### Fixed
+
+- Fix energy sale tracking in `pallet-energy-broker`
+- Roll back failed `pallet-energy-broker` swaps made by other pallets
+
 ## [214] - 2026-09-25
 
 ### Added

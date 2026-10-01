@@ -18,6 +18,7 @@ mod mock;
 pub use pallet::*;
 
 use frame_support::{
+    storage::with_storage_layer,
     traits::{
         fungibles::{Balanced, Credit, Inspect, Mutate},
         tokens::{
@@ -32,8 +33,7 @@ use frame_support::{
 };
 use sp_runtime::{
     traits::{
-        AccountIdConversion, CheckedDiv, CheckedMul, Ensure, Get, IntegerSquareRoot, One,
-        StaticLookup, Zero,
+        AccountIdConversion, Bounded, CheckedDiv, CheckedMul, Ensure, Get, StaticLookup, Zero,
     },
     DispatchError, Saturating, TokenError, Vec,
 };
@@ -48,9 +48,11 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
-    use sp_arithmetic::traits::Unsigned;
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+
+    /// Denominator of swap fees: a fee of 10 takes 10 / 1000 of the input amount, i.e. 1%.
+    const FEE_DENOMINATOR: u32 = 1000;
 
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]
@@ -68,10 +70,7 @@ pub mod pallet {
         type Balance: Balance;
 
         /// A type used for calculations concerning the `Balance` type to avoid possible overflows.
-        type HigherPrecisionBalance: IntegerSquareRoot
-            + One
-            + Ensure
-            + Unsigned
+        type HigherPrecisionBalance: Ensure
             + From<u32>
             + From<Self::Balance>
             + TryInto<Self::Balance>;
@@ -100,15 +99,12 @@ pub mod pallet {
         #[pallet::constant]
         type SwapFee: Get<u32>;
 
-        /// Identifier of native asset.
-        #[pallet::constant]
-        type NativeAsset: Get<Self::AssetKind>;
-
         /// Identifier of energy asset.
         #[pallet::constant]
         type EnergyAsset: Get<Self::AssetKind>;
 
         /// The count of sessions used for calculating burned energy.
+        /// Decreasing it requires a migration, or stale entries stay in `TotalEnergyBurn` forever.
         #[pallet::constant]
         type BurnedEnergySessionsCount: Get<u32>;
     }
@@ -137,7 +133,7 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
-        /// A successful call of the `ForceAddLiquidity` extrinsic will create this event.
+        /// Liquidity was added to the broker by `force_add_liquidity`.
         LiquidityAdded {
             /// The account that the liquidity was taken from.
             source: T::AccountId,
@@ -146,31 +142,31 @@ pub mod pallet {
             /// The amount that was added.
             amount: T::Balance,
         },
-        /// Assets have been converted from one to another. Both `SwapExactTokenForToken`
-        /// and `SwapTokenForExactToken` will generate this event.
+        /// A swap was executed, by a swap extrinsic or on behalf of another pallet.
         SwapExecuted {
-            /// Which account was the instigator of the swap.
+            /// The account the input was taken from.
             who: T::AccountId,
-            /// The account that the assets were transferred to.
+            /// The account that received the output.
             recipient: T::AccountId,
             /// The swapped assets.
             path: (T::AssetKind, T::AssetKind),
-            /// The amount of the first asset that was swapped.
+            /// The amount of the first asset taken from `who`, the fee included.
             amount_in: T::Balance,
             /// The amount of the second asset that was received.
             amount_out: T::Balance,
         },
-        /// Some energy was burned.
+        /// Energy above the warehouse capacity was burned.
         EnergyBurned {
             /// The amount that was burned.
             amount: T::Balance,
         },
-        /// The energy capacity was forcibly set.
+        /// The capacity override was set, or removed with `None`; it applies from the next session.
         EnergyCapacityForceSet {
-            /// The capacity.
+            /// The override, or `None` to derive the capacity from the energy burned in the last
+            /// `BurnedEnergySessionsCount` sessions.
             amount: Option<T::Balance>,
         },
-        /// The energy capacity was updated.
+        /// The capacity was set for the new session, possibly unchanged.
         EnergyCapacityUpdated {
             /// The capacity.
             amount: T::Balance,
@@ -180,38 +176,61 @@ pub mod pallet {
     #[pallet::genesis_config]
     #[derive(frame_support::DefaultNoBound)]
     pub struct GenesisConfig<T: Config> {
-        /// Initial energy capacity.
-        pub energy_capacity: T::Balance,
+        /// `Some(amount)` fixes the capacity at a non-zero `amount` until `force_set_capacity`
+        /// changes it. `None` leaves it unlimited until some energy is burned, and from then on
+        /// derives it from the energy burned in the last `BurnedEnergySessionsCount` sessions.
+        pub energy_capacity: Option<T::Balance>,
     }
 
     #[pallet::genesis_build]
     impl<T: Config> BuildGenesisConfig for GenesisConfig<T> {
         fn build(&self) {
-            EnergyCapacity::<T>::put(self.energy_capacity);
-            EnergyCapacityOverride::<T>::put(self.energy_capacity);
+            match self.energy_capacity {
+                Some(capacity) => {
+                    assert!(!capacity.is_zero(), "energy capacity must be non-zero");
+                    EnergyCapacity::<T>::put(capacity);
+                    EnergyCapacityOverride::<T>::put(capacity);
+                },
+                None => EnergyCapacity::<T>::put(T::Balance::max_value()),
+            }
         }
     }
 
     #[pallet::error]
     pub enum Error<T> {
-        /// An overflow happened.
+        /// An arithmetic overflow happened, or the swap fee is 100% or more.
         Overflow,
         /// Amount can't be zero.
         ZeroAmount,
-        /// The destination account cannot exist with the swapped funds.
-        BelowMinimum,
+        /// The broker could not take the swap input.
+        DepositFailed,
         /// Insufficient liquidity in the energy broker.
         InsufficientLiquidity,
         /// Calculated amount out is less than provided minimum amount.
         ProvidedMinimumNotSufficientForSwap,
         /// Provided maximum amount is not sufficient for swap.
         ProvidedMaximumNotSufficientForSwap,
-        /// The provided path contains an invalid asset.
+        /// The path is not supported, or its converter cannot price the swap, e.g. because no
+        /// exchange rate is set.
         InvalidPath,
     }
 
     #[pallet::hooks]
-    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {}
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn integrity_test() {
+            assert!(
+                T::BurnedEnergySessionsCount::get() > 0,
+                "BurnedEnergySessionsCount must be non-zero"
+            );
+
+            for path in T::AssetConverter::paths() {
+                assert!(
+                    Self::swap_fee(&path) < FEE_DENOMINATOR,
+                    "swap fee for {path:?} must be below {FEE_DENOMINATOR}"
+                );
+            }
+        }
+    }
 
     /// Pallet's callable functions.
     #[pallet::call]
@@ -275,6 +294,7 @@ pub mod pallet {
             keep_alive: bool,
         ) -> DispatchResult {
             T::ManageOrigin::ensure_origin(origin)?;
+            ensure!(!amount.is_zero(), Error::<T>::ZeroAmount);
 
             let source = T::Lookup::lookup(source)?;
             let preservation = match keep_alive {
@@ -289,7 +309,11 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Force set the energy capacity.
+        /// Override the energy capacity, starting from the next session.
+        ///
+        /// `Some(amount)` sets the capacity to `amount`, which must be non-zero; `None` removes the
+        /// override, so the capacity is derived from the energy burned in the last
+        /// `BurnedEnergySessionsCount` sessions.
         #[pallet::call_index(11)]
         #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn force_set_capacity(
@@ -297,6 +321,7 @@ pub mod pallet {
             amount: Option<T::Balance>,
         ) -> DispatchResult {
             T::ManageOrigin::ensure_origin(origin)?;
+            ensure!(amount != Some(Zero::zero()), Error::<T>::ZeroAmount);
 
             EnergyCapacityOverride::<T>::set(amount);
             Self::deposit_event(Event::EnergyCapacityForceSet { amount });
@@ -379,10 +404,6 @@ pub mod pallet {
             amount_out_min: Option<T::Balance>,
             keep_alive: bool,
         ) -> Result<T::Balance, DispatchError> {
-            if let Some(amount_out_min) = amount_out_min {
-                ensure!(amount_out_min > Zero::zero(), Error::<T>::ZeroAmount);
-            }
-
             let include_fee = !T::FeelessAccounts::contains(&sender);
             let (amount_out, fee) = Self::get_amount_out(amount_in, &path, include_fee)?;
 
@@ -414,10 +435,6 @@ pub mod pallet {
             amount_in_max: Option<T::Balance>,
             keep_alive: bool,
         ) -> Result<T::Balance, DispatchError> {
-            if let Some(amount_in_max) = amount_in_max {
-                ensure!(amount_in_max > Zero::zero(), Error::<T>::ZeroAmount);
-            }
-
             let include_fee = !T::FeelessAccounts::contains(&sender);
             let (amount_in, fee) = Self::get_amount_in(amount_out, &path, include_fee)?;
 
@@ -465,7 +482,10 @@ pub mod pallet {
                 ensure!(free >= amount_in, TokenError::NotExpendable);
             }
 
-            let energy_before_swap = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
+            let liquidity = T::AssetConverter::reducible_balance(path, &broker_account);
+            ensure!(liquidity >= amount_out, Error::<T>::InsufficientLiquidity);
+
+            let energy_before_input = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
 
             // transfer from the sender to the broker
             let mut credit_in = T::Assets::withdraw(
@@ -480,20 +500,25 @@ pub mod pallet {
             T::SwapFeeTarget::on_unbalanced(credit_in.extract(fee_part));
 
             T::AssetConverter::resolve(path, &broker_account, credit_in)
-                .map_err(|_| Error::<T>::BelowMinimum)?;
+                .map_err(|_| Error::<T>::DepositFailed)?;
 
-            // transfer from the broker to the recipient
+            // before the payout below, so the sale counts only what the converter just deposited.
+            let energy_deposited = T::Assets::balance(T::EnergyAsset::get(), &broker_account)
+                .saturating_sub(energy_before_input);
+
+            // transfer from the broker to the recipient; can only fail if a converter reported more
+            // than it can supply
             let credit_out = T::AssetConverter::withdraw(path, &broker_account, amount_out)
                 .map_err(|_| Error::<T>::InsufficientLiquidity)?;
 
-            T::Assets::resolve(recipient, credit_out).map_err(|_| Error::<T>::BelowMinimum)?;
+            // Unlike `resolve`, `deposit` reports why the recipient cannot take the output.
+            let debt = T::Assets::deposit(credit_out.asset(), recipient, credit_out.peek(), Exact)?;
+            let _ = credit_out.offset(debt);
 
-            let energy_after_swap = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
-
-            if energy_after_swap > energy_before_swap {
+            if !energy_deposited.is_zero() {
                 Self::burn_surplus_energy(&broker_account);
 
-                T::OnEnergySell::on_energy_sell(energy_after_swap - energy_before_swap);
+                T::OnEnergySell::on_energy_sell(energy_deposited);
             }
 
             Ok(())
@@ -503,10 +528,12 @@ pub mod pallet {
             amount: T::Balance,
             fee: u32,
         ) -> Result<T::Balance, Error<T>> {
+            let exchange_share = FEE_DENOMINATOR.checked_sub(fee).ok_or(Error::<T>::Overflow)?;
+
             T::HigherPrecisionBalance::from(amount)
-                .checked_mul(&(T::HigherPrecisionBalance::from(1000u32) - fee.into()))
+                .checked_mul(&T::HigherPrecisionBalance::from(exchange_share))
                 .ok_or(Error::<T>::Overflow)?
-                .checked_div(&T::HigherPrecisionBalance::from(1000u32))
+                .checked_div(&T::HigherPrecisionBalance::from(FEE_DENOMINATOR))
                 .ok_or(Error::<T>::Overflow)?
                 .try_into()
                 .map_err(|_| Error::<T>::Overflow)
@@ -516,10 +543,12 @@ pub mod pallet {
             amount: T::Balance,
             fee: u32,
         ) -> Result<T::Balance, Error<T>> {
+            let exchange_share = FEE_DENOMINATOR.checked_sub(fee).ok_or(Error::<T>::Overflow)?;
+
             T::HigherPrecisionBalance::from(amount)
-                .checked_mul(&T::HigherPrecisionBalance::from(1000u32))
+                .checked_mul(&T::HigherPrecisionBalance::from(FEE_DENOMINATOR))
                 .ok_or(Error::<T>::Overflow)?
-                .checked_div(&(T::HigherPrecisionBalance::from(1000u32) - fee.into()))
+                .checked_div(&T::HigherPrecisionBalance::from(exchange_share))
                 .ok_or(Error::<T>::Overflow)?
                 .try_into()
                 .map_err(|_| Error::<T>::Overflow)
@@ -539,7 +568,7 @@ pub mod pallet {
                     Polite,
                 );
 
-                if let Ok(amount) = res {
+                if let Some(amount) = res.ok().filter(|amount| !amount.is_zero()) {
                     Self::deposit_event(Event::EnergyBurned { amount });
                 }
             }
@@ -591,14 +620,16 @@ impl<T: Config> Swap<T::AccountId> for Pallet<T> {
         keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError> {
         if let Ok([asset_in, asset_out]) = <[T::AssetKind; 2]>::try_from(path) {
-            Self::do_swap_exact_tokens_for_tokens(
-                sender,
-                send_to,
-                (asset_in, asset_out),
-                amount_in,
-                amount_out_min,
-                keep_alive,
-            )
+            with_storage_layer(|| {
+                Self::do_swap_exact_tokens_for_tokens(
+                    sender,
+                    send_to,
+                    (asset_in, asset_out),
+                    amount_in,
+                    amount_out_min,
+                    keep_alive,
+                )
+            })
         } else {
             Err(Error::<T>::InvalidPath.into())
         }
@@ -613,14 +644,16 @@ impl<T: Config> Swap<T::AccountId> for Pallet<T> {
         keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError> {
         if let Ok([asset_in, asset_out]) = <[T::AssetKind; 2]>::try_from(path) {
-            Self::do_swap_tokens_for_exact_tokens(
-                sender,
-                send_to,
-                (asset_in, asset_out),
-                amount_out,
-                amount_in_max,
-                keep_alive,
-            )
+            with_storage_layer(|| {
+                Self::do_swap_tokens_for_exact_tokens(
+                    sender,
+                    send_to,
+                    (asset_in, asset_out),
+                    amount_out,
+                    amount_in_max,
+                    keep_alive,
+                )
+            })
         } else {
             Err(Error::<T>::InvalidPath.into())
         }
@@ -641,7 +674,8 @@ impl<T: Config> OnSessionChange for Pallet<T> {
             TotalEnergyBurn::<T>::mutate(|total| total.saturating_accrue(burned));
         }
 
-        if let Some(index) = index.checked_sub(T::BurnedEnergySessionsCount::get() + 1) {
+        let window = T::BurnedEnergySessionsCount::get();
+        if let Some(index) = index.checked_sub(window.saturating_add(1)) {
             if let Some(old_burned) = EnergyBurn::<T>::take(index) {
                 TotalEnergyBurn::<T>::mutate(|total| total.saturating_reduce(old_burned));
             }

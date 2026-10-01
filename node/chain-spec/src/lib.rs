@@ -351,7 +351,7 @@ pub fn testnet_genesis(
         evm_chain_id: EVMChainIdConfig { chain_id, ..Default::default() },
         evm: Default::default(),
         ethereum: Default::default(),
-        energy_broker: EnergyBrokerConfig { energy_capacity: 1_000_000_000_000 },
+        energy_broker: EnergyBrokerConfig { energy_capacity: Some(1_000_000_000_000) },
         assets: AssetsConfig {
             assets: vec![
                 (VNRG::get(), root_key, false, 1),
@@ -515,7 +515,7 @@ fn mainnet_genesis(
         evm_chain_id: EVMChainIdConfig { chain_id: SS58Prefix::get() as u64, ..Default::default() },
         evm: Default::default(),
         ethereum: Default::default(),
-        energy_broker: EnergyBrokerConfig { energy_capacity: 1_000_000_000_000 },
+        energy_broker: EnergyBrokerConfig { energy_capacity: Some(1_000_000_000_000) },
         assets: AssetsConfig {
             assets: vec![
                 (VNRG::get(), treasury(), false, 1),

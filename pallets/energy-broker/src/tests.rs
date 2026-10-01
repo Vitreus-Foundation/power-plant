@@ -4,9 +4,11 @@ use frame_support::{
     traits::fungibles::{Inspect, Mutate},
 };
 use sp_runtime::{DispatchError, TokenError};
+use vitreus_runtime_common::{OnEnergyBurn, OnSessionChange, Swap};
 
 const NATIVE_TOKEN: NativeOrAssetId = NativeOrAssetId::Native;
 const ENERGY_TOKEN: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
+const STATIC_ENERGY_TOKEN: NativeOrAssetId = NativeOrAssetId::WithId(SNRG::get());
 
 fn balance(owner: u128) -> u128 {
     <<Test as Config>::Assets>::balance(NATIVE_TOKEN, &owner)
@@ -14,6 +16,10 @@ fn balance(owner: u128) -> u128 {
 
 fn energy_balance(owner: u128) -> u128 {
     <<Test as Config>::Assets>::balance(ENERGY_TOKEN, &owner)
+}
+
+fn static_energy_balance(owner: u128) -> u128 {
+    <<Test as Config>::Assets>::balance(STATIC_ENERGY_TOKEN, &owner)
 }
 
 fn get_ed() -> u128 {
@@ -207,6 +213,16 @@ fn swap_with_amount_out_min_works() {
             Some(amount_out),
             true
         ));
+
+        // A zero minimum is the same as none.
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            ALICE,
+            (NATIVE_TOKEN, ENERGY_TOKEN),
+            amount_in,
+            Some(0),
+            true
+        ));
     });
 }
 
@@ -224,6 +240,19 @@ fn swap_with_amount_in_max_works() {
                 (NATIVE_TOKEN, ENERGY_TOKEN),
                 amount_out,
                 Some(amount_in - 1),
+                true
+            ),
+            Error::<Test>::ProvidedMaximumNotSufficientForSwap
+        );
+
+        // A zero maximum cannot cover any swap.
+        assert_noop!(
+            EnergyBroker::swap_tokens_for_exact_tokens(
+                RuntimeOrigin::signed(ALICE),
+                ALICE,
+                (NATIVE_TOKEN, ENERGY_TOKEN),
+                amount_out,
+                Some(0),
                 true
             ),
             Error::<Test>::ProvidedMaximumNotSufficientForSwap
@@ -333,6 +362,36 @@ fn can_not_swap_without_liquidity() {
     });
 }
 
+/// The mirror of `can_not_swap_without_liquidity`: a conversion mints its output, so the broker
+/// holding none of it must not stop the swap. This is why the liquidity check goes through
+/// `AssetConverter::reducible_balance` instead of reading the broker's balance directly.
+#[test]
+fn conversion_does_not_require_liquidity() {
+    new_test_ext().execute_with(|| {
+        let broker = EnergyBroker::account_id();
+        let amount = 1000;
+
+        // Leave the broker with far less energy than the swap must produce.
+        <Test as Config>::Assets::set_balance(ENERGY_TOKEN, &broker, get_energy_ed());
+        assert!(energy_balance(broker) < amount);
+
+        let alice_energy_before = energy_balance(ALICE);
+        let alice_static_before = static_energy_balance(ALICE);
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            ALICE,
+            (STATIC_ENERGY_TOKEN, ENERGY_TOKEN),
+            amount,
+            None,
+            false,
+        ));
+
+        assert_eq!(static_energy_balance(ALICE), alice_static_before - amount);
+        assert_eq!(energy_balance(ALICE), alice_energy_before + amount);
+    });
+}
+
 #[test]
 fn can_not_swap_zero_amount() {
     new_test_ext().execute_with(|| {
@@ -400,6 +459,61 @@ fn can_not_swap_zero_amount() {
 }
 
 #[test]
+fn energy_sale_is_recorded_for_a_real_trade() {
+    new_test_ext().execute_with(|| {
+        assert_eq!(energy_sold(), 0);
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            ALICE,
+            (ENERGY_TOKEN, NATIVE_TOKEN),
+            1000,
+            None,
+            true,
+        ));
+
+        assert!(energy_sold() > 0);
+    });
+}
+
+#[test]
+fn energy_sale_is_not_recorded_when_recipient_is_the_broker() {
+    new_test_ext().execute_with(|| {
+        let broker = EnergyBroker::account_id();
+        let amount = 1000;
+
+        let broker_energy_before = energy_balance(broker);
+        assert_eq!(energy_sold(), 0);
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            broker,
+            (STATIC_ENERGY_TOKEN, ENERGY_TOKEN),
+            amount,
+            None,
+            false,
+        ));
+
+        // The minted output did land on the broker, so the swap really happened ...
+        assert_eq!(energy_balance(broker), broker_energy_before + amount);
+        // ... and it was still not counted as a sale.
+        assert_eq!(energy_sold(), 0);
+
+        // Same swap to an ordinary recipient: also not a sale.
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(ALICE),
+            ALICE,
+            (STATIC_ENERGY_TOKEN, ENERGY_TOKEN),
+            amount,
+            None,
+            false,
+        ));
+
+        assert_eq!(energy_sold(), 0);
+    });
+}
+
+#[test]
 fn burn_energy_beyond_capacity() {
     new_test_ext().execute_with(|| {
         let broker_account = EnergyBroker::account_id();
@@ -441,6 +555,114 @@ fn burn_energy_beyond_capacity() {
 
         assert_eq!(energy_balance(broker_account), INITIAL_ENERGY_CAPACITY);
         assert_eq!(get_energy_total_issuance(), energy_issuance - 880 - 980);
+    });
+}
+
+#[test]
+fn energy_burn_is_summed_over_sliding_window() {
+    new_test_ext().execute_with(|| {
+        EnergyBroker::on_energy_burn(100);
+        EnergyBroker::on_energy_burn(50);
+        EnergyBroker::on_new_session(1);
+        EnergyBroker::on_energy_burn(200);
+        EnergyBroker::on_new_session(2);
+
+        assert_eq!(EnergyBurn::<Test>::get(0), Some(150));
+        assert_eq!(TotalEnergyBurn::<Test>::get(), 350);
+
+        // The window is two sessions, so session 0 drops out when session 3 starts.
+        EnergyBroker::on_energy_burn(400);
+        EnergyBroker::on_new_session(3);
+
+        assert_eq!(EnergyBurn::<Test>::get(0), None);
+        assert_eq!(TotalEnergyBurn::<Test>::get(), 600);
+    });
+}
+
+#[test]
+fn capacity_follows_energy_burn_without_override() {
+    new_test_ext().execute_with(|| {
+        let broker_account = EnergyBroker::account_id();
+        assert_ok!(EnergyBroker::force_set_capacity(RuntimeOrigin::root(), None));
+
+        EnergyBroker::on_energy_burn(300);
+        EnergyBroker::on_new_session(1);
+
+        assert_eq!(EnergyCapacity::<Test>::get(), 300);
+        assert_eq!(energy_balance(broker_account), 300);
+    });
+}
+
+#[test]
+fn capacity_does_not_drop_to_zero() {
+    new_test_ext().execute_with(|| {
+        assert_ok!(EnergyBroker::force_set_capacity(RuntimeOrigin::root(), None));
+
+        EnergyBroker::on_energy_burn(300);
+        EnergyBroker::on_new_session(1);
+
+        // Nothing is burned for a whole window after that.
+        EnergyBroker::on_new_session(2);
+        EnergyBroker::on_new_session(3);
+
+        assert_eq!(TotalEnergyBurn::<Test>::get(), 0);
+        assert_eq!(EnergyCapacity::<Test>::get(), 300);
+    });
+}
+
+#[test]
+fn force_set_capacity_works() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            EnergyBroker::force_set_capacity(RuntimeOrigin::signed(ALICE), Some(100)),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            EnergyBroker::force_set_capacity(RuntimeOrigin::root(), Some(0)),
+            Error::<Test>::ZeroAmount
+        );
+
+        // The override takes effect from the next session.
+        assert_ok!(EnergyBroker::force_set_capacity(RuntimeOrigin::root(), Some(100)));
+        assert_eq!(EnergyCapacity::<Test>::get(), INITIAL_ENERGY_CAPACITY);
+
+        EnergyBroker::on_new_session(1);
+        assert_eq!(EnergyCapacity::<Test>::get(), 100);
+    });
+}
+
+#[test]
+fn force_add_liquidity_works() {
+    new_test_ext().execute_with(|| {
+        let broker_account = EnergyBroker::account_id();
+        let alice_energy = energy_balance(ALICE);
+        let broker_energy = energy_balance(broker_account);
+
+        assert_noop!(
+            EnergyBroker::force_add_liquidity(
+                RuntimeOrigin::signed(ALICE),
+                ALICE,
+                ENERGY_TOKEN,
+                100,
+                true
+            ),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            EnergyBroker::force_add_liquidity(RuntimeOrigin::root(), ALICE, ENERGY_TOKEN, 0, true),
+            Error::<Test>::ZeroAmount
+        );
+
+        assert_ok!(EnergyBroker::force_add_liquidity(
+            RuntimeOrigin::root(),
+            ALICE,
+            ENERGY_TOKEN,
+            100,
+            true,
+        ));
+
+        assert_eq!(energy_balance(ALICE), alice_energy - 100);
+        assert_eq!(energy_balance(broker_account), broker_energy + 100);
     });
 }
 
@@ -487,5 +709,98 @@ fn swap_to_recipient_works() {
 
         assert_eq!(balance(ALICE), alice_balance - exchange_in - expect_fee);
         assert_eq!(energy_balance(BOB), expect_out);
+    });
+}
+
+#[test]
+fn feeless_account_swaps_without_fee() {
+    new_test_ext().execute_with(|| {
+        let bob_balance = balance(BOB);
+        let fee_account_balance = balance(FeeAccount::get());
+
+        assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+            RuntimeOrigin::signed(BOB),
+            BOB,
+            (NATIVE_TOKEN, ENERGY_TOKEN),
+            100,
+            None,
+            true,
+        ));
+        assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
+            RuntimeOrigin::signed(BOB),
+            BOB,
+            (NATIVE_TOKEN, ENERGY_TOKEN),
+            1000,
+            None,
+            true,
+        ));
+
+        assert_eq!(balance(BOB), bob_balance - 200);
+        assert_eq!(energy_balance(BOB), 2000);
+        assert_eq!(balance(FeeAccount::get()), fee_account_balance);
+    });
+}
+
+#[test]
+fn swap_trait_returns_swapped_amounts() {
+    new_test_ext().execute_with(|| {
+        let bob_energy = energy_balance(BOB);
+        let amount_out = <EnergyBroker as Swap<u128>>::swap_exact_tokens_for_tokens(
+            ALICE,
+            vec![NATIVE_TOKEN, ENERGY_TOKEN],
+            100,
+            None,
+            BOB,
+            true,
+        );
+        assert_eq!(amount_out, Ok(energy_balance(BOB) - bob_energy));
+
+        let alice_balance = balance(ALICE);
+        let amount_in = <EnergyBroker as Swap<u128>>::swap_tokens_for_exact_tokens(
+            ALICE,
+            vec![NATIVE_TOKEN, ENERGY_TOKEN],
+            1000,
+            None,
+            BOB,
+            true,
+        );
+        assert_eq!(amount_in, Ok(alice_balance - balance(ALICE)));
+    });
+}
+
+#[test]
+fn swap_trait_rejects_invalid_path() {
+    new_test_ext().execute_with(|| {
+        assert_noop!(
+            <EnergyBroker as Swap<u128>>::swap_exact_tokens_for_tokens(
+                ALICE,
+                vec![NATIVE_TOKEN],
+                100,
+                None,
+                ALICE,
+                true
+            ),
+            Error::<Test>::InvalidPath
+        );
+    });
+}
+
+#[test]
+fn swap_trait_rolls_back_a_failed_swap() {
+    new_test_ext().execute_with(|| {
+        // Without a native balance the recipient cannot hold energy, so the swap fails only after
+        // the input is taken and the fee is paid. All of it must be rolled back.
+        let recipient = 3;
+        assert_noop!(
+            <EnergyBroker as Swap<u128>>::swap_exact_tokens_for_tokens(
+                ALICE,
+                vec![NATIVE_TOKEN, ENERGY_TOKEN],
+                100,
+                None,
+                recipient,
+                true
+            ),
+            DispatchError::Token(TokenError::CannotCreate)
+        );
     });
 }
