@@ -14,6 +14,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 ### Changed
 
 - Improve validation and error reporting in `pallet-energy-broker`
+- Set `spec_name` to `vitreus-power-plant-testnet` on testnet
 
 ### Fixed
 
