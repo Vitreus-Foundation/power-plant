@@ -35,6 +35,9 @@ OUT = "out"
 NAME = "vitreus_power_plant_{network}_runtime-v{version}"
 REPORT = re.compile(r"(vitreus_power_plant_(\w+)_runtime-v[0-9]+)\.srtool\.json")
 
+# The release notes give each network a section with this heading.
+HEADINGS = {"mainnet": "⚡ Mainnet", "testnet": "🧪 Testnet"}
+
 
 def srtool_tag():
     with open("rust-toolchain.toml", "rb") as f:
@@ -127,7 +130,7 @@ def collect(runtime, version, wasm, report):
 def runtime_info(reports, commit):
     """Return the "Runtime info" block of the release notes, built from srtool's reports."""
     image = f"{SRTOOL_IMAGE}:{srtool_tag()}"
-    rows, commands, rustc = [], [], ""
+    sections, rustc = [], ""
     for path in sorted(reports):
         m = REPORT.fullmatch(os.path.basename(path))
         if not m:
@@ -138,16 +141,29 @@ def runtime_info(reports, commit):
         wasm = data["runtimes"]["compressed"]["subwasm"]
         core = wasm["core_version"]
         rustc = data["rustc"]
-        rows.append(
-            f"| {network} | `{stem}.compact.compressed.wasm` | `{core['specName']}` | "
-            f"{core['specVersion']} | {wasm['size']:,} bytes | `{wasm['blake2_256']}` |"
-        )
-        commands.append(
-            f"    # {network}\n"
-            f'    docker run --rm --user root -v "$PWD":/build -e PACKAGE={PACKAGE} \\\n'
-            f"      -e RUNTIME_DIR={RUNTIME_DIR} -e PROFILE={PROFILE} \\\n"
-            f'      -e BUILD_OPTS="--features {network}-runtime" {image} build'
-        )
+        rows = [
+            ("📦", "File:", f"{stem}.compact.compressed.wasm"),
+            ("🏷️", "Spec name:", core["specName"]),
+            ("🔖", "Spec version:", core["specVersion"]),
+            ("✍️", "Transaction version:", core["transactionVersion"]),
+            ("🏋️", "Size:", f"{wasm['size']:,} bytes"),
+            ("🧬", "Blake2-256:", wasm["blake2_256"]),
+            ("🗳️", "setCode call hash:", wasm["proposal_hash"]),
+        ]
+        # Only the labels are padded: some of the emojis end with an invisible U+FE0F.
+        width = 2 + max(len(label) for _, label, _ in rows)
+        sections += [
+            "",
+            f"### {HEADINGS[network]}",
+            "",
+            "~~~",
+            *(f"{emoji} {label:<{width}}{value}" for emoji, label, value in rows),
+            "~~~",
+            "",
+            f'    docker run --rm --user root -v "$PWD":/build -e PACKAGE={PACKAGE} \\',
+            f"      -e RUNTIME_DIR={RUNTIME_DIR} -e PROFILE={PROFILE} \\",
+            f'      -e BUILD_OPTS="--features {network}-runtime" {image} build',
+        ]
     return "\n".join(
         [
             "## Runtime info",
@@ -157,13 +173,10 @@ def runtime_info(reports, commit):
             f"- Compiler: {rustc}",
             f"- Profile: `{PROFILE}`",
             "",
-            "| Network | File | spec_name | spec_version | Size | blake2-256 |",
-            "|---|---|---|---|---|---|",
-            *rows,
-            "",
-            "To reproduce a build, check out the commit and run:",
-            "",
-            "\n\n".join(commands),
+            "The setCode call hash is the hash of `system.setCode` with that wasm: the preimage hash",
+            "a democracy proposal for the upgrade shows. To reproduce a build, check out the commit",
+            "and run the command in its section.",
+            *sections,
         ]
     )
 
@@ -177,7 +190,8 @@ def notes(version, reports, commit, out):
     lines = changelog.section(text, version)
     if not lines:
         fail(f"no [{version}] section in {changelog.CHANGELOG}")
-    body = "\n".join(lines[1:]).strip() + "\n\n" + runtime_info(reports, commit) + "\n"
+    # "## Changelog" replaces the section's header: its number and date repeat the release's.
+    body = "## Changelog\n\n" + "\n".join(lines[1:]).strip() + "\n\n" + runtime_info(reports, commit) + "\n"
     with open(out, "w") as f:
         f.write(body)
     if "GITHUB_STEP_SUMMARY" in os.environ:

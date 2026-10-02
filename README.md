@@ -181,8 +181,9 @@ A runtime release is a "Runtime version N" PR that does all of this at once:
 
 Merging a release PR publishes the GitHub release `runtime-vN`. It holds the testnet and mainnet
 wasm built with [srtool](https://github.com/paritytech/srtool), their srtool reports, and notes:
-the `[N]` section of CHANGELOG.md, each wasm's `spec_name`, size and blake2-256 hash, and the
-command that rebuilds it. The release PR shows the same notes and hashes before the merge.
+the `[N]` section of CHANGELOG.md, each wasm's `spec_name`, `spec_version`, `transaction_version`,
+size, blake2-256 and setCode call hashes, and the command that rebuilds it. The release PR shows
+the same notes and hashes before the merge.
 
 - Upgrade a network only with the wasm from a release, never with a local build.
 - To verify a release, check out its tag and run the command from its notes: the hashes must
