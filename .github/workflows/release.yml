@@ -30,6 +30,7 @@ jobs:
     outputs:
       should-release: ${{ steps.should-release.outputs.should-release }}
       version: ${{ steps.should-release.outputs.version }}
+      tag: ${{ steps.should-release.outputs.tag }}
       srtool-tag: ${{ steps.should-release.outputs.srtool-tag }}
       profile: ${{ steps.should-release.outputs.profile }}
 
@@ -122,10 +123,12 @@ jobs:
 
       # The tag goes on the commit that was built. Tags and releases made with GITHUB_TOKEN
       # trigger no other workflows.
-      - name: Tag and publish runtime-v${{ needs.prepare.outputs.version }}
+      # The title matches the release PR's, "Runtime version N".
+      - name: Tag and publish ${{ needs.prepare.outputs.tag }}
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: runtime-v${{ needs.prepare.outputs.version }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
         run: |
           gh release create "$TAG" out/*.wasm out/*.srtool.json --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" --title "$TAG" --notes-file out/notes.md
+            --target "$GITHUB_SHA" --title "Runtime version $VERSION" --notes-file out/notes.md

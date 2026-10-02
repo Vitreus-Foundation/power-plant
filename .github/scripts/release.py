@@ -100,7 +100,13 @@ def should_release():
                 f"[{version}] section; use the next free number"
             )
     set_outputs(
-        {"should-release": release, "version": version, "srtool-tag": srtool_tag(), "profile": PROFILE}
+        {
+            "should-release": release,
+            "version": version,
+            "tag": TAG.format(version) if version else "",
+            "srtool-tag": srtool_tag(),
+            "profile": PROFILE,
+        }
     )
 
 
