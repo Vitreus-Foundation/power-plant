@@ -6,6 +6,7 @@
 
 In CI, --base is HEAD^1: the first parent of GitHub's merge commit for the PR, which is the
 base branch. Locally, pass the fork point instead: --base "$(git merge-base origin/develop HEAD)".
+release.py builds on this module.
 """
 import argparse
 import re
@@ -64,7 +65,9 @@ def parse(text):
             if not versions and line != UNRELEASED:
                 errors.append((number, f"the first section must be '{UNRELEASED}'; keep it on top even when empty"))
             if line == UNRELEASED:
-                if versions:
+                if "Unreleased" in versions:
+                    errors.append((number, f"a second '{UNRELEASED}': move its entries into the first one"))
+                elif versions:
                     errors.append((number, "[Unreleased] must be the first section"))
                 versions.append("Unreleased")
             elif m := RELEASE.fullmatch(line):
@@ -95,6 +98,18 @@ def section(text, version):
     return lines
 
 
+def read_changelog():
+    """Return CHANGELOG.md and its versions, or report its format errors and exit."""
+    with open(CHANGELOG) as f:
+        text = f.read()
+    versions, errors = parse(text)
+    for number, message in errors:
+        print(f"::error file={CHANGELOG},line={number}::{message}")
+    if errors:
+        sys.exit(1)
+    return text, versions
+
+
 def check(base):
     """Validate CHANGELOG.md and its versions against spec_version.
 
@@ -105,14 +120,7 @@ def check(base):
     goes into the release; any other PR must leave the latest version's section unchanged, since
     new entries go under [Unreleased].
     """
-    with open(CHANGELOG) as f:
-        text = f.read()
-    versions, errors = parse(text)
-    for number, message in errors:
-        print(f"::error file={CHANGELOG},line={number}::{message}")
-    if errors:
-        sys.exit(1)
-
+    text, versions = read_changelog()
     released = versions[1:]
     if not released:
         return

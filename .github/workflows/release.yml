@@ -1,0 +1,134 @@
+name: Release
+
+# Builds both runtimes with srtool and publishes release runtime-vN once CHANGELOG.md gets a
+# version N without a tag. See "Releases" in README.md.
+on:
+  push:
+    branches: [develop]
+    paths: [CHANGELOG.md]
+  # By hand on develop: retries a release that failed. On any other branch: a dry run.
+  workflow_dispatch:
+  # A release PR gets a dry run: the runtimes are built and the notes rendered, nothing is
+  # published. The prepare job tells release PRs apart: they bring a version without a tag.
+  pull_request:
+    paths: [CHANGELOG.md]
+
+permissions:
+  contents: read
+
+concurrency:
+  # Releases queue up instead of cancelling each other midway; a new push to a PR cancels its
+  # dry run.
+  group: ${{ github.event_name == 'pull_request' && format('release-{0}', github.ref) || 'release' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  prepare:
+    name: Prepare
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      should-release: ${{ steps.should-release.outputs.should-release }}
+      version: ${{ steps.should-release.outputs.version }}
+      tag: ${{ steps.should-release.outputs.tag }}
+      srtool-tag: ${{ steps.should-release.outputs.srtool-tag }}
+      profile: ${{ steps.should-release.outputs.profile }}
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: should-release
+        run: python3 .github/scripts/release.py should-release
+
+  build:
+    name: Build ${{ matrix.runtime }}
+    needs: prepare
+    if: needs.prepare.outputs.should-release == '1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+
+    strategy:
+      fail-fast: false
+      matrix:
+        runtime: [testnet-runtime, mainnet-runtime]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # A third-party action, so it is pinned to a commit: it builds the wasm we publish.
+      - id: srtool
+        uses: paritytech/srtool-actions@b78be6ffeaf80fbcf09fb9e5df1a458de3ee7352 # v0.9.4
+        env:
+          BUILD_OPTS: --features ${{ matrix.runtime }}
+        with:
+          chain: vitreus
+          package: vitreus-power-plant-runtime
+          runtime_dir: runtime/vitreus
+          profile: ${{ needs.prepare.outputs.profile }}
+          tag: ${{ needs.prepare.outputs.srtool-tag }}
+
+      - name: Check the build and name its files for the release
+        env:
+          WASM: ${{ steps.srtool.outputs.wasm_compressed }}
+          REPORT: ${{ steps.srtool.outputs.json }}
+        run: >-
+          python3 .github/scripts/release.py collect
+          ${{ matrix.runtime }} ${{ needs.prepare.outputs.version }} "$WASM" "$REPORT"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: ${{ matrix.runtime }}
+          path: out/
+          if-no-files-found: error
+
+  notes:
+    name: Release notes
+    needs: [prepare, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/download-artifact@v7
+        with:
+          path: out
+          merge-multiple: true
+
+      - name: Write the release notes
+        run: >-
+          python3 .github/scripts/release.py notes
+          ${{ needs.prepare.outputs.version }} out/*.srtool.json --commit "$GITHUB_SHA" --out notes.md
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: notes
+          path: notes.md
+
+  publish:
+    name: Publish
+    needs: [prepare, notes]
+    # Only the mainline publishes; PRs and other branches stop at the notes.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: out
+          merge-multiple: true
+
+      # The tag goes on the commit that was built. Tags and releases made with GITHUB_TOKEN
+      # trigger no other workflows.
+      # The title matches the release PR's, "Runtime version N".
+      - name: Tag and publish ${{ needs.prepare.outputs.tag }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.prepare.outputs.tag }}
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          gh release create "$TAG" out/*.wasm out/*.srtool.json --repo "$GITHUB_REPOSITORY" \
+            --target "$GITHUB_SHA" --title "Runtime version $VERSION" --notes-file out/notes.md
