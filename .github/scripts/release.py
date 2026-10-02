@@ -127,7 +127,7 @@ def collect(runtime, version, wasm, report):
         f.write("\n")
 
 
-def runtime_info(reports, commit):
+def runtime_info(version, reports, commit):
     """Return the "Runtime info" block of the release notes, built from srtool's reports."""
     image = f"{SRTOOL_IMAGE}:{srtool_tag()}"
     sections, rustc = [], ""
@@ -173,9 +173,11 @@ def runtime_info(reports, commit):
             f"- Compiler: {rustc}",
             f"- Profile: `{PROFILE}`",
             "",
-            "The setCode call hash is the hash of `system.setCode` with that wasm: the preimage hash",
-            "a democracy proposal for the upgrade shows. To reproduce a build, check out the commit",
-            "and run the command in its section.",
+            "The setCode call hash is the preimage hash of a democracy proposal that calls",
+            "`system.setCode` with the runtime's wasm.",
+            "",
+            "To verify a runtime, run the command from its section in a clean checkout of",
+            f"`{TAG.format(version)}`: srtool must print the same hashes.",
             *sections,
         ]
     )
@@ -191,7 +193,8 @@ def notes(version, reports, commit, out):
     if not lines:
         fail(f"no [{version}] section in {changelog.CHANGELOG}")
     # "## Changelog" replaces the section's header: its number and date repeat the release's.
-    body = "## Changelog\n\n" + "\n".join(lines[1:]).strip() + "\n\n" + runtime_info(reports, commit) + "\n"
+    changes = "\n".join(lines[1:]).strip()
+    body = f"## Changelog\n\n{changes}\n\n{runtime_info(version, reports, commit)}\n"
     with open(out, "w") as f:
         f.write(body)
     if "GITHUB_STEP_SUMMARY" in os.environ:
