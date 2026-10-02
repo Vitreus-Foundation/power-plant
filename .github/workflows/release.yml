@@ -25,7 +25,7 @@ concurrency:
 jobs:
   prepare:
     name: Prepare
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
       should-release: ${{ steps.should-release.outputs.should-release }}
@@ -34,7 +34,7 @@ jobs:
       profile: ${{ steps.should-release.outputs.profile }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - id: should-release
         run: python3 .github/scripts/release.py should-release
@@ -43,7 +43,7 @@ jobs:
     name: Build ${{ matrix.runtime }}
     needs: prepare
     if: needs.prepare.outputs.should-release == '1'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
 
     strategy:
@@ -52,10 +52,11 @@ jobs:
         runtime: [testnet-runtime, mainnet-runtime]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
+      # A third-party action, so it is pinned to a commit: it builds the wasm we publish.
       - id: srtool
-        uses: paritytech/srtool-actions@v0.9.4
+        uses: paritytech/srtool-actions@b78be6ffeaf80fbcf09fb9e5df1a458de3ee7352 # v0.9.4
         env:
           BUILD_OPTS: --features ${{ matrix.runtime }}
         with:
@@ -73,7 +74,7 @@ jobs:
           python3 .github/scripts/release.py collect
           ${{ matrix.runtime }} ${{ needs.prepare.outputs.version }} "$WASM" "$REPORT"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: ${{ matrix.runtime }}
           path: out/
@@ -82,13 +83,13 @@ jobs:
   notes:
     name: Release notes
     needs: [prepare, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: out
           merge-multiple: true
@@ -98,7 +99,7 @@ jobs:
           python3 .github/scripts/release.py notes
           ${{ needs.prepare.outputs.version }} out/*.srtool.json --commit "$GITHUB_SHA" --out notes.md
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v6
         with:
           name: notes
           path: notes.md
@@ -108,13 +109,13 @@ jobs:
     needs: [prepare, notes]
     # Only the mainline publishes; PRs and other branches stop at the notes.
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/develop'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
       contents: write
 
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           path: out
           merge-multiple: true
