@@ -281,11 +281,14 @@ mod energy_broker {
 
 mod xcm_tests {
     use super::*;
+    use frame_support::{assert_err_ignore_postinfo, assert_noop};
+    use sp_runtime::{traits::Dispatchable, DispatchError};
     use xcm::latest::prelude::{
-        Asset, AssetId, ExecuteXcm, Fungible, Location, Parachain, ReceiveTeleportedAsset, Weight,
-        Xcm, XcmError,
+        Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, Here, Location, Parachain,
+        ReceiveTeleportedAsset, Weight, WeightLimit, Xcm, XcmError,
     };
-    use xcm_executor::XcmExecutor;
+    use xcm::{VersionedLocation, VersionedXcm};
+    use xcm_executor::{traits::TransferType, XcmExecutor};
 
     // A child parachain origin that `EnergyForParachains` trusts as a teleporter.
     fn parachain() -> Location {
@@ -315,6 +318,58 @@ mod xcm_tests {
             );
 
             assert_eq!(outcome.ensure_complete(), Err(XcmError::UntrustedTeleportLocation));
+        });
+    }
+
+    /// Only governance may `send` arbitrary XCM. Regression guard for `SendXcmOrigin`.
+    #[test]
+    fn signed_cannot_send_xcm() {
+        new_test_ext().execute_with(|| {
+            let dest = VersionedLocation::from(Location::new(0, [Parachain(2000)]));
+            let message = VersionedXcm::from(Xcm::<()>(vec![ClearOrigin]));
+            assert_noop!(
+                XcmPallet::send(RuntimeOrigin::signed(alith()), Box::new(dest), Box::new(message)),
+                DispatchError::BadOrigin,
+            );
+        });
+    }
+
+    /// `execute` of arbitrary XCM is disabled via `XcmExecuteFilter = Nothing`.
+    /// Regression guard for the filter.
+    #[test]
+    fn signed_cannot_execute_xcm() {
+        new_test_ext().execute_with(|| {
+            let message = VersionedXcm::from(Xcm::<RuntimeCall>(vec![ClearOrigin]));
+            assert_err_ignore_postinfo!(
+                XcmPallet::execute(
+                    RuntimeOrigin::signed(alith()),
+                    Box::new(message),
+                    Weight::zero(),
+                ),
+                pallet_xcm::Error::<Runtime>::Filtered,
+            );
+        });
+    }
+
+    /// `transfer_assets_using_type_and_then` is not gated by `XcmExecuteFilter`, so it is blocked
+    /// at `BaseCallFilter`. Regression guard.
+    #[test]
+    fn signed_cannot_transfer_assets_using_type_and_then() {
+        new_test_ext().execute_with(|| {
+            let call =
+                RuntimeCall::XcmPallet(pallet_xcm::Call::transfer_assets_using_type_and_then {
+                    dest: Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)]))),
+                    assets: Box::new(xcm::latest::Assets::new().into()),
+                    assets_transfer_type: Box::new(TransferType::Teleport),
+                    remote_fees_id: Box::new(AssetId(Here.into_location()).into()),
+                    fees_transfer_type: Box::new(TransferType::Teleport),
+                    custom_xcm_on_dest: Box::new(VersionedXcm::from(Xcm::<()>(vec![]))),
+                    weight_limit: WeightLimit::Unlimited,
+                });
+            assert_err_ignore_postinfo!(
+                call.dispatch(RuntimeOrigin::signed(alith())),
+                frame_system::Error::<Runtime>::CallFiltered,
+            );
         });
     }
 }

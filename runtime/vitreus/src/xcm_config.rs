@@ -402,11 +402,13 @@ pub type LocalOriginToLocation = (
 );
 impl pallet_xcm::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type SendXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
+    // Arbitrary `send` is restricted to governance; signed accounts use the transfer extrinsics.
+    type SendXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, CouncilToPlurality>;
     type XcmRouter = XcmRouter;
-    // Anyone can execute XCM messages locally.
+    // Keep the origin converter permissive so the transfer extrinsics work for signed accounts;
+    // the `execute` call itself is disabled via `XcmExecuteFilter` below.
     type ExecuteXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
-    type XcmExecuteFilter = Everything;
+    type XcmExecuteFilter = Nothing;
     type XcmExecutor = XcmExecutor<XcmConfig>;
     type XcmTeleportFilter = Everything;
     // Anyone is able to use reserve transfers regardless of who they are and what they want to
