@@ -53,8 +53,6 @@ use xcm_executor::{
 };
 
 // TODO: use constants from `vitreus-runtime-constants` crate
-const ASSET_HUB_ID: u32 = 1000;
-const BRIDGE_HUB_ID: u32 = 1013;
 const RELAY_NETWORK: NetworkId = prod_or_fast!(
     NetworkId::ByGenesis(hex_literal::hex!(
         "4f27ff2e1c714c78b718d11a999774b2f639da713b9481337942997140185cfc"
@@ -62,12 +60,6 @@ const RELAY_NETWORK: NetworkId = prod_or_fast!(
     NetworkId::ByGenesis(hex_literal::hex!(
         "c28caa6bf827d357af8ca58ddcefc2aba6d08b2fd29de8acb67becd4ea6c3673"
     ))
-);
-pub const ETHEREUM_NETWORK: NetworkId =
-    prod_or_fast!(NetworkId::Ethereum { chain_id: 1 }, NetworkId::Ethereum { chain_id: 11155111 });
-pub const ETHEREUM_VTRS_ADDRESS: [u8; 20] = prod_or_fast!(
-    hex_literal::hex!("74950FC112473caba58193c6bF6412a6f1e4d7d2"),
-    hex_literal::hex!("27C2E2131DF1310C9bdfAc779316685dB8B1E8bb")
 );
 pub const ASSETS_PALLET_ID: u8 = 5;
 
@@ -81,13 +73,6 @@ parameter_types! {
 }
 
 parameter_types! {
-    pub WrappedTokenLocation: Location = Location::new(
-        1,
-        [
-            GlobalConsensus(ETHEREUM_NETWORK),
-            AccountKey20 { network: None, key: ETHEREUM_VTRS_ADDRESS }
-        ]
-    );
     pub EnergyTokenLocation: Location = Location::new(
         0,
         [PalletInstance(ASSETS_PALLET_ID), GeneralIndex(VNRG::get())]
@@ -127,6 +112,7 @@ pub type LocalAssetTransactor = xcm_builder::CurrencyAdapter<
     LocalCheckAccount,
 >;
 
+// Fees for the wVTRS <-> VTRS conversion in `pallet-manual-bridge`.
 parameter_types! {
     pub const DefaultDepositFeePercent: u8 = 1;
     pub storage DepositFeePercent: u8 = DefaultDepositFeePercent::get();
@@ -134,26 +120,6 @@ parameter_types! {
     pub const DefaultWithdrawalFeePercent: u8 = 9;
     pub storage WithdrawalFeePercent: u8 = DefaultWithdrawalFeePercent::get();
 }
-
-/// Means for transacting the wrapped VTRS.
-pub type WrappedTokenTransactor = currency_adapter::CurrencyAdapterWithFee<
-    // Use this currency:
-    Balances,
-    // Use this currency when it is a fungible asset matching the given location or name:
-    IsConcrete<WrappedTokenLocation>,
-    // We can convert the Locations with our converter above:
-    LocationConverter,
-    // Our chain's account ID type (we can't get away without mentioning it explicitly):
-    AccountId,
-    // We track our teleports in/out to keep total issuance correct.
-    LocalCheckAccount,
-    // Fee for wVTRS -> VTRS conversion
-    DepositFeePercent,
-    // Fee for VTRS -> wVTRS conversion
-    WithdrawalFeePercent,
-    // Send fee to the treasury
-    TreasuryAccount,
->;
 
 parameter_types! {
     pub AssetsPalletLocation: Location = PalletInstance(ASSETS_PALLET_ID).into();
@@ -225,16 +191,9 @@ pub type XcmRouter = WithUniqueTopic<
 >;
 
 parameter_types! {
-    pub const Vtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(TokenLocation::get()) });
     pub Vnrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(EnergyTokenLocation::get()) });
     pub Snrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(StaticEnergyTokenLocation::get()) });
     pub Lnrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(LiquidEnergyTokenLocation::get()) });
-    pub WrappedVtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(WrappedTokenLocation::get()) });
-    pub AssetHub: Location = Parachain(ASSET_HUB_ID).into_location();
-    pub BridgeHub: Location = Parachain(BRIDGE_HUB_ID).into_location();
-    pub VtrsForAssetHub: (AssetFilter, Location) = (Vtrs::get(), AssetHub::get());
-    pub VtrsForBridgeHub: (AssetFilter, Location) = (Vtrs::get(), BridgeHub::get());
-    pub WrappedVtrsForAssetHub: (AssetFilter, Location) = (WrappedVtrs::get(), AssetHub::get());
     pub const MaxAssetsIntoHolding: u32 = 64;
 }
 
@@ -258,12 +217,7 @@ impl ContainsPair<Asset, Location> for EnergyForParachains {
     }
 }
 
-pub type TrustedTeleporters = (
-    EnergyForParachains,
-    xcm_builder::Case<VtrsForAssetHub>,
-    xcm_builder::Case<VtrsForBridgeHub>,
-    xcm_builder::Case<WrappedVtrsForAssetHub>,
-);
+pub type TrustedTeleporters = (EnergyForParachains,);
 
 /// The barriers one of which must be passed for an XCM message to be executed.
 pub type Barrier = TrailingSetTopicAsId<(
@@ -383,7 +337,7 @@ pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
-    type AssetTransactor = (LocalAssetTransactor, WrappedTokenTransactor, EnergyTransactor);
+    type AssetTransactor = (LocalAssetTransactor, EnergyTransactor);
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
     type IsTeleporter = TrustedTeleporters;
@@ -673,192 +627,6 @@ mod origin_conversion {
                 Ok(other) => Err(other.into()),
                 Err(other) => Err(other),
             })
-        }
-    }
-}
-
-#[allow(deprecated)]
-mod currency_adapter {
-    use super::*;
-    use frame_support::traits::{ExistenceRequirement::KeepAlive, Get, WithdrawReasons};
-    use sp_runtime::{traits::CheckedSub, Percent, Saturating};
-    use sp_std::marker::PhantomData;
-    use xcm::latest::Result as XcmResult;
-    use xcm_builder::CurrencyAdapter;
-    use xcm_executor::{
-        traits::{ConvertLocation, MatchesFungible, TransactAsset},
-        AssetsInHolding,
-    };
-
-    /// Asset transaction errors.
-    enum Error {
-        /// The given asset is not handled. (According to [`XcmError::AssetNotFound`])
-        AssetNotHandled,
-        /// `Location` to `AccountId` conversion failed.
-        AccountIdConversionFailed,
-    }
-
-    impl From<Error> for XcmError {
-        fn from(e: Error) -> Self {
-            use XcmError::FailedToTransactAsset;
-            match e {
-                Error::AssetNotHandled => XcmError::AssetNotFound,
-                Error::AccountIdConversionFailed => {
-                    FailedToTransactAsset("AccountIdConversionFailed")
-                },
-            }
-        }
-    }
-
-    pub struct CurrencyAdapterWithFee<
-        Currency,
-        Matcher,
-        AccountIdConverter,
-        AccountId,
-        CheckedAccount,
-        DepositFeePercent,
-        WithdrawalFeePercent,
-        FeeReceiverAccount,
-    >(
-        PhantomData<(
-            Currency,
-            Matcher,
-            AccountIdConverter,
-            AccountId,
-            CheckedAccount,
-            DepositFeePercent,
-            WithdrawalFeePercent,
-            FeeReceiverAccount,
-        )>,
-    );
-
-    impl<
-            Currency: frame_support::traits::Currency<AccountId>,
-            Matcher: MatchesFungible<Currency::Balance>,
-            AccountIdConverter: ConvertLocation<AccountId>,
-            AccountId: Clone, // can't get away without it since Currency is generic over it.
-            CheckedAccount: Get<Option<(AccountId, MintLocation)>>,
-            DepositFeePercent: Get<u8>,
-            WithdrawalFeePercent: Get<u8>,
-            FeeReceiverAccount: Get<AccountId>,
-        > TransactAsset
-        for CurrencyAdapterWithFee<
-            Currency,
-            Matcher,
-            AccountIdConverter,
-            AccountId,
-            CheckedAccount,
-            DepositFeePercent,
-            WithdrawalFeePercent,
-            FeeReceiverAccount,
-        >
-    {
-        fn can_check_in(origin: &Location, what: &Asset, context: &XcmContext) -> XcmResult {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::can_check_in(origin, what, context)
-        }
-
-        fn check_in(origin: &Location, what: &Asset, context: &XcmContext) {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::check_in(origin, what, context)
-        }
-
-        fn can_check_out(dest: &Location, what: &Asset, context: &XcmContext) -> XcmResult {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::can_check_out(dest, what, context)
-        }
-
-        fn check_out(dest: &Location, what: &Asset, context: &XcmContext) {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::check_out(dest, what, context)
-        }
-
-        fn deposit_asset(what: &Asset, who: &Location, _context: Option<&XcmContext>) -> XcmResult {
-            log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset what: {:?}, who: {:?}", what, who);
-            // Check we handle this asset.
-            let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
-
-            let who = AccountIdConverter::convert_location(who)
-                .ok_or(Error::AccountIdConversionFailed)?;
-
-            let fee_percent = Percent::from_percent(DepositFeePercent::get());
-            let fee_amount = fee_percent.mul_floor(amount);
-            log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset fee: {:?}", fee_amount);
-
-            let _imbalance = Currency::deposit_creating(&who, amount.saturating_sub(fee_amount));
-            let _imbalance = Currency::deposit_creating(&FeeReceiverAccount::get(), fee_amount);
-            Ok(())
-        }
-
-        fn withdraw_asset(
-            what: &Asset,
-            who: &Location,
-            _maybe_context: Option<&XcmContext>,
-        ) -> Result<AssetsInHolding, XcmError> {
-            log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset what: {:?}, who: {:?}", what, who);
-            // Check we handle this asset.
-            let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
-            let who = AccountIdConverter::convert_location(who)
-                .ok_or(Error::AccountIdConversionFailed)?;
-
-            let fee_percent = Percent::from_percent(WithdrawalFeePercent::get());
-            let fee_amount = fee_percent.mul_floor(amount);
-            log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset fee: {:?}", fee_amount);
-
-            let amount_with_fee = amount.saturating_add(fee_amount);
-            let new_balance = Currency::free_balance(&who)
-                .checked_sub(&amount_with_fee)
-                .ok_or(XcmError::NotWithdrawable)?;
-            Currency::ensure_can_withdraw(
-                &who,
-                amount_with_fee,
-                WithdrawReasons::TRANSFER,
-                new_balance,
-            )
-            .map_err(|_| XcmError::NotWithdrawable)?;
-
-            let _ = Currency::withdraw(&who, amount, WithdrawReasons::TRANSFER, KeepAlive)
-                .map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
-
-            Currency::transfer(&who, &FeeReceiverAccount::get(), fee_amount, KeepAlive)
-                .map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
-
-            Ok(what.clone().into())
-        }
-
-        fn internal_transfer_asset(
-            asset: &Asset,
-            from: &Location,
-            to: &Location,
-            context: &XcmContext,
-        ) -> Result<AssetsInHolding, XcmError> {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::internal_transfer_asset(asset, from, to, context)
         }
     }
 }
