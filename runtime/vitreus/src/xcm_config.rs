@@ -21,8 +21,7 @@
 use super::{
     parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
     CouncilCollective, DynamicEnergy, EnergyAsset, EnergyBroker, ParaId, Runtime, RuntimeCall,
-    RuntimeEvent, RuntimeOrigin, TransactionPicosecondFee, Treasury, XcmPallet,
-    LNRG, SNRG, VNRG,
+    RuntimeEvent, RuntimeOrigin, TransactionPicosecondFee, Treasury, XcmPallet, LNRG, SNRG, VNRG,
 };
 use frame_support::{
     parameter_types,
@@ -410,9 +409,9 @@ impl pallet_xcm::Config for Runtime {
     type XcmExecuteFilter = Nothing;
     type XcmExecutor = XcmExecutor<XcmConfig>;
     type XcmTeleportFilter = Everything;
-    // Anyone is able to use reserve transfers regardless of who they are and what they want to
-    // transfer.
-    type XcmReserveTransferFilter = Everything;
+    // Reserve transfers are disabled: assets move to parachains via teleport only, and no reserve
+    // is configured (`IsReserve = ()`).
+    type XcmReserveTransferFilter = Nothing;
     type Weigher = FixedWeightBounds<BaseXcmWeight, RuntimeCall, MaxInstructions>;
     type UniversalLocation = UniversalLocation;
     type RuntimeOrigin = RuntimeOrigin;

@@ -287,7 +287,7 @@ mod xcm_tests {
         Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, Here, Location, Parachain,
         ReceiveTeleportedAsset, Weight, WeightLimit, Xcm, XcmError,
     };
-    use xcm::{VersionedLocation, VersionedXcm};
+    use xcm::{VersionedAssets, VersionedLocation, VersionedXcm};
     use xcm_executor::{traits::TransferType, XcmExecutor};
 
     // A child parachain origin that `EnergyForParachains` trusts as a teleporter.
@@ -382,6 +382,27 @@ mod xcm_tests {
         new_test_ext().execute_with(|| {
             let message = Xcm::<()>(vec![ClearOrigin]);
             assert!(Price::price_for_delivery(2000.into(), &message).is_none());
+        });
+    }
+
+    /// Reserve transfers are disabled via `XcmReserveTransferFilter = Nothing`. Regression guard.
+    #[test]
+    fn signed_cannot_reserve_transfer() {
+        new_test_ext().execute_with(|| {
+            let dest = Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)])));
+            let beneficiary = Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)])));
+            let assets = Box::new(VersionedAssets::from(xcm::latest::Assets::new()));
+            assert_noop!(
+                XcmPallet::limited_reserve_transfer_assets(
+                    RuntimeOrigin::signed(alith()),
+                    dest,
+                    beneficiary,
+                    assets,
+                    0,
+                    WeightLimit::Unlimited,
+                ),
+                pallet_xcm::Error::<Runtime>::Filtered,
+            );
         });
     }
 }
