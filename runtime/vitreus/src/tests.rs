@@ -278,3 +278,43 @@ mod energy_broker {
         new_test_ext().execute_with(|| assert_conversion_burns_and_mints(LNRG::get()))
     }
 }
+
+mod xcm_tests {
+    use super::*;
+    use xcm::latest::prelude::{
+        Asset, AssetId, ExecuteXcm, Fungible, Location, Parachain, ReceiveTeleportedAsset, Weight,
+        Xcm, XcmError,
+    };
+    use xcm_executor::XcmExecutor;
+
+    // A child parachain origin that `EnergyForParachains` trusts as a teleporter.
+    fn parachain() -> Location {
+        Location::new(0, [Parachain(2000)])
+    }
+
+    fn energy_asset(amount: u128) -> Asset {
+        Asset { id: AssetId(crate::xcm_config::EnergyTokenLocation::get()), fun: Fungible(amount) }
+    }
+
+    /// Inbound energy teleports must be rejected explicitly with `UntrustedTeleportLocation`,
+    /// not silently masked as `AssetNotFound`. See `EnergyAdapter::can_check_in` for why energy
+    /// is one-way.
+    #[test]
+    fn inbound_energy_teleport_is_rejected() {
+        new_test_ext().execute_with(|| {
+            let message =
+                Xcm(vec![ReceiveTeleportedAsset(vec![energy_asset(1_000_000_000)].into())]);
+            let mut hash = [0u8; 32];
+
+            let outcome = XcmExecutor::<crate::xcm_config::XcmConfig>::prepare_and_execute(
+                parachain(),
+                message,
+                &mut hash,
+                Weight::MAX,
+                Weight::MAX,
+            );
+
+            assert_eq!(outcome.ensure_complete(), Err(XcmError::UntrustedTeleportLocation));
+        });
+    }
+}

@@ -480,9 +480,14 @@ mod energy {
             OnBurn,
         >
     {
-        fn can_check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
-            // Prevent the transfer of energy assets into the relaychain.
-            Err(XcmError::Unimplemented)
+        fn can_check_in(_origin: &Location, what: &Asset, _context: &XcmContext) -> XcmResult {
+            // The relay is the sole issuer of energy; accepting a teleport in would let a
+            // parachain mint relay-side energy outside its economy. Reject energy explicitly,
+            // and defer any other asset so the transactor tuple can try the next adapter.
+            if Matcher::matches_fungibles(what).is_ok() {
+                return Err(XcmError::UntrustedTeleportLocation);
+            }
+            Err(XcmError::AssetNotFound)
         }
 
         fn check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) {}
