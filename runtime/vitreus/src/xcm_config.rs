@@ -19,7 +19,7 @@
 #![allow(clippy::match_like_matches_macro, clippy::type_complexity)]
 
 use super::{
-    parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
+    parachains_hrmp, parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
     CouncilCollective, DynamicEnergy, EnergyAsset, EnergyBroker, ParaId, Runtime, RuntimeCall,
     RuntimeEvent, RuntimeOrigin, TransactionPicosecondFee, Treasury, XcmPallet, LNRG, SNRG, VNRG,
 };
@@ -237,13 +237,11 @@ pub type Barrier = TrailingSetTopicAsId<(
     >,
 )>;
 
-/// A call filter for the XCM Transact instruction. This is a temporary measure until we
-/// properly account for proof size weights.
-///
-/// Calls that are allowed through this filter must:
-/// 1. Have a fixed weight;
-/// 2. Cannot lead to another call being made;
-/// 3. Have a defined proof size weight, e.g. no unbounded vecs in call parameters.
+/// Calls a parachain may dispatch on the relay via XCM `Transact` as its own origin — only the
+/// calls gated on a parachain origin: HRMP channel management and the registrar self-service ops
+/// (lock/unlock, swap, deregister). Root-only HRMP `force_*`, signed-origin `reserve`, and the
+/// unbounded `register` are excluded. All allowed calls are fixed-weight with bounded proof size
+/// and cannot lead to another call; everything else is rejected.
 pub struct SafeCallFilter;
 impl Contains<RuntimeCall> for SafeCallFilter {
     fn contains(call: &RuntimeCall) -> bool {
@@ -254,76 +252,21 @@ impl Contains<RuntimeCall> for SafeCallFilter {
             }
         }
 
-        match call {
-            RuntimeCall::System(
-                frame_system::Call::kill_prefix { .. } | frame_system::Call::set_heap_pages { .. },
-            )
-            | RuntimeCall::Babe(..)
-            | RuntimeCall::Timestamp(..)
-            | RuntimeCall::Balances(..)
-            | RuntimeCall::Session(pallet_session::Call::purge_keys { .. })
-            | RuntimeCall::Grandpa(..)
-            | RuntimeCall::ImOnline(..)
-            | RuntimeCall::Democracy(
-                pallet_democracy::Call::second { .. }
-                | pallet_democracy::Call::vote { .. }
-                | pallet_democracy::Call::emergency_cancel { .. }
-                | pallet_democracy::Call::fast_track { .. }
-                | pallet_democracy::Call::veto_external { .. }
-                | pallet_democracy::Call::cancel_referendum { .. }
-                | pallet_democracy::Call::delegate { .. }
-                | pallet_democracy::Call::undelegate { .. }
-                | pallet_democracy::Call::clear_public_proposals { .. }
-                | pallet_democracy::Call::unlock { .. }
-                | pallet_democracy::Call::remove_vote { .. }
-                | pallet_democracy::Call::remove_other_vote { .. }
-                | pallet_democracy::Call::blacklist { .. }
-                | pallet_democracy::Call::cancel_proposal { .. },
-            )
-            | RuntimeCall::Council(
-                pallet_collective::Call::vote { .. }
-                | pallet_collective::Call::disapprove_proposal { .. }
-                | pallet_collective::Call::close { .. },
-            )
-            | RuntimeCall::TechnicalCommittee(
-                pallet_collective::Call::vote { .. }
-                | pallet_collective::Call::disapprove_proposal { .. }
-                | pallet_collective::Call::close { .. },
-            )
-            | RuntimeCall::TechnicalMembership(
-                pallet_membership::Call::add_member { .. }
-                | pallet_membership::Call::remove_member { .. }
-                | pallet_membership::Call::swap_member { .. }
-                | pallet_membership::Call::change_key { .. }
-                | pallet_membership::Call::set_prime { .. }
-                | pallet_membership::Call::clear_prime { .. },
-            )
-            | RuntimeCall::Treasury(..)
-            | RuntimeCall::Utility(pallet_utility::Call::as_derivative { .. })
-            | RuntimeCall::Vesting(..)
-            | RuntimeCall::Bounties(
-                pallet_bounties::Call::propose_bounty { .. }
-                | pallet_bounties::Call::approve_bounty { .. }
-                | pallet_bounties::Call::propose_curator { .. }
-                | pallet_bounties::Call::unassign_curator { .. }
-                | pallet_bounties::Call::accept_curator { .. }
-                | pallet_bounties::Call::award_bounty { .. }
-                | pallet_bounties::Call::claim_bounty { .. }
-                | pallet_bounties::Call::close_bounty { .. },
-            )
-            | RuntimeCall::Hrmp(..)
-            | RuntimeCall::Registrar(
+        matches!(
+            call,
+            RuntimeCall::Hrmp(
+                parachains_hrmp::Call::hrmp_init_open_channel { .. }
+                    | parachains_hrmp::Call::hrmp_accept_open_channel { .. }
+                    | parachains_hrmp::Call::hrmp_close_channel { .. }
+                    | parachains_hrmp::Call::hrmp_cancel_open_request { .. }
+                    | parachains_hrmp::Call::establish_channel_with_system { .. },
+            ) | RuntimeCall::Registrar(
                 paras_registrar::Call::deregister { .. }
-                | paras_registrar::Call::swap { .. }
-                | paras_registrar::Call::remove_lock { .. }
-                | paras_registrar::Call::reserve { .. }
-                | paras_registrar::Call::add_lock { .. },
+                    | paras_registrar::Call::swap { .. }
+                    | paras_registrar::Call::add_lock { .. }
+                    | paras_registrar::Call::remove_lock { .. },
             )
-            | RuntimeCall::XcmPallet(pallet_xcm::Call::limited_reserve_transfer_assets {
-                ..
-            }) => true,
-            _ => false,
-        }
+        )
     }
 }
 

@@ -284,8 +284,8 @@ mod xcm_tests {
     use frame_support::{assert_err_ignore_postinfo, assert_noop};
     use sp_runtime::{traits::Dispatchable, DispatchError};
     use xcm::latest::prelude::{
-        Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, Here, Location, Parachain,
-        ReceiveTeleportedAsset, Weight, WeightLimit, Xcm, XcmError,
+        Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, Here, Location, OriginKind, Parachain,
+        ReceiveTeleportedAsset, Transact, Weight, WeightLimit, Xcm, XcmError,
     };
     use xcm::{VersionedAssets, VersionedLocation, VersionedXcm};
     use xcm_executor::{traits::TransferType, XcmExecutor};
@@ -403,6 +403,39 @@ mod xcm_tests {
                 ),
                 pallet_xcm::Error::<Runtime>::Filtered,
             );
+        });
+    }
+
+    /// Only whitelisted parachain-origin calls (HRMP, registrar) may be dispatched via `Transact`;
+    /// anything else is rejected with `NoPermission`. Regression guard for `SafeCallFilter` — the
+    /// call used here (a reserve transfer) is deliberately not on the whitelist.
+    #[test]
+    fn transact_is_rejected() {
+        use sp_runtime::codec::Encode;
+        new_test_ext().execute_with(|| {
+            let call = RuntimeCall::XcmPallet(pallet_xcm::Call::limited_reserve_transfer_assets {
+                dest: Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)]))),
+                beneficiary: Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)]))),
+                assets: Box::new(VersionedAssets::from(xcm::latest::Assets::new())),
+                fee_asset_item: 0,
+                weight_limit: WeightLimit::Unlimited,
+            });
+            let message = Xcm(vec![Transact {
+                origin_kind: OriginKind::SovereignAccount,
+                require_weight_at_most: Weight::from_parts(u64::MAX / 2, u64::MAX / 2),
+                call: call.encode().into(),
+            }]);
+            let mut hash = [0u8; 32];
+
+            let outcome = XcmExecutor::<crate::xcm_config::XcmConfig>::prepare_and_execute(
+                parachain(),
+                message,
+                &mut hash,
+                Weight::MAX,
+                Weight::MAX,
+            );
+
+            assert_eq!(outcome.ensure_complete(), Err(XcmError::NoPermission));
         });
     }
 }
