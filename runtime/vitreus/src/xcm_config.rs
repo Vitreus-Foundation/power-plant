@@ -20,8 +20,8 @@
 
 use super::{
     parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
-    CouncilCollective, Dmp, DynamicEnergy, EnergyAsset, EnergyBroker, ParaId, Runtime, RuntimeCall,
-    RuntimeEvent, RuntimeOrigin, TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet,
+    CouncilCollective, DynamicEnergy, EnergyAsset, EnergyBroker, ParaId, Runtime, RuntimeCall,
+    RuntimeEvent, RuntimeOrigin, TransactionPicosecondFee, Treasury, XcmPallet,
     LNRG, SNRG, VNRG,
 };
 use frame_support::{
@@ -33,7 +33,7 @@ use frame_system::EnsureRoot;
 use origin_conversion::SignedToAccountKey20;
 use polkadot_runtime_common::{
     paras_registrar, prod_or_fast,
-    xcm_sender::{ChildParachainRouter, ExponentialPrice},
+    xcm_sender::{ChildParachainRouter, NoPriceForMessageDelivery},
 };
 use sp_core::ConstU32;
 use sp_runtime::traits::TryConvertInto;
@@ -174,14 +174,13 @@ parameter_types! {
     /// Maximum number of instructions in a single XCM fragment. A sanity check against weight
     /// calculations getting too crazy.
     pub const MaxInstructions: u32 = 100;
-    /// The asset ID for the asset that we use to pay for message delivery fees.
-    pub FeeAssetId: AssetId = AssetId(EnergyTokenLocation::get());
-    /// The base fee for the message delivery fees.
-    pub const BaseDeliveryFee: u128 = 1_000_000_000;
 }
 
-pub type PriceForChildParachainDelivery =
-    ExponentialPrice<FeeAssetId, BaseDeliveryFee, TransactionByteFee, Dmp>;
+// No delivery fee: the sender pays nothing for delivery, so the only cost is the regular
+// transaction fee. Safe only while arbitrary outbound XCM stays restricted to governance (see
+// `SendXcmOrigin` / `XcmExecuteFilter` here and `BaseCallFilter` in the runtime); reopening those
+// entry points would require pricing delivery again.
+pub type PriceForChildParachainDelivery = NoPriceForMessageDelivery<ParaId>;
 
 /// The XCM router. When we want to send an XCM message, we use this type. It amalgamates all of our
 /// individual routers.

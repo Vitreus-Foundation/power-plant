@@ -372,4 +372,16 @@ mod xcm_tests {
             );
         });
     }
+
+    /// Outbound delivery to child parachains is free: `price_for_delivery` returns no assets, so the
+    /// sender pays nothing for delivery. Regression guard for `PriceForChildParachainDelivery`.
+    #[test]
+    fn child_parachain_delivery_is_free() {
+        use polkadot_runtime_common::xcm_sender::PriceForMessageDelivery;
+        type Price = crate::xcm_config::PriceForChildParachainDelivery;
+        new_test_ext().execute_with(|| {
+            let message = Xcm::<()>(vec![ClearOrigin]);
+            assert!(Price::price_for_delivery(2000.into(), &message).is_none());
+        });
+    }
 }
