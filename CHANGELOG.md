@@ -15,11 +15,15 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Improve validation and error reporting in `pallet-energy-broker`
 - Set `spec_name` to `vitreus-power-plant-testnet` on testnet
+- Make the EnergyBroker `quote_price_*` runtime APIs return `None` when the output exceeds `max_amount_out`
+- Make the EnergyFee `estimate_call_fee` runtime API return `None` when the broker cannot sell the VNRG missing for the fee
 
 ### Fixed
 
+- Fix the `QuotePrice` implementation in `pallet-energy-broker` to return `None` when the output exceeds `max_amount_out`
 - Fix energy sale tracking in `pallet-energy-broker`
 - Roll back failed `pallet-energy-broker` swaps made by other pallets
+- Reject EVM transactions in the transaction pool when the broker cannot sell the VNRG missing for their fee
 
 ## [214] - 2026-09-25
 

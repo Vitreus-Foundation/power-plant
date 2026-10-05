@@ -4,7 +4,7 @@ use frame_support::{
     traits::fungibles::{Inspect, Mutate},
 };
 use sp_runtime::{DispatchError, TokenError};
-use vitreus_runtime_common::{OnEnergyBurn, OnSessionChange, Swap};
+use vitreus_runtime_common::{OnEnergyBurn, OnSessionChange, QuotePrice, Swap};
 
 const NATIVE_TOKEN: NativeOrAssetId = NativeOrAssetId::Native;
 const ENERGY_TOKEN: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
@@ -39,15 +39,23 @@ fn set_balances(who: u128, balance: u128, energy_balance: u128) {
     <Test as Config>::Assets::set_balance(ENERGY_TOKEN, &who, energy_balance);
 }
 
+fn set_output_liquidity(asset_out: NativeOrAssetId, liquidity: u128) {
+    let broker = EnergyBroker::account_id();
+    let ed = <<Test as Config>::Assets>::minimum_balance(asset_out.clone());
+    <<Test as Config>::Assets>::set_balance(asset_out, &broker, liquidity + ed);
+}
+
 #[test]
 fn get_amount_works() {
     new_test_ext().execute_with(|| {
         let amount_in = 100000;
         let (amount_out, fee) =
-            EnergyBroker::get_amount_out(amount_in, &(NATIVE_TOKEN, ENERGY_TOKEN), true).unwrap();
+            EnergyBroker::get_amount_out_and_fee(amount_in, &(NATIVE_TOKEN, ENERGY_TOKEN), true)
+                .unwrap();
 
         let (expected_amount_in, expected_fee) =
-            EnergyBroker::get_amount_in(amount_out, &(NATIVE_TOKEN, ENERGY_TOKEN), true).unwrap();
+            EnergyBroker::get_amount_in_and_fee(amount_out, &(NATIVE_TOKEN, ENERGY_TOKEN), true)
+                .unwrap();
 
         assert_eq!(amount_in, expected_amount_in);
         assert_eq!(fee, expected_fee);
@@ -190,7 +198,7 @@ fn can_swap_exact_energy_for_native() {
 fn swap_with_amount_out_min_works() {
     new_test_ext().execute_with(|| {
         let amount_in = 200;
-        let (amount_out, _) =
+        let amount_out =
             EnergyBroker::get_amount_out(amount_in, &(NATIVE_TOKEN, ENERGY_TOKEN), true).unwrap();
 
         assert_noop!(
@@ -230,7 +238,7 @@ fn swap_with_amount_out_min_works() {
 fn swap_with_amount_in_max_works() {
     new_test_ext().execute_with(|| {
         let amount_out = 200;
-        let (amount_in, _) =
+        let amount_in =
             EnergyBroker::get_amount_in(amount_out, &(NATIVE_TOKEN, ENERGY_TOKEN), true).unwrap();
 
         assert_noop!(
@@ -392,6 +400,39 @@ fn conversion_does_not_require_liquidity() {
     });
 }
 
+/// `conversion_does_not_require_liquidity` for quotes: a minted output is quoted even when the
+/// broker has no energy to spare.
+#[test]
+fn quote_of_conversion_does_not_require_liquidity() {
+    new_test_ext().execute_with(|| {
+        let broker = EnergyBroker::account_id();
+        let path = (STATIC_ENERGY_TOKEN, ENERGY_TOKEN);
+        let amount = 1_000u128;
+
+        <<Test as Config>::Assets>::set_balance(ENERGY_TOKEN, &broker, get_energy_ed());
+        assert_eq!(EnergyBroker::max_amount_out(&path), u128::MAX);
+
+        assert_eq!(
+            <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
+                STATIC_ENERGY_TOKEN,
+                ENERGY_TOKEN,
+                amount,
+                true,
+            ),
+            Some(amount),
+        );
+        assert_eq!(
+            <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
+                STATIC_ENERGY_TOKEN,
+                ENERGY_TOKEN,
+                amount,
+                true,
+            ),
+            Some(amount),
+        );
+    });
+}
+
 #[test]
 fn max_amount_out_works() {
     new_test_ext().execute_with(|| {
@@ -445,6 +486,80 @@ fn can_swap_up_to_max_amount_out() {
                 true
             ));
             assert_eq!(EnergyBroker::max_amount_out(&path), 0);
+        }
+    });
+}
+
+/// An exact-out quote returns `Some` for `max_amount_out` and `None` for one unit more.
+#[test]
+fn can_quote_tokens_for_exact_tokens_up_to_max_amount_out() {
+    new_test_ext().execute_with(|| {
+        let liquidity = 100u128;
+
+        for path in [(NATIVE_TOKEN, ENERGY_TOKEN), (ENERGY_TOKEN, NATIVE_TOKEN)] {
+            let (asset_in, asset_out) = path.clone();
+            set_output_liquidity(asset_out.clone(), liquidity);
+            assert_eq!(EnergyBroker::max_amount_out(&path), liquidity);
+
+            let at_limit = <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
+                asset_in.clone(),
+                asset_out.clone(),
+                liquidity,
+                true,
+            );
+            let expected_in =
+                EnergyBroker::get_amount_in(liquidity, &path, true).expect("path is priced");
+            assert_eq!(at_limit, Some(expected_in));
+
+            assert_eq!(
+                <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
+                    asset_in,
+                    asset_out,
+                    liquidity + 1,
+                    true,
+                ),
+                None,
+            );
+        }
+    });
+}
+
+/// An exact-in quote returns `Some` when its output equals `max_amount_out` and `None` when it is
+/// one unit above, where `get_amount_out` still returns the price.
+#[test]
+fn can_quote_exact_tokens_for_tokens_up_to_max_amount_out() {
+    new_test_ext().execute_with(|| {
+        let amount_in = 1_000u128;
+
+        for path in [(NATIVE_TOKEN, ENERGY_TOKEN), (ENERGY_TOKEN, NATIVE_TOKEN)] {
+            let (asset_in, asset_out) = path.clone();
+            let amount_out =
+                EnergyBroker::get_amount_out(amount_in, &path, true).expect("path is priced");
+            assert!(amount_out > 1);
+
+            set_output_liquidity(asset_out.clone(), amount_out);
+            assert_eq!(EnergyBroker::max_amount_out(&path), amount_out);
+            assert_eq!(
+                <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
+                    asset_in.clone(),
+                    asset_out.clone(),
+                    amount_in,
+                    true,
+                ),
+                Some(amount_out),
+            );
+
+            set_output_liquidity(asset_out.clone(), amount_out - 1);
+            assert_eq!(
+                <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
+                    asset_in, asset_out, amount_in, true,
+                ),
+                None,
+            );
+
+            let price = EnergyBroker::get_amount_out(amount_in, &path, true)
+                .expect("the price does not consider liquidity");
+            assert_eq!(price, amount_out);
         }
     });
 }

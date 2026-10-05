@@ -2942,23 +2942,21 @@ impl_runtime_apis! {
 
     impl energy_broker_runtime_api::EnergyBrokerApi<Block, AccountId, NativeOrAssetId, Balance> for Runtime {
         fn estimate_energy_from_native(amount: Balance) -> Option<Balance> {
-            Self::quote_price_exact_tokens_for_tokens(
-                None,
-                NativeOrAssetId::Native,
-                NativeOrAssetId::WithId(VNRG::get()),
+            EnergyBroker::get_amount_out(
                 amount,
+                &(NativeOrAssetId::Native, NativeOrAssetId::WithId(VNRG::get())),
                 true,
             )
+            .ok()
         }
 
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance> {
-            Self::quote_price_exact_tokens_for_tokens(
-                None,
-                NativeOrAssetId::WithId(LNRG::get()),
-                NativeOrAssetId::Native,
+            EnergyBroker::get_amount_out(
                 amount,
+                &(NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native),
                 true,
             )
+            .ok()
         }
 
         fn quote_price_exact_tokens_for_tokens(

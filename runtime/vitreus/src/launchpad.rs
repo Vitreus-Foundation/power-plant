@@ -280,12 +280,8 @@ impl TreasuryStaking<AccountId, Balance> for EnergyGenerationStaking {
 pub struct EnergyBrokerExchange;
 impl TreasuryExchange<AccountId, Balance> for EnergyBrokerExchange {
     fn quote(lnrg: Balance) -> Option<Balance> {
-        <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
-            LnrgAssetKind::get(),
-            NativeOrAssetId::Native,
-            lnrg,
-            true,
-        )
+        EnergyBroker::get_amount_out(lnrg, &(LnrgAssetKind::get(), NativeOrAssetId::Native), true)
+            .ok()
     }
     fn depth() -> Balance {
         EnergyBroker::max_amount_out(&(LnrgAssetKind::get(), NativeOrAssetId::Native))

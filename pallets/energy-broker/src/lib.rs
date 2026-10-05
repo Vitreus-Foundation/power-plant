@@ -350,11 +350,37 @@ pub mod pallet {
             T::AssetConverter::reducible_balance(path, &Self::account_id())
         }
 
+        /// The output amount for `amount_in` along `path`.
+        ///
+        /// If `include_fee` is `true`, the path's swap fee is deducted from `amount_in` first.
+        /// Liquidity is not checked: the output may exceed [`Self::max_amount_out`].
+        pub fn get_amount_out(
+            amount_in: T::Balance,
+            path: &(T::AssetKind, T::AssetKind),
+            include_fee: bool,
+        ) -> Result<T::Balance, Error<T>> {
+            Self::get_amount_out_and_fee(amount_in, path, include_fee)
+                .map(|(amount_out, _)| amount_out)
+        }
+
+        /// The input amount required to obtain `amount_out` along `path`.
+        ///
+        /// If `include_fee` is `true`, the path's swap fee is added on top. Liquidity is not
+        /// checked: `amount_out` may exceed [`Self::max_amount_out`].
+        pub fn get_amount_in(
+            amount_out: T::Balance,
+            path: &(T::AssetKind, T::AssetKind),
+            include_fee: bool,
+        ) -> Result<T::Balance, Error<T>> {
+            Self::get_amount_in_and_fee(amount_out, path, include_fee)
+                .map(|(amount_in, _)| amount_in)
+        }
+
         /// Calculates amount out.
         ///
         /// Given an input amount and swap path, returns the output amount
         /// of the other asset and the swap fee amount.
-        pub(crate) fn get_amount_out(
+        pub(crate) fn get_amount_out_and_fee(
             amount_in: T::Balance,
             path: &(T::AssetKind, T::AssetKind),
             include_fee: bool,
@@ -380,7 +406,7 @@ pub mod pallet {
         ///
         /// Given an output amount and swap path, returns the input amount
         /// of the other asset and the swap fee amount.
-        pub(crate) fn get_amount_in(
+        pub(crate) fn get_amount_in_and_fee(
             amount_out: T::Balance,
             path: &(T::AssetKind, T::AssetKind),
             include_fee: bool,
@@ -413,7 +439,7 @@ pub mod pallet {
             keep_alive: bool,
         ) -> Result<T::Balance, DispatchError> {
             let include_fee = !T::FeelessAccounts::contains(&sender);
-            let (amount_out, fee) = Self::get_amount_out(amount_in, &path, include_fee)?;
+            let (amount_out, fee) = Self::get_amount_out_and_fee(amount_in, &path, include_fee)?;
 
             if let Some(amount_out_min) = amount_out_min {
                 ensure!(
@@ -444,7 +470,7 @@ pub mod pallet {
             keep_alive: bool,
         ) -> Result<T::Balance, DispatchError> {
             let include_fee = !T::FeelessAccounts::contains(&sender);
-            let (amount_in, fee) = Self::get_amount_in(amount_out, &path, include_fee)?;
+            let (amount_in, fee) = Self::get_amount_in_and_fee(amount_out, &path, include_fee)?;
 
             if let Some(amount_in_max) = amount_in_max {
                 ensure!(
@@ -591,23 +617,23 @@ impl<T: Config> QuotePrice for Pallet<T> {
     fn quote_price_tokens_for_exact_tokens(
         asset1: Self::AssetKind,
         asset2: Self::AssetKind,
-        amount: Self::Balance,
+        amount_out: Self::Balance,
         include_fee: bool,
     ) -> Option<Self::Balance> {
-        Self::get_amount_in(amount, &(asset1, asset2), include_fee)
-            .map(|(amount_in, _)| amount_in)
-            .ok()
+        let path = (asset1, asset2);
+        let amount_in = Self::get_amount_in(amount_out, &path, include_fee).ok()?;
+        (amount_out <= Self::max_amount_out(&path)).then_some(amount_in)
     }
 
     fn quote_price_exact_tokens_for_tokens(
         asset1: Self::AssetKind,
         asset2: Self::AssetKind,
-        amount: Self::Balance,
+        amount_in: Self::Balance,
         include_fee: bool,
     ) -> Option<Self::Balance> {
-        Self::get_amount_out(amount, &(asset1, asset2), include_fee)
-            .map(|(amount_out, _)| amount_out)
-            .ok()
+        let path = (asset1, asset2);
+        let amount_out = Self::get_amount_out(amount_in, &path, include_fee).ok()?;
+        (amount_out <= Self::max_amount_out(&path)).then_some(amount_out)
     }
 }
 
