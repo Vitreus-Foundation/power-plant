@@ -15,6 +15,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Improve validation and error reporting in `pallet-energy-broker`
 - Set `spec_name` to `vitreus-power-plant-testnet` on testnet
+- Restrict XCM `send` to governance and disable `execute` and reserve transfers
+- Drop the delivery fee for outbound XCM to parachains
 
 ### Fixed
 
