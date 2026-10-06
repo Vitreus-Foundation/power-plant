@@ -390,7 +390,8 @@ mod xcm_tests {
     fn signed_cannot_reserve_transfer() {
         new_test_ext().execute_with(|| {
             let dest = Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)])));
-            let beneficiary = Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)])));
+            let beneficiary =
+                Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)])));
             let assets = Box::new(VersionedAssets::from(xcm::latest::Assets::new()));
             assert_noop!(
                 XcmPallet::limited_reserve_transfer_assets(
