@@ -153,7 +153,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
         let static_energy_balance = T::StaticEnergyAsset::reducible_balance(
             &account_id,
-            Preservation::Expendable,
+            Preservation::Preserve,
             Fortitude::Polite,
         );
 
@@ -161,7 +161,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             let swap_result = T::StaticEnergyExchange::swap_exact_tokens_for_tokens(
                 account_id.clone(),
                 static_energy_balance,
-                false,
+                true,
             );
 
             if swap_result.is_ok() {
@@ -171,7 +171,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
 
         let liquid_energy_balance = T::LiquidEnergyAsset::reducible_balance(
             &account_id,
-            Preservation::Expendable,
+            Preservation::Preserve,
             Fortitude::Polite,
         );
 
@@ -179,7 +179,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             let swap_result = T::LiquidEnergyExchange::swap_exact_tokens_for_tokens(
                 account_id.clone(),
                 liquid_energy_balance,
-                false,
+                true,
             );
 
             if swap_result.is_ok() {
@@ -195,7 +195,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     ) -> Result<EnergyBalanceOf<T, I>, DispatchError> {
         let energy_balance = T::EnergyAsset::reducible_balance(
             account_id,
-            Preservation::Expendable,
+            Preservation::Preserve,
             Fortitude::Polite,
         );
 
@@ -207,7 +207,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             let burned_amount = T::EnergyAsset::burn_from(
                 account_id,
                 energy_balance,
-                Preservation::Expendable,
+                Preservation::Preserve,
                 Precision::Exact,
                 Fortitude::Polite,
             )?;
