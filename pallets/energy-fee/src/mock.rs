@@ -150,8 +150,6 @@ pub struct MockEnergyExchange;
 
 impl QuotePriceNativeForEnergy for MockEnergyExchange {
     type Balance = u128;
-    type AssetKind = ();
-    type NativeAsset = ();
     type EnergyAsset = BalancesVNRG;
 
     fn quote_price_exact_tokens_for_tokens(
@@ -171,8 +169,6 @@ impl QuotePriceNativeForEnergy for MockEnergyExchange {
 
 impl SwapNativeForEnergy<AccountId> for MockEnergyExchange {
     type Balance = u128;
-    type AssetKind = ();
-    type NativeAsset = ();
     type EnergyAsset = BalancesVNRG;
 
     fn swap_exact_tokens_for_tokens(

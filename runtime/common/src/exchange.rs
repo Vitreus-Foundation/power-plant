@@ -43,10 +43,6 @@ pub trait QuotePrice {
 pub trait QuotePriceNativeForEnergy {
     /// Measurement units of the asset classes for pricing.
     type Balance: Balance;
-    /// Type representing the kind of assets for which the price is being quoted.
-    type AssetKind;
-    /// A constant representing the native asset kind.
-    type NativeAsset: Get<Self::AssetKind>;
     /// The energy asset being quoted, as a fungible.
     ///
     /// Consumers bind it to the fungible they use, so a runtime cannot give them an exchange for
@@ -70,10 +66,6 @@ pub trait QuotePriceNativeForEnergy {
 pub trait QuotePriceEnergyForNative {
     /// Measurement units of the asset classes for pricing.
     type Balance: Balance;
-    /// Type representing the kind of assets for which the price is being quoted.
-    type AssetKind;
-    /// A constant representing the native asset kind.
-    type NativeAsset: Get<Self::AssetKind>;
     /// The energy asset being quoted, as a fungible.
     ///
     /// Consumers bind it to the fungible they use, so a runtime cannot give them an exchange for
@@ -97,10 +89,6 @@ pub trait QuotePriceEnergyForNative {
 pub trait SwapNativeForEnergy<AccountId> {
     /// The type in which the assets for swapping are measured.
     type Balance: Balance;
-    /// Type representing the kind of assets for swapping.
-    type AssetKind;
-    /// A constant representing the native asset kind.
-    type NativeAsset: Get<Self::AssetKind>;
     /// The energy asset being swapped, as a fungible.
     ///
     /// Consumers bind it to the fungible they use, so a runtime cannot give them an exchange for
@@ -126,10 +114,6 @@ pub trait SwapNativeForEnergy<AccountId> {
 pub trait SwapEnergyForNative<AccountId> {
     /// The type in which the assets for swapping are measured.
     type Balance: Balance;
-    /// Type representing the kind of assets for swapping.
-    type AssetKind;
-    /// A constant representing the native asset kind.
-    type NativeAsset: Get<Self::AssetKind>;
     /// The energy asset being swapped, as a fungible.
     ///
     /// Consumers bind it to the fungible they use, so a runtime cannot give them an exchange for
@@ -169,8 +153,6 @@ where
     F::AssetId: Into<Exchange::AssetKind>,
 {
     type Balance = Exchange::Balance;
-    type AssetKind = Exchange::AssetKind;
-    type NativeAsset = NativeAsset;
     type EnergyAsset = ItemOf<F, A, AccountId>;
 
     fn quote_price_exact_tokens_for_tokens(
@@ -208,8 +190,6 @@ where
     F::AssetId: Into<Exchange::AssetKind>,
 {
     type Balance = Exchange::Balance;
-    type AssetKind = Exchange::AssetKind;
-    type NativeAsset = NativeAsset;
     type EnergyAsset = ItemOf<F, A, AccountId>;
 
     fn quote_price_exact_tokens_for_tokens(
@@ -248,8 +228,6 @@ where
     F::AssetId: Into<Exchange::AssetKind>,
 {
     type Balance = Exchange::Balance;
-    type AssetKind = Exchange::AssetKind;
-    type NativeAsset = NativeAsset;
     type EnergyAsset = ItemOf<F, A, AccountId>;
 
     fn swap_exact_tokens_for_tokens(
@@ -298,8 +276,6 @@ where
     F::AssetId: Into<Exchange::AssetKind>,
 {
     type Balance = Exchange::Balance;
-    type AssetKind = Exchange::AssetKind;
-    type NativeAsset = NativeAsset;
     type EnergyAsset = ItemOf<F, A, AccountId>;
 
     fn swap_exact_tokens_for_tokens(
@@ -339,8 +315,6 @@ where
 
 impl QuotePriceNativeForEnergy for () {
     type Balance = u32;
-    type AssetKind = ();
-    type NativeAsset = ();
     type EnergyAsset = ();
 
     fn quote_price_exact_tokens_for_tokens(
@@ -360,8 +334,6 @@ impl QuotePriceNativeForEnergy for () {
 
 impl QuotePriceEnergyForNative for () {
     type Balance = u32;
-    type AssetKind = ();
-    type NativeAsset = ();
     type EnergyAsset = ();
 
     fn quote_price_exact_tokens_for_tokens(
@@ -381,8 +353,6 @@ impl QuotePriceEnergyForNative for () {
 
 impl<AccountId> SwapNativeForEnergy<AccountId> for () {
     type Balance = u32;
-    type AssetKind = ();
-    type NativeAsset = ();
     type EnergyAsset = ();
 
     fn swap_exact_tokens_for_tokens(
@@ -404,8 +374,6 @@ impl<AccountId> SwapNativeForEnergy<AccountId> for () {
 
 impl<AccountId> SwapEnergyForNative<AccountId> for () {
     type Balance = u32;
-    type AssetKind = ();
-    type NativeAsset = ();
     type EnergyAsset = ();
 
     fn swap_exact_tokens_for_tokens(
