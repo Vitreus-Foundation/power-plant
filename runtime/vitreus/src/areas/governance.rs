@@ -3,8 +3,8 @@ use crate::{
     EnergyAsset, EnergyBroker, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAndAssets,
     NativeAsset, NativeEnergyExchange, NativeOrAssetId, OriginCaller, Preimage, Runtime,
     RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin, Scheduler, StaticEnergyAsset,
-    TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, LNRG, MICRO_VTRS, MILLI_VTRS,
-    MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, SNRG, UNITS, VNRG,
+    TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, MICRO_VTRS, MILLI_VTRS, MINUTES,
+    MONTHS, NANO_VTRS, PICO_VTRS, UNITS, VNRG,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
@@ -313,8 +313,8 @@ impl pallet_treasury_extension::Config for Runtime {
     type EnergyAsset = EnergyAsset;
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
-    type StaticEnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, SNRG>;
-    type LiquidEnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, LNRG>;
+    type StaticEnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, StaticEnergyAsset>;
+    type LiquidEnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, LiquidEnergyAsset>;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = StakingRewardsSink;
     type TreasuryTargetBalance = TreasuryTargetBalance;

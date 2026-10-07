@@ -152,7 +152,7 @@ impl QuotePriceNativeForEnergy for MockEnergyExchange {
     type Balance = u128;
     type AssetKind = ();
     type NativeAsset = ();
-    type EnergyAsset = ();
+    type EnergyAsset = BalancesVNRG;
 
     fn quote_price_exact_tokens_for_tokens(
         amount: Self::Balance,
@@ -173,7 +173,7 @@ impl SwapNativeForEnergy<AccountId> for MockEnergyExchange {
     type Balance = u128;
     type AssetKind = ();
     type NativeAsset = ();
-    type EnergyAsset = ();
+    type EnergyAsset = BalancesVNRG;
 
     fn swap_exact_tokens_for_tokens(
         who: AccountId,

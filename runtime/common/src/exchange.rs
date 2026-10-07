@@ -1,4 +1,7 @@
-use frame_support::traits::tokens::Balance;
+use frame_support::traits::{
+    fungible::ItemOf,
+    tokens::{fungibles, Balance},
+};
 use sp_runtime::{traits::Get, DispatchError};
 use sp_std::vec;
 
@@ -44,8 +47,8 @@ pub trait QuotePriceNativeForEnergy {
     type AssetKind;
     /// A constant representing the native asset kind.
     type NativeAsset: Get<Self::AssetKind>;
-    /// A constant representing the energy asset kind.
-    type EnergyAsset: Get<Self::AssetKind>;
+    /// The energy asset being quoted, as a fungible.
+    type EnergyAsset;
 
     /// Quotes the amount of energy resulting from swapping the exact `amount` of native currency.
     fn quote_price_exact_tokens_for_tokens(
@@ -68,8 +71,8 @@ pub trait QuotePriceEnergyForNative {
     type AssetKind;
     /// A constant representing the native asset kind.
     type NativeAsset: Get<Self::AssetKind>;
-    /// A constant representing the energy asset kind.
-    type EnergyAsset: Get<Self::AssetKind>;
+    /// The energy asset being quoted, as a fungible.
+    type EnergyAsset;
 
     /// Quotes the amount of native currency resulting from swapping the exact `amount` of energy.
     fn quote_price_exact_tokens_for_tokens(
@@ -92,8 +95,8 @@ pub trait SwapNativeForEnergy<AccountId> {
     type AssetKind;
     /// A constant representing the native asset kind.
     type NativeAsset: Get<Self::AssetKind>;
-    /// A constant representing the energy asset kind.
-    type EnergyAsset: Get<Self::AssetKind>;
+    /// The energy asset being swapped, as a fungible.
+    type EnergyAsset;
 
     /// Swaps an exact amount of native currency for energy.
     fn swap_exact_tokens_for_tokens(
@@ -118,8 +121,8 @@ pub trait SwapEnergyForNative<AccountId> {
     type AssetKind;
     /// A constant representing the native asset kind.
     type NativeAsset: Get<Self::AssetKind>;
-    /// A constant representing the energy asset kind.
-    type EnergyAsset: Get<Self::AssetKind>;
+    /// The energy asset being swapped, as a fungible.
+    type EnergyAsset;
 
     /// Swaps an exact amount of energy for native currency.
     fn swap_exact_tokens_for_tokens(
@@ -137,21 +140,26 @@ pub trait SwapEnergyForNative<AccountId> {
 }
 
 /// An exchange for swapping between native tokens and energy.
+///
+/// `EnergyAsset` is the energy asset as a fungible, an [`ItemOf`]; `Exchange` is called with the
+/// `ItemOf`'s asset id, converted into the exchange's asset kind.
 pub struct NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>(
     core::marker::PhantomData<(Exchange, NativeAsset, EnergyAsset)>,
 );
 
-impl<Exchange, NativeAsset, EnergyAsset> QuotePriceNativeForEnergy
-    for NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>
+impl<AccountId, Exchange, NativeAsset, F, A> QuotePriceNativeForEnergy
+    for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
     Exchange: QuotePrice,
     NativeAsset: Get<Exchange::AssetKind>,
-    EnergyAsset: Get<Exchange::AssetKind>,
+    F: fungibles::Inspect<AccountId>,
+    A: Get<F::AssetId>,
+    F::AssetId: Into<Exchange::AssetKind>,
 {
     type Balance = Exchange::Balance;
     type AssetKind = Exchange::AssetKind;
     type NativeAsset = NativeAsset;
-    type EnergyAsset = EnergyAsset;
+    type EnergyAsset = ItemOf<F, A, AccountId>;
 
     fn quote_price_exact_tokens_for_tokens(
         amount: Self::Balance,
@@ -159,7 +167,7 @@ where
     ) -> Option<Self::Balance> {
         Exchange::quote_price_exact_tokens_for_tokens(
             NativeAsset::get(),
-            EnergyAsset::get(),
+            A::get().into(),
             amount,
             include_fee,
         )
@@ -171,31 +179,33 @@ where
     ) -> Option<Self::Balance> {
         Exchange::quote_price_tokens_for_exact_tokens(
             NativeAsset::get(),
-            EnergyAsset::get(),
+            A::get().into(),
             amount,
             include_fee,
         )
     }
 }
 
-impl<Exchange, NativeAsset, EnergyAsset> QuotePriceEnergyForNative
-    for NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>
+impl<AccountId, Exchange, NativeAsset, F, A> QuotePriceEnergyForNative
+    for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
     Exchange: QuotePrice,
     NativeAsset: Get<Exchange::AssetKind>,
-    EnergyAsset: Get<Exchange::AssetKind>,
+    F: fungibles::Inspect<AccountId>,
+    A: Get<F::AssetId>,
+    F::AssetId: Into<Exchange::AssetKind>,
 {
     type Balance = Exchange::Balance;
     type AssetKind = Exchange::AssetKind;
     type NativeAsset = NativeAsset;
-    type EnergyAsset = EnergyAsset;
+    type EnergyAsset = ItemOf<F, A, AccountId>;
 
     fn quote_price_exact_tokens_for_tokens(
         amount: Self::Balance,
         include_fee: bool,
     ) -> Option<Self::Balance> {
         Exchange::quote_price_exact_tokens_for_tokens(
-            EnergyAsset::get(),
+            A::get().into(),
             NativeAsset::get(),
             amount,
             include_fee,
@@ -207,7 +217,7 @@ where
         include_fee: bool,
     ) -> Option<Self::Balance> {
         Exchange::quote_price_tokens_for_exact_tokens(
-            EnergyAsset::get(),
+            A::get().into(),
             NativeAsset::get(),
             amount,
             include_fee,
@@ -215,18 +225,20 @@ where
     }
 }
 
-impl<AccountId, Exchange, NativeAsset, EnergyAsset> SwapNativeForEnergy<AccountId>
-    for NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>
+impl<AccountId, Exchange, NativeAsset, F, A> SwapNativeForEnergy<AccountId>
+    for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
     AccountId: Clone,
     Exchange: Swap<AccountId>,
     NativeAsset: Get<Exchange::AssetKind>,
-    EnergyAsset: Get<Exchange::AssetKind>,
+    F: fungibles::Inspect<AccountId>,
+    A: Get<F::AssetId>,
+    F::AssetId: Into<Exchange::AssetKind>,
 {
     type Balance = Exchange::Balance;
     type AssetKind = Exchange::AssetKind;
     type NativeAsset = NativeAsset;
-    type EnergyAsset = EnergyAsset;
+    type EnergyAsset = ItemOf<F, A, AccountId>;
 
     fn swap_exact_tokens_for_tokens(
         who: AccountId,
@@ -237,7 +249,7 @@ where
 
         Exchange::swap_exact_tokens_for_tokens(
             who,
-            vec![NativeAsset::get(), EnergyAsset::get()],
+            vec![NativeAsset::get(), A::get().into()],
             amount_in,
             None,
             send_to,
@@ -254,7 +266,7 @@ where
 
         Exchange::swap_tokens_for_exact_tokens(
             who,
-            vec![NativeAsset::get(), EnergyAsset::get()],
+            vec![NativeAsset::get(), A::get().into()],
             amount_out,
             None,
             send_to,
@@ -263,18 +275,20 @@ where
     }
 }
 
-impl<AccountId, Exchange, NativeAsset, EnergyAsset> SwapEnergyForNative<AccountId>
-    for NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>
+impl<AccountId, Exchange, NativeAsset, F, A> SwapEnergyForNative<AccountId>
+    for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
     AccountId: Clone,
     Exchange: Swap<AccountId>,
     NativeAsset: Get<Exchange::AssetKind>,
-    EnergyAsset: Get<Exchange::AssetKind>,
+    F: fungibles::Inspect<AccountId>,
+    A: Get<F::AssetId>,
+    F::AssetId: Into<Exchange::AssetKind>,
 {
     type Balance = Exchange::Balance;
     type AssetKind = Exchange::AssetKind;
     type NativeAsset = NativeAsset;
-    type EnergyAsset = EnergyAsset;
+    type EnergyAsset = ItemOf<F, A, AccountId>;
 
     fn swap_exact_tokens_for_tokens(
         who: AccountId,
@@ -285,7 +299,7 @@ where
 
         Exchange::swap_exact_tokens_for_tokens(
             who,
-            vec![EnergyAsset::get(), NativeAsset::get()],
+            vec![A::get().into(), NativeAsset::get()],
             amount_in,
             None,
             send_to,
@@ -302,7 +316,7 @@ where
 
         Exchange::swap_tokens_for_exact_tokens(
             who,
-            vec![EnergyAsset::get(), NativeAsset::get()],
+            vec![A::get().into(), NativeAsset::get()],
             amount_out,
             None,
             send_to,

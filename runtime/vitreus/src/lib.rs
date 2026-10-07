@@ -1251,7 +1251,7 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyAsset = EnergyAsset;
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
-    type EnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, VNRG>;
+    type EnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, EnergyAsset>;
     type OnWithdrawFee = NacManaging;
     type OnEnergyBurn = (EnergyBroker, DynamicEnergy);
     type FeeRecyclingRate = TreasuryExtension;
