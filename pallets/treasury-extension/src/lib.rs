@@ -32,10 +32,11 @@
 
 use frame_support::{
     pallet_prelude::*,
+    storage::with_storage_layer,
     traits::{
         fungible::{Inspect, Mutate},
         tokens::{Fortitude, Precision, Preservation},
-        Currency, Get, Imbalance, IsType, OnUnbalanced,
+        Currency, Defensive, Get, Imbalance, IsType, OnUnbalanced,
     },
 };
 use pallet_treasury::{BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
@@ -145,7 +146,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     fn exchange_energy() {
         let account_id = pallet_treasury::Pallet::<T, I>::account_id();
 
-        let _ = Self::convert_energy_to_liquid_energy(&account_id);
+        let _ = Self::convert_energy_to_liquid_energy(&account_id)
+            .defensive_proof("Converting treasury energy to liquid energy should not fail");
 
         let mut amount = EnergyBalanceOf::<T, I>::zero();
 
@@ -197,7 +199,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             Fortitude::Polite,
         );
 
-        if !energy_balance.is_zero() {
+        if energy_balance.is_zero() {
+            return Ok(EnergyBalanceOf::<T, I>::zero());
+        }
+
+        with_storage_layer(|| {
             let burned_amount = T::EnergyAsset::burn_from(
                 account_id,
                 energy_balance,
@@ -207,9 +213,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             )?;
 
             T::LiquidEnergyAsset::mint_into(account_id, burned_amount)
-        } else {
-            Ok(EnergyBalanceOf::<T, I>::zero())
-        }
+        })
     }
 
     fn update_fee_recycling_rate(total_weight: &mut Weight) {
