@@ -48,6 +48,9 @@ pub trait QuotePriceNativeForEnergy {
     /// A constant representing the native asset kind.
     type NativeAsset: Get<Self::AssetKind>;
     /// The energy asset being quoted, as a fungible.
+    ///
+    /// Consumers bind it to the fungible they use, so a runtime cannot give them an exchange for
+    /// another asset.
     type EnergyAsset;
 
     /// Quotes the amount of energy resulting from swapping the exact `amount` of native currency.
@@ -72,6 +75,9 @@ pub trait QuotePriceEnergyForNative {
     /// A constant representing the native asset kind.
     type NativeAsset: Get<Self::AssetKind>;
     /// The energy asset being quoted, as a fungible.
+    ///
+    /// Consumers bind it to the fungible they use, so a runtime cannot give them an exchange for
+    /// another asset.
     type EnergyAsset;
 
     /// Quotes the amount of native currency resulting from swapping the exact `amount` of energy.
@@ -96,6 +102,9 @@ pub trait SwapNativeForEnergy<AccountId> {
     /// A constant representing the native asset kind.
     type NativeAsset: Get<Self::AssetKind>;
     /// The energy asset being swapped, as a fungible.
+    ///
+    /// Consumers bind it to the fungible they use, so a runtime cannot give them an exchange for
+    /// another asset.
     type EnergyAsset;
 
     /// Swaps an exact amount of native currency for energy.
@@ -122,6 +131,9 @@ pub trait SwapEnergyForNative<AccountId> {
     /// A constant representing the native asset kind.
     type NativeAsset: Get<Self::AssetKind>;
     /// The energy asset being swapped, as a fungible.
+    ///
+    /// Consumers bind it to the fungible they use, so a runtime cannot give them an exchange for
+    /// another asset.
     type EnergyAsset;
 
     /// Swaps an exact amount of energy for native currency.

@@ -93,12 +93,14 @@ pub mod pallet {
         type StaticEnergyExchange: SwapEnergyForNative<
             Self::AccountId,
             Balance = EnergyBalanceOf<Self, I>,
+            EnergyAsset = Self::StaticEnergyAsset,
         >;
 
         /// A type used for swapping Liquid Energy for native currency.
         type LiquidEnergyExchange: SwapEnergyForNative<
             Self::AccountId,
             Balance = EnergyBalanceOf<Self, I>,
+            EnergyAsset = Self::LiquidEnergyAsset,
         >;
 
         /// Funds ratio to be recycled.

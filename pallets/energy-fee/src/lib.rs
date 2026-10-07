@@ -162,8 +162,12 @@ pub mod pallet {
             + Mutate<Self::AccountId>;
 
         /// A type used for swapping native currency for energy.
-        type EnergyExchange: QuotePriceNativeForEnergy<Balance = BalanceOf<Self>>
-            + SwapNativeForEnergy<Self::AccountId, Balance = BalanceOf<Self>>;
+        type EnergyExchange: QuotePriceNativeForEnergy<Balance = BalanceOf<Self>, EnergyAsset = Self::EnergyAsset>
+            + SwapNativeForEnergy<
+                Self::AccountId,
+                Balance = BalanceOf<Self>,
+                EnergyAsset = Self::EnergyAsset,
+            >;
 
         /// Handler for when a fee has been withdrawn.
         type OnWithdrawFee: OnWithdrawFeeHandler<Self::AccountId>;
