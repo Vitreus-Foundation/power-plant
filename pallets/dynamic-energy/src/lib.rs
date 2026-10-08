@@ -3,7 +3,7 @@
 
 use frame_support::traits::{
     tokens::{Balance, ConversionFromAssetBalance, ConversionToAssetBalance},
-    Contains, Get, UnixTime,
+    Contains, Defensive, Get, UnixTime,
 };
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
@@ -97,10 +97,6 @@ pub mod pallet {
 
         /// Time used for computing session duration.
         type UnixTime: UnixTime;
-
-        /// Number of sessions per era.
-        #[pallet::constant]
-        type SessionsPerEra: Get<SessionIndex>;
 
         /// Session duration in seconds.
         #[pallet::constant]
@@ -442,6 +438,21 @@ impl<T: Config> Pallet<T> {
         EnergyGeneration::<T>::insert(index, rate);
     }
 
+    /// When an era starts, keeps only this session in `EnergyGeneration`, as `calculate` has
+    /// already summed the previous eras. Must run after `update_generation_rate`, which reads
+    /// the last session.
+    fn prune_energy_generation(index: SessionIndex) {
+        let era_started = T::Staking::active_era()
+            .and_then(T::Staking::session_range_for_era)
+            .is_some_and(|(start, _)| start == index);
+
+        if era_started {
+            let rate = EnergyGeneration::<T>::get(index);
+            let _ = EnergyGeneration::<T>::clear(u32::MAX, None);
+            EnergyGeneration::<T>::insert(index, rate);
+        }
+    }
+
     fn update_exchange_rate(index: SessionIndex, duration: u32) {
         let energy_sale =
             EnergySaleOverride::<T>::get().unwrap_or_else(SessionEnergySale::<T>::get);
@@ -594,9 +605,7 @@ impl<T: Config> OnSessionChange for Pallet<T> {
         SessionEnergyBurn::<T>::put(EnergyOf::<T>::zero());
         SessionEnergySale::<T>::put(EnergyOf::<T>::zero());
 
-        if let Some(old_session) = index.checked_sub(T::SessionsPerEra::get() + 1) {
-            EnergyGeneration::<T>::remove(old_session);
-        }
+        Self::prune_energy_generation(index);
     }
 }
 
@@ -606,7 +615,10 @@ impl<T: Config> EraEnergyRateCalculator<EnergyOf<T>> for Pallet<T> {
 
         let mut total = EnergyOf::<T>::zero();
         for index in start..end {
-            let amount = EnergyGeneration::<T>::get(index);
+            let amount = EnergyGeneration::<T>::try_get(index)
+                .map_err(|()| index)
+                .defensive_proof("sessions are pruned only after their era is calculated; qed")
+                .unwrap_or_default();
 
             log::trace!(target: LOG_TARGET, "Energy generated in session {:?}: {:?}", index, amount);
 

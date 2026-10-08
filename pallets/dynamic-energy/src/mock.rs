@@ -12,6 +12,12 @@ pub(crate) const ENERGY_SALE: u128 = 2000;
 pub(crate) const TOTAL_STAKE: u128 = 3000;
 pub(crate) const INIT_TIMESTAMP: u64 = 30_000;
 
+parameter_types! {
+    // sessions per staking era; tests make eras longer, as when elections fail
+    pub static EraLength: SessionIndex = 3;
+    pub static CurrentSession: SessionIndex = 0;
+}
+
 pub struct MockStaking;
 
 impl Staking<u128> for MockStaking {
@@ -22,15 +28,15 @@ impl Staking<u128> for MockStaking {
 
 impl EraSessionLookup for MockStaking {
     fn active_era() -> Option<EraIndex> {
-        None
+        Self::era_for_session(CurrentSession::get())
     }
 
     fn era_for_session(session_index: SessionIndex) -> Option<EraIndex> {
-        Some(session_index / SessionsPerEra::get())
+        Some(session_index / EraLength::get())
     }
 
     fn session_range_for_era(era_index: EraIndex) -> Option<(SessionIndex, SessionIndex)> {
-        Some((era_index * SessionsPerEra::get(), (era_index + 1) * SessionsPerEra::get()))
+        Some((era_index * EraLength::get(), (era_index + 1) * EraLength::get()))
     }
 }
 
@@ -64,7 +70,6 @@ impl frame_system::Config for Test {
 impl pallet_timestamp::Config for Test {}
 
 parameter_types! {
-    pub SessionsPerEra: u32 = 3;
     pub ExpectedSessionDuration: u32 = 600;
     pub DefaultAnnualPercentageRate: u32 = 100;
     pub DefaultMultiplierCoefficients: [FixedI128; 4] = [
@@ -80,7 +85,6 @@ impl pallet_dynamic_energy::Config for Test {
     type Staking = MockStaking;
     type Warehouse = MockWarehouse;
     type UnixTime = Timestamp;
-    type SessionsPerEra = SessionsPerEra;
     type ExpectedSessionDuration = ExpectedSessionDuration;
     type DefaultAnnualPercentageRate = DefaultAnnualPercentageRate;
     type DefaultMultiplierCoefficients = DefaultMultiplierCoefficients;
@@ -103,5 +107,6 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
 pub(crate) fn start_session(index: SessionIndex) {
     let session_millis = u64::from(ExpectedSessionDuration::get()) * 1000;
     Timestamp::set_timestamp(INIT_TIMESTAMP + u64::from(index) * session_millis);
+    CurrentSession::set(index);
     Pallet::<Test>::on_new_session(index);
 }

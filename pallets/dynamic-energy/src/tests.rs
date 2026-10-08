@@ -114,14 +114,51 @@ fn energy_generation_works() {
         assert!(total_generation > 0);
         assert_eq!(Pallet::<Test>::calculate(0), Some(total_generation));
 
-        // old data removed
+        // era 0 data removed once era 1 starts
         start_session(3);
         start_session(4);
         assert!(!EnergyGeneration::<Test>::contains_key(0));
-        assert!(EnergyGeneration::<Test>::contains_key(1));
-        assert!(EnergyGeneration::<Test>::contains_key(2));
+        assert!(!EnergyGeneration::<Test>::contains_key(1));
+        assert!(!EnergyGeneration::<Test>::contains_key(2));
         assert!(EnergyGeneration::<Test>::contains_key(3));
         assert!(EnergyGeneration::<Test>::contains_key(4));
+    });
+}
+
+#[test]
+fn calculating_energy_generation_works() {
+    new_test_ext().execute_with(|| {
+        // eras of 3 sessions; staking calculates an era before the next one starts, and every
+        // session generates the energy burn override from genesis
+        for era in 0..3 {
+            for index in 3 * era..3 * (era + 1) {
+                start_session(index);
+            }
+
+            assert_eq!(Pallet::<Test>::calculate(era), Some(3 * ENERGY_BURN));
+        }
+    });
+}
+
+#[test]
+fn calculating_long_era_energy_generation_works() {
+    new_test_ext().execute_with(|| {
+        // era 0 lasts 7 sessions instead of 3, as when elections fail
+        EraLength::set(7);
+
+        for index in 0..7 {
+            start_session(index);
+        }
+
+        // every session generates the energy burn override from genesis
+        assert_eq!(Pallet::<Test>::calculate(0), Some(7 * ENERGY_BURN));
+
+        // era 0 data removed
+        for index in 7..11 {
+            start_session(index);
+        }
+        assert!((0..7).all(|index| !EnergyGeneration::<Test>::contains_key(index)));
+        assert!((7..11).all(EnergyGeneration::<Test>::contains_key));
     });
 }
 
