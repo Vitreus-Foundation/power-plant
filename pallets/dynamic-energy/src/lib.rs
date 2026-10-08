@@ -501,6 +501,15 @@ impl<T: Config> Pallet<T> {
                 smooth_factor,
             ));
 
+            if rate.is_zero() {
+                log::warn!(
+                    target: LOG_TARGET,
+                    "Exchange rate rounds down to zero: energy_sale: {:?}, total_stake: {:?}",
+                    energy_sale, total_stake
+                );
+                return;
+            }
+
             ExchangeRate::<T>::put(rate);
 
             Self::deposit_event(Event::ExchangeRateUpdated { rate });
