@@ -144,6 +144,11 @@ fn calculating_energy_generation_works() {
         for era in 0..3 {
             for index in 3 * era..3 * (era + 1) {
                 start_session(index);
+
+                // the rate is smoothed with the previous session, which pruning at an era start
+                // must not remove first
+                let old_rate = (index > 0).then_some(ENERGY_BURN);
+                assert_eq!(Pallet::<Test>::generation_rate_parameters().old_rate, old_rate);
             }
 
             assert_eq!(Pallet::<Test>::calculate(era), Some(3 * ENERGY_BURN));
