@@ -1,4 +1,99 @@
 use crate::{mock::*, *};
+use frame_support::{assert_noop, assert_ok};
+
+#[test]
+fn setting_multiplier_coefficients_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        // 0.02*x + 1, which is 2 at the mock warehouse fill of 50%
+        let coefficients = [
+            FixedI128::zero(),
+            FixedI128::zero(),
+            FixedI128::from_rational(2, 100),
+            FixedI128::one(),
+        ];
+        let [a, b, c, d] = coefficients;
+
+        assert_ok!(Pallet::<Test>::set_multiplier_coefficients(RuntimeOrigin::root(), a, b, c, d));
+        assert_eq!(MultiplierCoefficients::<Test>::get(), coefficients);
+        System::assert_last_event(
+            Event::<Test>::MultiplierCoefficientsUpdated { coefficients }.into(),
+        );
+
+        assert_eq!(
+            Pallet::<Test>::calculate_warehouse_capacity_multiplier(),
+            FixedU128::from_u32(2)
+        );
+    });
+}
+
+#[test]
+fn setting_overflowing_multiplier_coefficients_fails() {
+    new_test_ext().execute_with(|| {
+        let zero = FixedI128::zero();
+
+        // a*x^3 fits at the mock warehouse fill of 50%, but overflows at the full warehouse
+        let a = FixedI128::saturating_from_integer(1_000_000_000_000_000u64);
+        assert_noop!(
+            Pallet::<Test>::set_multiplier_coefficients(RuntimeOrigin::root(), a, zero, zero, zero),
+            Error::<Test>::InvalidMultiplierCoefficients
+        );
+
+        // a*x^3 and b*x^2 fit at the full warehouse, but their sum overflows
+        let a = FixedI128::saturating_from_integer(100_000_000_000_000u64);
+        let b = FixedI128::saturating_from_integer(10_000_000_000_000_000u64);
+        assert_noop!(
+            Pallet::<Test>::set_multiplier_coefficients(RuntimeOrigin::root(), a, b, zero, zero),
+            Error::<Test>::InvalidMultiplierCoefficients
+        );
+    });
+}
+
+#[test]
+fn calculating_polynomial_works() {
+    // on-chain coefficients: -0.000001*x^3 + 0.000147*x^2 - 0.009475*x + 1.228239
+    let coefficients = [
+        FixedI128::from_inner(-1_000_000_000_000),
+        FixedI128::from_inner(147_000_000_000_000),
+        FixedI128::from_inner(-9_475_000_000_000_000),
+        FixedI128::from_inner(1_228_239_000_000_000_000),
+    ];
+
+    assert_eq!(
+        Pallet::<Test>::checked_polynomial(coefficients, FixedI128::from_u32(0)),
+        Some(FixedI128::from_rational(1_228_239, 1_000_000))
+    );
+    assert_eq!(
+        Pallet::<Test>::checked_polynomial(coefficients, FixedI128::from_u32(50)),
+        Some(FixedI128::from_rational(996_989, 1_000_000))
+    );
+    assert_eq!(
+        Pallet::<Test>::checked_polynomial(coefficients, FixedI128::from_u32(100)),
+        Some(FixedI128::from_rational(750_739, 1_000_000))
+    );
+}
+
+#[test]
+fn calculating_overflowing_multiplier_works() {
+    new_test_ext().execute_with(|| {
+        let zero = FixedI128::zero();
+
+        // a*x^3 overflows at the mock warehouse fill of 50%
+        MultiplierCoefficients::<Test>::put([FixedI128::from_inner(i128::MAX), zero, zero, zero]);
+        assert_eq!(Pallet::<Test>::calculate_warehouse_capacity_multiplier(), FixedU128::one());
+
+        // a*x^3 and b*x^2 fit at the mock warehouse fill of 50%, but their sum overflows
+        let a = FixedI128::saturating_from_integer(800_000_000_000_000u64);
+        let b = FixedI128::saturating_from_integer(40_000_000_000_000_000u64);
+        MultiplierCoefficients::<Test>::put([a, b, zero, zero]);
+        assert_eq!(Pallet::<Test>::calculate_warehouse_capacity_multiplier(), FixedU128::one());
+
+        // the session change goes through the same calculation
+        Pallet::<Test>::on_new_session(1);
+        assert_eq!(Pallet::<Test>::exchange_rate_parameters().multiplier, FixedU128::one());
+    });
+}
 
 #[test]
 fn energy_generation_works() {
