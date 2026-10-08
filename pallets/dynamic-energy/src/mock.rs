@@ -10,6 +10,7 @@ type Block = frame_system::mocking::MockBlock<Test>;
 pub(crate) const ENERGY_BURN: u128 = 1000;
 pub(crate) const ENERGY_SALE: u128 = 2000;
 pub(crate) const TOTAL_STAKE: u128 = 3000;
+pub(crate) const INIT_TIMESTAMP: u64 = 30_000;
 
 pub struct MockStaking;
 
@@ -97,4 +98,10 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     .unwrap();
 
     t.into()
+}
+
+pub(crate) fn start_session(index: SessionIndex) {
+    let session_millis = u64::from(ExpectedSessionDuration::get()) * 1000;
+    Timestamp::set_timestamp(INIT_TIMESTAMP + u64::from(index) * session_millis);
+    Pallet::<Test>::on_new_session(index);
 }

@@ -90,7 +90,7 @@ fn calculating_overflowing_multiplier_works() {
         assert_eq!(Pallet::<Test>::calculate_warehouse_capacity_multiplier(), FixedU128::one());
 
         // the session change goes through the same calculation
-        Pallet::<Test>::on_new_session(1);
+        start_session(1);
         assert_eq!(Pallet::<Test>::exchange_rate_parameters().multiplier, FixedU128::one());
     });
 }
@@ -98,13 +98,13 @@ fn calculating_overflowing_multiplier_works() {
 #[test]
 fn energy_generation_works() {
     new_test_ext().execute_with(|| {
-        Pallet::<Test>::on_new_session(0);
+        start_session(0);
         assert!(EnergyGeneration::<Test>::contains_key(0));
 
-        Pallet::<Test>::on_new_session(1);
+        start_session(1);
         assert!(EnergyGeneration::<Test>::contains_key(1));
 
-        Pallet::<Test>::on_new_session(2);
+        start_session(2);
         assert!(EnergyGeneration::<Test>::contains_key(2));
 
         let total_generation = EnergyGeneration::<Test>::get(0)
@@ -115,8 +115,8 @@ fn energy_generation_works() {
         assert_eq!(Pallet::<Test>::calculate(0), Some(total_generation));
 
         // old data removed
-        Pallet::<Test>::on_new_session(3);
-        Pallet::<Test>::on_new_session(4);
+        start_session(3);
+        start_session(4);
         assert!(!EnergyGeneration::<Test>::contains_key(0));
         assert!(EnergyGeneration::<Test>::contains_key(1));
         assert!(EnergyGeneration::<Test>::contains_key(2));
@@ -135,14 +135,14 @@ fn calculating_zero_exchange_rate_works() {
         TotalStakeOverride::<Test>::put(100_000_000 * unit);
 
         Pallet::<Test>::on_energy_sell(10_000 * unit);
-        Pallet::<Test>::on_new_session(1);
+        start_session(1);
         let rate = Pallet::<Test>::exchange_rate().unwrap();
         assert!(!rate.is_zero());
 
         // at this stake, a sale of 1 gives a rate that rounds down to zero, which must not
         // replace the previous one
         Pallet::<Test>::on_energy_sell(1);
-        Pallet::<Test>::on_new_session(2);
+        start_session(2);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
         System::assert_last_event(Event::<Test>::ExchangeRateUpdated { rate }.into());
     });
@@ -151,14 +151,14 @@ fn calculating_zero_exchange_rate_works() {
 #[test]
 fn calculating_sold_energy_works() {
     new_test_ext().execute_with(|| {
-        Pallet::<Test>::on_new_session(0);
+        start_session(0);
         assert_eq!(SessionEnergySale::<Test>::get(), 0);
 
         Pallet::<Test>::on_energy_sell(500);
         Pallet::<Test>::on_energy_sell(1000);
         assert_eq!(SessionEnergySale::<Test>::get(), 1500);
 
-        Pallet::<Test>::on_new_session(1);
+        start_session(1);
         assert_eq!(SessionEnergySale::<Test>::get(), 0);
     });
 }
@@ -166,14 +166,14 @@ fn calculating_sold_energy_works() {
 #[test]
 fn calculating_burned_energy_works() {
     new_test_ext().execute_with(|| {
-        Pallet::<Test>::on_new_session(0);
+        start_session(0);
         assert_eq!(SessionEnergyBurn::<Test>::get(), 0);
 
         Pallet::<Test>::on_energy_burn(500);
         Pallet::<Test>::on_energy_burn(1000);
         assert_eq!(SessionEnergyBurn::<Test>::get(), 1500);
 
-        Pallet::<Test>::on_new_session(1);
+        start_session(1);
         assert_eq!(SessionEnergyBurn::<Test>::get(), 0);
     });
 }
