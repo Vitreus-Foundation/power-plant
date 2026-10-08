@@ -220,6 +220,8 @@ pub mod pallet {
         InvalidSmoothFactor,
         /// The multiplier polynomial can overflow with these coefficients.
         InvalidMultiplierCoefficients,
+        /// Invalid annual percentage rate value.
+        InvalidAnnualPercentageRate,
     }
 
     #[pallet::genesis_config]
@@ -324,6 +326,7 @@ pub mod pallet {
         pub fn set_annual_percentage_rate(origin: OriginFor<T>, value: u32) -> DispatchResult {
             T::ManageOrigin::ensure_origin(origin)?;
 
+            ensure!(value > 0, Error::<T>::InvalidAnnualPercentageRate);
             AnnualPercentageRate::<T>::set(value);
             Self::deposit_event(Event::AnnualPercentageRateUpdated { value });
 

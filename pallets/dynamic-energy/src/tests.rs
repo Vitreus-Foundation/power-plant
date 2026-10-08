@@ -2,6 +2,17 @@ use crate::{mock::*, *};
 use frame_support::{assert_noop, assert_ok};
 
 #[test]
+fn setting_zero_annual_percentage_rate_fails() {
+    new_test_ext().execute_with(|| {
+        // zero APR makes the denominator of the exchange rate zero
+        assert_noop!(
+            Pallet::<Test>::set_annual_percentage_rate(RuntimeOrigin::root(), 0),
+            Error::<Test>::InvalidAnnualPercentageRate
+        );
+    });
+}
+
+#[test]
 fn setting_multiplier_coefficients_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
