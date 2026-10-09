@@ -15,11 +15,18 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Improve validation and error reporting in `pallet-energy-broker`
 - Set `spec_name` to `vitreus-power-plant-testnet` on testnet
+- Reject a zero value in `set_annual_percentage_rate` of `pallet-dynamic-energy`
+- Reject coefficients that can overflow the multiplier in `set_multiplier_coefficients` of `pallet-dynamic-energy`
+
+### Removed
+
+- Remove the `SessionsPerEra` constant from `pallet-dynamic-energy`
 
 ### Fixed
 
 - Fix energy sale tracking in `pallet-energy-broker`
 - Roll back failed `pallet-energy-broker` swaps made by other pallets
+- Fix exchange rate and energy generation edge cases in `pallet-dynamic-energy`
 
 ## [214] - 2026-09-25
 
