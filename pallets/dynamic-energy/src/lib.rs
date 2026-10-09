@@ -175,7 +175,8 @@ pub mod pallet {
     #[pallet::storage]
     pub type SessionEnergySale<T: Config> = StorageValue<_, EnergyOf<T>, ValueQuery>;
 
-    /// Energy generation per session.
+    /// Energy generation per session of the active era.
+    /// Sessions of previous eras are removed when an era starts.
     #[pallet::storage]
     pub type EnergyGeneration<T: Config> =
         StorageMap<_, Twox64Concat, SessionIndex, EnergyOf<T>, ValueQuery>;
