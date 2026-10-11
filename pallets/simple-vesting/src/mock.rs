@@ -73,6 +73,8 @@ impl pallet_balances::Config for Test {
 }
 
 impl pallet_simple_vesting::Config for Test {
+    type NativeCurrencyObserverWeight = ();
+    type OnVestingChanged = ();
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type BlockNumberToBalance = Identity;

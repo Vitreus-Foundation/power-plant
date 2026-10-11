@@ -171,6 +171,7 @@ pub(crate) fn energy_sold() -> u128 {
 }
 
 impl Config for Test {
+    type NativeCurrencyObserverWeight = ();
     type RuntimeEvent = RuntimeEvent;
     type ManageOrigin = EnsureRoot<u128>;
     type Balance = u128;

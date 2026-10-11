@@ -98,6 +98,10 @@ pub mod pallet {
             Balance = Self::StakeBalance,
         >;
 
+        /// Additional cost of each native account-store observation performed by
+        /// the runtime currency. Deferred slash hooks reserve this before work.
+        type NativeCurrencyObserverWeight: Get<Weight>;
+
         /// Just the `StakeCurrency::Balance` type; we have this item to allow us to constrain it to
         /// `From<u64>`.
         type StakeBalance: AtLeast32BitUnsigned
@@ -934,7 +938,6 @@ pub mod pallet {
 
                 // NOTE: ledger must be updated prior to calling `Self::weight_of`.
                 Self::update_ledger(&controller, &ledger);
-                T::OnVipMembershipHandler::update_active_stake(&stash);
 
                 Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
             }
@@ -1045,7 +1048,6 @@ pub mod pallet {
 
                 // NOTE: ledger must be updated prior to calling `Self::weight_of`.
                 Self::update_ledger(&controller, &ledger);
-                Self::adjust_cooperator_targets(&ledger.stash, ledger.active);
 
                 Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
             }

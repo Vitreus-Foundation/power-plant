@@ -47,7 +47,7 @@ parameter_types! {
 }
 
 impl pallet_preimage::Config for Runtime {
-    type WeightInfo = pallet_preimage::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = crate::vip_currency_weights::VippCurrencyWeights;
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type ManagerOrigin = EnsureRoot<AccountId>;
@@ -95,7 +95,7 @@ impl pallet_multisig::Config for Runtime {
     type DepositBase = DepositBase;
     type DepositFactor = DepositFactor;
     type MaxSignatories = MaxSignatories;
-    type WeightInfo = pallet_multisig::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = crate::vip_currency_weights::VippCurrencyWeights;
 }
 
 parameter_types! {
@@ -135,7 +135,7 @@ impl pallet_elections_phragmen::Config for Runtime {
     type MaxCandidates = MaxCandidates;
     type MaxVoters = MaxVoters;
     type MaxVotesPerVoter = MaxVotesPerVoter;
-    type WeightInfo = pallet_elections_phragmen::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = crate::vip_currency_weights::VippCurrencyWeights;
 }
 
 parameter_types! {
@@ -198,7 +198,7 @@ impl pallet_treasury::Config for Runtime {
     type Burn = Burn;
     type BurnDestination = ();
     type MaxApprovals = MaxApprovals;
-    type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = crate::vip_currency_weights::VippCurrencyWeights;
     type SpendFunds = (Bounties, TreasuryExtension);
     type SpendOrigin = EitherOf<
         frame_system::EnsureRootWithSuccess<AccountId, RootSpendOriginMaxAmount>,
@@ -258,7 +258,7 @@ impl pallet_treasury::Config<TechnicalCommitteeTreasury> for Runtime {
     type Burn = Burn;
     type PalletId = TechnicalCommitteeTreasuryPalletId;
     type BurnDestination = ();
-    type WeightInfo = pallet_treasury::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = crate::vip_currency_weights::VippCurrencyWeights;
     type SpendFunds = ();
     type MaxApprovals = MaxApprovals;
     type SpendOrigin = EitherOf<
@@ -309,6 +309,7 @@ parameter_types! {
 }
 
 impl pallet_treasury_extension::Config for Runtime {
+    type EnergyExchangeWeight = crate::vip_currency_weights::TreasuryEnergyExchangesWeight;
     type RuntimeEvent = RuntimeEvent;
     type EnergyAsset = EnergyAsset;
     type StaticEnergyAsset = StaticEnergyAsset;
@@ -320,7 +321,7 @@ impl pallet_treasury_extension::Config for Runtime {
     type TreasuryTargetBalance = TreasuryTargetBalance;
     type FeeRecyclingBaseRate = FeeRecyclingBaseRate;
     type FeeRecyclingScalingFactor = FeeRecyclingScalingFactor;
-    type WeightInfo = pallet_treasury_extension::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = crate::vip_currency_weights::VippCurrencyWeights;
 }
 
 parameter_types! {
@@ -345,7 +346,7 @@ impl pallet_bounties::Config for Runtime {
     type DataDepositPerByte = DataDepositPerByte;
     type RuntimeEvent = RuntimeEvent;
     type MaximumReasonLength = MaximumReasonLength;
-    type WeightInfo = pallet_bounties::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = crate::vip_currency_weights::VippCurrencyWeights;
     type ChildBountyManager = ();
     type OnSlash = Treasury;
 }
@@ -363,7 +364,7 @@ parameter_types! {
 }
 
 impl pallet_democracy::Config for Runtime {
-    type WeightInfo = pallet_democracy::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = crate::vip_currency_weights::VippCurrencyWeights;
     type RuntimeEvent = RuntimeEvent;
     type Scheduler = Scheduler;
     type Preimages = Preimage;

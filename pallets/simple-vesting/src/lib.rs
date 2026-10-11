@@ -105,6 +105,16 @@ where
     }
 }
 
+/// Observe a newly reserved vesting schedule after its named reserve is committed.
+pub trait OnVestingChanged<AccountId> {
+    /// Inspect the final schedule and named reserve, without performing heavy work.
+    fn on_vesting_changed(who: &AccountId);
+}
+
+impl<AccountId> OnVestingChanged<AccountId> for () {
+    fn on_vesting_changed(_who: &AccountId) {}
+}
+
 #[frame_support::pallet]
 pub mod pallet {
     use frame_support::pallet_prelude::*;
@@ -122,6 +132,12 @@ pub mod pallet {
     pub trait Config: frame_system::Config {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// Additional cost of one native balance AccountStore observation.
+        type NativeCurrencyObserverWeight: Get<Weight>;
+        /// Lightweight post-reservation observer. The currency's account-store
+        /// hook runs before the named reserve metadata has been committed.
+        type OnVestingChanged: OnVestingChanged<Self::AccountId>;
         /// The currency trait.
         type Currency: NamedReservableCurrency<Self::AccountId, ReserveIdentifier = [u8; 8]>;
         /// Convert the block number into a balance.
@@ -220,7 +236,8 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         /// Unlock any vested funds of the sender account.
         #[pallet::call_index(0)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(3, 3))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(3, 3)
+            .saturating_add(T::NativeCurrencyObserverWeight::get().saturating_mul(2)))]
         pub fn vest(origin: OriginFor<T>) -> DispatchResult {
             let who = ensure_signed(origin)?;
 
@@ -231,7 +248,8 @@ pub mod pallet {
         ///
         /// The dispatch origin for this call must be _Root_.
         #[pallet::call_index(1)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(4, 4))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(4, 4)
+            .saturating_add(T::NativeCurrencyObserverWeight::get().saturating_mul(7)))]
         pub fn force_vested_transfer(
             origin: OriginFor<T>,
             source: T::AccountId,
@@ -254,6 +272,7 @@ pub mod pallet {
             frame_system::Pallet::<T>::inc_providers(&dest);
 
             T::Currency::reserve_named(&VESTING_ID, &dest, schedule.locked)?;
+            T::OnVestingChanged::on_vesting_changed(&dest);
 
             Self::deposit_event(Event::<T>::VestingCreated {
                 account: dest,
@@ -267,7 +286,8 @@ pub mod pallet {
         ///
         /// The dispatch origin for this call must be _Root_.
         #[pallet::call_index(2)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(4, 4))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(4, 4)
+            .saturating_add(T::NativeCurrencyObserverWeight::get().saturating_mul(4)))]
         pub fn force_remove_vesting(origin: OriginFor<T>, who: T::AccountId) -> DispatchResult {
             ensure_root(origin)?;
 

@@ -162,6 +162,12 @@ mod helpers {
 }
 pub mod areas;
 pub mod migrations;
+mod vip_balance_weights;
+mod vip_currency_weights;
+#[cfg(test)]
+mod vip_rehearsal;
+#[cfg(test)]
+mod vip_weight_calibration;
 mod weights;
 mod xcm_config;
 
@@ -344,8 +350,7 @@ type LiquidEnergyAsset = ItemOf<Assets, LNRG, AccountId>;
 parameter_types! {
     pub const Version: RuntimeVersion = VERSION;
     pub const BlockHashCount: BlockNumber = 256;
-    pub BlockWeights: frame_system::limits::BlockWeights = frame_system::limits::BlockWeights
-        ::with_sensible_defaults(MAXIMUM_BLOCK_WEIGHT, NORMAL_DISPATCH_RATIO);
+    pub BlockWeights: frame_system::limits::BlockWeights = vip_currency_weights::block_weights();
     pub BlockLength: frame_system::limits::BlockLength = frame_system::limits::BlockLength
         ::max_with_normal_ratio(MAXIMUM_BLOCK_LENGTH, NORMAL_DISPATCH_RATIO);
     pub const SS58Prefix: u16 = 1943;
@@ -447,7 +452,7 @@ parameter_types! {
 impl pallet_timestamp::Config for Runtime {
     /// A timestamp: milliseconds since the unix epoch.
     type Moment = Moment;
-    type OnTimestampSet = Babe;
+    type OnTimestampSet = (Babe, Privileges);
     type MinimumPeriod = MinimumPeriod;
     type WeightInfo = ();
 }
@@ -469,12 +474,12 @@ impl pallet_balances::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type RuntimeHoldReason = RuntimeHoldReason;
     type RuntimeFreezeReason = RuntimeFreezeReason;
-    type WeightInfo = pallet_balances::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = vip_balance_weights::VippBalanceWeights<Runtime>;
     /// The type for recording an account's balance.
     type Balance = Balance;
     type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
-    type AccountStore = System;
+    type AccountStore = pallet_nac_managing::balance_observer::VippBalanceObserver<Runtime, System>;
     type ReserveIdentifier = [u8; 8];
     type FreezeIdentifier = RuntimeFreezeReason;
     type MaxLocks = MaxLocks;
@@ -512,7 +517,7 @@ impl pallet_assets::Config for Runtime {
     type Freezer = AssetsFreezer;
     type Extra = ();
     type CallbackHandle = ();
-    type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = AssetsBenchmarkHelper;
 }
@@ -794,6 +799,7 @@ type EnergyGenerationAdminOrigin = EitherOfDiverse<
 >;
 
 impl pallet_energy_generation::Config for Runtime {
+    type NativeCurrencyObserverWeight = vip_currency_weights::NativeCurrencyObserverWeight;
     type AdminOrigin = EnergyGenerationAdminOrigin;
     type BatterySlotCapacity = BatterySlotCapacity;
     type BenchmarkingConfig = EnergyGenerationBenchmarkConfig;
@@ -823,7 +829,7 @@ impl pallet_energy_generation::Config for Runtime {
     type ValidatorExposureMultiplier = ReputationExposureMultiplier;
     type CooperatorExposureMultiplier = ();
     type OnVipMembershipHandler = Privileges;
-    type ThisWeightInfo = ();
+    type ThisWeightInfo = vip_currency_weights::VippCurrencyWeights;
     type UnixTime = Timestamp;
 }
 
@@ -855,7 +861,7 @@ impl pallet_nfts::Config for Runtime {
     type CreateOrigin = frame_system::EnsureNever<AccountId>;
     #[cfg(feature = "testnet-runtime")]
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
-    type Locker = ();
+    type Locker = pallet_nac_managing::transfers::VippNftLocker<Runtime>;
     type CollectionDeposit = CollectionDeposit;
     type ItemDeposit = ItemDeposit;
     type MetadataDepositBase = MetadataDepositBase;
@@ -874,7 +880,7 @@ impl pallet_nfts::Config for Runtime {
     type OffchainPublic = <Signature as Verify>::Signer;
     #[cfg(feature = "runtime-benchmarks")]
     type Helper = NftsBenchmarkHelper;
-    type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
 }
 
 #[cfg(feature = "runtime-benchmarks")]
@@ -935,6 +941,70 @@ impl pallet_nac_managing::Config for Runtime {
     type OnVIPPChanged = Privileges;
     type NftCollectionId = NftCollectionId;
     type VIPPCollectionId = VIPPCollectionId;
+    type MaxVippNftsPerAccount = ConstU32<64>;
+    type MaxPendingVippAccounts = ConstU32<128>;
+    type MaxVippReconciliationsPerBlock = ConstU32<1>;
+    type UnvestedBalance = VippUnvestedBalance;
+}
+
+/// Observe named vesting after reserve metadata is committed, so a following
+/// transfer in the same utility batch cannot erase a temporary eligibility loss.
+pub struct VippVestingChanged;
+
+impl pallet_simple_vesting::OnVestingChanged<AccountId> for VippVestingChanged {
+    fn on_vesting_changed(who: &AccountId) {
+        NacManaging::check_observed_balance(who);
+    }
+}
+
+/// Exclude both locked and reserved, still-unvested VTRS from VIPP eligibility.
+pub struct VippUnvestedBalance;
+
+impl pallet_nac_managing::UnvestedBalance<AccountId, Balance> for VippUnvestedBalance {
+    fn unvested_balance(who: &AccountId) -> Balance {
+        let locked =
+            <Vesting as frame_support::traits::VestingSchedule<AccountId>>::vesting_balance(who)
+                .unwrap_or_default();
+        let reserved = SimpleVesting::vesting(who)
+            .map(|schedule| schedule.locked_at::<<Runtime as pallet_simple_vesting::Config>::BlockNumberToBalance>(System::block_number()))
+            .unwrap_or_default()
+            .min(<Balances as frame_support::traits::NamedReservableCurrency<AccountId>>::reserved_balance_named(b"vesting ", who))
+            // Generic reserve slashes do not update named-reserve metadata.
+            // Never exclude more vesting funds than still exist as reserves.
+            .min(<Balances as frame_support::traits::ReservableCurrency<AccountId>>::reserved_balance(who));
+        locked.saturating_add(reserved)
+    }
+
+    #[cfg(feature = "runtime-benchmarks")]
+    fn benchmark_prepare(who: &AccountId) -> frame_support::dispatch::DispatchResult {
+        use frame_support::traits::NamedReservableCurrency;
+        let amount = pallet_nac_managing::benchmarking::unit::<Runtime>();
+        let starts = System::block_number().saturating_add(1_000_000);
+        let schedules: frame_support::BoundedVec<
+            _,
+            pallet_vesting::MaxVestingSchedulesGet<Runtime>,
+        > = vec![
+            pallet_vesting::VestingInfo::new(amount, 1, starts);
+            <Runtime as pallet_vesting::Config>::MAX_VESTING_SCHEDULES as usize
+        ]
+        .try_into()
+        .expect("the benchmark uses the configured vesting bound");
+        pallet_vesting::Vesting::<Runtime>::insert(who, schedules);
+        // Read and decode the full bounded reserve vector during eligibility checks.
+        for index in 0..<Runtime as pallet_balances::Config>::MaxReserves::get().saturating_sub(1) {
+            <Balances as NamedReservableCurrency<AccountId>>::reserve_named(
+                &u64::from(index).to_le_bytes(),
+                who,
+                1,
+            )?;
+        }
+        <Balances as NamedReservableCurrency<AccountId>>::reserve_named(b"vesting ", who, amount)?;
+        pallet_simple_vesting::Vesting::<Runtime>::insert(
+            who,
+            pallet_simple_vesting::VestingInfo::new(amount, 1, starts),
+        );
+        Ok(())
+    }
 }
 
 parameter_types! {
@@ -995,7 +1065,7 @@ impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
     type Freezer = ();
     type Extra = ();
     type CallbackHandle = ();
-    type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = AssetsBenchmarkHelper;
 }
@@ -1166,6 +1236,7 @@ impl FixedPathAssetConverter<Runtime> for StaticEnergyToEnergyConverter {
 }
 
 impl pallet_energy_broker::Config for Runtime {
+    type NativeCurrencyObserverWeight = vip_currency_weights::NativeCurrencyObserverWeight;
     type RuntimeEvent = RuntimeEvent;
     type ManageOrigin = EnsureRoot<AccountId>;
     type Balance = Balance;
@@ -1238,6 +1309,7 @@ impl pallet_atomic_swap::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type SwapAction = pallet_atomic_swap::BalanceSwapAction<Self::AccountId, Balances>;
     type ProofLimit = ProofLimit;
+    type NativeCurrencyObserverWeight = vip_currency_weights::NativeCurrencyObserverWeight;
 }
 
 parameter_types! {
@@ -1251,7 +1323,7 @@ impl pallet_claiming::Config for Runtime {
     type ClaimData = ();
     type OnClaim = NacManaging;
     type Prefix = Prefix;
-    type WeightInfo = ();
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
 }
 
 #[derive(Decode, Encode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
@@ -1304,7 +1376,7 @@ impl pallet_claiming::Config<pallet_claiming::Instance1> for Runtime {
     type ClaimData = KickstartClaimData;
     type OnClaim = KickstartClaimHandler;
     type Prefix = Prefix;
-    type WeightInfo = ();
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
 }
 
 parameter_types! {
@@ -1319,12 +1391,14 @@ impl pallet_vesting::Config for Runtime {
     type BlockNumberToBalance = ConvertInto;
     type MinVestedTransfer = MinVestedTransfer;
     type BlockNumberProvider = System;
-    type WeightInfo = pallet_vesting::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
     type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
     const MAX_VESTING_SCHEDULES: u32 = 28;
 }
 
 impl pallet_simple_vesting::Config for Runtime {
+    type NativeCurrencyObserverWeight = vip_currency_weights::NativeCurrencyObserverWeight;
+    type OnVestingChanged = VippVestingChanged;
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type BlockNumberToBalance = ConvertInto;
@@ -1487,7 +1561,7 @@ impl pallet_proxy::Config for Runtime {
     type ProxyDepositBase = ProxyDepositBase;
     type ProxyDepositFactor = ProxyDepositFactor;
     type MaxProxies = MaxProxies;
-    type WeightInfo = pallet_proxy::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
     type MaxPending = MaxPending;
     type CallHasher = BlakeTwo256;
     type AnnouncementDepositBase = AnnouncementDepositBase;
@@ -1519,7 +1593,7 @@ impl<F: FindAuthor<u32>> FindAuthor<H160> for FindAuthorTruncated<F> {
 pub struct FixedFeeCalculator;
 impl FeeCalculator for FixedFeeCalculator {
     fn min_gas_price() -> (U256, Weight) {
-        (U256::one(), Weight::zero())
+        (U256::one(), vip_currency_weights::fee_observation_weight())
     }
 }
 
@@ -1722,7 +1796,7 @@ parameter_types! {
 
 impl pallet_evm::Config for Runtime {
     type FeeCalculator = FixedFeeCalculator;
-    type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
+    type GasWeightMapping = vip_currency_weights::VippGasWeightMapping;
     type WeightPerGas = WeightPerGas;
     type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
     type CallOrigin = EnsureAccountId20;
@@ -1879,7 +1953,7 @@ impl parachains_hrmp::Config for Runtime {
         HrmpChannelSizeAndCapacityWithSystemRatio,
     >;
     type VersionWrapper = XcmPallet;
-    type WeightInfo = weights::runtime_parachains_hrmp::WeightInfo<Self>;
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
 }
 
 impl parachains_paras_inherent::Config for Runtime {
@@ -1935,7 +2009,7 @@ impl paras_registrar::Config for Runtime {
     type OnSwap = Slots;
     type ParaDeposit = ParaDeposit;
     type DataDepositPerByte = ParaDataByteDeposit;
-    type WeightInfo = weights::runtime_common_paras_registrar::WeightInfo<Runtime>;
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
 }
 
 parameter_types! {
@@ -1983,10 +2057,11 @@ impl pallet_faucet::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type MaxAmount = FaucetMaxAmount;
     type AccumulationPeriod = FaucetAccumulationPeriod;
-    type WeightInfo = pallet_faucet::weights::SubstrateWeight<Runtime>;
+    type WeightInfo = vip_currency_weights::VippCurrencyWeights;
 }
 
 impl pallet_manual_bridge::Config for Runtime {
+    type NativeCurrencyObserverWeight = vip_currency_weights::NativeCurrencyObserverWeight;
     type RuntimeEvent = RuntimeEvent;
     type Currency = Balances;
     type PayoutOrigin =
@@ -2314,6 +2389,8 @@ impl frame_system_benchmarking::Config for Runtime {}
 #[cfg(all(feature = "runtime-benchmarks", feature = "mainnet-runtime"))]
 mod benches {
     define_benchmarks!(
+        [pallet_privileges, Privileges]
+        [pallet_nac_managing, NacManaging]
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
@@ -2323,6 +2400,8 @@ mod benches {
 #[cfg(all(feature = "runtime-benchmarks", feature = "testnet-runtime"))]
 mod benches {
     define_benchmarks!(
+        [pallet_privileges, Privileges]
+        [pallet_nac_managing, NacManaging]
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]

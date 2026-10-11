@@ -1,0 +1,10 @@
+Source: paritytech/polkadot-sdk stable2407
+Commit: 7642d6b5dea6dd7871ef8bbfcb9d48ba8a8b0f77
+Path: substrate/frame/atomic-swap
+Upstream package: pallet-atomic-swap 37.0.0
+
+Local changes: workspace dependency paths; explicit native account observation
+allowances in create/claim/cancel dispatch weights; preserve proof weight;
+repository formatting and one documentation-list indentation fix for clippy.
+Call indices, SCALE fields, events, storage prefixes and swap behavior retain
+the upstream implementation. Upstream tests and Apache-2.0 license retained.

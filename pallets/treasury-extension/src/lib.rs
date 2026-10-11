@@ -101,6 +101,10 @@ pub mod pallet {
             Balance = EnergyBalanceOf<Self, I>,
         >;
 
+        /// Cost of both session-boundary exchanges, including native currency
+        /// callbacks. Session listeners do not return a hook weight themselves.
+        type EnergyExchangeWeight: Get<Weight>;
+
         /// Funds ratio to be recycled.
         type SpendThreshold: Get<Permill>;
 
@@ -268,6 +272,10 @@ impl<T: Config<I>, I: 'static> pallet_treasury::SpendFunds<T, I> for Pallet<T, I
 
 impl<T: Config<I>, I: 'static> OnSessionChange for Pallet<T, I> {
     fn on_new_session(_index: SessionIndex) {
+        frame_system::Pallet::<T>::register_extra_weight_unchecked(
+            T::EnergyExchangeWeight::get(),
+            frame_support::dispatch::DispatchClass::Mandatory,
+        );
         Self::exchange_energy()
     }
 }

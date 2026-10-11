@@ -3,6 +3,22 @@ use crate::Event;
 use pallet_treasury::Event as TreasuryEvent;
 
 #[test]
+fn session_exchange_reserves_weight_before_extrinsics_are_admitted() {
+    use frame_support::dispatch::DispatchClass;
+    use vitreus_runtime_common::OnSessionChange;
+
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        let before = *System::block_weight().get(DispatchClass::Mandatory);
+        TreasuryExtension::on_new_session(1);
+        assert_eq!(
+            *System::block_weight().get(DispatchClass::Mandatory),
+            before.saturating_add(TestEnergyExchangeWeight::get()),
+        );
+    });
+}
+
+#[test]
 fn spend_funds_should_work() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);

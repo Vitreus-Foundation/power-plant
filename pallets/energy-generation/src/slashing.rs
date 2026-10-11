@@ -36,11 +36,12 @@ use core::ops::{Add, Mul};
 
 use crate::{
     Config, CooperatorSlashInEra, DisabledValidators, DisablingStrategy, Error, Exposure, Pallet,
-    Perbill, SessionInterface, SpanSlash, StakeOf, UnappliedSlash, ValidatorSlashInEra,
+    Perbill, SessionInterface, SpanSlash, StakeOf, UnappliedSlash, ValidatorSlashInEra, WeightInfo,
 };
 use frame_support::{
     ensure,
-    traits::{tokens::Imbalance, Currency, Defensive, OnUnbalanced},
+    traits::{tokens::Imbalance, Currency, Defensive, Get, OnUnbalanced},
+    weights::Weight,
 };
 use pallet_reputation::{Reputation, ReputationPoint, ReputationRecord, RANKS_PER_TIER};
 use parity_scale_codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -793,8 +794,15 @@ pub fn do_slash<T: Config>(
             *reward_payout = reward_payout.saturating_sub(missing);
         }
 
+        // Slashes run outside the staking dispatchables whose declarations
+        // already include this callback. Charge the actual refresh before it
+        // executes, including immediate offences whose SDK caller discards
+        // OnOffenceHandler's returned weight.
+        frame_system::Pallet::<T>::register_extra_weight_unchecked(
+            T::ThisWeightInfo::stake_refresh_hook(),
+            frame_support::dispatch::DispatchClass::Mandatory,
+        );
         <Pallet<T>>::update_ledger(&controller, &ledger);
-        <Pallet<T>>::adjust_cooperator_targets(stash, ledger.active);
     }
     value.stake = stake_value;
     <pallet_reputation::Pallet<T>>::do_slash(stash, value.reputation)?;
@@ -805,11 +813,35 @@ pub fn do_slash<T: Config>(
     Ok(())
 }
 
+/// Additional native account-store callbacks: slash + lock per staker,
+/// reporter credit and the final imbalance destination. Each Currency operation
+/// may upgrade the account before its normal write, hence two observations.
+pub(crate) fn native_observer_weight<T: Config>(cooperators: u64, reporters: u64) -> Weight {
+    let observations = cooperators
+        .saturating_add(1)
+        .saturating_mul(4)
+        .saturating_add(reporters.saturating_mul(2))
+        .saturating_add(2);
+    T::NativeCurrencyObserverWeight::get().saturating_mul(observations)
+}
+
 /// Apply a previously-unapplied slash.
 pub(crate) fn apply_slash<T: Config>(
     unapplied_slash: UnappliedSlash<T::AccountId, SlashEntityOf<T>>,
     slash_era: EraIndex,
 ) -> DispatchResult {
+    // Both deferred session slashes and immediate offences reach this entry.
+    // The SDK Offences pallet drops OnOffenceHandler's reported weight; record
+    // the callbacks before execution rather than relying on that return value.
+    // This accounts for consumption, but does not bound the number of slashes
+    // in a legacy session queue or replace equivocation-call admission weights.
+    frame_system::Pallet::<T>::register_extra_weight_unchecked(
+        native_observer_weight::<T>(
+            unapplied_slash.others.len() as u64,
+            unapplied_slash.reporters.len() as u64,
+        ),
+        frame_support::dispatch::DispatchClass::Mandatory,
+    );
     let mut stake_reward_payout = unapplied_slash.payout.stake;
     let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
 

@@ -140,6 +140,36 @@ impl frame_system::Config for Test {
 parameter_types! {
     pub TestCollectionDeposit:  u64 = 0;
     pub TestItemDeposit:  u64 = 0;
+    pub static ObserveVippBalances: bool = false;
+}
+
+pub struct TestVippBalanceObserver;
+
+impl frame_support::traits::StoredMap<AccountId, pallet_balances::AccountData<Balance>>
+    for TestVippBalanceObserver
+{
+    fn get(who: &AccountId) -> pallet_balances::AccountData<Balance> {
+        <System as frame_support::traits::StoredMap<
+            AccountId,
+            pallet_balances::AccountData<Balance>,
+        >>::get(who)
+    }
+
+    fn try_mutate_exists<R, E: From<sp_runtime::DispatchError>>(
+        who: &AccountId,
+        mutate: impl FnOnce(&mut Option<pallet_balances::AccountData<Balance>>) -> Result<R, E>,
+    ) -> Result<R, E> {
+        if ObserveVippBalances::get() {
+            <pallet_nac_managing::balance_observer::VippBalanceObserver<Test, System> as frame_support::traits::StoredMap<
+                AccountId, pallet_balances::AccountData<Balance>,
+            >>::try_mutate_exists(who, mutate)
+        } else {
+            <System as frame_support::traits::StoredMap<
+                AccountId,
+                pallet_balances::AccountData<Balance>,
+            >>::try_mutate_exists(who, mutate)
+        }
+    }
 }
 
 type CollectionId = u32;
@@ -169,9 +199,9 @@ impl pallet_nfts::Config for Test {
     type ValueLimit = ConstU32<50>;
     type WeightInfo = ();
     #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
+    type Helper = TestNftBenchmarkHelper;
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
-    type Locker = ();
+    type Locker = pallet_nac_managing::transfers::VippNftLocker<Test>;
 }
 
 impl pallet_timestamp::Config for Test {
@@ -199,6 +229,19 @@ impl pallet_nac_managing::Config for Test {
     type Currency = Balances;
     type VIPPCollectionId = VIPPCollectionId;
     type OnVIPPChanged = Privileges;
+    type MaxVippNftsPerAccount = ConstU32<64>;
+    type MaxPendingVippAccounts = ConstU32<128>;
+    type MaxVippReconciliationsPerBlock = ConstU32<2>;
+    type UnvestedBalance = VippUnvestedBalance;
+}
+
+pub struct VippUnvestedBalance;
+
+impl pallet_nac_managing::UnvestedBalance<AccountId, Balance> for VippUnvestedBalance {
+    fn unvested_balance(who: &AccountId) -> Balance {
+        <Vesting as frame_support::traits::VestingSchedule<AccountId>>::vesting_balance(who)
+            .unwrap_or_default()
+    }
 }
 
 parameter_types! {
@@ -287,7 +330,7 @@ impl pallet_balances::Config for Test {
     type Balance = Balance;
     type DustRemoval = ();
     type ExistentialDeposit = ConstU64<1>;
-    type AccountStore = System;
+    type AccountStore = TestVippBalanceObserver;
     type ReserveIdentifier = [u8; 8];
     type RuntimeHoldReason = ();
     type FreezeIdentifier = ();
@@ -402,6 +445,7 @@ parameter_types! {
 
 impl pallet_energy_generation::Config for Test {
     type StakeCurrency = Balances;
+    type NativeCurrencyObserverWeight = ();
     type StakeBalance = <Self as pallet_balances::Config>::Balance;
     type EnergyAssetId = VNRG;
     type BatterySlotCapacity = BatterySlotCapacity;
@@ -568,6 +612,7 @@ impl ExtBuilder {
         self
     }
     fn build(self) -> sp_io::TestExternalities {
+        ObserveVippBalances::set(false);
         sp_tracing::try_init_simple();
         let mut storage = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
@@ -816,4 +861,24 @@ fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
         push_nibble(b % 16);
     }
     r
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub struct TestNftBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_nfts::BenchmarkHelper<u32, u32, UintAuthorityId, u64, TestSignature>
+    for TestNftBenchmarkHelper
+{
+    fn collection(i: u16) -> u32 {
+        i.into()
+    }
+    fn item(i: u16) -> u32 {
+        i.into()
+    }
+    fn signer() -> (UintAuthorityId, u64) {
+        (UintAuthorityId(9000), 9000)
+    }
+    fn sign(signer: &UintAuthorityId, message: &[u8]) -> TestSignature {
+        TestSignature(signer.0, message.to_vec())
+    }
 }

@@ -63,6 +63,9 @@ pub mod pallet {
         /// Overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+        /// Additional cost of one native balance AccountStore observation.
+        type NativeCurrencyObserverWeight: Get<Weight>;
+
         /// The origin which can manage parameters of this pallet.
         type ManageOrigin: EnsureOrigin<Self::RuntimeOrigin>;
 
@@ -237,7 +240,8 @@ pub mod pallet {
     impl<T: Config> Pallet<T> {
         /// Swap the exact amount of input asset into output asset.
         #[pallet::call_index(0)]
-        #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
+        #[pallet::weight(Weight::from_parts(200_000_000, 20000)
+            .saturating_add(T::NativeCurrencyObserverWeight::get().saturating_mul(6)))]
         pub fn swap_exact_tokens_for_tokens(
             origin: OriginFor<T>,
             recipient: T::AccountId,
@@ -261,7 +265,8 @@ pub mod pallet {
 
         /// Swap any amount of input asset to get the exact amount of output asset.
         #[pallet::call_index(1)]
-        #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
+        #[pallet::weight(Weight::from_parts(200_000_000, 20000)
+            .saturating_add(T::NativeCurrencyObserverWeight::get().saturating_mul(6)))]
         pub fn swap_tokens_for_exact_tokens(
             origin: OriginFor<T>,
             recipient: T::AccountId,
@@ -285,7 +290,8 @@ pub mod pallet {
 
         /// Add liquidity to the energy broker.
         #[pallet::call_index(10)]
-        #[pallet::weight(Weight::from_parts(200_000_000, 20000))]
+        #[pallet::weight(Weight::from_parts(200_000_000, 20000)
+            .saturating_add(T::NativeCurrencyObserverWeight::get().saturating_mul(4)))]
         pub fn force_add_liquidity(
             origin: OriginFor<T>,
             source: AccountIdLookupOf<T>,

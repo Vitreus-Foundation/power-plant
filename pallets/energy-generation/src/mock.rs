@@ -106,6 +106,7 @@ parameter_types! {
     pub static SessionsPerEra: SessionIndex = 3;
     pub static ExistentialDeposit: Balance = 1;
     pub static SlashDeferDuration: EraIndex = 0;
+    pub static NativeCurrencyObserverWeight: Weight = Weight::zero();
     pub static Period: BlockNumber = 5;
     pub static Offset: BlockNumber = 0;
 }
@@ -350,6 +351,7 @@ impl pallet_energy_generation::Config for Test {
     type SlashDeferDuration = SlashDeferDuration;
     type StakeBalance = <Self as pallet_balances::Config>::Balance;
     type StakeCurrency = Balances;
+    type NativeCurrencyObserverWeight = NativeCurrencyObserverWeight;
     type ThisWeightInfo = ();
     type UnixTime = Timestamp;
     type ValidatorReputationTier = ValidatorReputationTier;

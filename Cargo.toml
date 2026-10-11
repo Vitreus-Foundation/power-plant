@@ -82,6 +82,7 @@ fast-runtime = [
 
 [workspace]
 members = [
+    "pallets/atomic-swap",
     "cli",
     "node/chain-spec",
     "node/service",
@@ -286,7 +287,7 @@ pallet-asset-conversion = { git = "https://github.com/paritytech/polkadot-sdk", 
 pallet-asset-rate = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-assets = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-assets-freezer = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-pallet-atomic-swap = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
+pallet-atomic-swap = { path = "pallets/atomic-swap", default-features = false }
 pallet-authority-discovery = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-authorship = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 pallet-babe = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }

@@ -27,6 +27,167 @@ use substrate_test_utils::assert_eq_uvec;
 use vitreus_runtime_common::EraSessionLookup;
 
 #[test]
+fn slash_ledger_refresh_charges_hook_budget_and_preserves_penalty() {
+    use frame_support::{dispatch::DispatchClass, traits::Imbalance};
+
+    ExtBuilder::default().build_and_execute(|| {
+        let before = *System::block_weight().get(DispatchClass::Mandatory);
+        let mut reward = 0;
+        let mut imbalance = slashing::NegativeImbalanceOf::<Test>::zero();
+        assert_ok!(slashing::do_slash::<Test>(
+            &11,
+            SlashEntity::new(ReputationPoint(0), 100),
+            &mut reward,
+            &mut imbalance,
+            active_era(),
+        ));
+        assert_eq!(Balances::free_balance(11), 900);
+        assert_eq!(PowerPlant::ledger(10).unwrap().active, 900);
+        assert_eq!(
+            *System::block_weight().get(DispatchClass::Mandatory),
+            before.saturating_add(<Test as Config>::ThisWeightInfo::stake_refresh_hook()),
+        );
+    });
+}
+
+#[test]
+fn reputation_slash_chill_charges_removed_delegations() {
+    use frame_support::dispatch::DispatchClass;
+
+    ExtBuilder::default().build_and_execute(|| {
+        assert_eq!(crate::collaboration_count::<Test>(&11), 1);
+        assert_eq!(PowerPlant::get_active_stake(&101), 500);
+        pallet_reputation::AccountReputation::<Test>::remove(11);
+        let before = *System::block_weight().get(DispatchClass::Mandatory);
+        PowerPlant::check_reputation_validator(&11);
+        assert!(!Validators::<Test>::contains_key(11));
+        assert!(!Collaborations::<Test>::contains_key(11));
+        assert_eq!(PowerPlant::get_active_stake(&101), 300);
+        assert_eq!(
+            *System::block_weight().get(DispatchClass::Mandatory),
+            before.saturating_add(
+                <Test as frame_system::Config>::DbWeight::get()
+                    .reads(1)
+                    .saturating_add(<Test as Config>::ThisWeightInfo::chill_hook(1)),
+            ),
+        );
+    });
+}
+
+#[test]
+fn offline_chill_reserves_callbacks_before_reporting_and_keeps_chill_behavior() {
+    use frame_support::dispatch::DispatchClass;
+    use sp_staking::offence::{Offence, OffenceError, ReportOffence};
+
+    type Offender = pallet_session::historical::IdentificationTuple<Test>;
+    struct Offline(Offender);
+    impl Offence<Offender> for Offline {
+        const ID: [u8; 16] = *b"vip-test-offline";
+        type TimeSlot = u32;
+        fn offenders(&self) -> Vec<Offender> {
+            vec![self.0.clone()]
+        }
+        fn session_index(&self) -> u32 {
+            Session::current_index()
+        }
+        fn validator_set_count(&self) -> u32 {
+            1
+        }
+        fn time_slot(&self) -> u32 {
+            self.session_index()
+        }
+        fn slash_fraction(&self, _: u32) -> Perbill {
+            Perbill::zero()
+        }
+    }
+    struct Reporter;
+    impl ReportOffence<AccountId, Offender, Offline> for Reporter {
+        fn report_offence(_: Vec<AccountId>, _: Offline) -> Result<(), OffenceError> {
+            assert!(System::block_weight()
+                .get(DispatchClass::Mandatory)
+                .all_gte(<Test as Config>::ThisWeightInfo::chill(),));
+            assert!(Validators::<Test>::contains_key(11));
+            Ok(())
+        }
+        fn is_known_offence(_: &[Offender], _: &u32) -> bool {
+            false
+        }
+    }
+    ExtBuilder::default().build_and_execute(|| {
+        let offender = (11, PowerPlant::eras_stakers(active_era(), 11));
+        assert_ok!(ChillOnOffence::<Test, Reporter>::report_offence(vec![], Offline(offender)));
+        assert!(!Validators::<Test>::contains_key(11));
+    });
+}
+
+#[test]
+fn deferred_slashing_charges_currency_observation_at_session_boundary() {
+    use frame_support::dispatch::DispatchClass;
+
+    fn run(observer: Weight) -> (Weight, Balance) {
+        let mut result = (Weight::zero(), 0);
+        ExtBuilder::default().slash_defer_duration(2).build_and_execute(|| {
+            NativeCurrencyObserverWeight::set(observer);
+            start_active_era(1);
+            let exposure = PowerPlant::eras_stakers(active_era(), 11);
+            on_offence_now(
+                &[OffenceDetails { offender: (11, exposure), reporters: vec![201, 202] }],
+                &[Perbill::from_percent(10)],
+            );
+            let slashes = UnappliedSlashes::<Test>::get(4);
+            assert_eq!(slashes.len(), 1);
+            let expected = slashing::native_observer_weight::<Test>(
+                slashes[0].others.len() as u64,
+                slashes[0].reporters.len() as u64,
+            );
+            start_active_era(4);
+            assert!(UnappliedSlashes::<Test>::get(4).is_empty());
+            let used = *System::block_weight().get(DispatchClass::Mandatory);
+            assert!(used.all_gte(expected));
+            result = (used, Balances::free_balance(11));
+        });
+        result
+    }
+
+    let without_observer = run(Weight::zero());
+    let with_observer = run(Weight::from_parts(1_000_000, 4096));
+    assert!(with_observer.0.all_gt(without_observer.0));
+    assert_eq!(with_observer.1, without_observer.1);
+    assert_eq!(with_observer.1, 900);
+}
+
+#[test]
+fn immediate_slashing_reports_currency_observer_cost_without_changing_the_penalty() {
+    use sp_staking::offence::OnOffenceHandler;
+
+    fn run(observer: Weight) -> (Weight, Balance) {
+        let mut result = (Weight::zero(), 0);
+        ExtBuilder::default().slash_defer_duration(0).build_and_execute(|| {
+            NativeCurrencyObserverWeight::set(observer);
+            let exposure = PowerPlant::eras_stakers(active_era(), 11);
+            let weight = PowerPlant::on_offence(
+                &[OffenceDetails { offender: (11, exposure), reporters: vec![201, 202] }],
+                &[Perbill::from_percent(10)],
+                Session::current_index(),
+            );
+            // SDK Offences ignores `weight`; consumption must already be in
+            // System even when no caller adds the returned value.
+            assert!(System::block_weight()
+                .get(frame_support::dispatch::DispatchClass::Mandatory)
+                .all_gte(observer.saturating_mul(6)));
+            result = (weight, Balances::free_balance(11));
+        });
+        result
+    }
+
+    let without_observer = run(Weight::zero());
+    let with_observer = run(Weight::from_parts(1_000_000, 4096));
+    assert!(with_observer.0.all_gt(without_observer.0));
+    assert_eq!(with_observer.1, without_observer.1);
+    assert_eq!(with_observer.1, 900);
+}
+
+#[test]
 fn set_staking_configs_works() {
     ExtBuilder::default().build_and_execute(|| {
         // setting works

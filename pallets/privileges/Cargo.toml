@@ -50,7 +50,7 @@ substrate-test-utils = { workspace = true }
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "pallet-nac-managing/runtime-benchmarks", "pallet-assets/runtime-benchmarks"]
 std = [
     "chrono/std",
     "frame-benchmarking/std",
@@ -72,4 +72,3 @@ std = [
     "sp-std/std",
 ]
 try-runtime = [ "frame-support/try-runtime" ]
-

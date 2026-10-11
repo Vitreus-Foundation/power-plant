@@ -150,6 +150,8 @@ impl pallet_bounties::Config for Test {
 
 parameter_types! {
     pub const SpendThreshold: Permill = Permill::from_percent(50);
+    pub TestEnergyExchangeWeight: frame_support::weights::Weight =
+        frame_support::weights::Weight::from_parts(10_000_000, 4096);
 }
 
 impl crate::Config for Test {
@@ -159,6 +161,7 @@ impl crate::Config for Test {
     type LiquidEnergyAsset = ();
     type StaticEnergyExchange = ();
     type LiquidEnergyExchange = ();
+    type EnergyExchangeWeight = TestEnergyExchangeWeight;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = ();
     type TreasuryTargetBalance = ();

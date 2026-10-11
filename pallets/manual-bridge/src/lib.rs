@@ -31,6 +31,9 @@ pub mod pallet {
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
+        /// Additional cost of one native balance AccountStore observation.
+        type NativeCurrencyObserverWeight: Get<Weight>;
+
         /// The currency trait.
         type Currency: Currency<Self::AccountId>;
 
@@ -62,7 +65,8 @@ pub mod pallet {
     #[pallet::call]
     impl<T: Config> Pallet<T> {
         #[pallet::call_index(0)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(4, 3))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(4, 3)
+            .saturating_add(T::NativeCurrencyObserverWeight::get().saturating_mul(6)))]
         pub fn transfer(
             origin: OriginFor<T>,
             dest: EthereumAddress,
@@ -92,7 +96,8 @@ pub mod pallet {
         }
 
         #[pallet::call_index(1)]
-        #[pallet::weight(T::DbWeight::get().reads_writes(4, 3))]
+        #[pallet::weight(T::DbWeight::get().reads_writes(4, 3)
+            .saturating_add(T::NativeCurrencyObserverWeight::get().saturating_mul(6)))]
         pub fn payout(
             origin: OriginFor<T>,
             dest: T::AccountId,

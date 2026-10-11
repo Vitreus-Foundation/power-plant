@@ -6419,10 +6419,10 @@ dependencies = [
 [[package]]
 name = "pallet-atomic-swap"
 version = "37.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#7642d6b5dea6dd7871ef8bbfcb9d48ba8a8b0f77"
 dependencies = [
  "frame-support",
  "frame-system",
+ "pallet-balances",
  "parity-scale-codec",
  "scale-info",
  "sp-core",
@@ -7153,6 +7153,8 @@ dependencies = [
  "pallet-nfts",
  "pallet-privileges",
  "pallet-reputation",
+ "pallet-simple-vesting",
+ "pallet-vesting",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",
@@ -14299,6 +14301,7 @@ dependencies = [
  "precompile-utils",
  "primitive-types",
  "scale-info",
+ "serde_json",
  "sp-api",
  "sp-authority-discovery",
  "sp-block-builder",
