@@ -3,7 +3,7 @@ use ethereum::{TransactionAction, TransactionSignature, TransactionV2};
 use fp_self_contained::SelfContainedCall;
 use frame_support::{
     dispatch::{DispatchClass, GetDispatchInfo},
-    traits::Hooks,
+    traits::{fungible::Mutate as _, fungibles::Mutate as _, Hooks},
 };
 use pallet_energy_fee::DefaultFeeMultiplier;
 use sp_runtime::{BuildStorage, FixedU128, Perquintill};
@@ -117,18 +117,28 @@ fn fee_multiplier_update_works() {
 #[test]
 fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
     new_test_ext().execute_with(|| {
-        // A sender without energy buys it with VTRS. Without a rate the fee can't be quoted at all,
-        // and `InvalidTransaction::Payment` would come from that instead of the VTRS balance check.
+        // A sender without energy buys it with VTRS. Without a rate, or without VNRG for the broker
+        // to sell, the fee can't be quoted, and `InvalidTransaction::Payment` would come from that
+        // instead of the VTRS balance check.
+        let broker = EnergyBroker::account_id();
+        // VNRG is not sufficient, so the broker's account must exist before it can hold any.
+        Balances::set_balance(&broker, ExistentialDeposit::get());
+        NativeAndAssets::set_balance(
+            NativeOrAssetId::WithId(VNRG::get()),
+            &broker,
+            1_000_000_000_000_000,
+        );
         pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+
         assert!(
             <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
                 NativeOrAssetId::Native,
                 NativeOrAssetId::WithId(VNRG::get()),
-                1,
+                EnergyFee::ethereum_fee(),
                 true,
             )
             .is_some(),
-            "VTRS -> VNRG must be quotable",
+            "the EVM fee must be quotable in VTRS",
         );
 
         let sample_tx = TransactionV2::Legacy(LegacyTransaction {
@@ -156,6 +166,27 @@ fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
 
         assert_eq!(
             runtime_call.validate_self_contained(&noname_h160, &dispatch_info, len),
+            Some(Err(InvalidTransaction::Payment.into()))
+        );
+
+        // Short of energy, alith buys the rest of the fee with VTRS, which needs VNRG for the
+        // broker to sell. EVM balances are VNRG, so alith keeps half the fee for Frontier's own
+        // balance check.
+        NativeAndAssets::set_balance(NativeOrAssetId::WithId(SNRG::get()), &alith(), 0);
+        NativeAndAssets::set_balance(NativeOrAssetId::WithId(LNRG::get()), &alith(), 0);
+        NativeAndAssets::set_balance(
+            NativeOrAssetId::WithId(VNRG::get()),
+            &alith(),
+            EnergyFee::ethereum_fee() / 2,
+        );
+        assert!(matches!(
+            runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
+            Some(Ok(..))
+        ));
+
+        NativeAndAssets::set_balance(NativeOrAssetId::WithId(VNRG::get()), &broker, 0);
+        assert_eq!(
+            runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
             Some(Err(InvalidTransaction::Payment.into()))
         );
     })
