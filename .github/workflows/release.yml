@@ -17,9 +17,10 @@ permissions:
   contents: read
 
 concurrency:
-  # Releases queue up instead of cancelling each other midway; a new push to a PR cancels its
-  # dry run.
-  group: ${{ github.event_name == 'pull_request' && format('release-{0}', github.ref) || 'release' }}
+  # Runs on develop share one group, so two releases never run at once. A group keeps only one
+  # pending run and replaces it with a newer one, so dry runs get groups of their own, per PR or
+  # branch, and never push a release out; a new push to a PR cancels its dry run.
+  group: ${{ github.ref == 'refs/heads/develop' && 'release' || format('release-{0}', github.ref) }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
