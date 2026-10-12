@@ -15,6 +15,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Improve validation and error reporting in `pallet-energy-broker`
 - Set `spec_name` to `vitreus-power-plant-testnet` on testnet
+- Restrict XCM `send` to governance and disable `execute` and reserve transfers
+- Drop the delivery fee for outbound XCM to parachains
 - Make the EnergyBroker `quote_price_*` runtime APIs return `None` when the output exceeds `max_amount_out`
 - Make the EnergyFee `estimate_call_fee` runtime API return `None` when the broker cannot sell the VNRG missing for the fee
 

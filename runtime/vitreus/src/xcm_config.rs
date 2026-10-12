@@ -19,10 +19,9 @@
 #![allow(clippy::match_like_matches_macro, clippy::type_complexity)]
 
 use super::{
-    parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
-    CouncilCollective, Dmp, DynamicEnergy, EnergyAsset, EnergyBroker, ParaId, Runtime, RuntimeCall,
-    RuntimeEvent, RuntimeOrigin, TransactionByteFee, TransactionPicosecondFee, Treasury, XcmPallet,
-    LNRG, SNRG, VNRG,
+    parachains_hrmp, parachains_origin, AccountId, AllPalletsWithSystem, Assets, Balance, Balances,
+    CouncilCollective, DynamicEnergy, EnergyAsset, EnergyBroker, ParaId, Runtime, RuntimeCall,
+    RuntimeEvent, RuntimeOrigin, TransactionPicosecondFee, Treasury, XcmPallet, LNRG, SNRG, VNRG,
 };
 use frame_support::{
     parameter_types,
@@ -33,7 +32,7 @@ use frame_system::EnsureRoot;
 use origin_conversion::SignedToAccountKey20;
 use polkadot_runtime_common::{
     paras_registrar, prod_or_fast,
-    xcm_sender::{ChildParachainRouter, ExponentialPrice},
+    xcm_sender::{ChildParachainRouter, NoPriceForMessageDelivery},
 };
 use sp_core::ConstU32;
 use sp_runtime::traits::TryConvertInto;
@@ -53,8 +52,6 @@ use xcm_executor::{
 };
 
 // TODO: use constants from `vitreus-runtime-constants` crate
-const ASSET_HUB_ID: u32 = 1000;
-const BRIDGE_HUB_ID: u32 = 1013;
 const RELAY_NETWORK: NetworkId = prod_or_fast!(
     NetworkId::ByGenesis(hex_literal::hex!(
         "4f27ff2e1c714c78b718d11a999774b2f639da713b9481337942997140185cfc"
@@ -62,12 +59,6 @@ const RELAY_NETWORK: NetworkId = prod_or_fast!(
     NetworkId::ByGenesis(hex_literal::hex!(
         "c28caa6bf827d357af8ca58ddcefc2aba6d08b2fd29de8acb67becd4ea6c3673"
     ))
-);
-pub const ETHEREUM_NETWORK: NetworkId =
-    prod_or_fast!(NetworkId::Ethereum { chain_id: 1 }, NetworkId::Ethereum { chain_id: 11155111 });
-pub const ETHEREUM_VTRS_ADDRESS: [u8; 20] = prod_or_fast!(
-    hex_literal::hex!("74950FC112473caba58193c6bF6412a6f1e4d7d2"),
-    hex_literal::hex!("27C2E2131DF1310C9bdfAc779316685dB8B1E8bb")
 );
 pub const ASSETS_PALLET_ID: u8 = 5;
 
@@ -81,13 +72,6 @@ parameter_types! {
 }
 
 parameter_types! {
-    pub WrappedTokenLocation: Location = Location::new(
-        1,
-        [
-            GlobalConsensus(ETHEREUM_NETWORK),
-            AccountKey20 { network: None, key: ETHEREUM_VTRS_ADDRESS }
-        ]
-    );
     pub EnergyTokenLocation: Location = Location::new(
         0,
         [PalletInstance(ASSETS_PALLET_ID), GeneralIndex(VNRG::get())]
@@ -127,6 +111,7 @@ pub type LocalAssetTransactor = xcm_builder::CurrencyAdapter<
     LocalCheckAccount,
 >;
 
+// Fees for the wVTRS <-> VTRS conversion in `pallet-manual-bridge`.
 parameter_types! {
     pub const DefaultDepositFeePercent: u8 = 1;
     pub storage DepositFeePercent: u8 = DefaultDepositFeePercent::get();
@@ -134,26 +119,6 @@ parameter_types! {
     pub const DefaultWithdrawalFeePercent: u8 = 9;
     pub storage WithdrawalFeePercent: u8 = DefaultWithdrawalFeePercent::get();
 }
-
-/// Means for transacting the wrapped VTRS.
-pub type WrappedTokenTransactor = currency_adapter::CurrencyAdapterWithFee<
-    // Use this currency:
-    Balances,
-    // Use this currency when it is a fungible asset matching the given location or name:
-    IsConcrete<WrappedTokenLocation>,
-    // We can convert the Locations with our converter above:
-    LocationConverter,
-    // Our chain's account ID type (we can't get away without mentioning it explicitly):
-    AccountId,
-    // We track our teleports in/out to keep total issuance correct.
-    LocalCheckAccount,
-    // Fee for wVTRS -> VTRS conversion
-    DepositFeePercent,
-    // Fee for VTRS -> wVTRS conversion
-    WithdrawalFeePercent,
-    // Send fee to the treasury
-    TreasuryAccount,
->;
 
 parameter_types! {
     pub AssetsPalletLocation: Location = PalletInstance(ASSETS_PALLET_ID).into();
@@ -208,14 +173,13 @@ parameter_types! {
     /// Maximum number of instructions in a single XCM fragment. A sanity check against weight
     /// calculations getting too crazy.
     pub const MaxInstructions: u32 = 100;
-    /// The asset ID for the asset that we use to pay for message delivery fees.
-    pub FeeAssetId: AssetId = AssetId(EnergyTokenLocation::get());
-    /// The base fee for the message delivery fees.
-    pub const BaseDeliveryFee: u128 = 1_000_000_000;
 }
 
-pub type PriceForChildParachainDelivery =
-    ExponentialPrice<FeeAssetId, BaseDeliveryFee, TransactionByteFee, Dmp>;
+// No delivery fee: the sender pays nothing for delivery, so the only cost is the regular
+// transaction fee. Safe only while arbitrary outbound XCM stays restricted to governance (see
+// `SendXcmOrigin` / `XcmExecuteFilter` here and `BaseCallFilter` in the runtime); reopening those
+// entry points would require pricing delivery again.
+pub type PriceForChildParachainDelivery = NoPriceForMessageDelivery<ParaId>;
 
 /// The XCM router. When we want to send an XCM message, we use this type. It amalgamates all of our
 /// individual routers.
@@ -225,16 +189,9 @@ pub type XcmRouter = WithUniqueTopic<
 >;
 
 parameter_types! {
-    pub const Vtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(TokenLocation::get()) });
     pub Vnrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(EnergyTokenLocation::get()) });
     pub Snrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(StaticEnergyTokenLocation::get()) });
     pub Lnrg: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(LiquidEnergyTokenLocation::get()) });
-    pub WrappedVtrs: AssetFilter = Wild(AllOf { fun: WildFungible, id: AssetId(WrappedTokenLocation::get()) });
-    pub AssetHub: Location = Parachain(ASSET_HUB_ID).into_location();
-    pub BridgeHub: Location = Parachain(BRIDGE_HUB_ID).into_location();
-    pub VtrsForAssetHub: (AssetFilter, Location) = (Vtrs::get(), AssetHub::get());
-    pub VtrsForBridgeHub: (AssetFilter, Location) = (Vtrs::get(), BridgeHub::get());
-    pub WrappedVtrsForAssetHub: (AssetFilter, Location) = (WrappedVtrs::get(), AssetHub::get());
     pub const MaxAssetsIntoHolding: u32 = 64;
 }
 
@@ -258,12 +215,7 @@ impl ContainsPair<Asset, Location> for EnergyForParachains {
     }
 }
 
-pub type TrustedTeleporters = (
-    EnergyForParachains,
-    xcm_builder::Case<VtrsForAssetHub>,
-    xcm_builder::Case<VtrsForBridgeHub>,
-    xcm_builder::Case<WrappedVtrsForAssetHub>,
-);
+pub type TrustedTeleporters = (EnergyForParachains,);
 
 /// The barriers one of which must be passed for an XCM message to be executed.
 pub type Barrier = TrailingSetTopicAsId<(
@@ -285,13 +237,11 @@ pub type Barrier = TrailingSetTopicAsId<(
     >,
 )>;
 
-/// A call filter for the XCM Transact instruction. This is a temporary measure until we
-/// properly account for proof size weights.
-///
-/// Calls that are allowed through this filter must:
-/// 1. Have a fixed weight;
-/// 2. Cannot lead to another call being made;
-/// 3. Have a defined proof size weight, e.g. no unbounded vecs in call parameters.
+/// Calls a parachain may dispatch on the relay via XCM `Transact` as its own origin — only the
+/// calls gated on a parachain origin: HRMP channel management and the registrar self-service ops
+/// (lock/unlock, swap, deregister). Root-only HRMP `force_*`, signed-origin `reserve`, and the
+/// unbounded `register` are excluded. All allowed calls are fixed-weight with bounded proof size
+/// and cannot lead to another call; everything else is rejected.
 pub struct SafeCallFilter;
 impl Contains<RuntimeCall> for SafeCallFilter {
     fn contains(call: &RuntimeCall) -> bool {
@@ -302,76 +252,21 @@ impl Contains<RuntimeCall> for SafeCallFilter {
             }
         }
 
-        match call {
-            RuntimeCall::System(
-                frame_system::Call::kill_prefix { .. } | frame_system::Call::set_heap_pages { .. },
-            )
-            | RuntimeCall::Babe(..)
-            | RuntimeCall::Timestamp(..)
-            | RuntimeCall::Balances(..)
-            | RuntimeCall::Session(pallet_session::Call::purge_keys { .. })
-            | RuntimeCall::Grandpa(..)
-            | RuntimeCall::ImOnline(..)
-            | RuntimeCall::Democracy(
-                pallet_democracy::Call::second { .. }
-                | pallet_democracy::Call::vote { .. }
-                | pallet_democracy::Call::emergency_cancel { .. }
-                | pallet_democracy::Call::fast_track { .. }
-                | pallet_democracy::Call::veto_external { .. }
-                | pallet_democracy::Call::cancel_referendum { .. }
-                | pallet_democracy::Call::delegate { .. }
-                | pallet_democracy::Call::undelegate { .. }
-                | pallet_democracy::Call::clear_public_proposals { .. }
-                | pallet_democracy::Call::unlock { .. }
-                | pallet_democracy::Call::remove_vote { .. }
-                | pallet_democracy::Call::remove_other_vote { .. }
-                | pallet_democracy::Call::blacklist { .. }
-                | pallet_democracy::Call::cancel_proposal { .. },
-            )
-            | RuntimeCall::Council(
-                pallet_collective::Call::vote { .. }
-                | pallet_collective::Call::disapprove_proposal { .. }
-                | pallet_collective::Call::close { .. },
-            )
-            | RuntimeCall::TechnicalCommittee(
-                pallet_collective::Call::vote { .. }
-                | pallet_collective::Call::disapprove_proposal { .. }
-                | pallet_collective::Call::close { .. },
-            )
-            | RuntimeCall::TechnicalMembership(
-                pallet_membership::Call::add_member { .. }
-                | pallet_membership::Call::remove_member { .. }
-                | pallet_membership::Call::swap_member { .. }
-                | pallet_membership::Call::change_key { .. }
-                | pallet_membership::Call::set_prime { .. }
-                | pallet_membership::Call::clear_prime { .. },
-            )
-            | RuntimeCall::Treasury(..)
-            | RuntimeCall::Utility(pallet_utility::Call::as_derivative { .. })
-            | RuntimeCall::Vesting(..)
-            | RuntimeCall::Bounties(
-                pallet_bounties::Call::propose_bounty { .. }
-                | pallet_bounties::Call::approve_bounty { .. }
-                | pallet_bounties::Call::propose_curator { .. }
-                | pallet_bounties::Call::unassign_curator { .. }
-                | pallet_bounties::Call::accept_curator { .. }
-                | pallet_bounties::Call::award_bounty { .. }
-                | pallet_bounties::Call::claim_bounty { .. }
-                | pallet_bounties::Call::close_bounty { .. },
-            )
-            | RuntimeCall::Hrmp(..)
-            | RuntimeCall::Registrar(
+        matches!(
+            call,
+            RuntimeCall::Hrmp(
+                parachains_hrmp::Call::hrmp_init_open_channel { .. }
+                    | parachains_hrmp::Call::hrmp_accept_open_channel { .. }
+                    | parachains_hrmp::Call::hrmp_close_channel { .. }
+                    | parachains_hrmp::Call::hrmp_cancel_open_request { .. }
+                    | parachains_hrmp::Call::establish_channel_with_system { .. },
+            ) | RuntimeCall::Registrar(
                 paras_registrar::Call::deregister { .. }
-                | paras_registrar::Call::swap { .. }
-                | paras_registrar::Call::remove_lock { .. }
-                | paras_registrar::Call::reserve { .. }
-                | paras_registrar::Call::add_lock { .. },
+                    | paras_registrar::Call::swap { .. }
+                    | paras_registrar::Call::add_lock { .. }
+                    | paras_registrar::Call::remove_lock { .. },
             )
-            | RuntimeCall::XcmPallet(pallet_xcm::Call::limited_reserve_transfer_assets {
-                ..
-            }) => true,
-            _ => false,
-        }
+        )
     }
 }
 
@@ -383,7 +278,7 @@ pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
-    type AssetTransactor = (LocalAssetTransactor, WrappedTokenTransactor, EnergyTransactor);
+    type AssetTransactor = (LocalAssetTransactor, EnergyTransactor);
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
     type IsTeleporter = TrustedTeleporters;
@@ -448,16 +343,18 @@ pub type LocalOriginToLocation = (
 );
 impl pallet_xcm::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
-    type SendXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
+    // Arbitrary `send` is restricted to governance; signed accounts use the transfer extrinsics.
+    type SendXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, CouncilToPlurality>;
     type XcmRouter = XcmRouter;
-    // Anyone can execute XCM messages locally.
+    // Keep the origin converter permissive so the transfer extrinsics work for signed accounts;
+    // the `execute` call itself is disabled via `XcmExecuteFilter` below.
     type ExecuteXcmOrigin = xcm_builder::EnsureXcmOrigin<RuntimeOrigin, LocalOriginToLocation>;
-    type XcmExecuteFilter = Everything;
+    type XcmExecuteFilter = Nothing;
     type XcmExecutor = XcmExecutor<XcmConfig>;
     type XcmTeleportFilter = Everything;
-    // Anyone is able to use reserve transfers regardless of who they are and what they want to
-    // transfer.
-    type XcmReserveTransferFilter = Everything;
+    // Reserve transfers are disabled: assets move to parachains via teleport only, and no reserve
+    // is configured (`IsReserve = ()`).
+    type XcmReserveTransferFilter = Nothing;
     type Weigher = FixedWeightBounds<BaseXcmWeight, RuntimeCall, MaxInstructions>;
     type UniversalLocation = UniversalLocation;
     type RuntimeOrigin = RuntimeOrigin;
@@ -526,9 +423,14 @@ mod energy {
             OnBurn,
         >
     {
-        fn can_check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) -> XcmResult {
-            // Prevent the transfer of energy assets into the relaychain.
-            Err(XcmError::Unimplemented)
+        fn can_check_in(_origin: &Location, what: &Asset, _context: &XcmContext) -> XcmResult {
+            // The relay is the sole issuer of energy; accepting a teleport in would let a
+            // parachain mint relay-side energy outside its economy. Reject energy explicitly,
+            // and defer any other asset so the transactor tuple can try the next adapter.
+            if Matcher::matches_fungibles(what).is_ok() {
+                return Err(XcmError::UntrustedTeleportLocation);
+            }
+            Err(XcmError::AssetNotFound)
         }
 
         fn check_in(_origin: &Location, _what: &Asset, _context: &XcmContext) {}
@@ -673,192 +575,6 @@ mod origin_conversion {
                 Ok(other) => Err(other.into()),
                 Err(other) => Err(other),
             })
-        }
-    }
-}
-
-#[allow(deprecated)]
-mod currency_adapter {
-    use super::*;
-    use frame_support::traits::{ExistenceRequirement::KeepAlive, Get, WithdrawReasons};
-    use sp_runtime::{traits::CheckedSub, Percent, Saturating};
-    use sp_std::marker::PhantomData;
-    use xcm::latest::Result as XcmResult;
-    use xcm_builder::CurrencyAdapter;
-    use xcm_executor::{
-        traits::{ConvertLocation, MatchesFungible, TransactAsset},
-        AssetsInHolding,
-    };
-
-    /// Asset transaction errors.
-    enum Error {
-        /// The given asset is not handled. (According to [`XcmError::AssetNotFound`])
-        AssetNotHandled,
-        /// `Location` to `AccountId` conversion failed.
-        AccountIdConversionFailed,
-    }
-
-    impl From<Error> for XcmError {
-        fn from(e: Error) -> Self {
-            use XcmError::FailedToTransactAsset;
-            match e {
-                Error::AssetNotHandled => XcmError::AssetNotFound,
-                Error::AccountIdConversionFailed => {
-                    FailedToTransactAsset("AccountIdConversionFailed")
-                },
-            }
-        }
-    }
-
-    pub struct CurrencyAdapterWithFee<
-        Currency,
-        Matcher,
-        AccountIdConverter,
-        AccountId,
-        CheckedAccount,
-        DepositFeePercent,
-        WithdrawalFeePercent,
-        FeeReceiverAccount,
-    >(
-        PhantomData<(
-            Currency,
-            Matcher,
-            AccountIdConverter,
-            AccountId,
-            CheckedAccount,
-            DepositFeePercent,
-            WithdrawalFeePercent,
-            FeeReceiverAccount,
-        )>,
-    );
-
-    impl<
-            Currency: frame_support::traits::Currency<AccountId>,
-            Matcher: MatchesFungible<Currency::Balance>,
-            AccountIdConverter: ConvertLocation<AccountId>,
-            AccountId: Clone, // can't get away without it since Currency is generic over it.
-            CheckedAccount: Get<Option<(AccountId, MintLocation)>>,
-            DepositFeePercent: Get<u8>,
-            WithdrawalFeePercent: Get<u8>,
-            FeeReceiverAccount: Get<AccountId>,
-        > TransactAsset
-        for CurrencyAdapterWithFee<
-            Currency,
-            Matcher,
-            AccountIdConverter,
-            AccountId,
-            CheckedAccount,
-            DepositFeePercent,
-            WithdrawalFeePercent,
-            FeeReceiverAccount,
-        >
-    {
-        fn can_check_in(origin: &Location, what: &Asset, context: &XcmContext) -> XcmResult {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::can_check_in(origin, what, context)
-        }
-
-        fn check_in(origin: &Location, what: &Asset, context: &XcmContext) {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::check_in(origin, what, context)
-        }
-
-        fn can_check_out(dest: &Location, what: &Asset, context: &XcmContext) -> XcmResult {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::can_check_out(dest, what, context)
-        }
-
-        fn check_out(dest: &Location, what: &Asset, context: &XcmContext) {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::check_out(dest, what, context)
-        }
-
-        fn deposit_asset(what: &Asset, who: &Location, _context: Option<&XcmContext>) -> XcmResult {
-            log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset what: {:?}, who: {:?}", what, who);
-            // Check we handle this asset.
-            let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
-
-            let who = AccountIdConverter::convert_location(who)
-                .ok_or(Error::AccountIdConversionFailed)?;
-
-            let fee_percent = Percent::from_percent(DepositFeePercent::get());
-            let fee_amount = fee_percent.mul_floor(amount);
-            log::trace!(target: "xcm::currency_adapter_with_fee", "deposit_asset fee: {:?}", fee_amount);
-
-            let _imbalance = Currency::deposit_creating(&who, amount.saturating_sub(fee_amount));
-            let _imbalance = Currency::deposit_creating(&FeeReceiverAccount::get(), fee_amount);
-            Ok(())
-        }
-
-        fn withdraw_asset(
-            what: &Asset,
-            who: &Location,
-            _maybe_context: Option<&XcmContext>,
-        ) -> Result<AssetsInHolding, XcmError> {
-            log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset what: {:?}, who: {:?}", what, who);
-            // Check we handle this asset.
-            let amount = Matcher::matches_fungible(what).ok_or(Error::AssetNotHandled)?;
-            let who = AccountIdConverter::convert_location(who)
-                .ok_or(Error::AccountIdConversionFailed)?;
-
-            let fee_percent = Percent::from_percent(WithdrawalFeePercent::get());
-            let fee_amount = fee_percent.mul_floor(amount);
-            log::trace!(target: "xcm::currency_adapter_with_fee", "withdraw_asset fee: {:?}", fee_amount);
-
-            let amount_with_fee = amount.saturating_add(fee_amount);
-            let new_balance = Currency::free_balance(&who)
-                .checked_sub(&amount_with_fee)
-                .ok_or(XcmError::NotWithdrawable)?;
-            Currency::ensure_can_withdraw(
-                &who,
-                amount_with_fee,
-                WithdrawReasons::TRANSFER,
-                new_balance,
-            )
-            .map_err(|_| XcmError::NotWithdrawable)?;
-
-            let _ = Currency::withdraw(&who, amount, WithdrawReasons::TRANSFER, KeepAlive)
-                .map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
-
-            Currency::transfer(&who, &FeeReceiverAccount::get(), fee_amount, KeepAlive)
-                .map_err(|e| XcmError::FailedToTransactAsset(e.into()))?;
-
-            Ok(what.clone().into())
-        }
-
-        fn internal_transfer_asset(
-            asset: &Asset,
-            from: &Location,
-            to: &Location,
-            context: &XcmContext,
-        ) -> Result<AssetsInHolding, XcmError> {
-            CurrencyAdapter::<
-                Currency,
-                Matcher,
-                AccountIdConverter,
-                AccountId,
-                CheckedAccount,
-            >::internal_transfer_asset(asset, from, to, context)
         }
     }
 }

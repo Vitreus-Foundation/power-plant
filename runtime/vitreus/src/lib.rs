@@ -368,13 +368,26 @@ parameter_types! {
     pub const SS58Prefix: u16 = 1943;
 }
 
+/// XCM entry points blocked by the `BaseCallFilter` below (as the `EverythingBut` exclusion set),
+/// locked down alongside `send`/`execute` in the XCM config. Simple transfer/teleport extrinsics
+/// are unaffected.
+pub struct BlockedCalls;
+impl frame_support::traits::Contains<RuntimeCall> for BlockedCalls {
+    fn contains(call: &RuntimeCall) -> bool {
+        matches!(
+            call,
+            RuntimeCall::XcmPallet(pallet_xcm::Call::transfer_assets_using_type_and_then { .. })
+        )
+    }
+}
+
 // Configure FRAME pallets to include in runtime.
 #[derive_impl(frame_system::config_preludes::RelayChainDefaultConfig)]
 impl frame_system::Config for Runtime {
     /// The ubiquitous event type.
     type RuntimeEvent = RuntimeEvent;
     /// The basic call filter to use in dispatchable.
-    type BaseCallFilter = frame_support::traits::Everything;
+    type BaseCallFilter = frame_support::traits::EverythingBut<BlockedCalls>;
     /// Block & extrinsics weights: base values and limits.
     type BlockWeights = BlockWeights;
     /// The maximum length of a block (in bytes).
