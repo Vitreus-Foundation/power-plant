@@ -5,7 +5,7 @@
     python3 .github/scripts/changelog.py updated --base REV
 
 In CI, --base is HEAD^1: the first parent of GitHub's merge commit for the PR, which is the
-base branch. Locally, pass the fork point instead: --base "$(git merge-base origin/develop HEAD)".
+base branch. Locally, pass the fork point instead: --base "$(git merge-base origin/main HEAD)".
 release.py builds on this module.
 """
 import argparse

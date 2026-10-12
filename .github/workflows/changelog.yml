@@ -3,7 +3,7 @@ name: Changelog
 on:
   pull_request:
     # The mainline only, not stacked PRs into feature branches.
-    branches: [develop]
+    branches: [main]
     # `edited` re-runs the checks when the PR description changes, e.g. when the
     # "Does not require a CHANGELOG entry" box gets ticked.
     types: [opened, reopened, synchronize, edited]
