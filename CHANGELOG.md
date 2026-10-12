@@ -19,6 +19,12 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Drop the delivery fee for outbound XCM to parachains
 - Make the EnergyBroker `quote_price_*` runtime APIs return `None` when the output exceeds `max_amount_out`
 - Make the EnergyFee `estimate_call_fee` runtime API return `None` when the broker cannot sell the VNRG missing for the fee
+- Reject a zero value in `set_annual_percentage_rate` of `pallet-dynamic-energy`
+- Reject coefficients that can overflow the multiplier in `set_multiplier_coefficients` of `pallet-dynamic-energy`
+
+### Removed
+
+- Remove the `SessionsPerEra` constant from `pallet-dynamic-energy`
 
 ### Fixed
 
@@ -26,6 +32,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Fix energy sale tracking in `pallet-energy-broker`
 - Roll back failed `pallet-energy-broker` swaps made by other pallets
 - Reject EVM transactions in the transaction pool when the broker cannot sell the VNRG missing for their fee
+- Fix exchange rate and energy generation edge cases in `pallet-dynamic-energy`
 
 ## [214] - 2026-09-25
 

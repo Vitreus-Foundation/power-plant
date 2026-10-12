@@ -3,13 +3,14 @@
 
 use frame_support::traits::{
     tokens::{Balance, ConversionFromAssetBalance, ConversionToAssetBalance},
-    Contains, Get, UnixTime,
+    Contains, Defensive, Get, UnixTime,
 };
 use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{
-        AtLeast32BitUnsigned, CheckedConversion, CheckedDiv, CheckedMul, Debug, Ensure, One, Zero,
+        AtLeast32BitUnsigned, CheckedAdd, CheckedConversion, CheckedDiv, CheckedMul, Debug, Ensure,
+        One, Zero,
     },
     FixedI128, FixedPointNumber, FixedU128, Perbill, SaturatedConversion, Saturating,
 };
@@ -21,8 +22,6 @@ use vitreus_runtime_common::{
 
 pub use pallet::*;
 
-pub mod migration;
-
 #[cfg(test)]
 mod mock;
 
@@ -32,6 +31,9 @@ mod tests;
 const LOG_TARGET: &str = "runtime::dynamic-energy";
 
 const SECONDS_IN_YEAR: u32 = 60 * 60 * 24 * 36525 / 100;
+
+/// The fill of a full warehouse in percents, the upper bound of the multiplier polynomial domain.
+const MAX_WAREHOUSE_FILL: FixedI128 = FixedI128::from_u32(100);
 
 type EnergyOf<T> = <T as Config>::Balance;
 type StakeOf<T> = <T as Config>::Balance;
@@ -62,7 +64,10 @@ pub mod pallet {
     use frame_support::pallet_prelude::*;
     use frame_system::pallet_prelude::*;
 
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(0);
+
     #[pallet::pallet]
+    #[pallet::storage_version(STORAGE_VERSION)]
     pub struct Pallet<T>(_);
 
     #[pallet::config]
@@ -93,10 +98,6 @@ pub mod pallet {
 
         /// Time used for computing session duration.
         type UnixTime: UnixTime;
-
-        /// Number of sessions per era.
-        #[pallet::constant]
-        type SessionsPerEra: Get<SessionIndex>;
 
         /// Session duration in seconds.
         #[pallet::constant]
@@ -174,7 +175,8 @@ pub mod pallet {
     #[pallet::storage]
     pub type SessionEnergySale<T: Config> = StorageValue<_, EnergyOf<T>, ValueQuery>;
 
-    /// Energy generation per session.
+    /// Energy generation per session of the active era.
+    /// Sessions of previous eras are removed when an era starts.
     #[pallet::storage]
     pub type EnergyGeneration<T: Config> =
         StorageMap<_, Twox64Concat, SessionIndex, EnergyOf<T>, ValueQuery>;
@@ -217,6 +219,10 @@ pub mod pallet {
     pub enum Error<T> {
         /// Invalid smooth factor value.
         InvalidSmoothFactor,
+        /// The multiplier polynomial can overflow with these coefficients.
+        InvalidMultiplierCoefficients,
+        /// Invalid annual percentage rate value.
+        InvalidAnnualPercentageRate,
     }
 
     #[pallet::genesis_config]
@@ -321,6 +327,7 @@ pub mod pallet {
         pub fn set_annual_percentage_rate(origin: OriginFor<T>, value: u32) -> DispatchResult {
             T::ManageOrigin::ensure_origin(origin)?;
 
+            ensure!(value > 0, Error::<T>::InvalidAnnualPercentageRate);
             AnnualPercentageRate::<T>::set(value);
             Self::deposit_event(Event::AnnualPercentageRateUpdated { value });
 
@@ -328,6 +335,8 @@ pub mod pallet {
         }
 
         /// Set the coefficients for the warehouse capacity multiplier formula (`a*x^3 + b*x^2 + c*x + d`).
+        ///
+        /// Rejects coefficients for which the formula can overflow at some warehouse fill.
         #[pallet::call_index(6)]
         #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn set_multiplier_coefficients(
@@ -340,6 +349,14 @@ pub mod pallet {
             T::ManageOrigin::ensure_origin(origin)?;
 
             let coefficients = [a, b, c, d];
+
+            // Each term peaks in magnitude at the full warehouse, so if the polynomial with
+            // absolute coefficients fits there, it fits for any warehouse fill.
+            let magnitudes = coefficients.map(|coefficient| coefficient.saturating_abs());
+            ensure!(
+                Self::checked_polynomial(magnitudes, MAX_WAREHOUSE_FILL).is_some(),
+                Error::<T>::InvalidMultiplierCoefficients
+            );
 
             MultiplierCoefficients::<T>::set(coefficients);
             Self::deposit_event(Event::MultiplierCoefficientsUpdated { coefficients });
@@ -367,21 +384,36 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
     /// Calculates warehouse capacity multiplier using `a*x^3+b*x^2+c*x+d` polynomial.
     pub fn calculate_warehouse_capacity_multiplier() -> FixedU128 {
-        let x = FixedI128::from_perbill(Perbill::from_rational(
-            T::Warehouse::current_amount(),
-            T::Warehouse::max_capacity(),
-        )) * 100.into(); // convert to percents
+        // `Perbill` caps the fill at 100%, even with zero capacity, so `x` (the fill in percents)
+        // never exceeds `MAX_WAREHOUSE_FILL`, as `set_multiplier_coefficients` assumes.
+        let fill =
+            Perbill::from_rational(T::Warehouse::current_amount(), T::Warehouse::max_capacity());
+        let x = FixedI128::from_perbill(fill).saturating_mul(MAX_WAREHOUSE_FILL);
 
-        let [a, b, c, d] = MultiplierCoefficients::<T>::get();
+        let coefficients = MultiplierCoefficients::<T>::get();
+        let multiplier = Self::checked_polynomial(coefficients, x);
 
-        let multiplier = a * x.saturating_pow(3) + b * x.saturating_pow(2) + c * x + d;
-
-        if multiplier > FixedI128::zero() {
-            FixedU128::from_inner(multiplier.into_inner() as u128)
-        } else {
-            log::warn!(target: LOG_TARGET, "Invalid warehouse capacity multiplier");
-            FixedU128::one()
+        match multiplier {
+            Some(value) if value > FixedI128::zero() => {
+                FixedU128::from_inner(value.into_inner() as u128)
+            },
+            _ => {
+                log::warn!(
+                    target: LOG_TARGET,
+                    "Invalid warehouse capacity multiplier: {:?}, x: {:?}",
+                    multiplier, x
+                );
+                FixedU128::one()
+            },
         }
+    }
+
+    /// Evaluates the polynomial `a*x^3+b*x^2+c*x+d`, returning `None` on overflow.
+    fn checked_polynomial([a, b, c, d]: [FixedI128; 4], x: FixedI128) -> Option<FixedI128> {
+        a.checked_mul(&x.saturating_pow(3))?
+            .checked_add(&b.checked_mul(&x.saturating_pow(2))?)?
+            .checked_add(&c.checked_mul(&x)?)?
+            .checked_add(&d)
     }
 
     fn update_generation_rate(index: SessionIndex) {
@@ -409,6 +441,21 @@ impl<T: Config> Pallet<T> {
         );
 
         EnergyGeneration::<T>::insert(index, rate);
+    }
+
+    /// When an era starts, keeps only this session in `EnergyGeneration`, as `calculate` has
+    /// already summed the previous eras. Must run after `update_generation_rate`, which reads
+    /// the last session.
+    fn prune_energy_generation(index: SessionIndex) {
+        let era_started = T::Staking::active_era()
+            .and_then(T::Staking::session_range_for_era)
+            .is_some_and(|(start, _)| start == index);
+
+        if era_started {
+            let rate = EnergyGeneration::<T>::get(index);
+            let _ = EnergyGeneration::<T>::clear(u32::MAX, None);
+            EnergyGeneration::<T>::insert(index, rate);
+        }
     }
 
     fn update_exchange_rate(index: SessionIndex, duration: u32) {
@@ -469,6 +516,15 @@ impl<T: Config> Pallet<T> {
                 old_rate.into_inner(),
                 smooth_factor,
             ));
+
+            if rate.is_zero() {
+                log::warn!(
+                    target: LOG_TARGET,
+                    "Exchange rate rounds down to zero: energy_sale: {:?}, total_stake: {:?}",
+                    energy_sale, total_stake
+                );
+                return;
+            }
 
             ExchangeRate::<T>::put(rate);
 
@@ -554,9 +610,7 @@ impl<T: Config> OnSessionChange for Pallet<T> {
         SessionEnergyBurn::<T>::put(EnergyOf::<T>::zero());
         SessionEnergySale::<T>::put(EnergyOf::<T>::zero());
 
-        if let Some(old_session) = index.checked_sub(T::SessionsPerEra::get() + 1) {
-            EnergyGeneration::<T>::remove(old_session);
-        }
+        Self::prune_energy_generation(index);
     }
 }
 
@@ -566,7 +620,10 @@ impl<T: Config> EraEnergyRateCalculator<EnergyOf<T>> for Pallet<T> {
 
         let mut total = EnergyOf::<T>::zero();
         for index in start..end {
-            let amount = EnergyGeneration::<T>::get(index);
+            let amount = EnergyGeneration::<T>::try_get(index)
+                .map_err(|()| index)
+                .defensive_proof("sessions are pruned only after their era is calculated; qed")
+                .unwrap_or_default();
 
             log::trace!(target: LOG_TARGET, "Energy generated in session {:?}: {:?}", index, amount);
 

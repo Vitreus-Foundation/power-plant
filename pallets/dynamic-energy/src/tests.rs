@@ -1,15 +1,121 @@
 use crate::{mock::*, *};
+use frame_support::{assert_noop, assert_ok};
+
+#[test]
+fn setting_zero_annual_percentage_rate_fails() {
+    new_test_ext().execute_with(|| {
+        // zero APR makes the denominator of the exchange rate zero
+        assert_noop!(
+            Pallet::<Test>::set_annual_percentage_rate(RuntimeOrigin::root(), 0),
+            Error::<Test>::InvalidAnnualPercentageRate
+        );
+    });
+}
+
+#[test]
+fn setting_multiplier_coefficients_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        // 0.02*x + 1, which is 2 at the mock warehouse fill of 50%
+        let coefficients = [
+            FixedI128::zero(),
+            FixedI128::zero(),
+            FixedI128::from_rational(2, 100),
+            FixedI128::one(),
+        ];
+        let [a, b, c, d] = coefficients;
+
+        assert_ok!(Pallet::<Test>::set_multiplier_coefficients(RuntimeOrigin::root(), a, b, c, d));
+        assert_eq!(MultiplierCoefficients::<Test>::get(), coefficients);
+        System::assert_last_event(
+            Event::<Test>::MultiplierCoefficientsUpdated { coefficients }.into(),
+        );
+
+        assert_eq!(
+            Pallet::<Test>::calculate_warehouse_capacity_multiplier(),
+            FixedU128::from_u32(2)
+        );
+    });
+}
+
+#[test]
+fn setting_overflowing_multiplier_coefficients_fails() {
+    new_test_ext().execute_with(|| {
+        let zero = FixedI128::zero();
+
+        // a*x^3 fits at the mock warehouse fill of 50%, but overflows at the full warehouse
+        let a = FixedI128::saturating_from_integer(1_000_000_000_000_000u64);
+        assert_noop!(
+            Pallet::<Test>::set_multiplier_coefficients(RuntimeOrigin::root(), a, zero, zero, zero),
+            Error::<Test>::InvalidMultiplierCoefficients
+        );
+
+        // a*x^3 and b*x^2 fit at the full warehouse, but their sum overflows
+        let a = FixedI128::saturating_from_integer(100_000_000_000_000u64);
+        let b = FixedI128::saturating_from_integer(10_000_000_000_000_000u64);
+        assert_noop!(
+            Pallet::<Test>::set_multiplier_coefficients(RuntimeOrigin::root(), a, b, zero, zero),
+            Error::<Test>::InvalidMultiplierCoefficients
+        );
+    });
+}
+
+#[test]
+fn calculating_polynomial_works() {
+    // on-chain coefficients: -0.000001*x^3 + 0.000147*x^2 - 0.009475*x + 1.228239
+    let coefficients = [
+        FixedI128::from_inner(-1_000_000_000_000),
+        FixedI128::from_inner(147_000_000_000_000),
+        FixedI128::from_inner(-9_475_000_000_000_000),
+        FixedI128::from_inner(1_228_239_000_000_000_000),
+    ];
+
+    assert_eq!(
+        Pallet::<Test>::checked_polynomial(coefficients, FixedI128::from_u32(0)),
+        Some(FixedI128::from_rational(1_228_239, 1_000_000))
+    );
+    assert_eq!(
+        Pallet::<Test>::checked_polynomial(coefficients, FixedI128::from_u32(50)),
+        Some(FixedI128::from_rational(996_989, 1_000_000))
+    );
+    assert_eq!(
+        Pallet::<Test>::checked_polynomial(coefficients, FixedI128::from_u32(100)),
+        Some(FixedI128::from_rational(750_739, 1_000_000))
+    );
+}
+
+#[test]
+fn calculating_overflowing_multiplier_works() {
+    new_test_ext().execute_with(|| {
+        let zero = FixedI128::zero();
+
+        // a*x^3 overflows at the mock warehouse fill of 50%
+        MultiplierCoefficients::<Test>::put([FixedI128::from_inner(i128::MAX), zero, zero, zero]);
+        assert_eq!(Pallet::<Test>::calculate_warehouse_capacity_multiplier(), FixedU128::one());
+
+        // a*x^3 and b*x^2 fit at the mock warehouse fill of 50%, but their sum overflows
+        let a = FixedI128::saturating_from_integer(800_000_000_000_000u64);
+        let b = FixedI128::saturating_from_integer(40_000_000_000_000_000u64);
+        MultiplierCoefficients::<Test>::put([a, b, zero, zero]);
+        assert_eq!(Pallet::<Test>::calculate_warehouse_capacity_multiplier(), FixedU128::one());
+
+        // the session change goes through the same calculation
+        start_session(1);
+        assert_eq!(Pallet::<Test>::exchange_rate_parameters().multiplier, FixedU128::one());
+    });
+}
 
 #[test]
 fn energy_generation_works() {
     new_test_ext().execute_with(|| {
-        Pallet::<Test>::on_new_session(0);
+        start_session(0);
         assert!(EnergyGeneration::<Test>::contains_key(0));
 
-        Pallet::<Test>::on_new_session(1);
+        start_session(1);
         assert!(EnergyGeneration::<Test>::contains_key(1));
 
-        Pallet::<Test>::on_new_session(2);
+        start_session(2);
         assert!(EnergyGeneration::<Test>::contains_key(2));
 
         let total_generation = EnergyGeneration::<Test>::get(0)
@@ -19,28 +125,93 @@ fn energy_generation_works() {
         assert!(total_generation > 0);
         assert_eq!(Pallet::<Test>::calculate(0), Some(total_generation));
 
-        // old data removed
-        Pallet::<Test>::on_new_session(3);
-        Pallet::<Test>::on_new_session(4);
+        // era 0 data removed once era 1 starts
+        start_session(3);
+        start_session(4);
         assert!(!EnergyGeneration::<Test>::contains_key(0));
-        assert!(EnergyGeneration::<Test>::contains_key(1));
-        assert!(EnergyGeneration::<Test>::contains_key(2));
+        assert!(!EnergyGeneration::<Test>::contains_key(1));
+        assert!(!EnergyGeneration::<Test>::contains_key(2));
         assert!(EnergyGeneration::<Test>::contains_key(3));
         assert!(EnergyGeneration::<Test>::contains_key(4));
     });
 }
 
 #[test]
+fn calculating_energy_generation_works() {
+    new_test_ext().execute_with(|| {
+        // eras of 3 sessions; staking calculates an era before the next one starts, and every
+        // session generates the energy burn override from genesis
+        for era in 0..3 {
+            for index in 3 * era..3 * (era + 1) {
+                start_session(index);
+
+                // the rate is smoothed with the previous session, which pruning at an era start
+                // must not remove first
+                let old_rate = (index > 0).then_some(ENERGY_BURN);
+                assert_eq!(Pallet::<Test>::generation_rate_parameters().old_rate, old_rate);
+            }
+
+            assert_eq!(Pallet::<Test>::calculate(era), Some(3 * ENERGY_BURN));
+        }
+    });
+}
+
+#[test]
+fn calculating_long_era_energy_generation_works() {
+    new_test_ext().execute_with(|| {
+        // era 0 lasts 7 sessions instead of 3, as when elections fail
+        EraLength::set(7);
+
+        for index in 0..7 {
+            start_session(index);
+        }
+
+        // every session generates the energy burn override from genesis
+        assert_eq!(Pallet::<Test>::calculate(0), Some(7 * ENERGY_BURN));
+
+        // era 0 data removed
+        for index in 7..11 {
+            start_session(index);
+        }
+        assert!((0..7).all(|index| !EnergyGeneration::<Test>::contains_key(index)));
+        assert!((7..11).all(EnergyGeneration::<Test>::contains_key));
+    });
+}
+
+#[test]
+fn calculating_zero_exchange_rate_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        let unit = 10u128.pow(18);
+        EnergySaleOverride::<Test>::kill();
+        TotalStakeOverride::<Test>::put(100_000_000 * unit);
+
+        Pallet::<Test>::on_energy_sell(10_000 * unit);
+        start_session(1);
+        let rate = Pallet::<Test>::exchange_rate().unwrap();
+        assert!(!rate.is_zero());
+
+        // at this stake, a sale of 1 gives a rate that rounds down to zero, which must not
+        // replace the previous one
+        Pallet::<Test>::on_energy_sell(1);
+        start_session(2);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
+        System::assert_last_event(Event::<Test>::ExchangeRateUpdated { rate }.into());
+    });
+}
+
+#[test]
 fn calculating_sold_energy_works() {
     new_test_ext().execute_with(|| {
-        Pallet::<Test>::on_new_session(0);
+        start_session(0);
         assert_eq!(SessionEnergySale::<Test>::get(), 0);
 
         Pallet::<Test>::on_energy_sell(500);
         Pallet::<Test>::on_energy_sell(1000);
         assert_eq!(SessionEnergySale::<Test>::get(), 1500);
 
-        Pallet::<Test>::on_new_session(1);
+        start_session(1);
         assert_eq!(SessionEnergySale::<Test>::get(), 0);
     });
 }
@@ -48,14 +219,14 @@ fn calculating_sold_energy_works() {
 #[test]
 fn calculating_burned_energy_works() {
     new_test_ext().execute_with(|| {
-        Pallet::<Test>::on_new_session(0);
+        start_session(0);
         assert_eq!(SessionEnergyBurn::<Test>::get(), 0);
 
         Pallet::<Test>::on_energy_burn(500);
         Pallet::<Test>::on_energy_burn(1000);
         assert_eq!(SessionEnergyBurn::<Test>::get(), 1500);
 
-        Pallet::<Test>::on_new_session(1);
+        start_session(1);
         assert_eq!(SessionEnergyBurn::<Test>::get(), 0);
     });
 }
