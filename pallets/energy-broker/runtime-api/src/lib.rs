@@ -12,15 +12,18 @@ sp_api::decl_runtime_apis! {
         Balance: Decode + Encode,
     {
         /// Estimates energy received from a given amount of native currency.
+        ///
+        /// Does not account for available liquidity; the limit is [`Self::max_amount_out`].
         fn estimate_energy_from_native(amount: Balance) -> Option<Balance>;
 
         /// Estimates native currency received from a given amount of energy.
+        ///
+        /// Does not account for available liquidity; the limit is [`Self::max_amount_out`].
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance>;
 
         /// Quotes the amount of `asset2` resulting from swapping the exact `amount` of `asset1`.
         ///
-        /// Does not account for available liquidity. The most `asset2` the path can supply is
-        /// [`Self::max_amount_out`].
+        /// Returns `None` when the quoted `asset2` exceeds [`Self::max_amount_out`].
         fn quote_price_exact_tokens_for_tokens(
             who: Option<AccountId>,
             asset1: AssetKind,
@@ -31,8 +34,7 @@ sp_api::decl_runtime_apis! {
 
         /// Quotes the amount of `asset1` required to obtain the exact `amount` of `asset2`.
         ///
-        /// Does not account for available liquidity. The most `asset2` the path can supply is
-        /// [`Self::max_amount_out`].
+        /// Returns `None` when `amount` exceeds [`Self::max_amount_out`].
         fn quote_price_tokens_for_exact_tokens(
             who: Option<AccountId>,
             asset1: AssetKind,
