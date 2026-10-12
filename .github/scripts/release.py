@@ -121,9 +121,9 @@ def should_release():
             previous = versions[2] if len(versions) > 2 else ""
             if previous and not tag_exists(previous):
                 fail(
-                    f"[{previous}] was never released, {TAG.format(previous)} is missing, and "
-                    f"[{version}]'s notes would leave its changes out: release it first, or "
-                    f"fold its entries into [{version}]"
+                    f"[{previous}] isn't released yet (no {TAG.format(previous)}), so [{version}] "
+                    f"would ship its changes without their notes: release {previous} first, or "
+                    f"merge the [{previous}] section into [{version}]"
                 )
             release, commit = 1, release_commit(version)
         elif tagged != changelog.section(text, version):
