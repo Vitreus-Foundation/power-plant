@@ -26,7 +26,6 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Remove the `SessionsPerEra` constant from `pallet-dynamic-energy`
 
-
 ### Fixed
 
 - Fix the `QuotePrice` implementation in `pallet-energy-broker` to return `None` when the output exceeds `max_amount_out`
