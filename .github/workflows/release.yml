@@ -31,11 +31,15 @@ jobs:
       should-release: ${{ steps.should-release.outputs.should-release }}
       version: ${{ steps.should-release.outputs.version }}
       tag: ${{ steps.should-release.outputs.tag }}
+      commit: ${{ steps.should-release.outputs.commit }}
       srtool-tag: ${{ steps.should-release.outputs.srtool-tag }}
       profile: ${{ steps.should-release.outputs.profile }}
 
     steps:
+      # The whole history, to find the commit that cut the version.
       - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
 
       - id: should-release
         run: python3 .github/scripts/release.py should-release
@@ -53,7 +57,11 @@ jobs:
         runtime: [testnet-runtime, mainnet-runtime]
 
     steps:
+      # The commit that cut the version. It is older than the one that started the run when an
+      # earlier release run failed and develop moved on.
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
 
       # A third-party action, so it is pinned to a commit: it builds the wasm we publish.
       - id: srtool
@@ -89,6 +97,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
 
       - uses: actions/download-artifact@v7
         with:
@@ -96,9 +106,11 @@ jobs:
           merge-multiple: true
 
       - name: Write the release notes
+        env:
+          COMMIT: ${{ needs.prepare.outputs.commit }}
         run: >-
           python3 .github/scripts/release.py notes
-          ${{ needs.prepare.outputs.version }} out/*.srtool.json --commit "$GITHUB_SHA" --out notes.md
+          ${{ needs.prepare.outputs.version }} out/*.srtool.json --commit "$COMMIT" --out notes.md
 
       - uses: actions/upload-artifact@v6
         with:
@@ -129,6 +141,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.prepare.outputs.tag }}
           VERSION: ${{ needs.prepare.outputs.version }}
+          COMMIT: ${{ needs.prepare.outputs.commit }}
         run: |
           gh release create "$TAG" out/*.wasm out/*.srtool.json --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" --title "Runtime version $VERSION" --notes-file out/notes.md
+            --target "$COMMIT" --title "Runtime version $VERSION" --notes-file out/notes.md

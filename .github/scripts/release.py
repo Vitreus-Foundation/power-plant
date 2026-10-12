@@ -39,10 +39,14 @@ REPORT = re.compile(r"(vitreus_power_plant_(\w+)_runtime-v[0-9]+)\.srtool\.json"
 HEADINGS = {"mainnet": "⚡ Mainnet", "testnet": "🧪 Testnet"}
 
 
-def srtool_tag():
-    with open("rust-toolchain.toml", "rb") as f:
-        rust = tomllib.load(f)["toolchain"]["channel"]
-    return f"{rust}-{SRTOOL_VERSION}"
+def srtool_tag(commit=None):
+    """Return the srtool image tag for rust-toolchain.toml in `commit`, or in the checkout."""
+    if commit:
+        toolchain = changelog.git("show", f"{commit}:rust-toolchain.toml")
+    else:
+        with open("rust-toolchain.toml") as f:
+            toolchain = f.read()
+    return f"{tomllib.loads(toolchain)['toolchain']['channel']}-{SRTOOL_VERSION}"
 
 
 def set_outputs(values):
@@ -81,22 +85,38 @@ def released_section(version):
     return changelog.section(git("show", f"FETCH_HEAD:{changelog.CHANGELOG}"), version)
 
 
+def release_commit(version):
+    """Return the commit that cut [version]: the latest one on the mainline adding its header.
+
+    The release is built from it, not from the commit that started the run. The two differ when
+    a release run failed and develop moved on: neither a retry nor the next push that changes
+    CHANGELOG.md may ship what was merged since as part of [version]. With --first-parent, a
+    merge commit counts as adding what its branch added, e.g. GitHub's merge commit for a PR.
+    """
+    log = ["log", "-1", "--first-parent", "--format=%H", "-S", f"## [{version}] - "]
+    commit = changelog.git(*log, "--", changelog.CHANGELOG).strip()
+    if not commit:
+        fail(f"no commit adds the [{version}] header to {changelog.CHANGELOG}")
+    return commit
+
+
 def should_release():
     """Decide whether this run releases, and print what the build needs for that.
 
     The version is the first numbered section of CHANGELOG.md, right below [Unreleased]. Without
-    tag runtime-vN it gets released, after the same checks as `changelog.py check`. With the tag
-    it was released before, and its section must not have changed since: a different section
-    means the number was cut again, e.g. after a revert, so the release must take the next one.
+    tag runtime-vN it gets released, after the same checks as `changelog.py check`, from the
+    commit that cut it. With the tag it was released before, and its section must not have
+    changed since: a different section means the number was cut again, e.g. after a revert, so
+    the release must take the next one.
     """
     text, versions = changelog.read_changelog()
     version = versions[1] if len(versions) > 1 else ""
-    release = 0
+    release, commit = 0, ""
     if version:
         tagged = released_section(version)
         if tagged is None:
             changelog.check(None)
-            release = 1
+            release, commit = 1, release_commit(version)
         elif tagged != changelog.section(text, version):
             fail(
                 f"{version} is already released as {TAG.format(version)} with a different "
@@ -107,7 +127,8 @@ def should_release():
             "should-release": release,
             "version": version,
             "tag": TAG.format(version) if version else "",
-            "srtool-tag": srtool_tag(),
+            "commit": commit,
+            "srtool-tag": srtool_tag(commit),
             "profile": PROFILE,
         }
     )
