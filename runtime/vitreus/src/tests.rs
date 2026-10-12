@@ -3,7 +3,7 @@ use ethereum::{TransactionAction, TransactionSignature, TransactionV2};
 use fp_self_contained::SelfContainedCall;
 use frame_support::{
     dispatch::{DispatchClass, GetDispatchInfo},
-    traits::Hooks,
+    traits::{fungible::Mutate as _, fungibles::Mutate as _, Hooks},
 };
 use pallet_energy_fee::DefaultFeeMultiplier;
 use sp_runtime::{BuildStorage, FixedU128, Perquintill};
@@ -117,18 +117,28 @@ fn fee_multiplier_update_works() {
 #[test]
 fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
     new_test_ext().execute_with(|| {
-        // A sender without energy buys it with VTRS. Without a rate the fee can't be quoted at all,
-        // and `InvalidTransaction::Payment` would come from that instead of the VTRS balance check.
+        // A sender without energy buys it with VTRS. Without a rate, or without VNRG for the broker
+        // to sell, the fee can't be quoted, and `InvalidTransaction::Payment` would come from that
+        // instead of the VTRS balance check.
+        let broker = EnergyBroker::account_id();
+        // VNRG is not sufficient, so the broker's account must exist before it can hold any.
+        Balances::set_balance(&broker, ExistentialDeposit::get());
+        NativeAndAssets::set_balance(
+            NativeOrAssetId::WithId(VNRG::get()),
+            &broker,
+            1_000_000_000_000_000,
+        );
         pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+
         assert!(
             <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
                 NativeOrAssetId::Native,
                 NativeOrAssetId::WithId(VNRG::get()),
-                1,
+                EnergyFee::ethereum_fee(),
                 true,
             )
             .is_some(),
-            "VTRS -> VNRG must be quotable",
+            "the EVM fee must be quotable in VTRS",
         );
 
         let sample_tx = TransactionV2::Legacy(LegacyTransaction {
@@ -156,6 +166,27 @@ fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
 
         assert_eq!(
             runtime_call.validate_self_contained(&noname_h160, &dispatch_info, len),
+            Some(Err(InvalidTransaction::Payment.into()))
+        );
+
+        // Short of energy, alith buys the rest of the fee with VTRS, which needs VNRG for the
+        // broker to sell. EVM balances are VNRG, so alith keeps half the fee for Frontier's own
+        // balance check.
+        NativeAndAssets::set_balance(NativeOrAssetId::WithId(SNRG::get()), &alith(), 0);
+        NativeAndAssets::set_balance(NativeOrAssetId::WithId(LNRG::get()), &alith(), 0);
+        NativeAndAssets::set_balance(
+            NativeOrAssetId::WithId(VNRG::get()),
+            &alith(),
+            EnergyFee::ethereum_fee() / 2,
+        );
+        assert!(matches!(
+            runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
+            Some(Ok(..))
+        ));
+
+        NativeAndAssets::set_balance(NativeOrAssetId::WithId(VNRG::get()), &broker, 0);
+        assert_eq!(
+            runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
             Some(Err(InvalidTransaction::Payment.into()))
         );
     })
@@ -276,5 +307,167 @@ mod energy_broker {
     #[test]
     fn lnrg_conversion_burns_and_mints_without_touching_the_broker() {
         new_test_ext().execute_with(|| assert_conversion_burns_and_mints(LNRG::get()))
+    }
+}
+
+mod xcm_tests {
+    use super::*;
+    use frame_support::{assert_err_ignore_postinfo, assert_noop};
+    use sp_runtime::{traits::Dispatchable, DispatchError};
+    use xcm::latest::prelude::{
+        Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, Here, Location, OriginKind, Parachain,
+        ReceiveTeleportedAsset, Transact, Weight, WeightLimit, Xcm, XcmError,
+    };
+    use xcm::{VersionedAssets, VersionedLocation, VersionedXcm};
+    use xcm_executor::{traits::TransferType, XcmExecutor};
+
+    // A child parachain origin that `EnergyForParachains` trusts as a teleporter.
+    fn parachain() -> Location {
+        Location::new(0, [Parachain(2000)])
+    }
+
+    fn energy_asset(amount: u128) -> Asset {
+        Asset { id: AssetId(crate::xcm_config::EnergyTokenLocation::get()), fun: Fungible(amount) }
+    }
+
+    /// Inbound energy teleports must be rejected explicitly with `UntrustedTeleportLocation`,
+    /// not silently masked as `AssetNotFound`. See `EnergyAdapter::can_check_in` for why energy
+    /// is one-way.
+    #[test]
+    fn inbound_energy_teleport_is_rejected() {
+        new_test_ext().execute_with(|| {
+            let message =
+                Xcm(vec![ReceiveTeleportedAsset(vec![energy_asset(1_000_000_000)].into())]);
+            let mut hash = [0u8; 32];
+
+            let outcome = XcmExecutor::<crate::xcm_config::XcmConfig>::prepare_and_execute(
+                parachain(),
+                message,
+                &mut hash,
+                Weight::MAX,
+                Weight::MAX,
+            );
+
+            assert_eq!(outcome.ensure_complete(), Err(XcmError::UntrustedTeleportLocation));
+        });
+    }
+
+    /// Only governance may `send` arbitrary XCM. Regression guard for `SendXcmOrigin`.
+    #[test]
+    fn signed_cannot_send_xcm() {
+        new_test_ext().execute_with(|| {
+            let dest = VersionedLocation::from(Location::new(0, [Parachain(2000)]));
+            let message = VersionedXcm::from(Xcm::<()>(vec![ClearOrigin]));
+            assert_noop!(
+                XcmPallet::send(RuntimeOrigin::signed(alith()), Box::new(dest), Box::new(message)),
+                DispatchError::BadOrigin,
+            );
+        });
+    }
+
+    /// `execute` of arbitrary XCM is disabled via `XcmExecuteFilter = Nothing`.
+    /// Regression guard for the filter.
+    #[test]
+    fn signed_cannot_execute_xcm() {
+        new_test_ext().execute_with(|| {
+            let message = VersionedXcm::from(Xcm::<RuntimeCall>(vec![ClearOrigin]));
+            assert_err_ignore_postinfo!(
+                XcmPallet::execute(
+                    RuntimeOrigin::signed(alith()),
+                    Box::new(message),
+                    Weight::zero(),
+                ),
+                pallet_xcm::Error::<Runtime>::Filtered,
+            );
+        });
+    }
+
+    /// `transfer_assets_using_type_and_then` is not gated by `XcmExecuteFilter`, so it is blocked
+    /// at `BaseCallFilter`. Regression guard.
+    #[test]
+    fn signed_cannot_transfer_assets_using_type_and_then() {
+        new_test_ext().execute_with(|| {
+            let call =
+                RuntimeCall::XcmPallet(pallet_xcm::Call::transfer_assets_using_type_and_then {
+                    dest: Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)]))),
+                    assets: Box::new(xcm::latest::Assets::new().into()),
+                    assets_transfer_type: Box::new(TransferType::Teleport),
+                    remote_fees_id: Box::new(AssetId(Here.into_location()).into()),
+                    fees_transfer_type: Box::new(TransferType::Teleport),
+                    custom_xcm_on_dest: Box::new(VersionedXcm::from(Xcm::<()>(vec![]))),
+                    weight_limit: WeightLimit::Unlimited,
+                });
+            assert_err_ignore_postinfo!(
+                call.dispatch(RuntimeOrigin::signed(alith())),
+                frame_system::Error::<Runtime>::CallFiltered,
+            );
+        });
+    }
+
+    /// Outbound delivery to child parachains is free: `price_for_delivery` returns no assets, so the
+    /// sender pays nothing for delivery. Regression guard for `PriceForChildParachainDelivery`.
+    #[test]
+    fn child_parachain_delivery_is_free() {
+        use polkadot_runtime_common::xcm_sender::PriceForMessageDelivery;
+        type Price = crate::xcm_config::PriceForChildParachainDelivery;
+        new_test_ext().execute_with(|| {
+            let message = Xcm::<()>(vec![ClearOrigin]);
+            assert!(Price::price_for_delivery(2000.into(), &message).is_none());
+        });
+    }
+
+    /// Reserve transfers are disabled via `XcmReserveTransferFilter = Nothing`. Regression guard.
+    #[test]
+    fn signed_cannot_reserve_transfer() {
+        new_test_ext().execute_with(|| {
+            let dest = Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)])));
+            let beneficiary =
+                Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)])));
+            let assets = Box::new(VersionedAssets::from(xcm::latest::Assets::new()));
+            assert_noop!(
+                XcmPallet::limited_reserve_transfer_assets(
+                    RuntimeOrigin::signed(alith()),
+                    dest,
+                    beneficiary,
+                    assets,
+                    0,
+                    WeightLimit::Unlimited,
+                ),
+                pallet_xcm::Error::<Runtime>::Filtered,
+            );
+        });
+    }
+
+    /// Only whitelisted parachain-origin calls (HRMP, registrar) may be dispatched via `Transact`;
+    /// anything else is rejected with `NoPermission`. Regression guard for `SafeCallFilter` — the
+    /// call used here (a reserve transfer) is deliberately not on the whitelist.
+    #[test]
+    fn transact_is_rejected() {
+        use sp_runtime::codec::Encode;
+        new_test_ext().execute_with(|| {
+            let call = RuntimeCall::XcmPallet(pallet_xcm::Call::limited_reserve_transfer_assets {
+                dest: Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)]))),
+                beneficiary: Box::new(VersionedLocation::from(Location::new(0, [Parachain(2000)]))),
+                assets: Box::new(VersionedAssets::from(xcm::latest::Assets::new())),
+                fee_asset_item: 0,
+                weight_limit: WeightLimit::Unlimited,
+            });
+            let message = Xcm(vec![Transact {
+                origin_kind: OriginKind::SovereignAccount,
+                require_weight_at_most: Weight::from_parts(u64::MAX / 2, u64::MAX / 2),
+                call: call.encode().into(),
+            }]);
+            let mut hash = [0u8; 32];
+
+            let outcome = XcmExecutor::<crate::xcm_config::XcmConfig>::prepare_and_execute(
+                parachain(),
+                message,
+                &mut hash,
+                Weight::MAX,
+                Weight::MAX,
+            );
+
+            assert_eq!(outcome.ensure_complete(), Err(XcmError::NoPermission));
+        });
     }
 }
