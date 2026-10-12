@@ -9,7 +9,7 @@ on:
   # By hand on develop: retries a release that failed. On any other branch: a dry run.
   workflow_dispatch:
   # A release PR gets a dry run: the runtimes are built and the notes rendered, nothing is
-  # published. The prepare job tells release PRs apart: they bring a version without a tag.
+  # published. The prepare job tells release PRs apart: they cut a version that has no tag yet.
   pull_request:
     paths: [CHANGELOG.md]
 

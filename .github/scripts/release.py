@@ -105,11 +105,13 @@ def should_release():
 
     The version is the first numbered section of CHANGELOG.md, right below [Unreleased]. Without
     tag runtime-vN it gets released, after the same checks as `changelog.py check`, from the
-    commit that cut it. The version below it must be released already: if its release run
-    failed and nobody finished it, its changes would ship in N's wasm but in no release's notes.
-    With the tag it was released before, and its section must not have changed since: a
-    different section means the number was cut again, e.g. after a revert, so the release must
-    take the next one.
+    commit that cut it. Only two runs do that: the one on that commit itself, i.e. the release
+    PR's merge or its dry run, and a manual one. A later push or PR only gets a warning, so a
+    failed release is finished on purpose, never as a side effect of merging something else.
+    The version below it must be released already: if its release run failed and nobody
+    finished it, its changes would ship in N's wasm but in no release's notes. With the tag it
+    was released before, and its section must not have changed since: a different section
+    means the number was cut again, e.g. after a revert, so the release must take the next one.
     """
     text, versions = changelog.read_changelog()
     version = versions[1] if len(versions) > 1 else ""
@@ -125,7 +127,17 @@ def should_release():
                     f"would ship its changes without their notes: release {previous} first, or "
                     f"merge the [{previous}] section into [{version}]"
                 )
-            release, commit = 1, release_commit(version)
+            commit = release_commit(version)
+            manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
+            if manual or commit == changelog.git("rev-parse", "HEAD").strip():
+                release = 1
+            else:
+                print(
+                    f"::warning::{version} isn't released yet (no {TAG.format(version)}), and this "
+                    f"run doesn't publish it. If its release run failed, re-run it, or run "
+                    f"Release on develop by hand"
+                )
+                commit = ""
         elif tagged != changelog.section(text, version):
             fail(
                 f"{version} is already released as {TAG.format(version)} with a different "

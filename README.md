@@ -188,6 +188,8 @@ the same notes and hashes before the merge.
 - Upgrade a network only with the wasm from a release, never with a local build.
 - To verify a release, check out its tag and run the command from its notes: the hashes must
   match.
+- If a release run fails, re-run it, or run Release on `develop` by hand. Merging other PRs
+  doesn't publish it.
 - An urgent fix goes into `develop` like any other change, and a release PR follows right away.
   The release takes everything merged since the last one, so keep `develop` ready to release.
 
