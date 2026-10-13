@@ -165,6 +165,11 @@ impl QuotePriceNativeForEnergy for MockEnergyExchange {
     ) -> Option<Self::Balance> {
         Some(VNRG_TO_VTRS_RATE.saturating_mul_int(amount))
     }
+
+    // The mock mints VNRG, so its supply has no limit.
+    fn max_amount_out() -> Self::Balance {
+        u128::MAX
+    }
 }
 
 impl SwapNativeForEnergy<AccountId> for MockEnergyExchange {

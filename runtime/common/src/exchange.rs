@@ -69,6 +69,12 @@ pub trait QuotePriceNativeForEnergy {
         amount: Self::Balance,
         include_fee: bool,
     ) -> Option<Self::Balance>;
+
+    /// Returns the maximum amount of energy a swap can currently supply.
+    ///
+    /// Zero if nothing can be supplied, `Balance::max_value()` if there is no limit. Quoting or
+    /// swapping for more fails.
+    fn max_amount_out() -> Self::Balance;
 }
 
 /// Trait providing methods to quote swap prices for exchanging energy for native currency.
@@ -92,6 +98,12 @@ pub trait QuotePriceEnergyForNative {
         amount: Self::Balance,
         include_fee: bool,
     ) -> Option<Self::Balance>;
+
+    /// Returns the maximum amount of native currency a swap can currently supply.
+    ///
+    /// Zero if nothing can be supplied, `Balance::max_value()` if there is no limit. Quoting or
+    /// swapping for more fails.
+    fn max_amount_out() -> Self::Balance;
 }
 
 /// A trait for swapping native currency for energy.
@@ -155,7 +167,7 @@ pub struct NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>(
 impl<AccountId, Exchange, NativeAsset, F, A> QuotePriceNativeForEnergy
     for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
-    Exchange: QuotePrice,
+    Exchange: MaxAmountOut,
     NativeAsset: Get<Exchange::AssetKind>,
     F: fungibles::Inspect<AccountId>,
     A: Get<F::AssetId>,
@@ -186,13 +198,17 @@ where
             amount,
             include_fee,
         )
+    }
+
+    fn max_amount_out() -> Self::Balance {
+        Exchange::max_amount_out(NativeAsset::get(), A::get().into())
     }
 }
 
 impl<AccountId, Exchange, NativeAsset, F, A> QuotePriceEnergyForNative
     for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
-    Exchange: QuotePrice,
+    Exchange: MaxAmountOut,
     NativeAsset: Get<Exchange::AssetKind>,
     F: fungibles::Inspect<AccountId>,
     A: Get<F::AssetId>,
@@ -223,6 +239,10 @@ where
             amount,
             include_fee,
         )
+    }
+
+    fn max_amount_out() -> Self::Balance {
+        Exchange::max_amount_out(A::get().into(), NativeAsset::get())
     }
 }
 
@@ -339,6 +359,10 @@ impl QuotePriceNativeForEnergy for () {
     ) -> Option<Self::Balance> {
         None
     }
+
+    fn max_amount_out() -> Self::Balance {
+        0
+    }
 }
 
 impl QuotePriceEnergyForNative for () {
@@ -357,6 +381,10 @@ impl QuotePriceEnergyForNative for () {
         _include_fee: bool,
     ) -> Option<Self::Balance> {
         None
+    }
+
+    fn max_amount_out() -> Self::Balance {
+        0
     }
 }
 
