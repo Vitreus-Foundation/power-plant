@@ -195,7 +195,7 @@ fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
 mod energy_broker {
     use super::*;
     use frame_support::{assert_ok, traits::fungibles::Inspect as FungiblesInspect};
-    use vitreus_runtime_common::SwapEnergyForNative;
+    use vitreus_runtime_common::{QuotePriceEnergyForNative, SwapEnergyForNative};
 
     const AMOUNT: Balance = 1_000_000_000;
 
@@ -354,6 +354,24 @@ mod energy_broker {
     fn treasury_sells_lnrg_for_vtrs() {
         new_test_ext()
             .execute_with(|| assert_sells_for_vtrs::<TreasuryLiquidEnergyExchange>(LNRG::get()))
+    }
+
+    #[test]
+    fn treasury_lnrg_exchange_is_limited_by_broker_vtrs() {
+        new_test_ext().execute_with(|| {
+            let path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
+
+            fund_broker();
+            assert!(TreasuryLiquidEnergyExchange::max_amount_out() > 0);
+            assert_eq!(
+                TreasuryLiquidEnergyExchange::max_amount_out(),
+                EnergyBroker::max_amount_out(&path),
+            );
+
+            // With only its existential deposit left, the broker has no VTRS to pay out.
+            Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get());
+            assert_eq!(TreasuryLiquidEnergyExchange::max_amount_out(), 0);
+        })
     }
 }
 
