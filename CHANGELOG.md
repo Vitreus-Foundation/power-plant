@@ -21,6 +21,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Make the EnergyFee `estimate_call_fee` runtime API return `None` when the broker cannot sell the VNRG missing for the fee
 - Reject a zero value in `set_annual_percentage_rate` of `pallet-dynamic-energy`
 - Reject coefficients that can overflow the multiplier in `set_multiplier_coefficients` of `pallet-dynamic-energy`
+- Refactor the energy exchanges of `pallet-energy-fee` and `pallet-treasury-extension` and add `max_amount_out` to them
 
 ### Removed
 
