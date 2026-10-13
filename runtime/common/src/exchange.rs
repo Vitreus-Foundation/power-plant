@@ -39,6 +39,15 @@ pub trait QuotePrice {
     ) -> Option<Self::Balance>;
 }
 
+/// Trait providing the maximum amount an exchange can currently supply of an asset.
+pub trait MaxAmountOut: QuotePrice {
+    /// Returns the maximum amount of `asset2` a swap from `asset1` can currently supply.
+    ///
+    /// Zero if nothing can be supplied, including on an unsupported path, and
+    /// `Balance::max_value()` if there is no limit. Quoting or swapping for more fails.
+    fn max_amount_out(asset1: Self::AssetKind, asset2: Self::AssetKind) -> Self::Balance;
+}
+
 /// Trait providing methods to quote swap prices for exchanging native currency for energy.
 pub trait QuotePriceNativeForEnergy {
     /// Measurement units of the asset classes for pricing.
