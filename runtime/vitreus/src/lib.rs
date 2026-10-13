@@ -1384,7 +1384,6 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Kickstart(..)
             | RuntimeCall::Vesting(..)
             | RuntimeCall::NacManaging(..)
-            | RuntimeCall::ManualBridge(..)
             | RuntimeCall::Privileges(..)
             | RuntimeCall::Council(..)
             | RuntimeCall::TechnicalCommittee(..)
@@ -2015,17 +2014,6 @@ impl pallet_faucet::Config for Runtime {
     type WeightInfo = pallet_faucet::weights::SubstrateWeight<Runtime>;
 }
 
-impl pallet_manual_bridge::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
-    type PayoutOrigin =
-        pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>;
-    type BridgeAccount = xcm_config::CheckAccount;
-    type FeeReceiverAccount = xcm_config::TreasuryAccount;
-    type DepositFeePercent = xcm_config::DepositFeePercent;
-    type WithdrawalFeePercent = xcm_config::WithdrawalFeePercent;
-}
-
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -2130,7 +2118,7 @@ construct_runtime!(
         #[cfg(feature = "testnet-runtime")]
         Faucet: pallet_faucet = 240,
 
-        ManualBridge: pallet_manual_bridge = 245,
+        // ManualBridge (removed) = 245,
     }
 );
 

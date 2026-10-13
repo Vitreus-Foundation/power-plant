@@ -7061,17 +7061,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-manual-bridge"
-version = "0.1.0"
-dependencies = [
- "frame-support",
- "frame-system",
- "parity-scale-codec",
- "scale-info",
- "sp-runtime",
-]
-
-[[package]]
 name = "pallet-membership"
 version = "37.0.0"
 source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#7642d6b5dea6dd7871ef8bbfcb9d48ba8a8b0f77"
@@ -14264,7 +14253,6 @@ dependencies = [
  "pallet-im-online",
  "pallet-launch-treasury",
  "pallet-launchpad",
- "pallet-manual-bridge",
  "pallet-membership",
  "pallet-message-queue",
  "pallet-mmr",
