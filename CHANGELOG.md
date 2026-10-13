@@ -25,6 +25,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 ### Removed
 
 - Remove the `SessionsPerEra` constant from `pallet-dynamic-energy`
+- Remove `pallet-manual-bridge` and clear its storage
 
 ### Fixed
 
