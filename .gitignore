@@ -17,3 +17,12 @@ testnet_keys_envs
 # direnv files
 .envrc
 .direnv
+
+# Local environment, review documents and investigation artifacts
+.env.*
+!.env.example
+!.env.*.example
+/.idea/
+/.omc/
+/investigations/
+/docs/

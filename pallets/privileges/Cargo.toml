@@ -36,6 +36,7 @@ frame-benchmarking = { workspace = true, optional = true }
 pallet-assets = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-claiming = { workspace = true }
+pallet-energy-fee = { workspace = true }
 pallet-session = { workspace = true }
 parity-scale-codec = { workspace = true }
 pallet-balances = { workspace = true }
@@ -50,7 +51,7 @@ substrate-test-utils = { workspace = true }
 
 [features]
 default = ["std"]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
+runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks", "pallet-nac-managing/runtime-benchmarks", "pallet-assets/runtime-benchmarks"]
 std = [
     "chrono/std",
     "frame-benchmarking/std",
@@ -72,4 +73,3 @@ std = [
     "sp-std/std",
 ]
 try-runtime = [ "frame-support/try-runtime" ]
-

@@ -50,7 +50,8 @@ impl<T: Config> Pallet<T> {
 
     /// Slash account stake (reason: exit VIP).
     pub fn slash_vip_account(account: &T::AccountId, tax_percent: Perbill) -> DispatchResult {
-        let mut ledger_info = Self::ledger(account).ok_or(Error::<T>::NotController)?;
+        let controller = Self::bonded(account).ok_or(Error::<T>::NotStash)?;
+        let mut ledger_info = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
         let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
         let slash_era = Self::current_era().ok_or(Error::<T>::InvalidEraToSlash)?;
 
@@ -110,7 +111,7 @@ impl<T: Config> Pallet<T> {
             slashed_imbalance.subsume(imbalance);
             T::Slash::on_unbalanced(slashed_imbalance);
 
-            <Pallet<T>>::update_ledger(account, &ledger_info);
+            <Pallet<T>>::update_ledger(&controller, &ledger_info);
         }
 
         Ok(())
@@ -118,10 +119,8 @@ impl<T: Config> Pallet<T> {
 
     /// The total stake of VIP member.
     pub fn get_active_stake(account: &T::AccountId) -> StakeOf<T> {
-        let ledger_info = Self::ledger(account);
-
         if Self::is_user_validator(account) {
-            ledger_info.map_or_else(T::StakeBalance::default, |ledger| ledger.active)
+            Self::slashable_balance_of(account)
         } else {
             match Self::cooperators(account) {
                 Some(cooperations) => {
@@ -132,7 +131,7 @@ impl<T: Config> Pallet<T> {
                             None => {},
                             Some(collab) => {
                                 if collab.contains(account) {
-                                    active_stake += targets.1;
+                                    active_stake = active_stake.saturating_add(targets.1);
                                 }
                             },
                         }
@@ -190,7 +189,7 @@ impl<T: Config> Pallet<T> {
 
     pub(crate) fn check_reputation_validator(acc: &T::AccountId) {
         if !Self::is_legit_for_validator(acc) {
-            Self::chill_stash(acc);
+            Self::chill_after_reputation_slash(acc);
         }
     }
 
@@ -198,7 +197,7 @@ impl<T: Config> Pallet<T> {
         let prefs = Self::validators(acc);
 
         if prefs.collaborative && !Self::is_legit_for_collab(acc) {
-            Self::chill_stash(acc);
+            Self::chill_after_reputation_slash(acc);
         }
     }
 
@@ -208,8 +207,20 @@ impl<T: Config> Pallet<T> {
             .unwrap_or_else(ReputationRecord::with_now::<T>);
 
         if prefs.min_coop_reputation > record.reputation {
-            Self::chill_stash(cooperator);
+            Self::chill_after_reputation_slash(cooperator);
         }
+    }
+
+    /// These reputation checks are called only from slash execution. Its
+    /// currency allowance does not cover removing validator delegations.
+    fn chill_after_reputation_slash(stash: &T::AccountId) {
+        frame_system::Pallet::<T>::register_extra_weight_unchecked(
+            T::DbWeight::get().reads(1).saturating_add(T::ThisWeightInfo::chill_hook(
+                crate::collaboration_count::<T>(stash),
+            )),
+            frame_support::dispatch::DispatchClass::Mandatory,
+        );
+        Self::chill_stash(stash);
     }
 
     pub(super) fn do_withdraw_unbonded(
@@ -413,11 +424,13 @@ impl<T: Config> Pallet<T> {
 
     /// Update the ledger for a controller.
     ///
-    /// This will also update the stash lock.
+    /// Also update the stash lock and refresh VIP stake after reducing any delegations
+    /// that no longer fit in the active balance.
     pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
         T::StakeCurrency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
         <Ledger<T>>::insert(controller, ledger);
-        T::OnVipMembershipHandler::update_active_stake(controller);
+        Self::adjust_cooperator_targets(&ledger.stash, ledger.active);
+        T::OnVipMembershipHandler::update_active_stake(&ledger.stash);
     }
 
     /// Adjust the targets of a cooperator to ensure their total stake does not exceed `active_stake`.
@@ -785,11 +798,29 @@ impl<T: Config> Pallet<T> {
         // in this keys they would need to call Self::validate again, and their reputation will be
         // checked. So at the very list they will be blocked until the next era
         should_chill.iter().for_each(|(acc, _)| {
+            // Election runs during session initialization. Reserve the cache
+            // callbacks before removing eligibility, so ordinary extrinsics
+            // cannot be admitted using the old, callback-free hook allowance.
+            frame_system::Pallet::<T>::register_extra_weight_unchecked(
+                T::DbWeight::get().reads(1).saturating_add(T::ThisWeightInfo::chill_hook(
+                    crate::collaboration_count::<T>(acc),
+                )),
+                frame_support::dispatch::DispatchClass::Mandatory,
+            );
             Self::chill_stash(acc);
         });
 
         for (acc, _) in legit {
             if !Self::is_legit_for_collab(&acc) {
+                // Retaining validator status can still deactivate every
+                // delegated stake. The same conservative hook envelope covers
+                // these removal callbacks without charging shared helpers twice.
+                frame_system::Pallet::<T>::register_extra_weight_unchecked(
+                    T::DbWeight::get().reads(1).saturating_add(T::ThisWeightInfo::chill_hook(
+                        crate::collaboration_count::<T>(&acc),
+                    )),
+                    frame_support::dispatch::DispatchClass::Mandatory,
+                );
                 Validators::<T>::mutate(&acc, |prefs| {
                     prefs.collaborative = false;
                 });
@@ -797,7 +828,7 @@ impl<T: Config> Pallet<T> {
                 //
                 // this could be a case, when a validator lost so much reputation, that they can't
                 // be a collaborative validator anymore.
-                Collaborations::<T>::remove(&acc);
+                Self::remove_collaborations(&acc);
             }
         }
     }
@@ -894,10 +925,12 @@ impl<T: Config> Pallet<T> {
             }
 
             Collaborations::<T>::try_mutate(target.0, |set| {
-                set.as_mut()
-                    .unwrap()
-                    .try_insert(who.clone())
-                    .map_err(|_| Error::<T>::TooManyCooperators)
+                let set = set.as_mut().unwrap();
+                ensure!(
+                    set.contains(who) || set.len() < crate::MAX_VALIDATOR_COLLABORATORS as usize,
+                    Error::<T>::TooManyCooperators
+                );
+                set.try_insert(who.clone()).map_err(|_| Error::<T>::TooManyCooperators)
             })?;
         }
         Cooperators::<T>::insert(who, cooperations);
@@ -923,8 +956,8 @@ impl<T: Config> Pallet<T> {
                         }
                     });
                 }
-                T::OnVipMembershipHandler::update_active_stake(who);
                 Cooperators::<T>::remove(who);
+                T::OnVipMembershipHandler::update_active_stake(who);
                 true
             },
             None => false,
@@ -952,7 +985,7 @@ impl<T: Config> Pallet<T> {
     pub fn do_remove_validator(who: &T::AccountId) -> bool {
         if Validators::<T>::contains_key(who) {
             Validators::<T>::remove(who);
-            Collaborations::<T>::remove(who);
+            Self::remove_collaborations(who);
             T::OnVipMembershipHandler::update_active_stake(who);
             true
         } else {
@@ -960,10 +993,23 @@ impl<T: Config> Pallet<T> {
         }
     }
 
+    /// Stop counting delegations to this validator before refreshing affected VIP members.
+    fn remove_collaborations(who: &T::AccountId) {
+        if let Some(cooperators) = Collaborations::<T>::take(who) {
+            for cooperator in cooperators {
+                T::OnVipMembershipHandler::remove_validator_delegation(&cooperator, who);
+            }
+        }
+    }
+
     // Remove a validator from cooperators target
     pub fn do_remove_validator_from_cooperators_target(who: &T::AccountId) {
-        if let Some(cooperators) = Collaborations::<T>::get(who) {
+        // Take the collaboration first so the fallback callback sees the new
+        // eligibility. Notify before deleting each target so cached accounting
+        // can subtract its known amount; a later chill cannot subtract twice.
+        if let Some(cooperators) = Collaborations::<T>::take(who) {
             for cooperator in cooperators {
+                T::OnVipMembershipHandler::remove_validator_delegation(&cooperator, who);
                 Cooperators::<T>::mutate(cooperator, |cooperations| {
                     if let Some(cooperations) = cooperations {
                         cooperations.targets.remove(who);

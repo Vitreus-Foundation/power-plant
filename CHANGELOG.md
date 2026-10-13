@@ -28,6 +28,13 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ### Fixed
 
+- Keep VIPP NFT IDs and reward caps consistent on VIP entry, claims and burns; prevent zero-value minting and roll back failed NFT/accounting changes
+- Refresh VIP active stake after delegation reductions, slashing and validator removal, using the correct stash/controller mapping
+- Accrue completed UTC days and December 31 before calendar rollover; bound catch-up and require reviewed sources after long interruptions
+- Make VIPP transfers atomic across ownership, thresholds and reward caches; prevent unaccounted NFT transfer and burn paths
+- Correct VIPP threshold equality and vesting exclusion at explicit checks; defer fee/claim-triggered reconciliation with a bounded per-block budget
+- Protect funded reward years and add staged recovery of legacy VIP/VIPP caches without automatically rewriting historical points
+
 - Fix the `QuotePrice` implementation in `pallet-energy-broker` to return `None` when the output exceeds `max_amount_out`
 - Fix energy sale tracking in `pallet-energy-broker`
 - Roll back failed `pallet-energy-broker` swaps made by other pallets

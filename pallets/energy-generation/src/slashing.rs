@@ -36,7 +36,7 @@ use core::ops::{Add, Mul};
 
 use crate::{
     Config, CooperatorSlashInEra, DisabledValidators, DisablingStrategy, Error, Exposure, Pallet,
-    Perbill, SessionInterface, SpanSlash, StakeOf, UnappliedSlash, ValidatorSlashInEra,
+    Perbill, SessionInterface, SpanSlash, StakeOf, UnappliedSlash, ValidatorSlashInEra, WeightInfo,
 };
 use frame_support::{
     ensure,
@@ -793,8 +793,15 @@ pub fn do_slash<T: Config>(
             *reward_payout = reward_payout.saturating_sub(missing);
         }
 
+        // Slashes run outside the staking dispatchables whose declarations
+        // already include this callback. Charge the actual refresh before it
+        // executes, including immediate offences whose SDK caller discards
+        // OnOffenceHandler's returned weight.
+        frame_system::Pallet::<T>::register_extra_weight_unchecked(
+            T::ThisWeightInfo::stake_refresh_hook(),
+            frame_support::dispatch::DispatchClass::Mandatory,
+        );
         <Pallet<T>>::update_ledger(&controller, &ledger);
-        <Pallet<T>>::adjust_cooperator_targets(stash, ledger.active);
     }
     value.stake = stake_value;
     <pallet_reputation::Pallet<T>>::do_slash(stash, value.reputation)?;

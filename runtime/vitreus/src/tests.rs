@@ -49,9 +49,34 @@ fn mock_signature() -> TransactionSignature {
 
 #[test]
 fn configured_base_extrinsic_weight_is_evm_compatible() {
-    let min_ethereum_transaction_weight = WeightPerGas::get() * 21_000;
+    // The configured mapping includes the fee-observation reserve; the bare
+    // WeightPerGas product only describes EVM execution. Ethereum dispatch and
+    // validation both use GasWeightMapping, then CheckWeight adds the outer base.
+    type GasMapping = <Runtime as pallet_evm::Config>::GasWeightMapping;
+    let min_ethereum_transaction_weight = GasMapping::gas_to_weight(21_000, false);
     let base_extrinsic = BlockWeights::get().get(DispatchClass::Normal).base_extrinsic;
     assert!(base_extrinsic.ref_time() <= min_ethereum_transaction_weight.ref_time());
+    new_test_ext().execute_with(|| {
+        let transaction = TransactionV2::Legacy(LegacyTransaction {
+            nonce: Default::default(),
+            gas_price: 1.into(),
+            gas_limit: 21_000.into(),
+            action: TransactionAction::Call(Default::default()),
+            value: Default::default(),
+            input: Default::default(),
+            signature: mock_signature(),
+        });
+        let call = RuntimeCall::Ethereum(pallet_ethereum::Call::transact { transaction });
+        let info = call.get_dispatch_info();
+        assert_eq!(info.weight, GasMapping::gas_to_weight(21_000, true));
+        let sender = H160::from(alith().0);
+        assert!(matches!(call.validate_self_contained(&sender, &info, 0), Some(Ok(..))));
+        assert_eq!(call.pre_dispatch_self_contained(&sender, &info, 0), Some(Ok(())));
+        assert_eq!(
+            *System::block_weight().get(DispatchClass::Normal),
+            base_extrinsic.saturating_add(info.weight),
+        );
+    });
 }
 
 #[test]

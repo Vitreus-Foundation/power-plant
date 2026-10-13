@@ -169,9 +169,9 @@ impl pallet_nfts::Config for Test {
     type ValueLimit = ConstU32<50>;
     type WeightInfo = ();
     #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
+    type Helper = TestNftBenchmarkHelper;
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
-    type Locker = ();
+    type Locker = pallet_nac_managing::transfers::VippNftLocker<Test>;
 }
 
 impl pallet_timestamp::Config for Test {
@@ -199,6 +199,19 @@ impl pallet_nac_managing::Config for Test {
     type Currency = Balances;
     type VIPPCollectionId = VIPPCollectionId;
     type OnVIPPChanged = Privileges;
+    type MaxVippNftsPerAccount = ConstU32<64>;
+    type MaxPendingVippAccounts = ConstU32<128>;
+    type MaxVippReconciliationsPerBlock = ConstU32<2>;
+    type UnvestedBalance = VippUnvestedBalance;
+}
+
+pub struct VippUnvestedBalance;
+
+impl pallet_nac_managing::UnvestedBalance<AccountId, Balance> for VippUnvestedBalance {
+    fn unvested_balance(who: &AccountId) -> Balance {
+        <Vesting as frame_support::traits::VestingSchedule<AccountId>>::vesting_balance(who)
+            .unwrap_or_default()
+    }
 }
 
 parameter_types! {
@@ -816,4 +829,24 @@ fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
         push_nibble(b % 16);
     }
     r
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+pub struct TestNftBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_nfts::BenchmarkHelper<u32, u32, UintAuthorityId, u64, TestSignature>
+    for TestNftBenchmarkHelper
+{
+    fn collection(i: u16) -> u32 {
+        i.into()
+    }
+    fn item(i: u16) -> u32 {
+        i.into()
+    }
+    fn signer() -> (UintAuthorityId, u64) {
+        (UintAuthorityId(9000), 9000)
+    }
+    fn sign(signer: &UintAuthorityId, message: &[u8]) -> TestSignature {
+        TestSignature(signer.0, message.to_vec())
+    }
 }

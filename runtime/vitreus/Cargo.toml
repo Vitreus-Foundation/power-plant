@@ -338,6 +338,8 @@ std = [
     "vitreus-utility-runtime-api/std",
 ]
 runtime-benchmarks = [
+    "pallet-privileges/runtime-benchmarks",
+    "pallet-nac-managing/runtime-benchmarks",
     "frame-benchmarking/runtime-benchmarks",
     "frame-system-benchmarking/runtime-benchmarks",
     "frame-system/runtime-benchmarks",
