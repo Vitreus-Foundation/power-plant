@@ -89,7 +89,7 @@ def release_commit(version):
     """Return the commit that cut [version]: the latest one on the mainline adding its header.
 
     The release is built from it, not from the commit that started the run. The two differ when
-    a release run failed and develop moved on: neither a retry nor the next push that changes
+    a release run failed and main moved on: neither a retry nor the next push that changes
     CHANGELOG.md may ship what was merged since as part of [version]. With --first-parent, a
     merge commit counts as adding what its branch added, e.g. GitHub's merge commit for a PR.
     """
@@ -135,7 +135,7 @@ def should_release():
                 print(
                     f"::warning::{version} isn't released yet (no {TAG.format(version)}), and this "
                     f"run doesn't publish it. If its release run failed, re-run it, or run "
-                    f"Release on develop by hand"
+                    f"Release on main by hand"
                 )
                 commit = ""
         elif tagged != changelog.section(text, version):
