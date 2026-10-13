@@ -195,8 +195,15 @@ fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
 mod energy_broker {
     use super::*;
     use frame_support::{assert_ok, traits::fungibles::Inspect as FungiblesInspect};
+    use vitreus_runtime_common::SwapEnergyForNative;
 
     const AMOUNT: Balance = 1_000_000_000;
+
+    // The treasury's exchanges as its config wires them, so the tests check what it actually uses.
+    type TreasuryStaticEnergyExchange =
+        <Runtime as pallet_treasury_extension::Config>::StaticEnergyExchange;
+    type TreasuryLiquidEnergyExchange =
+        <Runtime as pallet_treasury_extension::Config>::LiquidEnergyExchange;
 
     fn asset_balance(asset: &NativeOrAssetId, who: &AccountId) -> Balance {
         NativeAndAssets::balance(asset.clone(), who)
@@ -208,6 +215,16 @@ mod energy_broker {
 
     fn energy_sale() -> Balance {
         pallet_dynamic_energy::SessionEnergySale::<Runtime>::get()
+    }
+
+    /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
+    fn fund_broker() {
+        Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
+            SNRG::get(),
+            FixedU128::from_u32(1),
+        );
     }
 
     /// Converting `source` into VNRG must be quoted one-to-one and cost no swap fee.
@@ -287,6 +304,24 @@ mod energy_broker {
         assert_eq!(energy_sale(), sale_before);
     }
 
+    /// Selling `AMOUNT` of `asset` through `Exchange` must take exactly that much and pay VTRS.
+    fn assert_sells_for_vtrs<Exchange>(asset: AssetId)
+    where
+        Exchange: SwapEnergyForNative<AccountId, Balance = Balance>,
+    {
+        fund_broker();
+        let asset = NativeOrAssetId::WithId(asset);
+        let asset_before = asset_balance(&asset, &alith());
+        let native_before = Balances::free_balance(alith());
+
+        let native_out = Exchange::swap_exact_tokens_for_tokens(alith(), AMOUNT, true)
+            .expect("the sale must go through");
+
+        assert!(native_out > 0, "the sale must pay VTRS");
+        assert_eq!(asset_balance(&asset, &alith()), asset_before - AMOUNT);
+        assert_eq!(Balances::free_balance(alith()), native_before + native_out);
+    }
+
     #[test]
     fn snrg_conversion_is_one_to_one_and_without_swap_fee() {
         new_test_ext()
@@ -307,6 +342,18 @@ mod energy_broker {
     #[test]
     fn lnrg_conversion_burns_and_mints_without_touching_the_broker() {
         new_test_ext().execute_with(|| assert_conversion_burns_and_mints(LNRG::get()))
+    }
+
+    #[test]
+    fn treasury_sells_snrg_for_vtrs() {
+        new_test_ext()
+            .execute_with(|| assert_sells_for_vtrs::<TreasuryStaticEnergyExchange>(SNRG::get()))
+    }
+
+    #[test]
+    fn treasury_sells_lnrg_for_vtrs() {
+        new_test_ext()
+            .execute_with(|| assert_sells_for_vtrs::<TreasuryLiquidEnergyExchange>(LNRG::get()))
     }
 }
 
