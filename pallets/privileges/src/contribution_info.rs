@@ -152,38 +152,6 @@ pub struct RewardsInfo<T: Config> {
 }
 
 impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> for Pallet<T> {
-    #[cfg(feature = "runtime-benchmarks")]
-    fn benchmark_fill_breach_queue(members: u32) {
-        let accounts: Vec<T::AccountId> = (0..members)
-            .map(|i| frame_benchmarking::account("observer-pending-breach", i, 0))
-            .collect();
-        PreTimestampVippBreaches::<T>::put(
-            frame_support::BoundedVec::<_, frame_support::traits::ConstU32<1024>>::try_from(
-                accounts,
-            )
-            .expect("exact configured bound"),
-        );
-    }
-    #[cfg(feature = "runtime-benchmarks")]
-    fn benchmark_populate_members(members: u32) {
-        crate::benchmarking::populate::<T>(members);
-    }
-    #[cfg(feature = "runtime-benchmarks")]
-    fn benchmark_prepare_member(who: &T::AccountId, stake: T::StakeBalance) -> DispatchResult {
-        CurrentDate::<T>::put(accounting::today::<T>()?);
-        TimestampSeenAtBlock::<T>::put(frame_system::Pallet::<T>::block_number());
-        VipMembers::<T>::insert(
-            who,
-            VipMemberInfo::<T> {
-                start: 0,
-                tax_type: PenaltyType::Flat,
-                points: Zero::zero(),
-                active_stake: stake,
-            },
-        );
-        Self::sync_vipp_membership(who, false)
-    }
-
     fn on_balance_breach(who: &T::AccountId) {
         // Explicit fee checks can precede this block's timestamp. Preserve the
         // prior day's source before quarantine changes its eligibility.

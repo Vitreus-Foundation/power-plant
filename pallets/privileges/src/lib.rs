@@ -49,8 +49,6 @@ pub mod mock;
 mod tests;
 
 mod accounting;
-#[cfg(feature = "runtime-benchmarks")]
-mod benchmarking;
 mod breach_period;
 mod contribution_info;
 

@@ -988,37 +988,6 @@ impl pallet_nac_managing::UnvestedBalance<AccountId, Balance> for VippUnvestedBa
             .min(<Balances as frame_support::traits::ReservableCurrency<AccountId>>::reserved_balance(who));
         locked.saturating_add(reserved)
     }
-
-    #[cfg(feature = "runtime-benchmarks")]
-    fn benchmark_prepare(who: &AccountId) -> frame_support::dispatch::DispatchResult {
-        use frame_support::traits::NamedReservableCurrency;
-        let amount = pallet_nac_managing::benchmarking::unit::<Runtime>();
-        let starts = System::block_number().saturating_add(1_000_000);
-        let schedules: frame_support::BoundedVec<
-            _,
-            pallet_vesting::MaxVestingSchedulesGet<Runtime>,
-        > = vec![
-            pallet_vesting::VestingInfo::new(amount, 1, starts);
-            <Runtime as pallet_vesting::Config>::MAX_VESTING_SCHEDULES as usize
-        ]
-        .try_into()
-        .expect("the benchmark uses the configured vesting bound");
-        pallet_vesting::Vesting::<Runtime>::insert(who, schedules);
-        // Read and decode the full bounded reserve vector during eligibility checks.
-        for index in 0..<Runtime as pallet_balances::Config>::MaxReserves::get().saturating_sub(1) {
-            <Balances as NamedReservableCurrency<AccountId>>::reserve_named(
-                &u64::from(index).to_le_bytes(),
-                who,
-                1,
-            )?;
-        }
-        <Balances as NamedReservableCurrency<AccountId>>::reserve_named(b"vesting ", who, amount)?;
-        pallet_simple_vesting::Vesting::<Runtime>::insert(
-            who,
-            pallet_simple_vesting::VestingInfo::new(amount, 1, starts),
-        );
-        Ok(())
-    }
 }
 
 parameter_types! {
@@ -2397,8 +2366,6 @@ impl frame_system_benchmarking::Config for Runtime {}
 #[cfg(all(feature = "runtime-benchmarks", feature = "mainnet-runtime"))]
 mod benches {
     define_benchmarks!(
-        [pallet_privileges, Privileges]
-        [pallet_nac_managing, NacManaging]
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
@@ -2408,8 +2375,6 @@ mod benches {
 #[cfg(all(feature = "runtime-benchmarks", feature = "testnet-runtime"))]
 mod benches {
     define_benchmarks!(
-        [pallet_privileges, Privileges]
-        [pallet_nac_managing, NacManaging]
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]

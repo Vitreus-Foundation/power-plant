@@ -130,8 +130,6 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
-#[cfg(feature = "runtime-benchmarks")]
-pub mod benchmarking;
 mod threshold_checks;
 pub mod transfers;
 pub mod weights;
@@ -956,17 +954,6 @@ impl<T: Config> OnWithdrawFeeHandler<T::AccountId> for Pallet<T> {
 
 /// Handler for updating, burning VIPP status.
 pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
-    /// Populate the integrated membership cache in benchmark-only builds.
-    #[cfg(feature = "runtime-benchmarks")]
-    fn benchmark_prepare_member(_who: &AccountId, _stake: Balance) -> DispatchResult {
-        Ok(())
-    }
-    /// Populate unrelated cache rows to measure membership-capacity scans.
-    #[cfg(feature = "runtime-benchmarks")]
-    fn benchmark_populate_members(_members: u32) {}
-    /// Exercise the bounded initialization-breach queue at capacity.
-    #[cfg(feature = "runtime-benchmarks")]
-    fn benchmark_fill_breach_queue(_members: u32) {}
     /// Remember when an unresolved breach began, including across year rollover.
     fn on_balance_breach(_who: &AccountId) {}
 
@@ -997,12 +984,6 @@ pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
 pub trait UnvestedBalance<AccountId, Balance> {
     /// Return unvested funds once, without adding overlapping locks or reserves.
     fn unvested_balance(who: &AccountId) -> Balance;
-
-    /// Populate the runtime's maximum vesting state for integrated observer measurements.
-    #[cfg(feature = "runtime-benchmarks")]
-    fn benchmark_prepare(_who: &AccountId) -> DispatchResult {
-        Ok(())
-    }
 }
 
 impl<AccountId, Balance: Zero> UnvestedBalance<AccountId, Balance> for () {
