@@ -2,7 +2,7 @@ use frame_support::traits::{
     fungible::ItemOf,
     tokens::{fungibles, Balance},
 };
-use sp_runtime::{traits::Get, DispatchError};
+use sp_runtime::{traits::Get, DispatchError, TokenError};
 use sp_std::vec;
 
 pub use pallet_asset_conversion::Swap;
@@ -397,7 +397,7 @@ impl<AccountId> SwapIntoEnergy<AccountId> for () {
         _amount_in: Self::Balance,
         _keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError> {
-        Err(DispatchError::Other("not implemented"))
+        Err(TokenError::Unsupported.into())
     }
 
     fn swap_tokens_for_exact_tokens(
@@ -405,7 +405,7 @@ impl<AccountId> SwapIntoEnergy<AccountId> for () {
         _amount_out: Self::Balance,
         _keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError> {
-        Err(DispatchError::Other("not implemented"))
+        Err(TokenError::Unsupported.into())
     }
 }
 
@@ -418,7 +418,7 @@ impl<AccountId> SwapFromEnergy<AccountId> for () {
         _amount_in: Self::Balance,
         _keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError> {
-        Err(DispatchError::Other("not implemented"))
+        Err(TokenError::Unsupported.into())
     }
 
     fn swap_tokens_for_exact_tokens(
@@ -426,6 +426,6 @@ impl<AccountId> SwapFromEnergy<AccountId> for () {
         _amount_out: Self::Balance,
         _keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError> {
-        Err(DispatchError::Other("not implemented"))
+        Err(TokenError::Unsupported.into())
     }
 }
