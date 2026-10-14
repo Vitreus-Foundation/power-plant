@@ -32,11 +32,10 @@
 
 use frame_support::{
     pallet_prelude::*,
-    storage::with_storage_layer,
     traits::{
-        fungible::{Inspect, Mutate},
-        tokens::{Fortitude, Precision, Preservation},
-        Currency, Defensive, Get, Imbalance, IsType, OnUnbalanced,
+        fungible::Inspect,
+        tokens::{Fortitude, Preservation},
+        Currency, Get, Imbalance, IsType, OnUnbalanced,
     },
 };
 use pallet_treasury::{BalanceOf, NegativeImbalanceOf, PositiveImbalanceOf};
@@ -80,15 +79,20 @@ pub mod pallet {
             + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// Energy asset.
-        type EnergyAsset: Inspect<Self::AccountId> + Mutate<Self::AccountId>;
+        type EnergyAsset: Inspect<Self::AccountId>;
 
         /// Static Energy asset.
-        type StaticEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>
-            + Mutate<Self::AccountId>;
+        type StaticEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>;
 
         /// Liquid Energy asset.
-        type LiquidEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>
-            + Mutate<Self::AccountId>;
+        type LiquidEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>;
+
+        /// A type used for swapping Energy for native currency.
+        type EnergyExchange: SwapFromEnergy<
+            Self::AccountId,
+            Balance = EnergyBalanceOf<Self, I>,
+            EnergyAsset = Self::EnergyAsset,
+        >;
 
         /// A type used for swapping Static Energy for native currency.
         type StaticEnergyExchange: SwapFromEnergy<
@@ -146,10 +150,25 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     fn exchange_energy() {
         let account_id = pallet_treasury::Pallet::<T, I>::account_id();
 
-        let _ = Self::convert_energy_to_liquid_energy(&account_id)
-            .defensive_proof("Converting treasury energy to liquid energy should not fail");
-
         let mut amount = EnergyBalanceOf::<T, I>::zero();
+
+        let energy_balance = T::EnergyAsset::reducible_balance(
+            &account_id,
+            Preservation::Preserve,
+            Fortitude::Polite,
+        );
+
+        if !energy_balance.is_zero() {
+            let swap_result = T::EnergyExchange::swap_exact_tokens_for_tokens(
+                account_id.clone(),
+                energy_balance,
+                true,
+            );
+
+            if swap_result.is_ok() {
+                amount.saturating_accrue(energy_balance);
+            }
+        }
 
         let static_energy_balance = T::StaticEnergyAsset::reducible_balance(
             &account_id,
@@ -188,32 +207,6 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
         }
 
         Self::deposit_event(Event::EnergyExchanged { amount });
-    }
-
-    fn convert_energy_to_liquid_energy(
-        account_id: &T::AccountId,
-    ) -> Result<EnergyBalanceOf<T, I>, DispatchError> {
-        let energy_balance = T::EnergyAsset::reducible_balance(
-            account_id,
-            Preservation::Preserve,
-            Fortitude::Polite,
-        );
-
-        if energy_balance.is_zero() {
-            return Ok(EnergyBalanceOf::<T, I>::zero());
-        }
-
-        with_storage_layer(|| {
-            let burned_amount = T::EnergyAsset::burn_from(
-                account_id,
-                energy_balance,
-                Preservation::Preserve,
-                Precision::Exact,
-                Fortitude::Polite,
-            )?;
-
-            T::LiquidEnergyAsset::mint_into(account_id, burned_amount)
-        })
     }
 
     fn update_fee_recycling_rate(total_weight: &mut Weight) {

@@ -157,6 +157,7 @@ impl crate::Config for Test {
     type EnergyAsset = ();
     type StaticEnergyAsset = ();
     type LiquidEnergyAsset = ();
+    type EnergyExchange = ();
     type StaticEnergyExchange = ();
     type LiquidEnergyExchange = ();
     type SpendThreshold = SpendThreshold;
