@@ -345,13 +345,13 @@ mod energy_broker {
     }
 
     #[test]
-    fn treasury_sells_snrg_for_vtrs() {
+    fn treasury_snrg_exchange_sells_for_vtrs() {
         new_test_ext()
             .execute_with(|| assert_sells_for_vtrs::<TreasuryStaticEnergyExchange>(SNRG::get()))
     }
 
     #[test]
-    fn treasury_sells_lnrg_for_vtrs() {
+    fn treasury_lnrg_exchange_sells_for_vtrs() {
         new_test_ext()
             .execute_with(|| assert_sells_for_vtrs::<TreasuryLiquidEnergyExchange>(LNRG::get()))
     }
