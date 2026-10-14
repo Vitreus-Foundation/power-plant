@@ -43,7 +43,7 @@ use sp_arithmetic::{
     traits::{Saturating, Zero},
     FixedPointNumber, FixedU64, Permill,
 };
-use vitreus_runtime_common::{OnSessionChange, SessionIndex, SwapEnergyForNative};
+use vitreus_runtime_common::{OnSessionChange, SessionIndex, SwapFromEnergy};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
@@ -90,14 +90,14 @@ pub mod pallet {
             + Mutate<Self::AccountId>;
 
         /// A type used for swapping Static Energy for native currency.
-        type StaticEnergyExchange: SwapEnergyForNative<
+        type StaticEnergyExchange: SwapFromEnergy<
             Self::AccountId,
             Balance = EnergyBalanceOf<Self, I>,
             EnergyAsset = Self::StaticEnergyAsset,
         >;
 
         /// A type used for swapping Liquid Energy for native currency.
-        type LiquidEnergyExchange: SwapEnergyForNative<
+        type LiquidEnergyExchange: SwapFromEnergy<
             Self::AccountId,
             Balance = EnergyBalanceOf<Self, I>,
             EnergyAsset = Self::LiquidEnergyAsset,

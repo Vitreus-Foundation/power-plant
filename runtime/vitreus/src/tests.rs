@@ -195,7 +195,7 @@ fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
 mod energy_broker {
     use super::*;
     use frame_support::{assert_ok, traits::fungibles::Inspect as FungiblesInspect};
-    use vitreus_runtime_common::{QuotePriceEnergyForNative, SwapEnergyForNative};
+    use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
 
     const AMOUNT: Balance = 1_000_000_000;
 
@@ -307,7 +307,7 @@ mod energy_broker {
     /// Selling `AMOUNT` of `asset` through `Exchange` must take exactly that much and pay VTRS.
     fn assert_sells_for_vtrs<Exchange>(asset: AssetId)
     where
-        Exchange: SwapEnergyForNative<AccountId, Balance = Balance>,
+        Exchange: SwapFromEnergy<AccountId, Balance = Balance>,
     {
         fund_broker();
         let asset = NativeOrAssetId::WithId(asset);

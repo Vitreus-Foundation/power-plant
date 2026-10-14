@@ -28,7 +28,7 @@ use sp_runtime::{
     traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup, Zero},
     BuildStorage, DispatchError, Permill,
 };
-use vitreus_runtime_common::{QuotePriceNativeForEnergy, SwapNativeForEnergy};
+use vitreus_runtime_common::{QuotePriceIntoEnergy, SwapIntoEnergy};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -148,7 +148,7 @@ impl<GetAccountId: Get<AccountId>> OnUnbalanced<FeeCreditOf<Test>>
 
 pub struct MockEnergyExchange;
 
-impl QuotePriceNativeForEnergy for MockEnergyExchange {
+impl QuotePriceIntoEnergy for MockEnergyExchange {
     type Balance = u128;
     type EnergyAsset = BalancesVNRG;
 
@@ -172,7 +172,7 @@ impl QuotePriceNativeForEnergy for MockEnergyExchange {
     }
 }
 
-impl SwapNativeForEnergy<AccountId> for MockEnergyExchange {
+impl SwapIntoEnergy<AccountId> for MockEnergyExchange {
     type Balance = u128;
     type EnergyAsset = BalancesVNRG;
 

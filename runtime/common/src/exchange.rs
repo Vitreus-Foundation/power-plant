@@ -49,7 +49,7 @@ pub trait MaxAmountOut: QuotePrice {
 }
 
 /// Trait providing methods to quote swap prices for exchanging native currency for energy.
-pub trait QuotePriceNativeForEnergy {
+pub trait QuotePriceIntoEnergy {
     /// Measurement units of the asset classes for pricing.
     type Balance: Balance;
     /// The energy asset being quoted, as a fungible.
@@ -78,7 +78,7 @@ pub trait QuotePriceNativeForEnergy {
 }
 
 /// Trait providing methods to quote swap prices for exchanging energy for native currency.
-pub trait QuotePriceEnergyForNative {
+pub trait QuotePriceFromEnergy {
     /// Measurement units of the asset classes for pricing.
     type Balance: Balance;
     /// The energy asset being quoted, as a fungible.
@@ -107,7 +107,7 @@ pub trait QuotePriceEnergyForNative {
 }
 
 /// A trait for swapping native currency for energy.
-pub trait SwapNativeForEnergy<AccountId> {
+pub trait SwapIntoEnergy<AccountId> {
     /// The type in which the assets for swapping are measured.
     type Balance: Balance;
     /// The energy asset being swapped, as a fungible.
@@ -132,7 +132,7 @@ pub trait SwapNativeForEnergy<AccountId> {
 }
 
 /// A trait for swapping energy for native currency.
-pub trait SwapEnergyForNative<AccountId> {
+pub trait SwapFromEnergy<AccountId> {
     /// The type in which the assets for swapping are measured.
     type Balance: Balance;
     /// The energy asset being swapped, as a fungible.
@@ -164,7 +164,7 @@ pub struct NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>(
     core::marker::PhantomData<(Exchange, NativeAsset, EnergyAsset)>,
 );
 
-impl<AccountId, Exchange, NativeAsset, F, A> QuotePriceNativeForEnergy
+impl<AccountId, Exchange, NativeAsset, F, A> QuotePriceIntoEnergy
     for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
     Exchange: MaxAmountOut,
@@ -205,7 +205,7 @@ where
     }
 }
 
-impl<AccountId, Exchange, NativeAsset, F, A> QuotePriceEnergyForNative
+impl<AccountId, Exchange, NativeAsset, F, A> QuotePriceFromEnergy
     for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
     Exchange: MaxAmountOut,
@@ -246,7 +246,7 @@ where
     }
 }
 
-impl<AccountId, Exchange, NativeAsset, F, A> SwapNativeForEnergy<AccountId>
+impl<AccountId, Exchange, NativeAsset, F, A> SwapIntoEnergy<AccountId>
     for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
     AccountId: Clone,
@@ -294,7 +294,7 @@ where
     }
 }
 
-impl<AccountId, Exchange, NativeAsset, F, A> SwapEnergyForNative<AccountId>
+impl<AccountId, Exchange, NativeAsset, F, A> SwapFromEnergy<AccountId>
     for NativeEnergyExchange<Exchange, NativeAsset, ItemOf<F, A, AccountId>>
 where
     AccountId: Clone,
@@ -342,7 +342,7 @@ where
     }
 }
 
-impl QuotePriceNativeForEnergy for () {
+impl QuotePriceIntoEnergy for () {
     type Balance = u32;
     type EnergyAsset = ();
 
@@ -365,7 +365,7 @@ impl QuotePriceNativeForEnergy for () {
     }
 }
 
-impl QuotePriceEnergyForNative for () {
+impl QuotePriceFromEnergy for () {
     type Balance = u32;
     type EnergyAsset = ();
 
@@ -388,7 +388,7 @@ impl QuotePriceEnergyForNative for () {
     }
 }
 
-impl<AccountId> SwapNativeForEnergy<AccountId> for () {
+impl<AccountId> SwapIntoEnergy<AccountId> for () {
     type Balance = u32;
     type EnergyAsset = ();
 
@@ -409,7 +409,7 @@ impl<AccountId> SwapNativeForEnergy<AccountId> for () {
     }
 }
 
-impl<AccountId> SwapEnergyForNative<AccountId> for () {
+impl<AccountId> SwapFromEnergy<AccountId> for () {
     type Balance = u32;
     type EnergyAsset = ();
 
