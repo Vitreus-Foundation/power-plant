@@ -16,7 +16,7 @@ Vitreus power-plant: a Substrate-based relay chain with EVM (Frontier). VTRS is 
 
 ## Commands
 
-CI runs these with `testnet-native` and with `mainnet-native`; the CI workflow in `.github/workflows/` is the source of truth. Always pass `--locked`.
+CI runs these once with `testnet-native` and once with `mainnet-native`; before pushing, do the same, one feature per run. The CI workflow in `.github/workflows/` is the source of truth. Always pass `--locked`.
 
 ```sh
 cargo fmt -- --check
