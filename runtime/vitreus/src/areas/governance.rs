@@ -3,8 +3,8 @@ use crate::{
     EnergyAsset, EnergyBroker, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAndAssets,
     NativeAsset, NativeEnergyExchange, NativeOrAssetId, OriginCaller, Preimage, Runtime,
     RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin, Scheduler, StaticEnergyAsset,
-    TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, LNRG, MICRO_VTRS, MILLI_VTRS,
-    MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, SNRG, UNITS, VNRG,
+    TechnicalCommittee, Treasury, TreasuryExtension, CENTS, DAYS, HOURS, LNRG, MICRO_VTRS,
+    MILLICENTS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, SNRG, UNITS, VNRG,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
@@ -25,7 +25,7 @@ use sp_runtime::{Perbill, Permill};
 use static_assertions::const_assert;
 
 pub const fn deposit(items: u32, bytes: u32) -> Balance {
-    items as Balance * 200 * NANO_VTRS + (bytes as Balance) * PICO_VTRS
+    items as Balance * 20 * CENTS + (bytes as Balance) * MILLICENTS
 }
 
 pub struct TreasuryAccountId<R, I: 'static = ()>(sp_std::marker::PhantomData<(R, I)>);
@@ -81,10 +81,10 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 }
 
 parameter_types! {
-    // One storage item; key size is 32; value is size 4+4+16+32 bytes = 56 bytes.
-    pub const DepositBase: Balance = deposit(1, 88);
-    // Additional storage item size of 32 bytes.
-    pub const DepositFactor: Balance = deposit(0, 32);
+    // One storage item; key size is 20+32; value is size 4+4+16+20 bytes = 44 bytes.
+    pub const DepositBase: Balance = deposit(1, 96);
+    // Additional storage item size of 20 bytes.
+    pub const DepositFactor: Balance = deposit(0, 20);
     pub const MaxSignatories: u32 = 100;
 }
 
@@ -100,10 +100,10 @@ impl pallet_multisig::Config for Runtime {
 
 parameter_types! {
     pub const CandidacyBond: Balance = 1 * UNITS;
-    // 1 storage item created, key size is 32 bytes, value size is 16+16.
-    pub const VotingBondBase: Balance = deposit(1, 64);
-    // additional data per vote is 32 bytes (account id).
-    pub const VotingBondFactor: Balance = deposit(0, 32);
+    // 1 storage item created, key size is 20 bytes, value size is 16+16.
+    pub const VotingBondBase: Balance = deposit(1, 52);
+    // additional data per vote is 20 bytes (account id).
+    pub const VotingBondFactor: Balance = deposit(0, 20);
     pub const DesiredMembers: u32 = 7;
     pub const DesiredRunnersUp: u32 = 7;
     // TODO: remove `storage` after April of 2025
