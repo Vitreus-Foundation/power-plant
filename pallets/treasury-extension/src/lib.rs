@@ -150,63 +150,34 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     fn exchange_energy() {
         let account_id = pallet_treasury::Pallet::<T, I>::account_id();
 
-        let mut amount = EnergyBalanceOf::<T, I>::zero();
-
-        let energy_balance = T::EnergyAsset::reducible_balance(
-            &account_id,
-            Preservation::Preserve,
-            Fortitude::Polite,
-        );
-
-        if !energy_balance.is_zero() {
-            let swap_result = T::EnergyExchange::swap_exact_tokens_for_tokens(
-                account_id.clone(),
-                energy_balance,
-                true,
-            );
-
-            if swap_result.is_ok() {
-                amount.saturating_accrue(energy_balance);
-            }
-        }
-
-        let static_energy_balance = T::StaticEnergyAsset::reducible_balance(
-            &account_id,
-            Preservation::Preserve,
-            Fortitude::Polite,
-        );
-
-        if !static_energy_balance.is_zero() {
-            let swap_result = T::StaticEnergyExchange::swap_exact_tokens_for_tokens(
-                account_id.clone(),
-                static_energy_balance,
-                true,
-            );
-
-            if swap_result.is_ok() {
-                amount.saturating_accrue(static_energy_balance);
-            }
-        }
-
-        let liquid_energy_balance = T::LiquidEnergyAsset::reducible_balance(
-            &account_id,
-            Preservation::Preserve,
-            Fortitude::Polite,
-        );
-
-        if !liquid_energy_balance.is_zero() {
-            let swap_result = T::LiquidEnergyExchange::swap_exact_tokens_for_tokens(
-                account_id.clone(),
-                liquid_energy_balance,
-                true,
-            );
-
-            if swap_result.is_ok() {
-                amount.saturating_accrue(liquid_energy_balance);
-            }
-        }
+        let mut amount = Self::sell_energy::<T::EnergyExchange>(&account_id);
+        amount.saturating_accrue(Self::sell_energy::<T::StaticEnergyExchange>(&account_id));
+        amount.saturating_accrue(Self::sell_energy::<T::LiquidEnergyExchange>(&account_id));
 
         Self::deposit_event(Event::EnergyExchanged { amount });
+    }
+
+    /// Sells the treasury's energy of the exchange's asset down to its minimum balance and returns
+    /// the amount sold.
+    fn sell_energy<Exchange>(account_id: &T::AccountId) -> EnergyBalanceOf<T, I>
+    where
+        Exchange: SwapFromEnergy<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
+        Exchange::EnergyAsset: Inspect<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
+    {
+        let balance = Exchange::EnergyAsset::reducible_balance(
+            account_id,
+            Preservation::Preserve,
+            Fortitude::Polite,
+        );
+
+        if balance.is_zero() {
+            return Zero::zero();
+        }
+
+        match Exchange::swap_exact_tokens_for_tokens(account_id.clone(), balance, true) {
+            Ok(_) => balance,
+            Err(_) => Zero::zero(),
+        }
     }
 
     fn update_fee_recycling_rate(total_weight: &mut Weight) {
