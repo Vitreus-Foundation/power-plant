@@ -56,7 +56,6 @@ The flow is in README.md. These are the parts agents get wrong:
 - Add new entries at the end of their subsection. Don't reorder or rewrite entries added by other PRs; on a rebase conflict, keep both sides' entries, yours last. Only a release PR may reorder, merge and reword them, keeping every change covered.
 - By merge time, a PR's entries describe its final diff: when the PR changes, update its entries instead of adding lines for follow-up commits.
 - Don't change `spec_version`; only a release PR does. Storage migrations go to `Unreleased` in `runtime/vitreus/src/migrations.rs`; a migration for one network goes behind its feature.
-- Check locally: `python3 .github/scripts/changelog.py check --base "$(git merge-base origin/main HEAD)"`. In a fork, use the remote of Vitreus-Foundation/power-plant instead of `origin`.
 
 ## Pull requests
 
