@@ -348,6 +348,11 @@ pub mod vnrg {
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
 }
 
+/// VTRS amount treated as one US dollar when pricing deposits.
+pub const DOLLARS: Balance = 200 * UNITS;
+pub const CENTS: Balance = DOLLARS / 100;
+pub const MILLICENTS: Balance = CENTS / 1_000;
+
 parameter_types! {
     pub const VNRG: AssetId = 0; // Energy
     pub const SNRG: AssetId = 1; // Static Energy
@@ -1453,13 +1458,15 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 }
 
 parameter_types! {
-    // One storage item; key size 32, value size 8; .
-    pub const ProxyDepositBase: Balance = deposit(1, 8);
-    // Additional storage item size of 33 bytes.
-    pub const ProxyDepositFactor: Balance = deposit(0, 33);
+    // One storage item; key size 20, value size 16.
+    pub const ProxyDepositBase: Balance = deposit(1, 36);
+    // Additional storage item size of 25 bytes: AccountId 20 + ProxyType 1 + delay 4.
+    pub const ProxyDepositFactor: Balance = deposit(0, 25);
     pub const MaxProxies: u16 = 32;
-    pub const AnnouncementDepositBase: Balance = deposit(1, 8);
-    pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+    // One storage item; key size 20, value size 16.
+    pub const AnnouncementDepositBase: Balance = deposit(1, 36);
+    // Additional storage item size of 56 bytes: AccountId 20 + call hash 32 + block number 4.
+    pub const AnnouncementDepositFactor: Balance = deposit(0, 56);
     pub const MaxPending: u16 = 32;
 }
 
