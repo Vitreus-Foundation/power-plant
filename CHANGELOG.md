@@ -10,6 +10,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 ### Added
 
 - Add `max_amount_out` to the EnergyBroker runtime API to query how much a swap path can supply
+- Add a `Launchpad` proxy type on testnet
 
 ### Changed
 

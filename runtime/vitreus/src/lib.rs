@@ -1481,6 +1481,9 @@ pub enum ProxyType {
     #[default]
     Any = 0,
     Staking = 1,
+    // Experimental pallets, testnet only: a separate range from 64.
+    #[cfg(feature = "testnet-runtime")]
+    Launchpad = 64,
 }
 
 impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
@@ -1494,6 +1497,10 @@ impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
                         | RuntimeCall::Session(..)
                         | RuntimeCall::Utility(..)
                 )
+            },
+            #[cfg(feature = "testnet-runtime")]
+            ProxyType::Launchpad => {
+                matches!(c, RuntimeCall::Launchpad(pallet_launchpad::Call::buy { .. }))
             },
         }
     }
