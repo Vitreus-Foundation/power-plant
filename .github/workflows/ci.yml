@@ -1,4 +1,4 @@
-name: Code Hygiene
+name: CI
 
 on:
   workflow_dispatch:
@@ -14,14 +14,15 @@ concurrency:
 jobs:
   fmt:
     name: "cargo fmt"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # The toolchain from rust-toolchain.toml: every option in rustfmt.toml is stable.
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      # A third-party action, so it is pinned to a commit, here and below.
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
           components: rustfmt
           cache: false
@@ -30,7 +31,7 @@ jobs:
 
   rust:
     name: "cargo clippy, build, test"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
 
     strategy:
@@ -42,9 +43,9 @@ jobs:
       CARGO_TERM_COLOR: always
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
         with:
           target: wasm32-unknown-unknown
           components: clippy rust-src
