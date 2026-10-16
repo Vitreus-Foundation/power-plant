@@ -44,7 +44,7 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 ## Code comments
 
 - Comment what the code can't say: invariants, non-obvious reasons, units of values (base units or whole tokens, basis points, blocks or milliseconds), edge cases. Arguments for a design go in the PR description.
-- Don't reference spec or design-doc sections (`§x.y`), decision or finding IDs from design docs, design-doc files, files outside the repository, or this repo's PRs and issues. History lives in git. A link to an issue in a dependency, such as the Polkadot SDK or Frontier, that a workaround depends on is fine.
+- Don't reference spec, design, review or audit documents (their sections such as `§x.y`, their decision or finding IDs, or the files themselves), files outside the repository, or this repo's PRs and issues, in comments or test names. History lives in git. A link to an issue in a dependency, such as the Polkadot SDK or Frontier, that a workaround depends on is fine.
 - No market values, dates or snapshots, whether of a live network (rates, balances, prices) or of a local measurement (machine, run date). State the relation the code relies on; numbers for scale go in the PR description. Generated files, such as benchmarked weights, are exempt.
 - Docs on shared traits in `runtime/common` describe the contract, not one implementation's assumptions.
 
