@@ -7026,7 +7026,7 @@ dependencies = [
 [[package]]
 name = "pallet-launch-treasury"
 version = "0.1.0"
-source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac#61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac"
+source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=1d33cac484eff4f384346a1b95c44debc7f1be5d#1d33cac484eff4f384346a1b95c44debc7f1be5d"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -7045,7 +7045,7 @@ dependencies = [
 [[package]]
 name = "pallet-launchpad"
 version = "0.1.0"
-source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac#61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac"
+source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=1d33cac484eff4f384346a1b95c44debc7f1be5d#1d33cac484eff4f384346a1b95c44debc7f1be5d"
 dependencies = [
  "frame-benchmarking",
  "frame-support",
@@ -7541,7 +7541,7 @@ dependencies = [
 [[package]]
 name = "pallet-vitreus-dex"
 version = "0.1.0"
-source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac#61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac"
+source = "git+https://github.com/Vitreus-Foundation/power-plant-experimental?rev=1d33cac484eff4f384346a1b95c44debc7f1be5d#1d33cac484eff4f384346a1b95c44debc7f1be5d"
 dependencies = [
  "frame-benchmarking",
  "frame-support",

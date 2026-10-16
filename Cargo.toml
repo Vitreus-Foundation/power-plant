@@ -386,9 +386,9 @@ pallet-treasury-extension = { path = "pallets/treasury-extension", default-featu
 # Experimental vitreus pallets.
 # All crates from power-plant-experimental must share one rev: they depend on
 # each other, and mixed revs pull in duplicate copies that don't build together.
-pallet-vitreus-dex = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac", default-features = false }
-pallet-launchpad = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac", default-features = false }
-pallet-launch-treasury = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "61a8639dc1ba92c8c4cdd609ef17018dc5dd4fac", default-features = false }
+pallet-vitreus-dex = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "1d33cac484eff4f384346a1b95c44debc7f1be5d", default-features = false }
+pallet-launchpad = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "1d33cac484eff4f384346a1b95c44debc7f1be5d", default-features = false }
+pallet-launch-treasury = { git = "https://github.com/Vitreus-Foundation/power-plant-experimental", rev = "1d33cac484eff4f384346a1b95c44debc7f1be5d", default-features = false }
 
 # Runtime API
 dynamic-energy-runtime-api = { path = "pallets/dynamic-energy/runtime-api", default-features = false }
