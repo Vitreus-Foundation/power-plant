@@ -3,7 +3,11 @@ use ethereum::{TransactionAction, TransactionSignature, TransactionV2};
 use fp_self_contained::SelfContainedCall;
 use frame_support::{
     dispatch::{DispatchClass, GetDispatchInfo},
-    traits::{fungible::Mutate as _, fungibles::Mutate as _, Hooks},
+    traits::{
+        fungible::Mutate as _,
+        fungibles::{Inspect as _, Mutate as _},
+        Hooks,
+    },
 };
 use pallet_energy_fee::DefaultFeeMultiplier;
 use sp_runtime::{BuildStorage, FixedU128, Perquintill};
@@ -45,6 +49,16 @@ fn mock_signature() -> TransactionSignature {
     ]);
 
     TransactionSignature::new(27, r, r).unwrap()
+}
+
+const AMOUNT: Balance = 1_000_000_000;
+
+fn asset_balance(asset: &NativeOrAssetId, who: &AccountId) -> Balance {
+    NativeAndAssets::balance(asset.clone(), who)
+}
+
+fn asset_issuance(asset: &NativeOrAssetId) -> Balance {
+    NativeAndAssets::total_issuance(asset.clone())
 }
 
 #[test]
@@ -217,38 +231,10 @@ fn energy_fee_exchange_is_limited_by_broker_vnrg() {
 
 mod energy_broker {
     use super::*;
-    use frame_support::{assert_ok, traits::fungibles::Inspect as FungiblesInspect};
-    use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
-
-    const AMOUNT: Balance = 1_000_000_000;
-
-    // The treasury's exchanges as its config wires them, so the tests check what it actually uses.
-    type TreasuryEnergyExchange = <Runtime as pallet_treasury_extension::Config>::EnergyExchange;
-    type TreasuryStaticEnergyExchange =
-        <Runtime as pallet_treasury_extension::Config>::StaticEnergyExchange;
-    type TreasuryLiquidEnergyExchange =
-        <Runtime as pallet_treasury_extension::Config>::LiquidEnergyExchange;
-
-    fn asset_balance(asset: &NativeOrAssetId, who: &AccountId) -> Balance {
-        NativeAndAssets::balance(asset.clone(), who)
-    }
-
-    fn asset_issuance(asset: &NativeOrAssetId) -> Balance {
-        NativeAndAssets::total_issuance(asset.clone())
-    }
+    use frame_support::assert_ok;
 
     fn energy_sale() -> Balance {
         pallet_dynamic_energy::SessionEnergySale::<Runtime>::get()
-    }
-
-    /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
-    fn fund_broker() {
-        Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
-            SNRG::get(),
-            FixedU128::from_u32(1),
-        );
     }
 
     /// Converting `source` into VNRG must be quoted one-to-one and cost no swap fee.
@@ -328,6 +314,51 @@ mod energy_broker {
         assert_eq!(energy_sale(), sale_before);
     }
 
+    #[test]
+    fn snrg_conversion_is_one_to_one_and_without_swap_fee() {
+        new_test_ext()
+            .execute_with(|| assert_conversion_is_one_to_one_and_without_swap_fee(SNRG::get()))
+    }
+
+    #[test]
+    fn lnrg_conversion_is_one_to_one_and_without_swap_fee() {
+        new_test_ext()
+            .execute_with(|| assert_conversion_is_one_to_one_and_without_swap_fee(LNRG::get()))
+    }
+
+    #[test]
+    fn snrg_conversion_burns_and_mints_without_touching_the_broker() {
+        new_test_ext().execute_with(|| assert_conversion_burns_and_mints(SNRG::get()))
+    }
+
+    #[test]
+    fn lnrg_conversion_burns_and_mints_without_touching_the_broker() {
+        new_test_ext().execute_with(|| assert_conversion_burns_and_mints(LNRG::get()))
+    }
+}
+
+mod treasury {
+    use super::*;
+    use frame_support::assert_ok;
+    use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
+
+    // The treasury's exchanges as its config wires them, so the tests check what it actually uses.
+    type TreasuryEnergyExchange = <Runtime as pallet_treasury_extension::Config>::EnergyExchange;
+    type TreasuryStaticEnergyExchange =
+        <Runtime as pallet_treasury_extension::Config>::StaticEnergyExchange;
+    type TreasuryLiquidEnergyExchange =
+        <Runtime as pallet_treasury_extension::Config>::LiquidEnergyExchange;
+
+    /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
+    fn fund_broker() {
+        Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
+            SNRG::get(),
+            FixedU128::from_u32(1),
+        );
+    }
+
     /// Selling `AMOUNT` of `asset` through `Exchange` must take exactly that much, pay VTRS and
     /// leave the seller's other energy as it was.
     fn assert_sells_for_vtrs<Exchange>(asset: AssetId)
@@ -404,28 +435,6 @@ mod energy_broker {
 
         assert_eq!(energy(), energy_before, "a failed sale must not touch energy");
         assert_eq!(Balances::free_balance(alith()), native_before);
-    }
-
-    #[test]
-    fn snrg_conversion_is_one_to_one_and_without_swap_fee() {
-        new_test_ext()
-            .execute_with(|| assert_conversion_is_one_to_one_and_without_swap_fee(SNRG::get()))
-    }
-
-    #[test]
-    fn lnrg_conversion_is_one_to_one_and_without_swap_fee() {
-        new_test_ext()
-            .execute_with(|| assert_conversion_is_one_to_one_and_without_swap_fee(LNRG::get()))
-    }
-
-    #[test]
-    fn snrg_conversion_burns_and_mints_without_touching_the_broker() {
-        new_test_ext().execute_with(|| assert_conversion_burns_and_mints(SNRG::get()))
-    }
-
-    #[test]
-    fn lnrg_conversion_burns_and_mints_without_touching_the_broker() {
-        new_test_ext().execute_with(|| assert_conversion_burns_and_mints(LNRG::get()))
     }
 
     #[test]
