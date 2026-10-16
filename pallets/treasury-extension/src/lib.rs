@@ -55,6 +55,9 @@ type ExchangeBalanceOf<T, I> =
 type ExchangeAssetOf<T, Exchange> =
     <Exchange as SwapFromEnergy<<T as frame_system::Config>::AccountId>>::EnergyAsset;
 
+/// The energy sold and the native currency received for it.
+type SaleOf<T, I> = (ExchangeBalanceOf<T, I>, ExchangeBalanceOf<T, I>);
+
 #[cfg(test)]
 mod mock;
 
@@ -222,9 +225,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     /// Sells the treasury's energy of the exchange's asset down to its minimum balance, but no
     /// more than the exchange can pay for, and returns the amount sold and the native currency
     /// received for it.
-    fn sell_energy<Exchange>(
-        account_id: &T::AccountId,
-    ) -> Result<(ExchangeBalanceOf<T, I>, ExchangeBalanceOf<T, I>), DispatchError>
+    fn sell_energy<Exchange>(account_id: &T::AccountId) -> Result<SaleOf<T, I>, DispatchError>
     where
         Exchange: QuotePriceFromEnergy<Balance = ExchangeBalanceOf<T, I>>
             + SwapFromEnergy<T::AccountId, Balance = ExchangeBalanceOf<T, I>>,
