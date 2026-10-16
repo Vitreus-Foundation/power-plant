@@ -43,13 +43,16 @@ use sp_arithmetic::{
     traits::{Saturating, Zero},
     FixedPointNumber, FixedU64, Permill,
 };
-use vitreus_runtime_common::{OnSessionChange, SessionIndex, SwapFromEnergy};
+use vitreus_runtime_common::{OnSessionChange, QuotePriceFromEnergy, SessionIndex, SwapFromEnergy};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
 
 type EnergyBalanceOf<T, I> =
     <<T as Config<I>>::EnergyAsset as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
+
+type ExchangeAssetOf<T, Exchange> =
+    <Exchange as SwapFromEnergy<<T as frame_system::Config>::AccountId>>::EnergyAsset;
 
 #[cfg(test)]
 mod mock;
@@ -88,25 +91,34 @@ pub mod pallet {
         type LiquidEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>;
 
         /// A type used for swapping Energy for native currency.
-        type EnergyExchange: SwapFromEnergy<
-            Self::AccountId,
-            Balance = EnergyBalanceOf<Self, I>,
-            EnergyAsset = Self::EnergyAsset,
-        >;
+        type EnergyExchange: QuotePriceFromEnergy<
+                Balance = EnergyBalanceOf<Self, I>,
+                EnergyAsset = Self::EnergyAsset,
+            > + SwapFromEnergy<
+                Self::AccountId,
+                Balance = EnergyBalanceOf<Self, I>,
+                EnergyAsset = Self::EnergyAsset,
+            >;
 
         /// A type used for swapping Static Energy for native currency.
-        type StaticEnergyExchange: SwapFromEnergy<
-            Self::AccountId,
-            Balance = EnergyBalanceOf<Self, I>,
-            EnergyAsset = Self::StaticEnergyAsset,
-        >;
+        type StaticEnergyExchange: QuotePriceFromEnergy<
+                Balance = EnergyBalanceOf<Self, I>,
+                EnergyAsset = Self::StaticEnergyAsset,
+            > + SwapFromEnergy<
+                Self::AccountId,
+                Balance = EnergyBalanceOf<Self, I>,
+                EnergyAsset = Self::StaticEnergyAsset,
+            >;
 
         /// A type used for swapping Liquid Energy for native currency.
-        type LiquidEnergyExchange: SwapFromEnergy<
-            Self::AccountId,
-            Balance = EnergyBalanceOf<Self, I>,
-            EnergyAsset = Self::LiquidEnergyAsset,
-        >;
+        type LiquidEnergyExchange: QuotePriceFromEnergy<
+                Balance = EnergyBalanceOf<Self, I>,
+                EnergyAsset = Self::LiquidEnergyAsset,
+            > + SwapFromEnergy<
+                Self::AccountId,
+                Balance = EnergyBalanceOf<Self, I>,
+                EnergyAsset = Self::LiquidEnergyAsset,
+            >;
 
         /// Funds ratio to be recycled.
         type SpendThreshold: Get<Permill>;
@@ -157,25 +169,33 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
         Self::deposit_event(Event::EnergyExchanged { amount });
     }
 
-    /// Sells the treasury's energy of the exchange's asset down to its minimum balance and returns
-    /// the amount sold.
+    /// Sells the treasury's energy of the exchange's asset down to its minimum balance, but no
+    /// more than the exchange can pay for, and returns the amount sold.
     fn sell_energy<Exchange>(account_id: &T::AccountId) -> EnergyBalanceOf<T, I>
     where
-        Exchange: SwapFromEnergy<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
-        Exchange::EnergyAsset: Inspect<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
+        Exchange: QuotePriceFromEnergy<Balance = EnergyBalanceOf<T, I>>
+            + SwapFromEnergy<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
+        ExchangeAssetOf<T, Exchange>: Inspect<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
     {
-        let balance = Exchange::EnergyAsset::reducible_balance(
+        let balance = ExchangeAssetOf::<T, Exchange>::reducible_balance(
             account_id,
             Preservation::Preserve,
             Fortitude::Polite,
         );
 
-        if balance.is_zero() {
+        // A swap for more than `max_amount_out` fails as a whole, so sell at most the input that
+        // buys exactly that. The quote leaves the fee out: with a fee the payout is only smaller.
+        let max_amount_out = Exchange::max_amount_out();
+        let max_amount_in = Exchange::quote_price_tokens_for_exact_tokens(max_amount_out, false)
+            .unwrap_or_default();
+        let amount = balance.min(max_amount_in);
+
+        if amount.is_zero() {
             return Zero::zero();
         }
 
-        match Exchange::swap_exact_tokens_for_tokens(account_id.clone(), balance, true) {
-            Ok(_) => balance,
+        match Exchange::swap_exact_tokens_for_tokens(account_id.clone(), amount, true) {
+            Ok(_) => amount,
             Err(_) => Zero::zero(),
         }
     }

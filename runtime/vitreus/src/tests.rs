@@ -356,6 +356,30 @@ mod energy_broker {
         assert_eq!(other_energy(), other_energy_before, "the sale must not touch other energy");
     }
 
+    /// With more `asset` than the broker can pay for, the treasury's session hook must sell as
+    /// much as `Exchange` reports the broker can pay for and keep the rest.
+    fn assert_treasury_sells_within_broker_vtrs<Exchange>(asset: AssetId)
+    where
+        Exchange: QuotePriceFromEnergy<Balance = Balance>,
+    {
+        let treasury = Treasury::account_id();
+
+        fund_broker();
+        let broker_vtrs = Exchange::max_amount_out();
+
+        // More energy than the broker can pay for.
+        Balances::set_balance(&treasury, ExistentialDeposit::get());
+        assert_ok!(Assets::mint_into(asset, &treasury, 2 * broker_vtrs));
+        let asset = NativeOrAssetId::WithId(asset);
+        let asset_before = asset_balance(&asset, &treasury);
+        let native_before = Balances::free_balance(&treasury);
+
+        <TreasuryExtension as vitreus_runtime_common::OnSessionChange>::on_new_session(1);
+
+        assert_eq!(Balances::free_balance(&treasury), native_before + broker_vtrs);
+        assert_eq!(asset_balance(&asset, &treasury), asset_before - broker_vtrs);
+    }
+
     /// When the broker has no VTRS to pay, selling through `Exchange` must fail and leave the
     /// seller's energy and VTRS, and the energy issuance, as they were.
     fn assert_fails_without_broker_vtrs<Exchange>()
@@ -420,6 +444,27 @@ mod energy_broker {
     fn treasury_lnrg_exchange_sells_for_vtrs() {
         new_test_ext()
             .execute_with(|| assert_sells_for_vtrs::<TreasuryLiquidEnergyExchange>(LNRG::get()))
+    }
+
+    #[test]
+    fn treasury_sells_vnrg_within_broker_vtrs() {
+        new_test_ext().execute_with(|| {
+            assert_treasury_sells_within_broker_vtrs::<TreasuryEnergyExchange>(VNRG::get())
+        })
+    }
+
+    #[test]
+    fn treasury_sells_snrg_within_broker_vtrs() {
+        new_test_ext().execute_with(|| {
+            assert_treasury_sells_within_broker_vtrs::<TreasuryStaticEnergyExchange>(SNRG::get())
+        })
+    }
+
+    #[test]
+    fn treasury_sells_lnrg_within_broker_vtrs() {
+        new_test_ext().execute_with(|| {
+            assert_treasury_sells_within_broker_vtrs::<TreasuryLiquidEnergyExchange>(LNRG::get())
+        })
     }
 
     #[test]
