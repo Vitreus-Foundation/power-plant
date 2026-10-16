@@ -430,8 +430,7 @@ mod energy_broker {
 
     #[test]
     fn treasury_vnrg_exchange_sells_for_vtrs() {
-        new_test_ext()
-            .execute_with(|| assert_sells_for_vtrs::<TreasuryEnergyExchange>(VNRG::get()))
+        new_test_ext().execute_with(|| assert_sells_for_vtrs::<TreasuryEnergyExchange>(VNRG::get()))
     }
 
     #[test]
@@ -468,6 +467,39 @@ mod energy_broker {
     }
 
     #[test]
+    fn treasury_reports_energy_sold_and_vtrs_received() {
+        new_test_ext().execute_with(|| {
+            let treasury = Treasury::account_id();
+            let vnrg = NativeOrAssetId::WithId(VNRG::get());
+            let snrg = NativeOrAssetId::WithId(SNRG::get());
+            let lnrg = NativeOrAssetId::WithId(LNRG::get());
+
+            System::set_block_number(1);
+            fund_broker();
+            Balances::set_balance(&treasury, ExistentialDeposit::get());
+            for asset in [VNRG::get(), SNRG::get(), LNRG::get()] {
+                assert_ok!(Assets::mint_into(asset, &treasury, AMOUNT));
+            }
+            let vnrg_before = asset_balance(&vnrg, &treasury);
+            let snrg_before = asset_balance(&snrg, &treasury);
+            let lnrg_before = asset_balance(&lnrg, &treasury);
+            let native_before = Balances::free_balance(&treasury);
+
+            <TreasuryExtension as vitreus_runtime_common::OnSessionChange>::on_new_session(1);
+
+            System::assert_last_event(
+                pallet_treasury_extension::Event::<Runtime>::EnergyExchanged {
+                    energy: vnrg_before - asset_balance(&vnrg, &treasury),
+                    static_energy: snrg_before - asset_balance(&snrg, &treasury),
+                    liquid_energy: lnrg_before - asset_balance(&lnrg, &treasury),
+                    native: Balances::free_balance(&treasury) - native_before,
+                }
+                .into(),
+            );
+        })
+    }
+
+    #[test]
     fn treasury_lnrg_exchange_is_limited_by_broker_vtrs() {
         new_test_ext().execute_with(|| {
             let path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
@@ -487,8 +519,7 @@ mod energy_broker {
 
     #[test]
     fn treasury_vnrg_exchange_fails_without_broker_vtrs() {
-        new_test_ext()
-            .execute_with(assert_fails_without_broker_vtrs::<TreasuryEnergyExchange>)
+        new_test_ext().execute_with(assert_fails_without_broker_vtrs::<TreasuryEnergyExchange>)
     }
 
     #[test]

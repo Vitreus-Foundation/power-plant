@@ -1,6 +1,7 @@
 use crate::mock::*;
 use crate::Event;
 use pallet_treasury::Event as TreasuryEvent;
+use vitreus_runtime_common::OnSessionChange;
 
 #[test]
 fn spend_funds_should_work() {
@@ -52,5 +53,19 @@ fn ensure_no_recycle_upon_spend_threhsold_exceeding() {
         )));
 
         assert_eq!(Treasury::pot(), left);
+    });
+}
+
+#[test]
+fn ensure_no_energy_exchanged_upon_nothing_to_sell() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        <TreasuryExtension as OnSessionChange>::on_new_session(1);
+
+        assert!(!System::events().iter().any(|record| matches!(
+            record.event,
+            RuntimeEvent::TreasuryExtension(Event::<Test>::EnergyExchanged { .. })
+        )));
     });
 }

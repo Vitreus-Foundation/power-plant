@@ -149,8 +149,20 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config<I>, I: 'static = ()> {
-        Recycled { recyled_funds: BalanceOf<T, I> },
-        EnergyExchanged { amount: EnergyBalanceOf<T, I> },
+        Recycled {
+            recyled_funds: BalanceOf<T, I>,
+        },
+        /// The treasury sold its energy for native currency.
+        EnergyExchanged {
+            /// Energy sold.
+            energy: EnergyBalanceOf<T, I>,
+            /// Static Energy sold.
+            static_energy: EnergyBalanceOf<T, I>,
+            /// Liquid Energy sold.
+            liquid_energy: EnergyBalanceOf<T, I>,
+            /// Native currency received for it.
+            native: EnergyBalanceOf<T, I>,
+        },
     }
 }
 
@@ -160,18 +172,36 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     }
 
     fn exchange_energy() {
+        let mut native = EnergyBalanceOf::<T, I>::zero();
         let account_id = pallet_treasury::Pallet::<T, I>::account_id();
 
-        let mut amount = Self::sell_energy::<T::EnergyExchange>(&account_id);
-        amount.saturating_accrue(Self::sell_energy::<T::StaticEnergyExchange>(&account_id));
-        amount.saturating_accrue(Self::sell_energy::<T::LiquidEnergyExchange>(&account_id));
+        let (energy, received) = Self::sell_energy::<T::EnergyExchange>(&account_id);
+        native.saturating_accrue(received);
 
-        Self::deposit_event(Event::EnergyExchanged { amount });
+        let (static_energy, received) = Self::sell_energy::<T::StaticEnergyExchange>(&account_id);
+        native.saturating_accrue(received);
+
+        let (liquid_energy, received) = Self::sell_energy::<T::LiquidEnergyExchange>(&account_id);
+        native.saturating_accrue(received);
+
+        if energy.is_zero() && static_energy.is_zero() && liquid_energy.is_zero() {
+            return;
+        }
+
+        Self::deposit_event(Event::EnergyExchanged {
+            energy,
+            static_energy,
+            liquid_energy,
+            native,
+        });
     }
 
     /// Sells the treasury's energy of the exchange's asset down to its minimum balance, but no
-    /// more than the exchange can pay for, and returns the amount sold.
-    fn sell_energy<Exchange>(account_id: &T::AccountId) -> EnergyBalanceOf<T, I>
+    /// more than the exchange can pay for, and returns the amount sold and the native currency
+    /// received for it.
+    fn sell_energy<Exchange>(
+        account_id: &T::AccountId,
+    ) -> (EnergyBalanceOf<T, I>, EnergyBalanceOf<T, I>)
     where
         Exchange: QuotePriceFromEnergy<Balance = EnergyBalanceOf<T, I>>
             + SwapFromEnergy<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
@@ -191,12 +221,12 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
         let amount = balance.min(max_amount_in);
 
         if amount.is_zero() {
-            return Zero::zero();
+            return (Zero::zero(), Zero::zero());
         }
 
         match Exchange::swap_exact_tokens_for_tokens(account_id.clone(), amount, true) {
-            Ok(_) => amount,
-            Err(_) => Zero::zero(),
+            Ok(received) => (amount, received),
+            Err(_) => (Zero::zero(), Zero::zero()),
         }
     }
 
