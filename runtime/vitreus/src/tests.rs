@@ -223,6 +223,7 @@ mod energy_broker {
     const AMOUNT: Balance = 1_000_000_000;
 
     // The treasury's exchanges as its config wires them, so the tests check what it actually uses.
+    type TreasuryEnergyExchange = <Runtime as pallet_treasury_extension::Config>::EnergyExchange;
     type TreasuryStaticEnergyExchange =
         <Runtime as pallet_treasury_extension::Config>::StaticEnergyExchange;
     type TreasuryLiquidEnergyExchange =
@@ -404,6 +405,12 @@ mod energy_broker {
     }
 
     #[test]
+    fn treasury_vnrg_exchange_sells_for_vtrs() {
+        new_test_ext()
+            .execute_with(|| assert_sells_for_vtrs::<TreasuryEnergyExchange>(VNRG::get()))
+    }
+
+    #[test]
     fn treasury_snrg_exchange_sells_for_vtrs() {
         new_test_ext()
             .execute_with(|| assert_sells_for_vtrs::<TreasuryStaticEnergyExchange>(SNRG::get()))
@@ -431,6 +438,12 @@ mod energy_broker {
             Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get());
             assert_eq!(TreasuryLiquidEnergyExchange::max_amount_out(), 0);
         })
+    }
+
+    #[test]
+    fn treasury_vnrg_exchange_fails_without_broker_vtrs() {
+        new_test_ext()
+            .execute_with(assert_fails_without_broker_vtrs::<TreasuryEnergyExchange>)
     }
 
     #[test]
