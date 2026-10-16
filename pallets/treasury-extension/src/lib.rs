@@ -164,6 +164,15 @@ pub mod pallet {
             /// Native currency received for it.
             native: ExchangeBalanceOf<T, I>,
         },
+        /// The treasury failed to sell some of its energy for native currency.
+        EnergyExchangeFailed {
+            /// Why the Energy sale failed, if it did.
+            energy: Option<DispatchError>,
+            /// Why the Static Energy sale failed, if it did.
+            static_energy: Option<DispatchError>,
+            /// Why the Liquid Energy sale failed, if it did.
+            liquid_energy: Option<DispatchError>,
+        },
     }
 }
 
@@ -173,16 +182,29 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     }
 
     fn exchange_energy() {
-        let mut native = ExchangeBalanceOf::<T, I>::zero();
         let account_id = pallet_treasury::Pallet::<T, I>::account_id();
 
-        let (energy, received) = Self::sell_energy::<T::EnergyExchange>(&account_id);
+        let energy = Self::sell_energy::<T::EnergyExchange>(&account_id);
+        let static_energy = Self::sell_energy::<T::StaticEnergyExchange>(&account_id);
+        let liquid_energy = Self::sell_energy::<T::LiquidEnergyExchange>(&account_id);
+
+        if energy.is_err() || static_energy.is_err() || liquid_energy.is_err() {
+            Self::deposit_event(Event::EnergyExchangeFailed {
+                energy: energy.err(),
+                static_energy: static_energy.err(),
+                liquid_energy: liquid_energy.err(),
+            });
+        }
+
+        let mut native = ExchangeBalanceOf::<T, I>::zero();
+
+        let (energy, received) = energy.unwrap_or_default();
         native.saturating_accrue(received);
 
-        let (static_energy, received) = Self::sell_energy::<T::StaticEnergyExchange>(&account_id);
+        let (static_energy, received) = static_energy.unwrap_or_default();
         native.saturating_accrue(received);
 
-        let (liquid_energy, received) = Self::sell_energy::<T::LiquidEnergyExchange>(&account_id);
+        let (liquid_energy, received) = liquid_energy.unwrap_or_default();
         native.saturating_accrue(received);
 
         if energy.is_zero() && static_energy.is_zero() && liquid_energy.is_zero() {
@@ -202,7 +224,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     /// received for it.
     fn sell_energy<Exchange>(
         account_id: &T::AccountId,
-    ) -> (ExchangeBalanceOf<T, I>, ExchangeBalanceOf<T, I>)
+    ) -> Result<(ExchangeBalanceOf<T, I>, ExchangeBalanceOf<T, I>), DispatchError>
     where
         Exchange: QuotePriceFromEnergy<Balance = ExchangeBalanceOf<T, I>>
             + SwapFromEnergy<T::AccountId, Balance = ExchangeBalanceOf<T, I>>,
@@ -222,13 +244,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
         let amount = balance.min(max_amount_in);
 
         if amount.is_zero() {
-            return (Zero::zero(), Zero::zero());
+            return Ok((Zero::zero(), Zero::zero()));
         }
 
-        match Exchange::swap_exact_tokens_for_tokens(account_id.clone(), amount, true) {
-            Ok(received) => (amount, received),
-            Err(_) => (Zero::zero(), Zero::zero()),
-        }
+        Exchange::swap_exact_tokens_for_tokens(account_id.clone(), amount, true)
+            .map(|received| (amount, received))
     }
 
     fn update_fee_recycling_rate(total_weight: &mut Weight) {
