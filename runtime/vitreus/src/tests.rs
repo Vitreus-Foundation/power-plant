@@ -472,9 +472,9 @@ mod xcm_tests {
     }
 }
 
-/// Launchpad §2.10 wiring: the free-trade fee is the broker's price for one
-/// launchpad call, and a `Pays::No` refund lands with a VTRS-only signer as
-/// VNRG — so their next call does not touch the broker.
+/// Launchpad free-trade wiring: the free-trade fee is the broker's price for
+/// one launchpad call, and a `Pays::No` refund lands with a VTRS-only signer
+/// as VNRG — so their next call does not touch the broker.
 #[cfg(feature = "testnet-runtime")]
 mod launchpad_free_trades {
     use super::*;
@@ -519,8 +519,8 @@ mod launchpad_free_trades {
             let fee = launchpad::LaunchpadFreeTradeFee::get();
             assert_eq!(fee, with_fee, "what a VTRS-only signer pays, broker fee included");
 
-            // Price, not inventory: this broker holds no VNRG, so `QuotePrice` refuses the
-            // quote (#118); the threshold must not become "nothing is free" because of it.
+            // The fee is a price only and does not depend on the broker's inventory: this
+            // broker holds no VNRG, so `QuotePrice` refuses the quote, and the fee is unchanged.
             assert_eq!(quote(), None);
             // With the VNRG to sell, `QuotePrice` gives the same price. The broker keeps VNRG's
             // minimum balance back, so it needs more than the one call it sells.
