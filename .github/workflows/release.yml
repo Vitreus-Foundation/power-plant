@@ -84,7 +84,7 @@ jobs:
           python3 .github/scripts/release.py collect
           ${{ matrix.runtime }} ${{ needs.prepare.outputs.version }} "$WASM" "$REPORT"
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.runtime }}
           path: out/
@@ -113,7 +113,7 @@ jobs:
           python3 .github/scripts/release.py notes
           ${{ needs.prepare.outputs.version }} out/*.srtool.json --commit "$COMMIT" --out notes.md
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: notes
           path: notes.md
