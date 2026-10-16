@@ -372,11 +372,11 @@ mod energy_broker {
         assert_ok!(Assets::mint_into(asset, &treasury, 2 * broker_vtrs));
         let asset = NativeOrAssetId::WithId(asset);
         let asset_before = asset_balance(&asset, &treasury);
-        let native_before = Balances::free_balance(&treasury);
+        let native_before = Balances::free_balance(treasury);
 
         <TreasuryExtension as vitreus_runtime_common::OnSessionChange>::on_new_session(1);
 
-        assert_eq!(Balances::free_balance(&treasury), native_before + broker_vtrs);
+        assert_eq!(Balances::free_balance(treasury), native_before + broker_vtrs);
         assert_eq!(asset_balance(&asset, &treasury), asset_before - broker_vtrs);
     }
 
@@ -483,7 +483,7 @@ mod energy_broker {
             let vnrg_before = asset_balance(&vnrg, &treasury);
             let snrg_before = asset_balance(&snrg, &treasury);
             let lnrg_before = asset_balance(&lnrg, &treasury);
-            let native_before = Balances::free_balance(&treasury);
+            let native_before = Balances::free_balance(treasury);
 
             <TreasuryExtension as vitreus_runtime_common::OnSessionChange>::on_new_session(1);
 
@@ -492,7 +492,7 @@ mod energy_broker {
                     energy: vnrg_before - asset_balance(&vnrg, &treasury),
                     static_energy: snrg_before - asset_balance(&snrg, &treasury),
                     liquid_energy: lnrg_before - asset_balance(&lnrg, &treasury),
-                    native: Balances::free_balance(&treasury) - native_before,
+                    native: Balances::free_balance(treasury) - native_before,
                 }
                 .into(),
             );
