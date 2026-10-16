@@ -48,7 +48,8 @@ use vitreus_runtime_common::{OnSessionChange, QuotePriceFromEnergy, SessionIndex
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-type EnergyBalanceOf<T, I> =
+/// The balance in which the exchanges measure both energy and native currency.
+type ExchangeBalanceOf<T, I> =
     <<T as Config<I>>::EnergyAsset as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
 
 type ExchangeAssetOf<T, Exchange> =
@@ -85,38 +86,38 @@ pub mod pallet {
         type EnergyAsset: Inspect<Self::AccountId>;
 
         /// Static Energy asset.
-        type StaticEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>;
+        type StaticEnergyAsset: Inspect<Self::AccountId, Balance = ExchangeBalanceOf<Self, I>>;
 
         /// Liquid Energy asset.
-        type LiquidEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>;
+        type LiquidEnergyAsset: Inspect<Self::AccountId, Balance = ExchangeBalanceOf<Self, I>>;
 
         /// A type used for swapping Energy for native currency.
         type EnergyExchange: QuotePriceFromEnergy<
-                Balance = EnergyBalanceOf<Self, I>,
+                Balance = ExchangeBalanceOf<Self, I>,
                 EnergyAsset = Self::EnergyAsset,
             > + SwapFromEnergy<
                 Self::AccountId,
-                Balance = EnergyBalanceOf<Self, I>,
+                Balance = ExchangeBalanceOf<Self, I>,
                 EnergyAsset = Self::EnergyAsset,
             >;
 
         /// A type used for swapping Static Energy for native currency.
         type StaticEnergyExchange: QuotePriceFromEnergy<
-                Balance = EnergyBalanceOf<Self, I>,
+                Balance = ExchangeBalanceOf<Self, I>,
                 EnergyAsset = Self::StaticEnergyAsset,
             > + SwapFromEnergy<
                 Self::AccountId,
-                Balance = EnergyBalanceOf<Self, I>,
+                Balance = ExchangeBalanceOf<Self, I>,
                 EnergyAsset = Self::StaticEnergyAsset,
             >;
 
         /// A type used for swapping Liquid Energy for native currency.
         type LiquidEnergyExchange: QuotePriceFromEnergy<
-                Balance = EnergyBalanceOf<Self, I>,
+                Balance = ExchangeBalanceOf<Self, I>,
                 EnergyAsset = Self::LiquidEnergyAsset,
             > + SwapFromEnergy<
                 Self::AccountId,
-                Balance = EnergyBalanceOf<Self, I>,
+                Balance = ExchangeBalanceOf<Self, I>,
                 EnergyAsset = Self::LiquidEnergyAsset,
             >;
 
@@ -155,13 +156,13 @@ pub mod pallet {
         /// The treasury sold its energy for native currency.
         EnergyExchanged {
             /// Energy sold.
-            energy: EnergyBalanceOf<T, I>,
+            energy: ExchangeBalanceOf<T, I>,
             /// Static Energy sold.
-            static_energy: EnergyBalanceOf<T, I>,
+            static_energy: ExchangeBalanceOf<T, I>,
             /// Liquid Energy sold.
-            liquid_energy: EnergyBalanceOf<T, I>,
+            liquid_energy: ExchangeBalanceOf<T, I>,
             /// Native currency received for it.
-            native: EnergyBalanceOf<T, I>,
+            native: ExchangeBalanceOf<T, I>,
         },
     }
 }
@@ -172,7 +173,7 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     }
 
     fn exchange_energy() {
-        let mut native = EnergyBalanceOf::<T, I>::zero();
+        let mut native = ExchangeBalanceOf::<T, I>::zero();
         let account_id = pallet_treasury::Pallet::<T, I>::account_id();
 
         let (energy, received) = Self::sell_energy::<T::EnergyExchange>(&account_id);
@@ -201,11 +202,11 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     /// received for it.
     fn sell_energy<Exchange>(
         account_id: &T::AccountId,
-    ) -> (EnergyBalanceOf<T, I>, EnergyBalanceOf<T, I>)
+    ) -> (ExchangeBalanceOf<T, I>, ExchangeBalanceOf<T, I>)
     where
-        Exchange: QuotePriceFromEnergy<Balance = EnergyBalanceOf<T, I>>
-            + SwapFromEnergy<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
-        ExchangeAssetOf<T, Exchange>: Inspect<T::AccountId, Balance = EnergyBalanceOf<T, I>>,
+        Exchange: QuotePriceFromEnergy<Balance = ExchangeBalanceOf<T, I>>
+            + SwapFromEnergy<T::AccountId, Balance = ExchangeBalanceOf<T, I>>,
+        ExchangeAssetOf<T, Exchange>: Inspect<T::AccountId, Balance = ExchangeBalanceOf<T, I>>,
     {
         let balance = ExchangeAssetOf::<T, Exchange>::reducible_balance(
             account_id,
