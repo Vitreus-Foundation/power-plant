@@ -348,6 +348,11 @@ pub mod vnrg {
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
 }
 
+/// VTRS amount treated as one US dollar when pricing deposits.
+pub const DOLLARS: Balance = 200 * UNITS;
+pub const CENTS: Balance = DOLLARS / 100;
+pub const MILLICENTS: Balance = CENTS / 1_000;
+
 parameter_types! {
     pub const VNRG: AssetId = 0; // Energy
     pub const SNRG: AssetId = 1; // Static Energy
@@ -1384,7 +1389,6 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Kickstart(..)
             | RuntimeCall::Vesting(..)
             | RuntimeCall::NacManaging(..)
-            | RuntimeCall::ManualBridge(..)
             | RuntimeCall::Privileges(..)
             | RuntimeCall::Council(..)
             | RuntimeCall::TechnicalCommittee(..)
@@ -1454,13 +1458,15 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 }
 
 parameter_types! {
-    // One storage item; key size 32, value size 8; .
-    pub const ProxyDepositBase: Balance = deposit(1, 8);
-    // Additional storage item size of 33 bytes.
-    pub const ProxyDepositFactor: Balance = deposit(0, 33);
+    // One storage item; key size 20, value size 16.
+    pub const ProxyDepositBase: Balance = deposit(1, 36);
+    // Additional storage item size of 25 bytes: AccountId 20 + ProxyType 1 + delay 4.
+    pub const ProxyDepositFactor: Balance = deposit(0, 25);
     pub const MaxProxies: u16 = 32;
-    pub const AnnouncementDepositBase: Balance = deposit(1, 8);
-    pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+    // One storage item; key size 20, value size 16.
+    pub const AnnouncementDepositBase: Balance = deposit(1, 36);
+    // Additional storage item size of 56 bytes: AccountId 20 + call hash 32 + block number 4.
+    pub const AnnouncementDepositFactor: Balance = deposit(0, 56);
     pub const MaxPending: u16 = 32;
 }
 
@@ -1482,6 +1488,9 @@ pub enum ProxyType {
     #[default]
     Any = 0,
     Staking = 1,
+    // Experimental pallets, testnet only: a separate range from 64.
+    #[cfg(feature = "testnet-runtime")]
+    Launchpad = 64,
 }
 
 impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
@@ -1495,6 +1504,10 @@ impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
                         | RuntimeCall::Session(..)
                         | RuntimeCall::Utility(..)
                 )
+            },
+            #[cfg(feature = "testnet-runtime")]
+            ProxyType::Launchpad => {
+                matches!(c, RuntimeCall::Launchpad(pallet_launchpad::Call::buy { .. }))
             },
         }
     }
@@ -2015,17 +2028,6 @@ impl pallet_faucet::Config for Runtime {
     type WeightInfo = pallet_faucet::weights::SubstrateWeight<Runtime>;
 }
 
-impl pallet_manual_bridge::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
-    type PayoutOrigin =
-        pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>;
-    type BridgeAccount = xcm_config::CheckAccount;
-    type FeeReceiverAccount = xcm_config::TreasuryAccount;
-    type DepositFeePercent = xcm_config::DepositFeePercent;
-    type WithdrawalFeePercent = xcm_config::WithdrawalFeePercent;
-}
-
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -2130,7 +2132,7 @@ construct_runtime!(
         #[cfg(feature = "testnet-runtime")]
         Faucet: pallet_faucet = 240,
 
-        ManualBridge: pallet_manual_bridge = 245,
+        // ManualBridge (removed) = 245,
     }
 );
 
