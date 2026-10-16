@@ -111,15 +111,6 @@ pub type LocalAssetTransactor = xcm_builder::CurrencyAdapter<
     LocalCheckAccount,
 >;
 
-// Fees for the wVTRS <-> VTRS conversion in `pallet-manual-bridge`.
-parameter_types! {
-    pub const DefaultDepositFeePercent: u8 = 1;
-    pub storage DepositFeePercent: u8 = DefaultDepositFeePercent::get();
-
-    pub const DefaultWithdrawalFeePercent: u8 = 9;
-    pub storage WithdrawalFeePercent: u8 = DefaultWithdrawalFeePercent::get();
-}
-
 parameter_types! {
     pub AssetsPalletLocation: Location = PalletInstance(ASSETS_PALLET_ID).into();
 }

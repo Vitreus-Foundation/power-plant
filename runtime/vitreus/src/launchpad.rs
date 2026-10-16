@@ -121,6 +121,12 @@ parameter_types! {
     /// Default terms; `set_params` changes them for future launches.
     /// Curve fee split creator 50 / protocol 25 / treasury 25; existing
     /// launches keep their snapshot.
+    ///
+    /// `graduation_target` is a placeholder. With these defaults a trade is
+    /// free from 200 × one call's energy fee in VTRS (`LaunchpadFreeTradeFee`),
+    /// and no trade on a curve can be larger than its target, so free trades
+    /// need a target well above 200 × the fee. If the target is not above
+    /// it, no trade on the launch is ever free.
     pub LaunchpadDefaultParams: pallet_launchpad::LaunchParams<Balance> = pallet_launchpad::LaunchParams {
         graduation_target: 3_000 * UNITS,
         curve_fee_bps: 100,
@@ -129,6 +135,33 @@ parameter_types! {
         pool_fee_tier: 3,
         creation_fee: 1 * UNITS,
     };
+}
+
+/// The free-trade fee for the launchpad: one launchpad call's energy fee in
+/// VTRS at the current price — the custom fee (1 gVolt × the fee multiplier)
+/// priced through the energy broker with its swap fee, which is exactly what
+/// a signer holding only VTRS pays for it. The fee is a price only and does
+/// not depend on the broker's inventory, which is why it uses `get_amount_in`
+/// and not `QuotePrice`: `QuotePrice` returns `None` when the broker holds
+/// less VNRG than the amount quoted, and that would make every trade non-free
+/// whenever the broker runs short. `Balance::MAX`, which makes no trade free,
+/// while the energy rate is unset.
+pub struct LaunchpadFreeTradeFee;
+impl Get<Balance> for LaunchpadFreeTradeFee {
+    fn get() -> Balance {
+        let energy = <EnergyFee as CustomFee<
+            RuntimeCall,
+            DispatchInfoOf<RuntimeCall>,
+            Balance,
+            GetConstantEnergyFee,
+        >>::custom_fee();
+        EnergyBroker::get_amount_in(
+            energy,
+            &(NativeOrAssetId::Native, NativeOrAssetId::WithId(VNRG::get())),
+            true,
+        )
+        .unwrap_or(Balance::MAX)
+    }
 }
 
 pub struct LaunchpadAssetKind;
@@ -165,6 +198,7 @@ impl pallet_launchpad::Config for Runtime {
     type DescriptionLimit = LaunchpadDescriptionLimit;
     type DefaultLaunchParams = LaunchpadDefaultParams;
     type BuyHook = ();
+    type FreeTradeFee = LaunchpadFreeTradeFee;
     type WeightInfo = pallet_launchpad::weights::SubstrateWeight<Runtime>;
 }
 
