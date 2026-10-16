@@ -40,6 +40,7 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 - A new pallet with benchmarks goes into `define_benchmarks!` for each network it runs on: there is one list per network.
 - Pallet and call indices are never reused: a removed pallet or call leaves its index free, and a removed pallet stays as a comment in `construct_runtime!`. Otherwise calls stored on chain or signed earlier decode as the new ones.
 - A fix of runtime or pallet behaviour comes with a test that fails without it. Put new tests next to the related ones and name them like their neighbours.
+- Test a pallet's own logic in the pallet's tests, against its mock. Runtime tests are for what depends on the runtime: config wiring, the real types behind config items (exchanges, fee handlers) and pallets working together.
 
 ## Code comments
 
