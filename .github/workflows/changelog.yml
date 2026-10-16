@@ -18,12 +18,12 @@ concurrency:
 jobs:
   changelog:
     name: "CHANGELOG"
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
 
     steps:
       # HEAD is GitHub's merge commit for the PR; its first parent, HEAD^1, is the base branch.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 2
 
