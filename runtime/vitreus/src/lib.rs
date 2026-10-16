@@ -1458,12 +1458,13 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 }
 
 parameter_types! {
-    // One storage item; key size 20, value size 8.
-    pub const ProxyDepositBase: Balance = deposit(1, 8);
+    // One storage item; key size 20, value size 16.
+    pub const ProxyDepositBase: Balance = deposit(1, 36);
     // Additional storage item size of 25 bytes: AccountId 20 + ProxyType 1 + delay 4.
     pub const ProxyDepositFactor: Balance = deposit(0, 25);
     pub const MaxProxies: u16 = 32;
-    pub const AnnouncementDepositBase: Balance = deposit(1, 8);
+    // One storage item; key size 20, value size 16.
+    pub const AnnouncementDepositBase: Balance = deposit(1, 36);
     // Additional storage item size of 56 bytes: AccountId 20 + call hash 32 + block number 4.
     pub const AnnouncementDepositFactor: Balance = deposit(0, 56);
     pub const MaxPending: u16 = 32;
