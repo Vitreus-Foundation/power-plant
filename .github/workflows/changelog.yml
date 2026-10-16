@@ -30,7 +30,11 @@ jobs:
       - name: Check CHANGELOG.md is updated
         # Ticking "Does not require a CHANGELOG entry" (see pull_request_template.md) skips this
         # step. The body is only read here, in the expression, never inside the script.
-        if: ${{ !contains(github.event.pull_request.body, '[x] Does not require a CHANGELOG entry') }}
+        # Dependabot's PRs skip it too: they only bump actions. Its author, not github.actor,
+        # so a human updating such a PR doesn't bring the step back.
+        if: >-
+          ${{ !contains(github.event.pull_request.body, '[x] Does not require a CHANGELOG entry')
+          && github.event.pull_request.user.login != 'dependabot[bot]' }}
         run: python3 .github/scripts/changelog.py updated --base HEAD^1
 
       - name: Check CHANGELOG and spec_version
