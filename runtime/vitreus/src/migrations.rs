@@ -19,7 +19,13 @@ pub type V0214 = (
     pallet_launch_treasury::migrations::FundVault<Runtime, xcm_config::TreasuryAccount>,
 );
 
-pub type Unreleased = ();
+pub type Unreleased = (
+    frame_support::migrations::RemovePallet<
+        ManualBridgePalletName,
+        <Runtime as frame_system::Config>::DbWeight,
+    >,
+    ClearManualBridgeFeeStorage,
+);
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {
@@ -42,5 +48,22 @@ impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury 
         }
 
         Weight::zero()
+    }
+}
+
+parameter_types! {
+    pub const ManualBridgePalletName: &'static str = "ManualBridge";
+}
+
+pub struct ClearManualBridgeFeeStorage;
+impl frame_support::traits::OnRuntimeUpgrade for ClearManualBridgeFeeStorage {
+    fn on_runtime_upgrade() -> Weight {
+        use sp_io::hashing::twox_128;
+
+        // Keys match `parameter_types! { storage DepositFeePercent / WithdrawalFeePercent }`.
+        frame_support::storage::unhashed::kill(&twox_128(b":DepositFeePercent:"));
+        frame_support::storage::unhashed::kill(&twox_128(b":WithdrawalFeePercent:"));
+
+        <Runtime as frame_system::Config>::DbWeight::get().writes(2)
     }
 }
