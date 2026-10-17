@@ -192,6 +192,29 @@ fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
     })
 }
 
+#[test]
+fn energy_fee_exchange_is_limited_by_broker_vnrg() {
+    use vitreus_runtime_common::QuotePriceIntoEnergy;
+    // The exchange as the config wires it, so the test checks what energy-fee actually uses.
+    type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
+
+    new_test_ext().execute_with(|| {
+        let energy = NativeOrAssetId::WithId(VNRG::get());
+        let path = (NativeOrAssetId::Native, energy.clone());
+        let broker = EnergyBroker::account_id();
+
+        // VNRG is not sufficient, so the broker's account must exist before it can hold any.
+        Balances::set_balance(&broker, ExistentialDeposit::get());
+        NativeAndAssets::set_balance(energy.clone(), &broker, vnrg::UNITS);
+        assert!(EnergyFeeExchange::max_amount_out() > 0);
+        assert_eq!(EnergyFeeExchange::max_amount_out(), EnergyBroker::max_amount_out(&path));
+
+        // Without VNRG of its own, the broker has none to sell.
+        NativeAndAssets::set_balance(energy, &broker, 0);
+        assert_eq!(EnergyFeeExchange::max_amount_out(), 0);
+    })
+}
+
 mod energy_broker {
     use super::*;
     use frame_support::{assert_ok, traits::fungibles::Inspect as FungiblesInspect};
