@@ -192,11 +192,41 @@ fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
     })
 }
 
+#[test]
+fn energy_fee_exchange_is_limited_by_broker_vnrg() {
+    use vitreus_runtime_common::QuotePriceIntoEnergy;
+    // The exchange as the config wires it, so the test checks what energy-fee actually uses.
+    type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
+
+    new_test_ext().execute_with(|| {
+        let energy = NativeOrAssetId::WithId(VNRG::get());
+        let path = (NativeOrAssetId::Native, energy.clone());
+        let broker = EnergyBroker::account_id();
+
+        // VNRG is not sufficient, so the broker's account must exist before it can hold any.
+        Balances::set_balance(&broker, ExistentialDeposit::get());
+        NativeAndAssets::set_balance(energy.clone(), &broker, vnrg::UNITS);
+        assert!(EnergyFeeExchange::max_amount_out() > 0);
+        assert_eq!(EnergyFeeExchange::max_amount_out(), EnergyBroker::max_amount_out(&path));
+
+        // Without VNRG of its own, the broker has none to sell.
+        NativeAndAssets::set_balance(energy, &broker, 0);
+        assert_eq!(EnergyFeeExchange::max_amount_out(), 0);
+    })
+}
+
 mod energy_broker {
     use super::*;
     use frame_support::{assert_ok, traits::fungibles::Inspect as FungiblesInspect};
+    use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
 
     const AMOUNT: Balance = 1_000_000_000;
+
+    // The treasury's exchanges as its config wires them, so the tests check what it actually uses.
+    type TreasuryStaticEnergyExchange =
+        <Runtime as pallet_treasury_extension::Config>::StaticEnergyExchange;
+    type TreasuryLiquidEnergyExchange =
+        <Runtime as pallet_treasury_extension::Config>::LiquidEnergyExchange;
 
     fn asset_balance(asset: &NativeOrAssetId, who: &AccountId) -> Balance {
         NativeAndAssets::balance(asset.clone(), who)
@@ -208,6 +238,16 @@ mod energy_broker {
 
     fn energy_sale() -> Balance {
         pallet_dynamic_energy::SessionEnergySale::<Runtime>::get()
+    }
+
+    /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
+    fn fund_broker() {
+        Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
+            SNRG::get(),
+            FixedU128::from_u32(1),
+        );
     }
 
     /// Converting `source` into VNRG must be quoted one-to-one and cost no swap fee.
@@ -287,6 +327,60 @@ mod energy_broker {
         assert_eq!(energy_sale(), sale_before);
     }
 
+    /// Selling `AMOUNT` of `asset` through `Exchange` must take exactly that much, pay VTRS and
+    /// leave the seller's other energy as it was.
+    fn assert_sells_for_vtrs<Exchange>(asset: AssetId)
+    where
+        Exchange: SwapFromEnergy<AccountId, Balance = Balance>,
+    {
+        fund_broker();
+        let other_energy = move || {
+            [VNRG::get(), SNRG::get(), LNRG::get()]
+                .into_iter()
+                .filter(|other| *other != asset)
+                .map(|other| asset_balance(&NativeOrAssetId::WithId(other), &alith()))
+                .collect::<Vec<_>>()
+        };
+        let other_energy_before = other_energy();
+        let asset = NativeOrAssetId::WithId(asset);
+        let asset_before = asset_balance(&asset, &alith());
+        let native_before = Balances::free_balance(alith());
+
+        let native_out = Exchange::swap_exact_tokens_for_tokens(alith(), AMOUNT, true)
+            .expect("the sale must go through");
+
+        assert!(native_out > 0, "the sale must pay VTRS");
+        assert_eq!(asset_balance(&asset, &alith()), asset_before - AMOUNT);
+        assert_eq!(Balances::free_balance(alith()), native_before + native_out);
+        assert_eq!(other_energy(), other_energy_before, "the sale must not touch other energy");
+    }
+
+    /// When the broker has no VTRS to pay, selling through `Exchange` must fail and leave the
+    /// seller's energy and VTRS, and the energy issuance, as they were.
+    fn assert_fails_without_broker_vtrs<Exchange>()
+    where
+        Exchange: SwapFromEnergy<AccountId, Balance = Balance>,
+    {
+        fund_broker();
+        // With only its existential deposit left, the broker has no VTRS to pay out.
+        Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get());
+
+        let energy = || {
+            [VNRG::get(), SNRG::get(), LNRG::get()].map(|asset| {
+                let asset = NativeOrAssetId::WithId(asset);
+                (asset_balance(&asset, &alith()), asset_issuance(&asset))
+            })
+        };
+        let energy_before = energy();
+        let native_before = Balances::free_balance(alith());
+
+        Exchange::swap_exact_tokens_for_tokens(alith(), AMOUNT, true)
+            .expect_err("the sale must fail without VTRS to pay");
+
+        assert_eq!(energy(), energy_before, "a failed sale must not touch energy");
+        assert_eq!(Balances::free_balance(alith()), native_before);
+    }
+
     #[test]
     fn snrg_conversion_is_one_to_one_and_without_swap_fee() {
         new_test_ext()
@@ -307,6 +401,48 @@ mod energy_broker {
     #[test]
     fn lnrg_conversion_burns_and_mints_without_touching_the_broker() {
         new_test_ext().execute_with(|| assert_conversion_burns_and_mints(LNRG::get()))
+    }
+
+    #[test]
+    fn treasury_snrg_exchange_sells_for_vtrs() {
+        new_test_ext()
+            .execute_with(|| assert_sells_for_vtrs::<TreasuryStaticEnergyExchange>(SNRG::get()))
+    }
+
+    #[test]
+    fn treasury_lnrg_exchange_sells_for_vtrs() {
+        new_test_ext()
+            .execute_with(|| assert_sells_for_vtrs::<TreasuryLiquidEnergyExchange>(LNRG::get()))
+    }
+
+    #[test]
+    fn treasury_lnrg_exchange_is_limited_by_broker_vtrs() {
+        new_test_ext().execute_with(|| {
+            let path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
+
+            fund_broker();
+            assert!(TreasuryLiquidEnergyExchange::max_amount_out() > 0);
+            assert_eq!(
+                TreasuryLiquidEnergyExchange::max_amount_out(),
+                EnergyBroker::max_amount_out(&path),
+            );
+
+            // With only its existential deposit left, the broker has no VTRS to pay out.
+            Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get());
+            assert_eq!(TreasuryLiquidEnergyExchange::max_amount_out(), 0);
+        })
+    }
+
+    #[test]
+    fn treasury_snrg_exchange_fails_without_broker_vtrs() {
+        new_test_ext()
+            .execute_with(assert_fails_without_broker_vtrs::<TreasuryStaticEnergyExchange>)
+    }
+
+    #[test]
+    fn treasury_lnrg_exchange_fails_without_broker_vtrs() {
+        new_test_ext()
+            .execute_with(assert_fails_without_broker_vtrs::<TreasuryLiquidEnergyExchange>)
     }
 }
 

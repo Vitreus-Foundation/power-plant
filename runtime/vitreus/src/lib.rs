@@ -126,7 +126,7 @@ use sp_consensus_beefy::{
     mmr::{BeefyDataProvider, MmrLeafVersion},
 };
 use sp_runtime::transaction_validity::InvalidTransaction;
-use vitreus_runtime_common::{ExposureMultiplier, NativeEnergyExchange, QuotePrice};
+use vitreus_runtime_common::{ExposureMultiplier, QuotePrice};
 use xcm::{
     latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
     VersionedXcm,
@@ -159,6 +159,7 @@ mod helpers {
     pub mod runner;
 }
 pub mod areas;
+mod energy;
 pub mod migrations;
 mod weights;
 mod xcm_config;
@@ -1256,7 +1257,7 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyAsset = EnergyAsset;
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
-    type EnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, VNRG>;
+    type EnergyExchange = energy::NativeToEnergyExchange;
     type OnWithdrawFee = NacManaging;
     type OnEnergyBurn = (EnergyBroker, DynamicEnergy);
     type FeeRecyclingRate = TreasuryExtension;

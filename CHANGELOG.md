@@ -25,6 +25,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Make successful `pallet-launchpad` buys and sells free (`Pays::No`) at or above 200× one call's energy fee, priced through the energy broker, on testnet
 - Require the recipient of `pallet-vitreus-dex` `swap_exact_tokens_for_tokens` to be the signer, on testnet
 - Raise the storage deposits of `pallet-proxy`, `pallet-multisig`, `pallet-preimage` and the voting bond of `pallet-elections-phragmen`
+- Refactor the energy exchanges of `pallet-energy-fee` and `pallet-treasury-extension` and add `max_amount_out` to them
 
 ### Removed
 
