@@ -11,9 +11,8 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+# No concurrency group: one push can bring `synchronize` and `edited` together, and a cancelled
+# run leaves the required CHANGELOG check without a result.
 
 jobs:
   changelog:
