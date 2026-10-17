@@ -37,14 +37,6 @@ polkadot-node-core-pvf-prepare-worker = { workspace = true, default-features = t
 vitreus-cli = { workspace = true }
 vitreus-service = { workspace = true, default-features = true }
 
-[dev-dependencies]
-assert_cmd = "2.0.4"
-nix = { version = "0.26.1", features = ["signal"] }
-tempfile = "3.2.0"
-tokio = "1.24.2"
-substrate-rpc-client = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-polkadot-core-primitives = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-
 [build-dependencies]
 substrate-build-script-utils = { workspace = true, default-features = true }
 
