@@ -7,6 +7,10 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Removed
+
+- Remove unused dependencies from the runtime
+
 ## [215] - 2026-10-19
 
 ### Added
