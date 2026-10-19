@@ -38,7 +38,7 @@ jobs:
 
     steps:
       # The whole history, to find the commit that cut the version.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -60,7 +60,7 @@ jobs:
     steps:
       # The commit that cut the version. It is older than the one that started the run when an
       # earlier release run failed and main moved on.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.commit }}
 
@@ -97,7 +97,7 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.commit }}
 
