@@ -182,7 +182,6 @@ try-runtime = [
     "pallet-energy-broker/try-runtime",
     "pallet-energy-fee/try-runtime",
     "pallet-energy-generation/try-runtime",
-    "pallet-energy-generation/try-runtime",
     "pallet-ethereum/try-runtime",
     "pallet-evm-chain-id/try-runtime",
     "pallet-evm/try-runtime",
