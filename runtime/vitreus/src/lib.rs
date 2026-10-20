@@ -283,7 +283,7 @@ pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
 decl_runtime_version! {
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 214,
+    spec_version: 215,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 4,
@@ -2201,6 +2201,7 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 pub type Migrations = (
     migrations::V0213,
     migrations::V0214,
+    migrations::V0215,
     migrations::Unreleased,
     migrations::Permanent,
 );

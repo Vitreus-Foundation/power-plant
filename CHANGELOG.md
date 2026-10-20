@@ -7,6 +7,12 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Changed
+
+- Refactor the energy exchanges of `pallet-energy-fee` and `pallet-treasury-extension` and add `max_amount_out` to them
+
+## [215] - 2026-10-19
+
 ### Added
 
 - Add `max_amount_out` to the EnergyBroker runtime API to query how much a swap path can supply
@@ -15,20 +21,20 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 ### Changed
 
 - Improve validation and error reporting in `pallet-energy-broker`
-- Set `spec_name` to `vitreus-power-plant-testnet` on testnet
-- Restrict XCM `send` to governance and disable `execute` and reserve transfers
-- Drop the delivery fee for outbound XCM to parachains
 - Make the EnergyBroker `quote_price_*` runtime APIs return `None` when the output exceeds `max_amount_out`
 - Make the EnergyFee `estimate_call_fee` runtime API return `None` when the broker cannot sell the VNRG missing for the fee
 - Reject a zero value in `set_annual_percentage_rate` of `pallet-dynamic-energy`
 - Reject coefficients that can overflow the multiplier in `set_multiplier_coefficients` of `pallet-dynamic-energy`
+- Restrict XCM `send` to governance and disable `execute` and reserve transfers
+- Drop the delivery fee for outbound XCM to parachains
+- Raise the storage deposits of `pallet-proxy`, `pallet-multisig`, `pallet-preimage` and the voting bond of `pallet-elections-phragmen`
+- Set `spec_name` to `vitreus-power-plant-testnet` on testnet
 - Make successful `pallet-launchpad` buys and sells free (`Pays::No`) at or above 200× one call's energy fee, priced through the energy broker, on testnet
 - Require the recipient of `pallet-vitreus-dex` `swap_exact_tokens_for_tokens` to be the signer, on testnet
-- Raise the storage deposits of `pallet-proxy`, `pallet-multisig`, `pallet-preimage` and the voting bond of `pallet-elections-phragmen`
-- Refactor the energy exchanges of `pallet-energy-fee` and `pallet-treasury-extension` and add `max_amount_out` to them
 
 ### Removed
 
+- Remove the `NativeAsset` constant from `pallet-energy-broker`
 - Remove the `SessionsPerEra` constant from `pallet-dynamic-energy`
 - Remove `pallet-manual-bridge` and clear its storage
 

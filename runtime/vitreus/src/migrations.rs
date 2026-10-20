@@ -19,13 +19,15 @@ pub type V0214 = (
     pallet_launch_treasury::migrations::FundVault<Runtime, xcm_config::TreasuryAccount>,
 );
 
-pub type Unreleased = (
+pub type V0215 = (
     frame_support::migrations::RemovePallet<
         ManualBridgePalletName,
         <Runtime as frame_system::Config>::DbWeight,
     >,
     ClearManualBridgeFeeStorage,
 );
+
+pub type Unreleased = ();
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {

@@ -38,7 +38,7 @@ jobs:
 
     steps:
       # The whole history, to find the commit that cut the version.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -60,7 +60,7 @@ jobs:
     steps:
       # The commit that cut the version. It is older than the one that started the run when an
       # earlier release run failed and main moved on.
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.commit }}
 
@@ -84,7 +84,7 @@ jobs:
           python3 .github/scripts/release.py collect
           ${{ matrix.runtime }} ${{ needs.prepare.outputs.version }} "$WASM" "$REPORT"
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.runtime }}
           path: out/
@@ -97,11 +97,11 @@ jobs:
     timeout-minutes: 5
 
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.prepare.outputs.commit }}
 
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           path: out
           merge-multiple: true
@@ -113,7 +113,7 @@ jobs:
           python3 .github/scripts/release.py notes
           ${{ needs.prepare.outputs.version }} out/*.srtool.json --commit "$COMMIT" --out notes.md
 
-      - uses: actions/upload-artifact@v6
+      - uses: actions/upload-artifact@v7
         with:
           name: notes
           path: notes.md
@@ -129,7 +129,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/download-artifact@v7
+      - uses: actions/download-artifact@v8
         with:
           path: out
           merge-multiple: true
