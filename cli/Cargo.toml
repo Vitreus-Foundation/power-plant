@@ -59,11 +59,15 @@ runtime-benchmarks = [
 	"frame-benchmarking-cli",
 	"frame-benchmarking-cli/runtime-benchmarks",
 	"polkadot-node-metrics/runtime-benchmarks",
+	"sc-service?/runtime-benchmarks",
 	"vitreus-power-plant-runtime/runtime-benchmarks",
 	"vitreus-service/runtime-benchmarks",
 ]
 full-node = ["vitreus-service/full-node"]
-try-runtime = ["vitreus-service/try-runtime"]
+try-runtime = [
+	"vitreus-power-plant-runtime/try-runtime",
+	"vitreus-service/try-runtime",
+]
 fast-runtime = ["vitreus-service/fast-runtime"]
 pyroscope = ["dep:pyroscope", "pyroscope_pprofrs"]
 
