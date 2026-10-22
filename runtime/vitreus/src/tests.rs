@@ -1,5 +1,5 @@
 use super::*;
-use ethereum::{TransactionAction, TransactionSignature, TransactionV2};
+use ethereum::{LegacyTransaction, TransactionAction, TransactionSignature, TransactionV2};
 use fp_self_contained::SelfContainedCall;
 use frame_support::{
     dispatch::{DispatchClass, GetDispatchInfo},
