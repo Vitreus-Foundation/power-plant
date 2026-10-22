@@ -38,7 +38,8 @@ use sp_runtime::{
     DispatchError, Saturating, TokenError, Vec,
 };
 use vitreus_runtime_common::{
-    OnEnergyBurn, OnEnergySell, OnSessionChange, QuotePrice, SessionIndex, Swap, Warehouse,
+    MaxAmountOut, OnEnergyBurn, OnEnergySell, OnSessionChange, QuotePrice, SessionIndex, Swap,
+    Warehouse,
 };
 
 type AccountIdLookupOf<T> = <<T as frame_system::Config>::Lookup as StaticLookup>::Source;
@@ -634,6 +635,13 @@ impl<T: Config> QuotePrice for Pallet<T> {
         let path = (asset1, asset2);
         let amount_out = Self::get_amount_out(amount_in, &path, include_fee).ok()?;
         (amount_out <= Self::max_amount_out(&path)).then_some(amount_out)
+    }
+}
+
+impl<T: Config> MaxAmountOut for Pallet<T> {
+    fn max_amount_out(asset1: Self::AssetKind, asset2: Self::AssetKind) -> Self::Balance {
+        // Calls the inherent function.
+        Self::max_amount_out(&(asset1, asset2))
     }
 }
 

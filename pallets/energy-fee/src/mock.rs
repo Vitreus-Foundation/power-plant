@@ -28,7 +28,7 @@ use sp_runtime::{
     traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup, Zero},
     BuildStorage, DispatchError, Permill,
 };
-use vitreus_runtime_common::{QuotePriceNativeForEnergy, SwapNativeForEnergy};
+use vitreus_runtime_common::{QuotePriceIntoEnergy, SwapIntoEnergy};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -148,11 +148,9 @@ impl<GetAccountId: Get<AccountId>> OnUnbalanced<FeeCreditOf<Test>>
 
 pub struct MockEnergyExchange;
 
-impl QuotePriceNativeForEnergy for MockEnergyExchange {
+impl QuotePriceIntoEnergy for MockEnergyExchange {
     type Balance = u128;
-    type AssetKind = ();
-    type NativeAsset = ();
-    type EnergyAsset = ();
+    type EnergyAsset = BalancesVNRG;
 
     fn quote_price_exact_tokens_for_tokens(
         amount: Self::Balance,
@@ -167,13 +165,16 @@ impl QuotePriceNativeForEnergy for MockEnergyExchange {
     ) -> Option<Self::Balance> {
         Some(VNRG_TO_VTRS_RATE.saturating_mul_int(amount))
     }
+
+    // The mock mints VNRG, so its supply has no limit.
+    fn max_amount_out() -> Self::Balance {
+        u128::MAX
+    }
 }
 
-impl SwapNativeForEnergy<AccountId> for MockEnergyExchange {
+impl SwapIntoEnergy<AccountId> for MockEnergyExchange {
     type Balance = u128;
-    type AssetKind = ();
-    type NativeAsset = ();
-    type EnergyAsset = ();
+    type EnergyAsset = BalancesVNRG;
 
     fn swap_exact_tokens_for_tokens(
         who: AccountId,

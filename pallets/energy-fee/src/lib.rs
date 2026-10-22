@@ -63,7 +63,7 @@ pub(crate) use pallet_evm::{AddressMapping, OnChargeEVMTransaction};
 pub use pallet_transaction_payment::{
     Config as TransactionPaymentConfig, Multiplier, MultiplierUpdate, OnChargeTransaction,
 };
-use vitreus_runtime_common::{OnEnergyBurn, QuotePriceNativeForEnergy, SwapNativeForEnergy};
+use vitreus_runtime_common::{OnEnergyBurn, QuotePriceIntoEnergy, SwapIntoEnergy};
 
 use sp_arithmetic::{traits::CheckedAdd, ArithmeticError::Overflow};
 use sp_core::{RuntimeDebug, H160, U256};
@@ -162,8 +162,12 @@ pub mod pallet {
             + Mutate<Self::AccountId>;
 
         /// A type used for swapping native currency for energy.
-        type EnergyExchange: QuotePriceNativeForEnergy<Balance = BalanceOf<Self>>
-            + SwapNativeForEnergy<Self::AccountId, Balance = BalanceOf<Self>>;
+        type EnergyExchange: QuotePriceIntoEnergy<Balance = BalanceOf<Self>, EnergyAsset = Self::EnergyAsset>
+            + SwapIntoEnergy<
+                Self::AccountId,
+                Balance = BalanceOf<Self>,
+                EnergyAsset = Self::EnergyAsset,
+            >;
 
         /// Handler for when a fee has been withdrawn.
         type OnWithdrawFee: OnWithdrawFeeHandler<Self::AccountId>;
