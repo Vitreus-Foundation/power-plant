@@ -10,7 +10,6 @@ version = "0.1.0"
 log = { workspace = true }
 num_enum = { workspace = true }
 paste = { workspace = true }
-slices = { workspace = true }
 
 # Moonbeam
 precompile-utils = { workspace = true }
@@ -31,7 +30,6 @@ fp-evm = { workspace = true }
 pallet-evm = { workspace = true, features = [ "forbid-evm-reentrancy" ] }
 
 [dev-dependencies]
-derive_more = { workspace = true }
 hex-literal = { workspace = true }
 libsecp256k1 = { workspace = true }
 serde = { workspace = true }
@@ -51,12 +49,20 @@ std = [
 	"fp-evm/std",
 	"frame-support/std",
 	"frame-system/std",
+	"libsecp256k1/std",
+	"log/std",
+	"num_enum/std",
 	"pallet-balances/std",
 	"pallet-evm/std",
+	"pallet-timestamp/std",
 	"parity-scale-codec/std",
 	"precompile-utils/std",
+	"scale-info/std",
+	"serde/std",
+	"sha3/std",
 	"sp-core/std",
 	"sp-io/std",
+	"sp-runtime/std",
 	"sp-std/std",
 ]
 

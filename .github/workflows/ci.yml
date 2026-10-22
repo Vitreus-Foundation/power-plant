@@ -29,6 +29,26 @@ jobs:
 
       - run: cargo fmt -- --check
 
+  zepter:
+    name: "zepter"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          cache: false
+
+      # Newer releases need a newer Rust than rust-toolchain.toml.
+      - run: cargo install zepter@1.82.1 --locked -q
+
+      # Zepter reads `cargo metadata` offline, so the sources must be fetched first.
+      - run: cargo fetch --locked
+
+      - run: zepter run check
+
   rust:
     name: "cargo clippy, build, test"
     runs-on: ubuntu-24.04
