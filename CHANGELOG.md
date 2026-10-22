@@ -7,6 +7,10 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Removed
+
+- Remove `pallet-uniques` and other unused dependencies from the runtime
+
 ## [215] - 2026-10-19
 
 ### Added

@@ -99,7 +99,6 @@ vitreus-rpc = { workspace = true, default-features = true }
 [dev-dependencies]
 tempfile = { workspace = true, default-features = true }
 
-polkadot-node-subsystem-test-helpers = { workspace = true, default-features = true }
 polkadot-primitives-test-helpers = { workspace = true, default-features = true }
 
 [features]
