@@ -66,7 +66,10 @@ runtime-benchmarks = [
     "vitreus-cli/runtime-benchmarks",
     "vitreus-service/runtime-benchmarks",
 ]
-try-runtime = ["vitreus-service/try-runtime"]
+try-runtime = [
+    "vitreus-cli/try-runtime",
+    "vitreus-service/try-runtime",
+]
 fast-runtime = [
     "vitreus-cli/fast-runtime",
     "vitreus-service/fast-runtime",

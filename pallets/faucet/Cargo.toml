@@ -32,6 +32,20 @@ std = [
     "pallet-balances/std",
     "parity-scale-codec/std",
     "scale-info/std",
+    "sp-core/std",
+    "sp-io/std",
+    "sp-runtime/std",
 ]
-runtime-benchmarks = ["frame-benchmarking/runtime-benchmarks"]
-try-runtime = ["frame-support/try-runtime"]
+runtime-benchmarks = [
+    "frame-benchmarking/runtime-benchmarks",
+    "frame-support/runtime-benchmarks",
+    "frame-system/runtime-benchmarks",
+    "pallet-balances/runtime-benchmarks",
+    "sp-runtime/runtime-benchmarks",
+]
+try-runtime = [
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "pallet-balances/try-runtime",
+    "sp-runtime/try-runtime",
+]
