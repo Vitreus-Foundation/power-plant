@@ -14,6 +14,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 ### Removed
 
 - Remove `pallet-uniques` and other unused dependencies from the runtime
+- Remove the unused `NacRunner` and other dead EVM code from the runtime
 
 ## [215] - 2026-10-19
 
