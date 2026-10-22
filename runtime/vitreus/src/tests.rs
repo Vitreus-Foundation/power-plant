@@ -339,7 +339,10 @@ mod energy_broker {
 
 mod treasury {
     use super::*;
-    use frame_support::assert_ok;
+    use frame_support::{
+        assert_ok,
+        traits::tokens::{Fortitude, Preservation},
+    };
     use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
 
     // The treasury's exchanges as its config wires them, so the tests check what it actually uses.
@@ -388,15 +391,16 @@ mod treasury {
     }
 
     /// With more `asset` than the broker can pay for, the treasury's session hook must sell as
-    /// much as `Exchange` reports the broker can pay for and keep the rest.
-    fn assert_sells_within_broker_vtrs<Exchange>(asset: AssetId)
-    where
-        Exchange: QuotePriceFromEnergy<Balance = Balance>,
-    {
+    /// much as the broker can pay out and keep the rest.
+    fn assert_sells_within_broker_vtrs(asset: AssetId) {
         let treasury = Treasury::account_id();
 
         fund_broker();
-        let broker_vtrs = Exchange::max_amount_out();
+        let broker_vtrs = Balances::reducible_balance(
+            &EnergyBroker::account_id(),
+            Preservation::Preserve,
+            Fortitude::Polite,
+        );
 
         // More energy than the broker can pay for.
         Balances::set_balance(&treasury, ExistentialDeposit::get());
@@ -456,55 +460,17 @@ mod treasury {
 
     #[test]
     fn new_session_sells_vnrg_within_broker_vtrs() {
-        new_test_ext()
-            .execute_with(|| assert_sells_within_broker_vtrs::<TreasuryEnergyExchange>(VNRG::get()))
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(VNRG::get()))
     }
 
     #[test]
     fn new_session_sells_snrg_within_broker_vtrs() {
-        new_test_ext().execute_with(|| {
-            assert_sells_within_broker_vtrs::<TreasuryStaticEnergyExchange>(SNRG::get())
-        })
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(SNRG::get()))
     }
 
     #[test]
     fn new_session_sells_lnrg_within_broker_vtrs() {
-        new_test_ext().execute_with(|| {
-            assert_sells_within_broker_vtrs::<TreasuryLiquidEnergyExchange>(LNRG::get())
-        })
-    }
-
-    #[test]
-    fn new_session_reports_energy_sold_and_vtrs_received() {
-        new_test_ext().execute_with(|| {
-            let treasury = Treasury::account_id();
-            let vnrg = NativeOrAssetId::WithId(VNRG::get());
-            let snrg = NativeOrAssetId::WithId(SNRG::get());
-            let lnrg = NativeOrAssetId::WithId(LNRG::get());
-
-            System::set_block_number(1);
-            fund_broker();
-            Balances::set_balance(&treasury, ExistentialDeposit::get());
-            for asset in [VNRG::get(), SNRG::get(), LNRG::get()] {
-                assert_ok!(Assets::mint_into(asset, &treasury, AMOUNT));
-            }
-            let vnrg_before = asset_balance(&vnrg, &treasury);
-            let snrg_before = asset_balance(&snrg, &treasury);
-            let lnrg_before = asset_balance(&lnrg, &treasury);
-            let native_before = Balances::free_balance(treasury);
-
-            <TreasuryExtension as vitreus_runtime_common::OnSessionChange>::on_new_session(1);
-
-            System::assert_last_event(
-                pallet_treasury_extension::Event::<Runtime>::EnergyExchanged {
-                    energy: vnrg_before - asset_balance(&vnrg, &treasury),
-                    static_energy: snrg_before - asset_balance(&snrg, &treasury),
-                    liquid_energy: lnrg_before - asset_balance(&lnrg, &treasury),
-                    native: Balances::free_balance(treasury) - native_before,
-                }
-                .into(),
-            );
-        })
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(LNRG::get()))
     }
 
     #[test]

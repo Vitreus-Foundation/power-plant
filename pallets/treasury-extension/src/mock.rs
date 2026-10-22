@@ -1,19 +1,26 @@
 use crate as pallet_treasury_extension;
 
-use frame_support::traits::tokens::{PayFromAccount, UnityAssetBalanceConversion};
+use frame_support::traits::tokens::{
+    Fortitude, PayFromAccount, Precision, Preservation, UnityAssetBalanceConversion,
+};
 use frame_support::PalletId;
 use frame_support::{
     derive_impl, parameter_types,
-    traits::{ConstU128, ConstU32, ConstU64, Everything},
+    traits::{
+        fungible::{ItemOf, Mutate as _},
+        fungibles::Mutate as _,
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything,
+    },
 };
-use frame_system::{EnsureRoot, EnsureRootWithSuccess};
+use frame_system::{EnsureRoot, EnsureRootWithSuccess, EnsureSigned};
 use pallet_treasury::TreasuryAccountId;
 use sp_core::H256;
 
 use sp_runtime::{
     traits::{BlakeTwo256, IdentityLookup},
-    BuildStorage, Permill,
+    BuildStorage, DispatchError, Permill, TokenError,
 };
+use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
 
 // 2 gVTRS
 const VTRS_INITIAL_BALANCE: u128 = 2_000_000_000_000_000_000_000_000_000;
@@ -36,6 +43,7 @@ frame_support::construct_runtime!(
     {
         System: frame_system,
         Balances: pallet_balances,
+        Assets: pallet_assets,
         Bounties: pallet_bounties,
         Treasury: pallet_treasury,
         TreasuryExtension: pallet_treasury_extension,
@@ -83,6 +91,20 @@ impl pallet_balances::Config for Test {
     type FreezeIdentifier = ();
     type MaxFreezes = ();
     type RuntimeHoldReason = ();
+}
+
+#[derive_impl(pallet_assets::config_preludes::TestDefaultConfig)]
+impl pallet_assets::Config for Test {
+    type Balance = Balance;
+    type Currency = Balances;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type AssetDeposit = ConstU128<1>;
+    type AssetAccountDeposit = ConstU128<10>;
+    type MetadataDepositBase = ConstU128<1>;
+    type MetadataDepositPerByte = ConstU128<1>;
+    type ApprovalDeposit = ConstU128<1>;
+    type Freezer = ();
 }
 
 parameter_types! {
@@ -148,18 +170,90 @@ impl pallet_bounties::Config for Test {
     type WeightInfo = ();
 }
 
+pub(crate) const ENERGY: u32 = 0;
+pub(crate) const STATIC_ENERGY: u32 = 1;
+pub(crate) const LIQUID_ENERGY: u32 = 2;
+
+/// The minimum balance of each energy asset.
+pub(crate) const ENERGY_MIN_BALANCE: Balance = 1;
+
+/// Native currency the mock exchanges pay per unit of energy.
+pub(crate) const EXCHANGE_RATE: Balance = 2;
+
 parameter_types! {
     pub const SpendThreshold: Permill = Permill::from_percent(50);
+    /// Native currency the mock exchanges can still pay out, all together.
+    pub storage ExchangeLiquidity: Balance = Balance::MAX;
+    /// The energy asset whose exchange fails every swap, if any.
+    pub storage FailingExchange: Option<u32> = None;
+}
+
+/// Sells the energy asset `ID` for native currency at `EXCHANGE_RATE`, minting what it pays out of
+/// `ExchangeLiquidity`, and fails every swap while `FailingExchange` names the asset.
+pub struct MockExchange<const ID: u32>;
+
+impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
+    type Balance = Balance;
+    type EnergyAsset = ItemOf<Assets, ConstU32<ID>, AccountId>;
+
+    fn quote_price_exact_tokens_for_tokens(amount: Balance, _: bool) -> Option<Balance> {
+        amount.checked_mul(EXCHANGE_RATE)
+    }
+
+    fn quote_price_tokens_for_exact_tokens(amount: Balance, _: bool) -> Option<Balance> {
+        Some(amount / EXCHANGE_RATE)
+    }
+
+    fn max_amount_out() -> Balance {
+        ExchangeLiquidity::get()
+    }
+}
+
+impl<const ID: u32> SwapFromEnergy<AccountId> for MockExchange<ID> {
+    type Balance = Balance;
+    type EnergyAsset = ItemOf<Assets, ConstU32<ID>, AccountId>;
+
+    fn swap_exact_tokens_for_tokens(
+        who: AccountId,
+        amount_in: Balance,
+        keep_alive: bool,
+    ) -> Result<Balance, DispatchError> {
+        if FailingExchange::get() == Some(ID) {
+            return Err(TokenError::FundsUnavailable.into());
+        }
+
+        // Like a real exchange, a swap for more than it can pay fails as a whole.
+        let amount_out = amount_in * EXCHANGE_RATE;
+        let liquidity_left = ExchangeLiquidity::get()
+            .checked_sub(amount_out)
+            .ok_or(TokenError::FundsUnavailable)?;
+
+        let preservation =
+            if keep_alive { Preservation::Preserve } else { Preservation::Expendable };
+        Assets::burn_from(ID, &who, amount_in, preservation, Precision::Exact, Fortitude::Polite)?;
+
+        ExchangeLiquidity::set(&liquidity_left);
+        Balances::mint_into(&who, amount_out)?;
+        Ok(amount_out)
+    }
+
+    fn swap_tokens_for_exact_tokens(
+        _who: AccountId,
+        _amount_out: Balance,
+        _keep_alive: bool,
+    ) -> Result<Balance, DispatchError> {
+        Err(TokenError::Unsupported.into())
+    }
 }
 
 impl crate::Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type EnergyAsset = ();
-    type StaticEnergyAsset = ();
-    type LiquidEnergyAsset = ();
-    type EnergyExchange = ();
-    type StaticEnergyExchange = ();
-    type LiquidEnergyExchange = ();
+    type EnergyAsset = ItemOf<Assets, ConstU32<ENERGY>, AccountId>;
+    type StaticEnergyAsset = ItemOf<Assets, ConstU32<STATIC_ENERGY>, AccountId>;
+    type LiquidEnergyAsset = ItemOf<Assets, ConstU32<LIQUID_ENERGY>, AccountId>;
+    type EnergyExchange = MockExchange<ENERGY>;
+    type StaticEnergyExchange = MockExchange<STATIC_ENERGY>;
+    type LiquidEnergyExchange = MockExchange<LIQUID_ENERGY>;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = ();
     type TreasuryTargetBalance = ();
@@ -178,6 +272,17 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (BOB, VTRS_INITIAL_BALANCE),
             (Treasury::account_id(), 1000),
         ],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+
+    pallet_assets::GenesisConfig::<Test> {
+        assets: vec![
+            (ENERGY, ALICE, false, ENERGY_MIN_BALANCE),
+            (STATIC_ENERGY, ALICE, false, ENERGY_MIN_BALANCE),
+            (LIQUID_ENERGY, ALICE, false, ENERGY_MIN_BALANCE),
+        ],
+        ..Default::default()
     }
     .assimilate_storage(&mut t)
     .unwrap();
