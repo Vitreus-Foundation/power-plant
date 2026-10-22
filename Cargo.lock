@@ -2427,12 +2427,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
 
 [[package]]
-name = "faster-hex"
-version = "0.6.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "51e2ce894d53b295cf97b05685aa077950ff3e8541af83217fc720a6437169f8"
-
-[[package]]
 name = "fastrand"
 version = "2.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6762,7 +6756,6 @@ dependencies = [
  "rand_chacha 0.2.2",
  "scale-info",
  "serde",
- "sp-application-crypto",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -6833,7 +6826,6 @@ dependencies = [
 name = "pallet-evm-precompile-balances-erc20"
 version = "0.1.0"
 dependencies = [
- "derive_more",
  "fp-evm",
  "frame-support",
  "frame-system",
@@ -6850,7 +6842,6 @@ dependencies = [
  "scale-info",
  "serde",
  "sha3",
- "slices",
  "sp-core",
  "sp-io",
  "sp-runtime",
@@ -7460,20 +7451,6 @@ dependencies = [
  "sp-tracing",
  "substrate-test-utils",
  "vitreus-runtime-common",
-]
-
-[[package]]
-name = "pallet-uniques"
-version = "37.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#7642d6b5dea6dd7871ef8bbfcb9d48ba8a8b0f77"
-dependencies = [
- "frame-benchmarking",
- "frame-support",
- "frame-system",
- "log",
- "parity-scale-codec",
- "scale-info",
- "sp-runtime",
 ]
 
 [[package]]
@@ -8485,28 +8462,6 @@ dependencies = [
  "polkadot-node-jaeger",
  "polkadot-node-subsystem-types",
  "polkadot-overseer",
-]
-
-[[package]]
-name = "polkadot-node-subsystem-test-helpers"
-version = "1.0.0"
-source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#7642d6b5dea6dd7871ef8bbfcb9d48ba8a8b0f77"
-dependencies = [
- "async-trait",
- "futures",
- "parking_lot 0.12.3",
- "polkadot-erasure-coding",
- "polkadot-node-primitives",
- "polkadot-node-subsystem",
- "polkadot-node-subsystem-util",
- "polkadot-primitives",
- "sc-client-api",
- "sc-keystore",
- "sc-utils",
- "sp-application-crypto",
- "sp-core",
- "sp-keyring",
- "sp-keystore",
 ]
 
 [[package]]
@@ -11950,18 +11905,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "826167069c09b99d56f31e9ae5c99049e932a98c9dc2dac47645b08dbbf76ba7"
 
 [[package]]
-name = "slices"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2086e458a369cdca838e9f6ed04b4cc2e3ce636d99abb80c9e2eada107749cf"
-dependencies = [
- "faster-hex",
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
-
-[[package]]
 name = "slot-range-helper"
 version = "15.0.0"
 source = "git+https://github.com/paritytech/polkadot-sdk?branch=stable2407#7642d6b5dea6dd7871ef8bbfcb9d48ba8a8b0f77"
@@ -14222,7 +14165,6 @@ dependencies = [
  "pallet-transaction-payment-rpc-runtime-api",
  "pallet-treasury",
  "pallet-treasury-extension",
- "pallet-uniques",
  "pallet-utility",
  "pallet-vesting",
  "pallet-vitreus-dex",
@@ -14359,7 +14301,6 @@ dependencies = [
  "polkadot-node-core-parachains-inherent",
  "polkadot-node-network-protocol",
  "polkadot-node-subsystem",
- "polkadot-node-subsystem-test-helpers",
  "polkadot-node-subsystem-types",
  "polkadot-node-subsystem-util",
  "polkadot-overseer",

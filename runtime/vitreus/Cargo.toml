@@ -88,7 +88,6 @@ pallet-timestamp = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 pallet-treasury = { workspace = true }
-pallet-uniques = { workspace = true }
 pallet-utility = { workspace = true }
 pallet-vesting = { workspace = true }
 pallet-xcm = { workspace = true }
@@ -287,7 +286,6 @@ std = [
     "pallet-transaction-payment-rpc-runtime-api/std",
     "pallet-transaction-payment/std",
     "pallet-treasury/std",
-    "pallet-uniques/std",
     "pallet-utility/std",
     "pallet-vesting/std",
     "pallet-xcm/std",
@@ -355,7 +353,6 @@ runtime-benchmarks = [
     "pallet-nfts/runtime-benchmarks",
     "pallet-proxy/runtime-benchmarks",
     "pallet-treasury-extension/runtime-benchmarks",
-    "pallet-uniques/runtime-benchmarks",
     "pallet-xcm/runtime-benchmarks",
     "polkadot-runtime-common/runtime-benchmarks",
     "polkadot-runtime-parachains/runtime-benchmarks",

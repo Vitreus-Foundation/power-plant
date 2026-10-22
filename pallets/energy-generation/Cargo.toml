@@ -19,7 +19,6 @@ pallet-session = { workspace = true }
 parity-scale-codec = { workspace = true }
 scale-info = { workspace = true }
 serde = { workspace = true }
-sp-application-crypto = { workspace = true }
 sp-io = { workspace = true }
 sp-runtime = { workspace = true }
 sp-staking = { workspace = true }
@@ -55,7 +54,6 @@ std = [
     "parity-scale-codec/std",
     "scale-info/std",
     "serde/std",
-    "sp-application-crypto/std",
     "sp-io/std",
     "sp-runtime/std",
     "sp-staking/std",
