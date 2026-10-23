@@ -33,8 +33,8 @@
 use frame_support::{
     pallet_prelude::*,
     traits::{
-        fungible::{Inspect, Mutate},
-        tokens::{Fortitude, Precision, Preservation},
+        fungible::Inspect,
+        tokens::{Fortitude, Preservation},
         Currency, Get, Imbalance, IsType, OnUnbalanced,
     },
 };
@@ -43,13 +43,20 @@ use sp_arithmetic::{
     traits::{Saturating, Zero},
     FixedPointNumber, FixedU64, Permill,
 };
-use vitreus_runtime_common::{OnSessionChange, SessionIndex, SwapFromEnergy};
+use vitreus_runtime_common::{OnSessionChange, QuotePriceFromEnergy, SessionIndex, SwapFromEnergy};
 
 pub use pallet::*;
 pub use weights::WeightInfo;
 
-type EnergyBalanceOf<T, I> =
+/// The balance in which the exchanges measure both energy and native currency.
+type ExchangeBalanceOf<T, I> =
     <<T as Config<I>>::EnergyAsset as Inspect<<T as frame_system::Config>::AccountId>>::Balance;
+
+type ExchangeAssetOf<T, Exchange> =
+    <Exchange as SwapFromEnergy<<T as frame_system::Config>::AccountId>>::EnergyAsset;
+
+/// The energy sold and the native currency received for it.
+type SaleOf<T, I> = (ExchangeBalanceOf<T, I>, ExchangeBalanceOf<T, I>);
 
 #[cfg(test)]
 mod mock;
@@ -79,29 +86,43 @@ pub mod pallet {
             + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// Energy asset.
-        type EnergyAsset: Inspect<Self::AccountId> + Mutate<Self::AccountId>;
+        type EnergyAsset: Inspect<Self::AccountId>;
 
         /// Static Energy asset.
-        type StaticEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>
-            + Mutate<Self::AccountId>;
+        type StaticEnergyAsset: Inspect<Self::AccountId, Balance = ExchangeBalanceOf<Self, I>>;
 
         /// Liquid Energy asset.
-        type LiquidEnergyAsset: Inspect<Self::AccountId, Balance = EnergyBalanceOf<Self, I>>
-            + Mutate<Self::AccountId>;
+        type LiquidEnergyAsset: Inspect<Self::AccountId, Balance = ExchangeBalanceOf<Self, I>>;
+
+        /// A type used for swapping Energy for native currency.
+        type EnergyExchange: QuotePriceFromEnergy<
+                Balance = ExchangeBalanceOf<Self, I>,
+                EnergyAsset = Self::EnergyAsset,
+            > + SwapFromEnergy<
+                Self::AccountId,
+                Balance = ExchangeBalanceOf<Self, I>,
+                EnergyAsset = Self::EnergyAsset,
+            >;
 
         /// A type used for swapping Static Energy for native currency.
-        type StaticEnergyExchange: SwapFromEnergy<
-            Self::AccountId,
-            Balance = EnergyBalanceOf<Self, I>,
-            EnergyAsset = Self::StaticEnergyAsset,
-        >;
+        type StaticEnergyExchange: QuotePriceFromEnergy<
+                Balance = ExchangeBalanceOf<Self, I>,
+                EnergyAsset = Self::StaticEnergyAsset,
+            > + SwapFromEnergy<
+                Self::AccountId,
+                Balance = ExchangeBalanceOf<Self, I>,
+                EnergyAsset = Self::StaticEnergyAsset,
+            >;
 
         /// A type used for swapping Liquid Energy for native currency.
-        type LiquidEnergyExchange: SwapFromEnergy<
-            Self::AccountId,
-            Balance = EnergyBalanceOf<Self, I>,
-            EnergyAsset = Self::LiquidEnergyAsset,
-        >;
+        type LiquidEnergyExchange: QuotePriceFromEnergy<
+                Balance = ExchangeBalanceOf<Self, I>,
+                EnergyAsset = Self::LiquidEnergyAsset,
+            > + SwapFromEnergy<
+                Self::AccountId,
+                Balance = ExchangeBalanceOf<Self, I>,
+                EnergyAsset = Self::LiquidEnergyAsset,
+            >;
 
         /// Funds ratio to be recycled.
         type SpendThreshold: Get<Permill>;
@@ -132,8 +153,29 @@ pub mod pallet {
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config<I>, I: 'static = ()> {
-        Recycled { recyled_funds: BalanceOf<T, I> },
-        EnergyExchanged { amount: EnergyBalanceOf<T, I> },
+        Recycled {
+            recyled_funds: BalanceOf<T, I>,
+        },
+        /// The treasury sold its energy for native currency.
+        EnergyExchanged {
+            /// Energy sold.
+            energy: ExchangeBalanceOf<T, I>,
+            /// Static Energy sold.
+            static_energy: ExchangeBalanceOf<T, I>,
+            /// Liquid Energy sold.
+            liquid_energy: ExchangeBalanceOf<T, I>,
+            /// Native currency received for it.
+            native: ExchangeBalanceOf<T, I>,
+        },
+        /// The treasury failed to sell some of its energy for native currency.
+        EnergyExchangeFailed {
+            /// Why the Energy sale failed, if it did.
+            energy: Option<DispatchError>,
+            /// Why the Static Energy sale failed, if it did.
+            static_energy: Option<DispatchError>,
+            /// Why the Liquid Energy sale failed, if it did.
+            liquid_energy: Option<DispatchError>,
+        },
     }
 }
 
@@ -145,71 +187,79 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
     fn exchange_energy() {
         let account_id = pallet_treasury::Pallet::<T, I>::account_id();
 
-        let _ = Self::convert_energy_to_liquid_energy(&account_id);
+        let energy = Self::sell_energy::<T::EnergyExchange>(&account_id);
+        let static_energy = Self::sell_energy::<T::StaticEnergyExchange>(&account_id);
+        let liquid_energy = Self::sell_energy::<T::LiquidEnergyExchange>(&account_id);
 
-        let mut amount = EnergyBalanceOf::<T, I>::zero();
-
-        let static_energy_balance = T::StaticEnergyAsset::reducible_balance(
-            &account_id,
-            Preservation::Expendable,
-            Fortitude::Polite,
-        );
-
-        if !static_energy_balance.is_zero() {
-            let swap_result = T::StaticEnergyExchange::swap_exact_tokens_for_tokens(
-                account_id.clone(),
-                static_energy_balance,
-                false,
-            );
-
-            if swap_result.is_ok() {
-                amount.saturating_accrue(static_energy_balance);
-            }
+        if energy.is_err() || static_energy.is_err() || liquid_energy.is_err() {
+            Self::deposit_event(Event::EnergyExchangeFailed {
+                energy: energy.err(),
+                static_energy: static_energy.err(),
+                liquid_energy: liquid_energy.err(),
+            });
         }
 
-        let liquid_energy_balance = T::LiquidEnergyAsset::reducible_balance(
-            &account_id,
-            Preservation::Expendable,
-            Fortitude::Polite,
-        );
+        let mut native = ExchangeBalanceOf::<T, I>::zero();
 
-        if !liquid_energy_balance.is_zero() {
-            let swap_result = T::LiquidEnergyExchange::swap_exact_tokens_for_tokens(
-                account_id.clone(),
-                liquid_energy_balance,
-                false,
-            );
+        let (energy, received) = energy.unwrap_or_default();
+        native.saturating_accrue(received);
 
-            if swap_result.is_ok() {
-                amount.saturating_accrue(liquid_energy_balance);
-            }
+        let (static_energy, received) = static_energy.unwrap_or_default();
+        native.saturating_accrue(received);
+
+        let (liquid_energy, received) = liquid_energy.unwrap_or_default();
+        native.saturating_accrue(received);
+
+        if energy.is_zero() && static_energy.is_zero() && liquid_energy.is_zero() {
+            return;
         }
 
-        Self::deposit_event(Event::EnergyExchanged { amount });
+        Self::deposit_event(Event::EnergyExchanged {
+            energy,
+            static_energy,
+            liquid_energy,
+            native,
+        });
     }
 
-    fn convert_energy_to_liquid_energy(
-        account_id: &T::AccountId,
-    ) -> Result<EnergyBalanceOf<T, I>, DispatchError> {
-        let energy_balance = T::EnergyAsset::reducible_balance(
+    /// Sells the treasury's energy of the exchange's asset down to its minimum balance, but no
+    /// more than the exchange can pay for, and returns the amount sold and the native currency
+    /// received for it.
+    fn sell_energy<Exchange>(account_id: &T::AccountId) -> Result<SaleOf<T, I>, DispatchError>
+    where
+        Exchange: QuotePriceFromEnergy<Balance = ExchangeBalanceOf<T, I>>
+            + SwapFromEnergy<T::AccountId, Balance = ExchangeBalanceOf<T, I>>,
+        ExchangeAssetOf<T, Exchange>: Inspect<T::AccountId, Balance = ExchangeBalanceOf<T, I>>,
+    {
+        let balance = ExchangeAssetOf::<T, Exchange>::reducible_balance(
             account_id,
-            Preservation::Expendable,
+            Preservation::Preserve,
             Fortitude::Polite,
         );
+        let max_amount_out = Exchange::max_amount_out();
 
-        if !energy_balance.is_zero() {
-            let burned_amount = T::EnergyAsset::burn_from(
-                account_id,
-                energy_balance,
-                Preservation::Expendable,
-                Precision::Exact,
-                Fortitude::Polite,
-            )?;
-
-            T::LiquidEnergyAsset::mint_into(account_id, burned_amount)
-        } else {
-            Ok(EnergyBalanceOf::<T, I>::zero())
+        // Nothing to sell, or an exchange with nothing to pay out, is not a failure.
+        if balance.is_zero() || max_amount_out.is_zero() {
+            return Ok((Zero::zero(), Zero::zero()));
         }
+
+        // A swap for more than `max_amount_out` fails as a whole, so sell at most the input that
+        // buys exactly that. The quote leaves the fee out: with a fee the payout is only smaller.
+        // Without a quote the exchange can't price the energy, and that is a failure.
+        let max_amount_in = Exchange::quote_price_tokens_for_exact_tokens(max_amount_out, false)
+            .ok_or(DispatchError::Unavailable)?;
+        let amount = balance.min(max_amount_in);
+
+        // Rounding can leave a sale that buys nothing: dust at the exchange or in the treasury.
+        // A missing quote here means such a sale, not a failure: the energy has a price by now.
+        let amount_out =
+            Exchange::quote_price_exact_tokens_for_tokens(amount, false).unwrap_or_default();
+        if amount_out.is_zero() {
+            return Ok((Zero::zero(), Zero::zero()));
+        }
+
+        Exchange::swap_exact_tokens_for_tokens(account_id.clone(), amount, true)
+            .map(|received| (amount, received))
     }
 
     fn update_fee_recycling_rate(total_weight: &mut Weight) {
