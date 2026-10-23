@@ -356,6 +356,10 @@ mod treasury {
     const EXACT_RATE: FixedU128 = FixedU128::from_u32(1);
     /// A rate at which the broker's conversions round down.
     const ROUNDING_RATE: FixedU128 = FixedU128::from_rational(3, 2);
+    /// A rate at which a base unit of VTRS at the broker pays for no energy on either path: LNRG
+    /// rounds the output down to zero, SNRG asks for more than the unit. At `ROUNDING_RATE` the
+    /// SNRG path still swaps one for one.
+    const DUST_RATE: FixedU128 = FixedU128::from_rational(7, 3);
 
     /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
     fn fund_broker() {
@@ -460,16 +464,42 @@ mod treasury {
         let treasury = Treasury::account_id();
 
         System::set_block_number(1);
-        // Rates other than one make the broker's conversions round down.
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_rational(7, 3));
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
-            SNRG::get(),
-            FixedU128::from_rational(7, 3),
-        );
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(DUST_RATE);
+        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), DUST_RATE);
         Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get() + 1);
 
         Balances::set_balance(&treasury, ExistentialDeposit::get());
         assert_ok!(Assets::mint_into(asset, &treasury, AMOUNT));
+        let asset = NativeOrAssetId::WithId(asset);
+        let asset_before = asset_balance(&asset, &treasury);
+        let native_before = Balances::free_balance(treasury);
+
+        <TreasuryExtension as vitreus_runtime_common::OnSessionChange>::on_new_session(1);
+
+        assert!(!System::events()
+            .iter()
+            .any(|record| matches!(record.event, RuntimeEvent::TreasuryExtension(_))));
+        assert_eq!(asset_balance(&asset, &treasury), asset_before);
+        assert_eq!(Balances::free_balance(treasury), native_before);
+    }
+
+    /// With only a base unit of `asset` above its minimum balance in the treasury, too little to
+    /// buy any VTRS at `ROUNDING_RATE`, the treasury's session hook must sell nothing and report
+    /// nothing: dust is not a failed sale. Only the LNRG path, which VNRG shares, has such dust: at
+    /// a rate of at least one VTRS per SNRG a base unit of SNRG always buys some VTRS.
+    fn assert_skips_treasury_dust(asset: AssetId) {
+        let treasury = Treasury::account_id();
+
+        System::set_block_number(1);
+        fund_broker();
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(ROUNDING_RATE);
+
+        Balances::set_balance(&treasury, ExistentialDeposit::get());
+        let min_balance =
+            <Assets as frame_support::traits::fungibles::Inspect<AccountId>>::minimum_balance(
+                asset,
+            );
+        assert_ok!(Assets::mint_into(asset, &treasury, min_balance + 1));
         let asset = NativeOrAssetId::WithId(asset);
         let asset_before = asset_balance(&asset, &treasury);
         let native_before = Balances::free_balance(treasury);
@@ -569,6 +599,16 @@ mod treasury {
     #[test]
     fn new_session_skips_lnrg_on_broker_vtrs_dust() {
         new_test_ext().execute_with(|| assert_skips_on_broker_vtrs_dust(LNRG::get()))
+    }
+
+    #[test]
+    fn new_session_skips_treasury_vnrg_dust() {
+        new_test_ext().execute_with(|| assert_skips_treasury_dust(VNRG::get()))
+    }
+
+    #[test]
+    fn new_session_skips_treasury_lnrg_dust() {
+        new_test_ext().execute_with(|| assert_skips_treasury_dust(LNRG::get()))
     }
 
     #[test]

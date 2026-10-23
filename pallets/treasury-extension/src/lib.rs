@@ -250,8 +250,8 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             .ok_or(DispatchError::Unavailable)?;
         let amount = balance.min(max_amount_in);
 
-        // Rounding can leave the exchange with dust too small to pay for any energy. A missing
-        // quote here means such dust, not a failure: the energy has a price by now.
+        // Rounding can leave a sale that buys nothing: dust at the exchange or in the treasury.
+        // A missing quote here means such a sale, not a failure: the energy has a price by now.
         let amount_out =
             Exchange::quote_price_exact_tokens_for_tokens(amount, false).unwrap_or_default();
         if amount_out.is_zero() {
