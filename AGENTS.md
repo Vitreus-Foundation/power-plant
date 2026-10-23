@@ -1,6 +1,6 @@
 # AGENTS.md
 
-Guidance for coding agents in this repository.
+Guidance for coding agents in this repository. If a request conflicts with a rule here, name the rule, say if it looks wrong for the case, and wait for the requester to confirm before you follow the request. A PR doesn't change a rule it breaks.
 
 Vitreus power-plant: a Substrate-based relay chain with EVM (Frontier). VTRS is the native token; transaction fees are paid in the energy token VNRG. One runtime crate builds two networks, testnet and mainnet.
 
