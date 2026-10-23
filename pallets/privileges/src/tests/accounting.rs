@@ -195,3 +195,30 @@ fn vipp_registration_respects_member_capacity() {
         assert!(!VipMembers::<Test>::contains_key(10));
     });
 }
+
+#[test]
+fn vip_and_nft_dispatches_before_timestamp_are_rejected_until_the_clock_is_known() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        join_vip_and_vipp(100);
+        System::set_block_number(1);
+        timestamp_hook();
+        System::set_block_number(2);
+        assert_noop!(
+            Privileges::exit_vip(RuntimeOrigin::signed(10)),
+            Error::<Test>::AccountingPaused
+        );
+        assert_noop!(
+            Privileges::become_vip_status(RuntimeOrigin::signed(20), PenaltyType::Flat),
+            Error::<Test>::AccountingPaused
+        );
+        assert_noop!(
+            NacManaging::transfer_vipp(RuntimeOrigin::signed(10), owned_vipp_ids(10)[0], 100),
+            Error::<Test>::AccountingPaused
+        );
+        clock(2020, 1, 2);
+        timestamp_hook();
+        assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(10)));
+        assert!(PreTimestampStake::<Test>::get(10).is_none());
+    });
+}

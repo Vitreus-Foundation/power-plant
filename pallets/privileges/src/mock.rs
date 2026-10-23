@@ -198,7 +198,7 @@ impl pallet_nfts::Config for Test {
         type Helper = NftsBenchmarkHelper;
     }
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
-    type Locker = ();
+    type Locker = pallet_nac_managing::transfers::VippNftLocker<Test>;
 }
 
 impl pallet_timestamp::Config for Test {

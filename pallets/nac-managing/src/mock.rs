@@ -223,6 +223,10 @@ impl pallet_simple_vesting::Config for Test {
 pub struct TestVippCallback;
 
 impl crate::OnVippStatusHandler<AccountId, Balance, ItemId> for TestVippCallback {
+    fn can_receive_vipp(_who: &AccountId) -> bool {
+        true
+    }
+
     fn mint_vipp(
         _who: &AccountId,
         _amount: Balance,
@@ -398,5 +402,14 @@ impl Mutate<AccountId, ItemConfig> for TestNfts {
             return Err(DispatchError::Other("injected NFT attribute failure"));
         }
         <Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(collection, item, key, value)
+    }
+}
+impl Transfer<AccountId> for TestNfts {
+    fn transfer(
+        collection: &CollectionId,
+        item: &ItemId,
+        destination: &AccountId,
+    ) -> DispatchResult {
+        <Nfts as Transfer<AccountId>>::transfer(collection, item, destination)
     }
 }

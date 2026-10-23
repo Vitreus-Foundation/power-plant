@@ -152,6 +152,10 @@ pub struct RewardsInfo<T: Config> {
 }
 
 impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> for Pallet<T> {
+    fn can_receive_vipp(who: &T::AccountId) -> bool {
+        VipMembers::<T>::contains_key(who)
+    }
+
     fn ensure_accounting_ready() -> DispatchResult {
         accounting::ensure_ready::<T>()
     }
