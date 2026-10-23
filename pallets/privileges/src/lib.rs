@@ -648,6 +648,7 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Exit VIP.
+    #[frame_support::transactional]
     pub fn do_exit_vip(account: &T::AccountId) -> DispatchResult {
         let current_date = Self::current_date();
         let vip_info = Self::vip_members(account);
@@ -666,10 +667,11 @@ impl<T: Config> Pallet<T> {
                 }
 
                 VipMembers::<T>::remove(account);
-                let vipp_status = VippMembers::<T>::get(account);
-                if vipp_status.is_some() {
-                    VippMembers::<T>::remove(account);
-                    while pallet_nac_managing::Pallet::<T>::burn_vipp_nft(account) {}
+                let had_vipp = VippMembers::<T>::take(account).is_some();
+                if had_vipp
+                    || !pallet_nac_managing::Pallet::<T>::owned_vipp_claims(account)?.is_empty()
+                {
+                    while pallet_nac_managing::Pallet::<T>::burn_vipp_nft(account)? {}
                 }
 
                 Self::deposit_event(Event::<T>::LeftVip {
@@ -728,19 +730,6 @@ impl<T: Config> Pallet<T> {
         let current_date = Self::current_date();
 
         current_date.current_month == FREE_PENALTY_PERIOD_MONTH_NUMBER
-    }
-
-    /// Burn VIPP NFT.
-    fn burn_vipp_nft(who: &T::AccountId, current_item_id: T::ItemId) {
-        VippMembers::<T>::mutate_exists(who, |info_opt| {
-            if let Some(info) = info_opt {
-                info.active_vipp_threshold.retain(|(item_id, _)| *item_id != current_item_id);
-
-                if info.active_vipp_threshold.is_empty() {
-                    *info_opt = None;
-                }
-            }
-        });
     }
 
     /// Update current quarter info.

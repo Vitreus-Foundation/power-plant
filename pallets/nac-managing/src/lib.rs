@@ -114,7 +114,7 @@ use pallet_claiming::OnClaimHandler;
 use pallet_energy_fee::OnWithdrawFeeHandler;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
-use parity_scale_codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
+use parity_scale_codec::{DecodeAll, Encode, MaxEncodedLen};
 use sp_arithmetic::traits::Saturating;
 use sp_arithmetic::Perbill;
 use sp_runtime::traits::{Convert, Zero};
@@ -616,75 +616,81 @@ impl<T: Config> Pallet<T> {
 
     /// Check VIPP threshold every transaction.
     pub fn check_account_threshold(account: &T::AccountId) {
-        while let Some(bytes) = Self::get_claim_balance(account) {
-            if !Self::threshold_meets_vipp_requirements(account, bytes.0) {
-                if !Self::burn_vipp_nft(account) {
-                    break;
-                }
-            } else {
-                break;
-            }
+        if let Err(error) = Self::try_check_account_threshold(account) {
+            log::error!(target: "runtime::nac-managing", "VIPP threshold update failed: {:?}", error);
         }
     }
 
     /// Burn VIPP NFT (return true if the VIPP was burned).
-    pub fn burn_vipp_nft(account: &T::AccountId) -> bool {
-        let collection_id = T::VIPPCollectionId::get();
+    /// Reconcile the complete bounded ownership set atomically.
+    #[frame_support::transactional]
+    pub fn try_check_account_threshold(account: &T::AccountId) -> DispatchResult {
+        Self::check_threshold_with_limit(account, None)
+    }
 
-        let mut lowest_claim_value = None;
-
-        // Find the VIPP NFT with lowest claim value.
-        for key in T::Nfts::owned_in_collection(&collection_id, account) {
-            let item_id = key;
-
-            if let Some(claim_value) = T::Nfts::system_attribute(
-                &collection_id,
-                Some(&item_id),
-                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
-            ) {
-                match lowest_claim_value {
-                    Some((min_claim, _)) if claim_value < min_claim => {
-                        lowest_claim_value = Some((claim_value, item_id))
-                    },
-                    None => lowest_claim_value = Some((claim_value, item_id)),
-                    _ => {},
-                }
+    fn check_threshold_with_limit(
+        account: &T::AccountId,
+        balance_limit: Option<T::Balance>,
+    ) -> DispatchResult {
+        let Some((claim, _)) = Self::try_get_claim_balance(account)? else {
+            return Ok(());
+        };
+        let meets_threshold = |claim| {
+            let balance = T::Currency::total_balance(account);
+            balance.min(balance_limit.unwrap_or(balance)) > Perbill::from_percent(95) * claim
+        };
+        if Self::is_vipp_inactive(account) || meets_threshold(claim) {
+            return Ok(());
+        }
+        let mut owned = Self::owned_vipp_claims(account)?;
+        owned.sort_by_key(|(_, amount)| *amount);
+        if owned.is_empty() {
+            return Self::set_inactive_attribute_vipp(account);
+        }
+        let mut remaining_claim = claim;
+        for (item_id, amount) in owned {
+            if meets_threshold(remaining_claim) {
+                break;
             }
+            Self::burn_vipp_item(account, item_id, amount)?;
+            remaining_claim = remaining_claim.saturating_sub(amount);
         }
+        Ok(())
+    }
 
-        // Burn NFT.
-        if let Some((amount, item_id)) = lowest_claim_value {
-            // Burn VIPP NFT.
-            let _ = T::Nfts::burn(&collection_id, &item_id, Some(account));
-            T::OnVIPPChanged::burn_vipp_nft(account, item_id);
-            // Decrease threshold.
-            let _ = Self::decrease_thrsehold(
-                account,
-                T::Balance::decode(&mut amount.as_slice()).unwrap_or(T::Balance::zero()),
-            );
-            true
-        } else {
-            Self::set_inactive_attribute_vipp(account);
-            false
+    fn burn_vipp_item(
+        account: &T::AccountId,
+        item_id: T::ItemId,
+        amount: T::Balance,
+    ) -> DispatchResult {
+        let collection = T::VIPPCollectionId::get();
+        T::Nfts::burn(&collection, &item_id, Some(account))?;
+        Self::decrease_thrsehold(account, amount)?;
+        if T::Nfts::owned_in_collection(&collection, account).next().is_none() {
+            Self::set_inactive_attribute_vipp(account)?;
         }
+        T::OnVIPPChanged::burn_vipp_nft(account, item_id)
+    }
+
+    /// Burn the smallest claim and update accounting atomically.
+    pub fn burn_vipp_nft(account: &T::AccountId) -> Result<bool, DispatchError> {
+        let smallest =
+            Self::owned_vipp_claims(account)?.into_iter().min_by_key(|(_, amount)| *amount);
+        with_storage_layer(|| {
+            if let Some((item_id, amount)) = smallest {
+                Self::burn_vipp_item(account, item_id, amount)?;
+                Ok(true)
+            } else {
+                Self::set_inactive_attribute_vipp(account)?;
+                Ok(false)
+            }
+        })
     }
 
     /// Set VIPP inactive status for NAC.
-    fn set_inactive_attribute_vipp(account: &T::AccountId) {
-        let collection = T::NftCollectionId::get();
-
-        let item_id = match Self::get_nac_level(account) {
-            Some(value) => value.1,
-            None => {
-                return;
-            },
-        };
-
-        let key = BoundedVec::<u8, T::KeyLimit>::try_from(Vec::from(VIPP_STATUS_EXIST))
-            .unwrap_or_default();
-        let mut is_exist = BoundedVec::<u8, T::ValueLimit>::new();
-        let _ = is_exist.try_push(1);
-        let _ = T::Nfts::set_attribute(&collection, &item_id, &key, &is_exist);
+    fn set_inactive_attribute_vipp(account: &T::AccountId) -> DispatchResult {
+        let (_, item_id) = Self::get_nac_level(account).ok_or(Error::<T>::NftNotFound)?;
+        T::Nfts::set_attribute(&T::NftCollectionId::get(), &item_id, &VIPP_STATUS_EXIST, &[1])
     }
 
     /// Decrease threshold of NAC claim value.
@@ -696,9 +702,9 @@ impl<T: Config> Pallet<T> {
 
         let claimed_raw =
             T::Nfts::system_attribute(&collection, Some(&item), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-                .unwrap_or(vec![]);
-        let currently_claimed =
-            T::Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(T::Balance::zero());
+                .ok_or(Error::<T>::InvalidClaimAttribute)?;
+        let currently_claimed = T::Balance::decode_all(&mut claimed_raw.as_slice())
+            .map_err(|_| Error::<T>::InvalidClaimAttribute)?;
 
         let updated_claimed = currently_claimed.saturating_sub(amount);
 
@@ -790,12 +796,14 @@ pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
     fn mint_vipp(who: &AccountId, _amount: Balance, item_id: ItemId) -> DispatchResult;
 
     /// Burning VIPP NFT.
-    fn burn_vipp_nft(who: &AccountId, item_id: ItemId);
+    fn burn_vipp_nft(who: &AccountId, item_id: ItemId) -> DispatchResult;
 }
 
 impl<AccountId, Balance, ItemId> OnVippStatusHandler<AccountId, Balance, ItemId> for () {
     fn mint_vipp(_who: &AccountId, _amount: Balance, _item_id: ItemId) -> DispatchResult {
         Ok(())
     }
-    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) {}
+    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) -> DispatchResult {
+        Ok(())
+    }
 }

@@ -32,6 +32,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Fix `pallet-nac-managing` VIPP mint IDs and zero-value issuance, and register minted reward caps atomically in `pallet-privileges`
 
+- Fix `pallet-nac-managing` VIPP burns to use numeric claim order and roll back NFT, threshold and `pallet-privileges` cache changes together
+
 ## [215] - 2026-10-19
 
 ### Added

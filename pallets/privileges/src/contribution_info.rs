@@ -160,7 +160,7 @@ impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> fo
         Self::register_vipp_nft(who, amount, item_id)
     }
 
-    fn burn_vipp_nft(who: &T::AccountId, item_id: T::ItemId) {
-        Self::burn_vipp_nft(who, item_id);
+    fn burn_vipp_nft(who: &T::AccountId, _item_id: T::ItemId) -> DispatchResult {
+        Self::sync_vipp_membership(who, false)
     }
 }

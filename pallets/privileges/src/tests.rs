@@ -1002,3 +1002,114 @@ fn test_unaccounted_vipp_transfer_does_not_activate_recipients() {
         assert_eq!(VippMembers::<Test>::iter_values().map(|m| m.points).sum::<u64>(), 950);
     });
 }
+
+fn advance_test_date(origin: RuntimeOrigin, year: i32, month: u32, day: u32) -> DispatchResult {
+    Privileges::update_time(origin, year, month, day)
+}
+
+#[test]
+fn vipp_failed_exit_rolls_back_penalty_membership_and_points() {
+    use frame_support::traits::tokens::nonfungibles_v2::Mutate;
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 2, 1));
+        let id = owned_vipp_ids(10)[0];
+        // A malformed legacy attribute must fail the exit after the penalty path,
+        // with the transaction layer restoring balances, locks and memberships.
+        assert_ok!(<Nfts as Mutate<AccountId, pallet_nfts::ItemConfig>>::set_attribute(
+            &1,
+            &id,
+            &[0, 0, 2],
+            &[1],
+        ));
+        assert_noop!(
+            Privileges::exit_vip(RuntimeOrigin::signed(10)),
+            pallet_nac_managing::Error::<Test>::InvalidClaimAttribute
+        );
+        assert_eq!(owned_vipp_ids(10), vec![id]);
+        assert!(Privileges::vip_members(10).is_some());
+        assert!(Privileges::vipp_members(10).is_some());
+    });
+}
+
+#[test]
+fn vipp_last_threshold_burn_clears_current_points_and_prevents_reissuance() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 2));
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 190);
+        VippPoints::<Test>::insert(2019, 10, 123);
+
+        assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 10, 100));
+        NacManaging::check_account_threshold(&10);
+        assert!(owned_vipp_ids(10).is_empty());
+        assert!(Privileges::vipp_members(10).is_none());
+        assert_eq!(Privileges::vipp_points(2019, 10), Some(123));
+        assert!(Privileges::vip_members(10).is_some());
+
+        System::set_block_number(2);
+        claim_for_validator(200);
+        System::set_block_number(3);
+        claim_for_validator(100);
+        assert!(owned_vipp_ids(10).is_empty());
+        assert!(Privileges::vipp_members(10).is_none());
+    });
+}
+
+#[test]
+fn vipp_exit_burns_owned_nfts_even_if_the_cached_member_is_missing() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        VippMembers::<Test>::remove(10);
+        assert_eq!(owned_vipp_ids(10).len(), 1);
+        assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(10)));
+        assert!(owned_vipp_ids(10).is_empty());
+        assert!(NacManaging::is_vipp_inactive(&10));
+    });
+}
+
+#[test]
+fn last_nft_burn_clears_legacy_nac_id_cache_and_stops_ghost_points() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        let nac_id = NacManaging::get_nac_level(&10).unwrap().1;
+        assert_ne!(owned_vipp_ids(10), vec![nac_id]);
+        VippMembers::<Test>::mutate(10, |m| {
+            let m = m.as_mut().unwrap();
+            m.active_vipp_threshold = vec![(nac_id, 950)];
+            m.points = 12345;
+        });
+        VippPoints::<Test>::insert(2019, 10, 456);
+        assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 10, 100));
+        NacManaging::check_account_threshold(&10);
+        assert!(owned_vipp_ids(10).is_empty());
+        assert!(Privileges::vipp_members(10).is_none());
+        assert_eq!(Privileges::vipp_points(2019, 10), Some(456));
+        assert_ok!(Privileges::update_time(RuntimeOrigin::root(), 2020, 1, 2));
+        assert!(Privileges::vipp_members(10).is_none());
+    });
+}
+
+#[test]
+fn test_partial_burn_with_unregistered_nft() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(256);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        let retained_id = owned_vipp_ids(10)[0];
+        System::set_block_number(2);
+        claim_for_validator(1);
+        let nac_id = NacManaging::get_nac_level(&10).unwrap().1;
+        VippMembers::<Test>::mutate(10, |m| {
+            let m = m.as_mut().unwrap();
+            m.active_vipp_threshold = vec![(nac_id, 243), (nac_id, 1)];
+            m.points = 5678;
+        });
+        assert_ok!(NacManaging::burn_vipp_nft(&10));
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.points, 5678);
+        assert!(member.active_vipp_threshold.is_empty());
+        assert_eq!(owned_vipp_ids(10), vec![retained_id]);
+    });
+}
