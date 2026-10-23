@@ -17,8 +17,13 @@ services:
       --rpc-port 9944
       --rpc-external
       --prometheus-external
+      --in-peers 128
+      --out-peers 128
       --rpc-cors all
       --rpc-max-connections 5000
+      --runtime-cache-size 32
+      --eth-log-block-cache 300000000
+      --eth-statuses-cache 300000000
       --state-pruning archive
       --enable-offchain-indexing true
       -lwarn
