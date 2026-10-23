@@ -168,15 +168,13 @@ In a regular PR:
 - add entries for your changes to [CHANGELOG.md](CHANGELOG.md) under `[Unreleased]`, or tick
   "Does not require a CHANGELOG entry" in the PR description;
 - add storage migrations to `migrations::Unreleased`;
-- don't change `spec_version` or `transaction_version`.
+- don't change `spec_version`.
 
 A runtime release is a "Runtime version N" PR that does all of this at once:
 
 - moves the `[Unreleased]` entries of CHANGELOG.md into a new `## [N] - YYYY-MM-DD` section right
   below the (now empty) `## [Unreleased]`;
 - bumps `spec_version` to N;
-- bumps `transaction_version` if an existing call's arguments changed on either network since
-  the previous release, but not for a removed call or one added at a new index;
 - moves the `Unreleased` migrations into `V0<N>`.
 
 ### Releases
