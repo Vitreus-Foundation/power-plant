@@ -89,8 +89,10 @@ impl frame_system::Config for Test {
 }
 
 parameter_types! {
-    pub TestCollectionDeposit:  u64 = 0;
-    pub TestItemDeposit:  u64 = 0;
+    pub TestCollectionDeposit: u64 = 0;
+    pub TestItemDeposit: u64 = 0;
+    pub static FailAttributeWrite: Option<(u32, Vec<u8>)> = None;
+    pub static FailVippCallback: bool = false;
 }
 
 pub type CollectionId = u32;
@@ -160,7 +162,7 @@ parameter_types! {
 impl crate::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type AdminOrigin = frame_system::EnsureRoot<Self::AccountId>;
-    type Nfts = Nfts;
+    type Nfts = TestNfts;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type NftCollectionId = NftCollectionId;
@@ -169,7 +171,25 @@ impl crate::Config for Test {
     type WeightInfo = ();
     type Currency = Balances;
     type VIPPCollectionId = VIPPCollectionId;
-    type OnVIPPChanged = ();
+    type OnVIPPChanged = TestVippCallback;
+    type MaxVippNftsPerAccount = ConstU32<64>;
+}
+
+pub struct TestVippCallback;
+
+impl crate::OnVippStatusHandler<AccountId, Balance, ItemId> for TestVippCallback {
+    fn mint_vipp(
+        _who: &AccountId,
+        _amount: Balance,
+        _item_id: ItemId,
+    ) -> sp_runtime::DispatchResult {
+        if FailVippCallback::get() {
+            return Err(sp_runtime::DispatchError::Other("injected VIPP callback failure"));
+        }
+        Ok(())
+    }
+
+    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) {}
 }
 
 parameter_types! {
@@ -222,15 +242,113 @@ impl pallet_balances::Config for Test {
     type ReserveIdentifier = [u8; 8];
     type RuntimeHoldReason = ();
     type FreezeIdentifier = ();
-    type MaxLocks = ();
-    type MaxReserves = ();
+    type MaxLocks = ConstU32<10>;
+    type MaxReserves = ConstU32<10>;
     type MaxFreezes = ();
 }
 
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
+    FailAttributeWrite::set(None);
+    FailVippCallback::set(false);
     let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
     let mut ext = sp_io::TestExternalities::new(t);
     ext.execute_with(|| System::set_block_number(1));
     ext
+}
+
+// Delegate to the real NFT pallet, with failure injection only at the attribute
+// write boundary. Reads and storage decoding remain identical to production.
+pub struct TestNfts;
+
+impl Inspect<AccountId> for TestNfts {
+    type CollectionId = CollectionId;
+    type ItemId = ItemId;
+    fn owner(collection: &CollectionId, item: &ItemId) -> Option<AccountId> {
+        Nfts::owner(*collection, *item)
+    }
+    fn system_attribute(
+        collection: &CollectionId,
+        item: Option<&ItemId>,
+        key: &[u8],
+    ) -> Option<Vec<u8>> {
+        Nfts::system_attribute(collection, item, key)
+    }
+}
+
+impl InspectEnumerable<AccountId> for TestNfts {
+    type CollectionsIterator = <Nfts as InspectEnumerable<AccountId>>::CollectionsIterator;
+    type ItemsIterator = <Nfts as InspectEnumerable<AccountId>>::ItemsIterator;
+    type OwnedIterator = <Nfts as InspectEnumerable<AccountId>>::OwnedIterator;
+    type OwnedInCollectionIterator =
+        <Nfts as InspectEnumerable<AccountId>>::OwnedInCollectionIterator;
+    fn collections() -> Self::CollectionsIterator {
+        Nfts::collections()
+    }
+    fn items(collection: &CollectionId) -> Self::ItemsIterator {
+        Nfts::items(collection)
+    }
+    fn owned(who: &AccountId) -> Self::OwnedIterator {
+        Nfts::owned(who)
+    }
+    fn owned_in_collection(
+        collection: &CollectionId,
+        who: &AccountId,
+    ) -> Self::OwnedInCollectionIterator {
+        Nfts::owned_in_collection(collection, who)
+    }
+}
+
+impl Create<AccountId, CollectionConfigFor<Test>> for TestNfts {
+    fn create_collection(
+        who: &AccountId,
+        admin: &AccountId,
+        config: &CollectionConfigFor<Test>,
+    ) -> Result<CollectionId, DispatchError> {
+        <Nfts as Create<AccountId, CollectionConfigFor<Test>>>::create_collection(
+            who, admin, config,
+        )
+    }
+    fn create_collection_with_id(
+        collection: CollectionId,
+        who: &AccountId,
+        admin: &AccountId,
+        config: &CollectionConfigFor<Test>,
+    ) -> DispatchResult {
+        <Nfts as Create<AccountId, CollectionConfigFor<Test>>>::create_collection_with_id(
+            collection, who, admin, config,
+        )
+    }
+}
+
+impl Mutate<AccountId, ItemConfig> for TestNfts {
+    fn mint_into(
+        collection: &CollectionId,
+        item: &ItemId,
+        who: &AccountId,
+        config: &ItemConfig,
+        deposit_collection_owner: bool,
+    ) -> DispatchResult {
+        <Nfts as Mutate<AccountId, ItemConfig>>::mint_into(
+            collection,
+            item,
+            who,
+            config,
+            deposit_collection_owner,
+        )
+    }
+    fn burn(collection: &CollectionId, item: &ItemId, owner: Option<&AccountId>) -> DispatchResult {
+        <Nfts as Mutate<AccountId, ItemConfig>>::burn(collection, item, owner)
+    }
+    fn set_attribute(
+        collection: &CollectionId,
+        item: &ItemId,
+        key: &[u8],
+        value: &[u8],
+    ) -> DispatchResult {
+        if FailAttributeWrite::get() == Some((*collection, key.to_vec())) {
+            return Err(DispatchError::Other("injected NFT attribute failure"));
+        }
+        <Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(collection, item, key, value)
+    }
 }

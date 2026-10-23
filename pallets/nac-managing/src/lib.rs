@@ -100,7 +100,9 @@
 #![warn(clippy::all)]
 
 use frame_support::{
+    ensure,
     pallet_prelude::{BoundedVec, DispatchResult},
+    storage::with_storage_layer,
     traits::{
         tokens::nonfungibles_v2::{Create, Inspect, InspectEnumerable, Mutate},
         Currency, Get, Incrementable, OnNewAccount,
@@ -112,13 +114,13 @@ use pallet_claiming::OnClaimHandler;
 use pallet_energy_fee::OnWithdrawFeeHandler;
 use pallet_nfts::{CollectionConfig, CollectionSettings, ItemConfig, ItemSettings, MintSettings};
 use pallet_reputation::{AccountReputation, ReputationPoint, ReputationRecord, ReputationTier};
-use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
+use parity_scale_codec::{Decode, DecodeAll, Encode, MaxEncodedLen};
 use sp_arithmetic::traits::Saturating;
 use sp_arithmetic::Perbill;
 use sp_runtime::traits::{Convert, Zero};
 use sp_runtime::{
     traits::{BlakeTwo256, Hash, MaybeSerializeDeserialize},
-    SaturatedConversion,
+    DispatchError, SaturatedConversion,
 };
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
@@ -135,6 +137,10 @@ type CollectionConfigFor<T> = CollectionConfig<
     BlockNumberFor<T>,
     <T as Config>::CollectionId,
 >;
+
+type VippMintFor<T> = Option<(<T as pallet_balances::Config>::Balance, <T as Config>::ItemId)>;
+type NacClaimFor<T> = VippMintFor<T>;
+type VippClaimsFor<T> = Vec<(<T as Config>::ItemId, <T as pallet_balances::Config>::Balance)>;
 
 /// NAC level attribute key in NFT.
 const NAC_LEVEL_ATTRIBUTE_KEY: [u8; 3] = [0, 0, 1];
@@ -205,6 +211,10 @@ pub mod pallet {
             Balance = <Self as pallet_balances::Config>::Balance,
         >;
 
+        /// Bound for per-account VIPP ownership scans and mutations.
+        #[pallet::constant]
+        type MaxVippNftsPerAccount: Get<u32>;
+
         /// Handler for VIPP members.
         type OnVIPPChanged: OnVippStatusHandler<
             Self::AccountId,
@@ -268,6 +278,10 @@ pub mod pallet {
         NftAlreadyExist,
         /// NAC level is not correct.
         NacLevelIsIncorrect,
+        /// A claim attribute is missing or cannot be decoded completely.
+        InvalidClaimAttribute,
+        /// Ownership exceeds the bounded VIPP accounting limit.
+        TooManyVippNfts,
     }
 
     #[pallet::call]
@@ -466,72 +480,95 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Mint VIPP nft to account.
-    pub fn mint_vipp_nft(account: &T::AccountId) -> Option<(T::Balance, <T as Config>::ItemId)> {
-        let claim_balance = Self::get_claim_balance(account);
-        let active_vipp_amount = Self::get_active_vipp_amount(account);
-
-        if let Some(claim_balance) = claim_balance {
-            if Self::threshold_meets_vipp_requirements(account, claim_balance.0)
-                && active_vipp_amount <= claim_balance.0
-            {
-                let item_id = Self::create_unique_item_id(account);
-                let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
-                let collection = T::VIPPCollectionId::get();
-                let perbill = Perbill::from_rational(95_u32, 100_u32);
-
-                let result = T::Nfts::mint_into(&collection, &item_id, account, &item_config, true);
-
-                let second_result = T::Nfts::set_attribute(
-                    &collection,
-                    &item_id,
-                    &CLAIM_AMOUNT_ATTRIBUTE_KEY,
-                    &(claim_balance.0 - active_vipp_amount).encode(),
-                );
-
-                let item_id = match Self::get_nac_level(account) {
-                    Some(value) => value.1,
-                    None => return None,
-                };
-
-                if result.is_ok() && second_result.is_ok() {
-                    Self::deposit_event(Event::VippNftMinted { owner: account.clone(), item_id });
-                    return Some((perbill * (claim_balance.0 - active_vipp_amount), item_id));
-                }
-
-                return None;
-            }
+    pub fn mint_vipp_nft(account: &T::AccountId) -> Result<VippMintFor<T>, DispatchError> {
+        let Some((claim_balance, nac_id)) = Self::try_get_claim_balance(account)? else {
+            return Ok(None);
+        };
+        if T::Nfts::system_attribute(&T::NftCollectionId::get(), Some(&nac_id), &VIPP_STATUS_EXIST)
+            .is_some()
+        {
+            return Ok(None);
         }
+        let owned = Self::owned_vipp_claims(account)?;
+        let active_vipp_amount = owned
+            .iter()
+            .fold(T::Balance::zero(), |total, (_, amount)| total.saturating_add(*amount));
+        if active_vipp_amount >= claim_balance
+            || !Self::threshold_meets_vipp_requirements(account, claim_balance)
+        {
+            return Ok(None);
+        }
+        ensure!(
+            owned.len() < T::MaxVippNftsPerAccount::get() as usize,
+            Error::<T>::TooManyVippNfts
+        );
+        let amount = claim_balance - active_vipp_amount;
+        let item_id = Self::create_unique_item_id(account);
+        let collection = T::VIPPCollectionId::get();
+        let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
 
-        None
+        // Never write an attribute after a failed mint (e.g. an ID collision), and
+        // never leave an NFT behind if its claim attribute cannot be written.
+        with_storage_layer(|| {
+            T::Nfts::mint_into(&collection, &item_id, account, &item_config, true)?;
+            T::Nfts::set_attribute(
+                &collection,
+                &item_id,
+                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+                &amount.encode(),
+            )?;
+            Self::deposit_event(Event::VippNftMinted { owner: account.clone(), item_id });
+            Ok(Some((Perbill::from_percent(95) * amount, item_id)))
+        })
     }
 
     /// can mint VIPP NFT to account.
-    pub fn can_mint_vipp(account: &T::AccountId) -> Option<(T::Balance, <T as Config>::ItemId)> {
-        let collection_id = T::NftCollectionId::get();
-        if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account).next() {
-            let item_id = key;
-            let vipp_status_exist =
-                T::Nfts::system_attribute(&collection_id, Some(&item_id), &VIPP_STATUS_EXIST);
-
-            return match vipp_status_exist {
-                Some(_) => None,
-                None => {
-                    if Self::get_claim_balance(account).is_some() {
-                        return Self::mint_vipp_nft(account);
-                    }
-
-                    None
-                },
-            };
-        }
-
-        None
+    pub fn can_mint_vipp(account: &T::AccountId) -> Result<VippMintFor<T>, DispatchError> {
+        Self::mint_vipp_nft(account)
     }
 
-    /// Get user claim balance.
-    pub fn get_claim_balance(
+    /// Whether the NAC marks VIPP eligibility as inactive.
+    pub fn is_vipp_inactive(account: &T::AccountId) -> bool {
+        Self::get_nac_level(account).is_some_and(|(_, item_id)| {
+            T::Nfts::system_attribute(
+                &T::NftCollectionId::get(),
+                Some(&item_id),
+                &VIPP_STATUS_EXIST,
+            )
+            .is_some()
+        })
+    }
+
+    /// Actual owned VIPP IDs and raw claim amounts, before applying the 95% cap.
+    pub fn owned_vipp_claims(account: &T::AccountId) -> Result<VippClaimsFor<T>, DispatchError> {
+        let collection = T::VIPPCollectionId::get();
+        let items: Vec<_> = T::Nfts::owned_in_collection(&collection, account)
+            .take(T::MaxVippNftsPerAccount::get().saturating_add(1) as usize)
+            .collect();
+        ensure!(
+            items.len() <= T::MaxVippNftsPerAccount::get() as usize,
+            Error::<T>::TooManyVippNfts
+        );
+        items
+            .into_iter()
+            .map(|item_id| {
+                let bytes = T::Nfts::system_attribute(
+                    &collection,
+                    Some(&item_id),
+                    &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+                )
+                .ok_or(Error::<T>::InvalidClaimAttribute)?;
+                let amount = T::Balance::decode_all(&mut bytes.as_slice())
+                    .map_err(|_| Error::<T>::InvalidClaimAttribute)?;
+                Ok((item_id, amount))
+            })
+            .collect()
+    }
+
+    /// Read the NAC claim and reject malformed or trailing attribute bytes.
+    pub fn try_get_claim_balance(
         account_id: &T::AccountId,
-    ) -> Option<(T::Balance, <T as Config>::ItemId)> {
+    ) -> Result<NacClaimFor<T>, DispatchError> {
         let collection_id = T::NftCollectionId::get();
 
         if let Some(key) = T::Nfts::owned_in_collection(&collection_id, account_id).next() {
@@ -543,16 +580,23 @@ impl<T: Config> Pallet<T> {
                 &CLAIM_AMOUNT_ATTRIBUTE_KEY,
             );
 
-            return match claim_balance {
-                Some(bytes) => match T::Balance::decode(&mut bytes.as_slice()) {
-                    Ok(balance) => Some((balance, item_id)),
-                    _ => None,
-                },
-                None => None,
-            };
+            return claim_balance
+                .map(|bytes| {
+                    T::Balance::decode_all(&mut bytes.as_slice())
+                        .map(|balance| (balance, item_id))
+                        .map_err(|_| Error::<T>::InvalidClaimAttribute.into())
+                })
+                .transpose();
         }
 
-        None
+        Ok(None)
+    }
+
+    /// Get user claim balance.
+    pub fn get_claim_balance(
+        account_id: &T::AccountId,
+    ) -> Option<(T::Balance, <T as Config>::ItemId)> {
+        Self::try_get_claim_balance(account_id).ok().flatten()
     }
 
     /// Check threshold of account.
@@ -665,28 +709,6 @@ impl<T: Config> Pallet<T> {
             &updated_claimed.encode(),
         )
     }
-
-    /// Get amount of active VIPP NFT.
-    fn get_active_vipp_amount(account: &T::AccountId) -> T::Balance {
-        let collection_id = T::VIPPCollectionId::get();
-        let mut total_sum = T::Balance::zero();
-
-        for key in T::Nfts::owned_in_collection(&collection_id, account) {
-            let item_id = key;
-
-            if let Some(claim_value_bytes) = T::Nfts::system_attribute(
-                &collection_id,
-                Some(&item_id),
-                &CLAIM_AMOUNT_ATTRIBUTE_KEY,
-            ) {
-                if let Ok(claim_value) = T::Balance::decode(&mut &claim_value_bytes[..]) {
-                    total_sum += claim_value;
-                }
-            }
-        }
-
-        total_sum
-    }
 }
 
 impl<T: Config> Convert<&T::AccountId, Option<u8>> for Pallet<T> {
@@ -718,17 +740,22 @@ impl<T: Config, Balance> OnClaimHandler<T::AccountId, Balance, ()> for Pallet<T>
 where
     Balance: frame_support::traits::tokens::Balance,
 {
+    #[frame_support::transactional]
     fn on_claim(who: &T::AccountId, amount: Balance, _data: Option<()>) -> DispatchResult {
         let collection = T::NftCollectionId::get();
         let item = T::Nfts::owned_in_collection(&collection, who)
             .next()
             .ok_or(Error::<T>::NftNotFound)?;
 
-        let claimed_raw =
-            T::Nfts::system_attribute(&collection, Some(&item), &CLAIM_AMOUNT_ATTRIBUTE_KEY)
-                .unwrap_or(vec![]);
-        let currently_claimed =
-            Balance::decode(&mut claimed_raw.as_slice()).unwrap_or(Balance::zero());
+        let currently_claimed = match T::Nfts::system_attribute(
+            &collection,
+            Some(&item),
+            &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+        ) {
+            Some(bytes) => Balance::decode_all(&mut bytes.as_slice())
+                .map_err(|_| Error::<T>::InvalidClaimAttribute)?,
+            None => Balance::zero(),
+        };
 
         let updated_claimed = currently_claimed.saturating_add(amount);
 
@@ -739,10 +766,11 @@ where
             &updated_claimed.encode(),
         )?;
 
-        if currently_claimed != Balance::zero() {
-            let nft = Self::mint_vipp_nft(who);
-            if let Some(nft) = nft {
-                T::OnVIPPChanged::mint_vipp(who, nft.0, nft.1);
+        // An additional claim extends existing VIPP ownership. A claim on its own
+        // does not establish VIPP membership before the user joins VIP.
+        if T::Nfts::owned_in_collection(&T::VIPPCollectionId::get(), who).next().is_some() {
+            if let Some(nft) = Self::can_mint_vipp(who)? {
+                T::OnVIPPChanged::mint_vipp(who, nft.0, nft.1)?;
             }
         }
 
@@ -759,13 +787,15 @@ impl<T: Config> OnWithdrawFeeHandler<T::AccountId> for Pallet<T> {
 /// Handler for updating, burning VIPP status.
 pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
     /// Handle a minting new VIPP NFT.
-    fn mint_vipp(who: &AccountId, _amount: Balance, item_id: ItemId);
+    fn mint_vipp(who: &AccountId, _amount: Balance, item_id: ItemId) -> DispatchResult;
 
     /// Burning VIPP NFT.
     fn burn_vipp_nft(who: &AccountId, item_id: ItemId);
 }
 
 impl<AccountId, Balance, ItemId> OnVippStatusHandler<AccountId, Balance, ItemId> for () {
-    fn mint_vipp(_who: &AccountId, _amount: Balance, _item_id: ItemId) {}
+    fn mint_vipp(_who: &AccountId, _amount: Balance, _item_id: ItemId) -> DispatchResult {
+        Ok(())
+    }
     fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) {}
 }

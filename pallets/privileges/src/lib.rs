@@ -281,7 +281,7 @@ pub mod pallet {
             ensure!(!VipMembers::<T>::contains_key(&who), Error::<T>::AlreadyVipMember);
 
             if Self::is_legit_for_vip(&who) {
-                Self::do_set_user_privilege(&who, tax_type);
+                Self::do_set_user_privilege(&who, tax_type)?;
                 Self::deposit_event(Event::<T>::NewVipMember { account: who });
                 Ok(())
             } else {
@@ -547,7 +547,8 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Set user privilege as VIP.
-    fn do_set_user_privilege(account: &T::AccountId, tax_type: PenaltyType) {
+    #[frame_support::transactional]
+    fn do_set_user_privilege(account: &T::AccountId, tax_type: PenaltyType) -> DispatchResult {
         let now_as_millis_u64 = <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>();
         let active_stake = pallet_energy_generation::Pallet::<T>::get_active_stake(account);
 
@@ -559,21 +560,91 @@ impl<T: Config> Pallet<T> {
         };
 
         VipMembers::<T>::insert(account, vip_member_info);
-        Self::do_set_vipp_status(account);
+        Self::do_set_vipp_status(account)
     }
 
     /// Set VIP member VIPP status.
-    fn do_set_vipp_status(account: &T::AccountId) {
-        let vipp_nft = pallet_nac_managing::Pallet::<T>::can_mint_vipp(account);
-
-        if let Some(vipp_nft) = vipp_nft {
-            let vipp_member_info = VippMemberInfo::<T> {
-                points: <T as pallet_energy_generation::Config>::StakeBalance::default(),
-                active_vipp_threshold: vec![(vipp_nft.1, vipp_nft.0.into())],
-            };
-
-            VippMembers::<T>::insert(account, vipp_member_info);
+    fn do_set_vipp_status(account: &T::AccountId) -> DispatchResult {
+        if pallet_nac_managing::Pallet::<T>::is_vipp_inactive(account) {
+            VippMembers::<T>::remove(account);
+            return Ok(());
         }
+        if let Some((amount, item_id)) = pallet_nac_managing::Pallet::<T>::can_mint_vipp(account)? {
+            Self::register_vipp_nft(account, amount.into(), item_id)?;
+        }
+        Self::sync_vipp_membership(account, true)
+    }
+
+    /// Register an NFT after its mint or accounted transfer has succeeded.
+    fn register_vipp_nft(
+        account: &T::AccountId,
+        amount: T::StakeBalance,
+        item_id: T::ItemId,
+    ) -> DispatchResult {
+        if !VipMembers::<T>::contains_key(account)
+            || pallet_nac_managing::Pallet::<T>::is_vipp_inactive(account)
+        {
+            return Ok(());
+        }
+        VippMembers::<T>::try_mutate(account, |member| -> DispatchResult {
+            let info = member.get_or_insert(VippMemberInfo::<T> {
+                points: Default::default(),
+                active_vipp_threshold: Vec::new(),
+            });
+            if let Some((_, value)) =
+                info.active_vipp_threshold.iter_mut().find(|(id, _)| *id == item_id)
+            {
+                *value = amount;
+            } else {
+                ensure!(
+                    info.active_vipp_threshold.len()
+                        < <T as pallet_nac_managing::Config>::MaxVippNftsPerAccount::get() as usize,
+                    pallet_nac_managing::Error::<T>::TooManyVippNfts
+                );
+                info.active_vipp_threshold.push((item_id, amount));
+            }
+            Ok(())
+        })?;
+        Self::sync_vipp_membership(account, false)
+    }
+
+    /// Refresh registered NFT caps without activating unaccounted ownership.
+    fn sync_vipp_membership(account: &T::AccountId, reset_points: bool) -> DispatchResult {
+        if !VipMembers::<T>::contains_key(account)
+            || pallet_nac_managing::Pallet::<T>::is_vipp_inactive(account)
+        {
+            VippMembers::<T>::remove(account);
+            return Ok(());
+        }
+        let previous = VippMembers::<T>::get(account);
+        let retain_points = previous.is_some();
+        let registered = previous.map(|member| member.active_vipp_threshold).unwrap_or_default();
+        let owned = pallet_nac_managing::Pallet::<T>::owned_vipp_claims(account)?;
+        let has_owned_claim = owned.iter().any(|(_, amount)| !amount.is_zero());
+        // Ownership alone does not prove that the previous owner's entitlement
+        // and the recipient's NAC threshold were updated during a transfer.
+        let active_vipp_threshold: Vec<_> = owned
+            .into_iter()
+            .filter(|(id, amount)| {
+                !amount.is_zero() && registered.iter().any(|(registered, _)| registered == id)
+            })
+            .map(|(item_id, amount)| (item_id, (Perbill::from_percent(95) * amount).into()))
+            .collect();
+        // Keep accumulated points while unresolved positive NFTs still exist,
+        // but give unregistered items no accrual cap until backing is reconciled.
+        if active_vipp_threshold.is_empty() && !(retain_points && has_owned_claim) {
+            VippMembers::<T>::remove(account);
+        } else {
+            VippMembers::<T>::mutate(account, |member| {
+                let points = if reset_points {
+                    Default::default()
+                } else {
+                    member.as_ref().map(|info| info.points).unwrap_or_default()
+                };
+                *member = Some(VippMemberInfo::<T> { points, active_vipp_threshold });
+            });
+        }
+        Ok(())
     }
 
     /// Exit VIP.
@@ -657,23 +728,6 @@ impl<T: Config> Pallet<T> {
         let current_date = Self::current_date();
 
         current_date.current_month == FREE_PENALTY_PERIOD_MONTH_NUMBER
-    }
-
-    /// Mint new VIPP.
-    fn mint_new_vipp_nft(who: &T::AccountId, amount: T::StakeBalance, item_id: T::ItemId) {
-        let member_info = VippMembers::<T>::get(who);
-
-        if let Some(mut info) = member_info {
-            info.active_vipp_threshold.push((item_id, amount));
-            VippMembers::<T>::insert(who, info);
-        } else {
-            let vipp_member_info = VippMemberInfo::<T> {
-                points: <T as pallet_energy_generation::Config>::StakeBalance::default(),
-                active_vipp_threshold: vec![(item_id, amount)],
-            };
-
-            VippMembers::<T>::insert(who, vipp_member_info);
-        }
     }
 
     /// Burn VIPP NFT.
