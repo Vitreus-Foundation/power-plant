@@ -62,7 +62,7 @@ The flow is in README.md. These are the parts agents get wrong:
 
 ## Pull requests
 
-- A PR covers one topic: a fix or a set of related fixes in one place, one feature, or one refactor, together with what it forces to change, such as callers, runtime wiring, runtime APIs and docs.
+- A PR covers one topic: a fix or a set of related fixes in one place, one feature, or one refactor, together with what it forces to change, such as callers, runtime wiring, runtime APIs and the docs it makes wrong, doc comments included.
 - Everything else goes to its own PR: unrelated fixes, refactors, renames, reformatting, dependency bumps and cleanups. Report what you noticed instead of fixing it, so it can become an issue; mention it in the PR description only if reviewers need it to understand this PR. Changes to several pallets and the runtime for different reasons are several PRs. Split a large topic into a series of PRs that each build and pass tests.
 - Propose runtime-wide changes and changes to the token economics in an issue before the PR.
 - `Cargo.lock` changes only for the dependencies the PR changes.
