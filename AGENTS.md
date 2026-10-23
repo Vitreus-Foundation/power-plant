@@ -36,10 +36,11 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 - Runtime and pallet code must not panic. Avoid `unwrap`; restructure the code, or use `expect` with a proof that it cannot fail, ending in `; qed`. Tests are exempt.
 - Runtime and pallet crates are `no_std`. Add dependencies with `default-features = false` and propagate the `std`, `runtime-benchmarks` and `try-runtime` features to them.
 - Work in hooks (`on_initialize`, `on_finalize`, `on_idle`) is bounded per block, and its weight is accounted for.
+- Don't turn a failure into "nothing to do": an `Option` or `Result` that means "can't" doesn't become a default (`unwrap_or_default`, `unwrap_or(0)`). A hook that can't return an error reports it in an event.
 - Calls are charged by the `CustomFee` impl for `EnergyFee` in `runtime/vitreus`: pallets listed in its flat-fee arm pay the flat fee, and anything not listed falls through to the weight-based fee. When adding a pallet or changing how calls are charged, choose on purpose.
 - A new pallet with benchmarks goes into `define_benchmarks!` for each network it runs on: there is one list per network.
 - Pallet and call indices are never reused: a removed pallet or call leaves its index free, and a removed pallet stays as a comment in `construct_runtime!`. Otherwise calls stored on chain or signed earlier decode as the new ones.
-- A fix of runtime or pallet behaviour comes with a test that fails without it. Put new tests next to the related ones and name them like their neighbours.
+- A fix of runtime or pallet behaviour comes with a test that fails without it. Write that test first and see it fail, then make the fix without changing the test. Put new tests next to the related ones. Name new tests as a short statement of what they check, subject first and without articles (`failing_swap_is_reported`); rename existing tests only in a PR of their own.
 - Test a pallet's own logic in the pallet's tests, against its mock. Runtime tests are for what depends on the runtime: config wiring, the real types behind config items (exchanges, fee handlers) and pallets working together.
 
 ## Code comments
@@ -61,7 +62,7 @@ The flow is in README.md. These are the parts agents get wrong:
 ## Pull requests
 
 - A PR covers one topic: a fix or a set of related fixes in one place, one feature, or one refactor, together with the code it forces to change, such as callers, runtime wiring and runtime APIs.
-- Everything else goes to its own PR: unrelated fixes, refactors, renames, reformatting, dependency bumps and cleanups; mention what you noticed in the PR description. Changes to several pallets and the runtime for different reasons are several PRs. Split a large topic into a series of PRs that each build and pass tests, and discuss runtime-wide changes in an issue first.
+- Everything else goes to its own PR: unrelated fixes, refactors, renames, reformatting, dependency bumps and cleanups. Report what you noticed instead of fixing it, so it can become an issue; mention it in the PR description only if reviewers need it to understand this PR. Changes to several pallets and the runtime for different reasons are several PRs. Split a large topic into a series of PRs that each build and pass tests, and discuss runtime-wide changes in an issue first.
 - `Cargo.lock` changes only for the dependencies the PR changes.
 - Don't add entries for your own tools or local files (IDE, agents, notes) to `.gitignore`; use `.git/info/exclude`.
 - If the PR changes what users or integrators see (RPC, EVM semantics, fees, XCM, events), describe the impact in the PR description.
