@@ -37,6 +37,7 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 - Runtime and pallet crates are `no_std`. Add dependencies with `default-features = false` and propagate the `std`, `runtime-benchmarks` and `try-runtime` features to them.
 - Work in hooks (`on_initialize`, `on_finalize`, `on_idle`) is bounded per block, and its weight is accounted for.
 - Don't turn a failure into "nothing to do": an `Option` or `Result` that means "can't" doesn't become a default (`unwrap_or_default`, `unwrap_or(0)`). A hook that can't return an error reports it in an event.
+- Don't mint VTRS in new code, migrations included: that changes issuance on mainnet. A migration that funds an account transfers from an existing one, such as the Treasury.
 - Calls are charged by the `CustomFee` impl for `EnergyFee` in `runtime/vitreus`: pallets listed in its flat-fee arm pay the flat fee, and anything not listed falls through to the weight-based fee. When adding a pallet or changing how calls are charged, choose on purpose.
 - A new pallet with benchmarks goes into `define_benchmarks!` for each network it runs on: there is one list per network.
 - Pallet and call indices are never reused: a removed pallet or call leaves its index free, and a removed pallet stays as a comment in `construct_runtime!`. An existing call keeps its purpose: a call that does something else is a new call at a new index. Otherwise calls stored on chain or signed earlier decode as the new ones.
