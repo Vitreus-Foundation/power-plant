@@ -39,7 +39,7 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 - Don't turn a failure into "nothing to do": an `Option` or `Result` that means "can't" doesn't become a default (`unwrap_or_default`, `unwrap_or(0)`). A hook that can't return an error reports it in an event.
 - Calls are charged by the `CustomFee` impl for `EnergyFee` in `runtime/vitreus`: pallets listed in its flat-fee arm pay the flat fee, and anything not listed falls through to the weight-based fee. When adding a pallet or changing how calls are charged, choose on purpose.
 - A new pallet with benchmarks goes into `define_benchmarks!` for each network it runs on: there is one list per network.
-- Pallet and call indices are never reused: a removed pallet or call leaves its index free, and a removed pallet stays as a comment in `construct_runtime!`. Otherwise calls stored on chain or signed earlier decode as the new ones.
+- Pallet and call indices are never reused: a removed pallet or call leaves its index free, and a removed pallet stays as a comment in `construct_runtime!`. An existing call keeps its purpose: a call that does something else is a new call at a new index. Otherwise calls stored on chain or signed earlier decode as the new ones.
 - A fix of runtime or pallet behaviour comes with a test that fails without it. Write that test first and see it fail, then make the fix without changing the test. Put new tests next to the related ones. Name new tests as a short statement of what they check, subject first and without articles (`failing_swap_is_reported`); rename existing tests only in a PR of their own.
 - Test a pallet's own logic in the pallet's tests, against its mock. Runtime tests are for what depends on the runtime: config wiring, the real types behind config items (exchanges, fee handlers) and pallets working together.
 
@@ -57,7 +57,7 @@ The flow is in README.md. These are the parts agents get wrong:
 - A PR that changes the runtime or a pallet adds entries under `## [Unreleased]` in `CHANGELOG.md`, runtime refactors included. Each entry starts with a verb and names the pallet or API it changes. Related small changes can share an entry. A PR that changes neither, such as a CI or docs change, ticks "Does not require a CHANGELOG entry" in its description, or the CHANGELOG check fails.
 - Add new entries at the end of their subsection. Don't reorder or rewrite entries added by other PRs; on a rebase conflict, keep both sides' entries, yours last. Only a release PR may reorder, merge and reword them, keeping every change covered.
 - By merge time, a PR's entries describe its final diff: when the PR changes, update its entries instead of adding lines for follow-up commits.
-- Don't change `spec_version`; only a release PR does. Storage migrations go to `Unreleased` in `runtime/vitreus/src/migrations.rs`; a migration for one network goes behind its feature.
+- Don't change `spec_version` or `transaction_version`; only a release PR does. Storage migrations go to `Unreleased` in `runtime/vitreus/src/migrations.rs`; a migration for one network goes behind its feature.
 
 ## Pull requests
 
