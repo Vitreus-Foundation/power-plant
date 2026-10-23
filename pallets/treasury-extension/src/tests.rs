@@ -67,7 +67,7 @@ fn mint_treasury_energy(energy: Balance, static_energy: Balance, liquid_energy: 
 }
 
 #[test]
-fn exchange_energy_should_work() {
+fn energy_above_minimum_is_sold_and_reported() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         let treasury = Treasury::account_id();
@@ -98,7 +98,7 @@ fn exchange_energy_should_work() {
 }
 
 #[test]
-fn ensure_energy_sold_within_exchange_liquidity() {
+fn energy_sale_stays_within_exchange_liquidity() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         let treasury = Treasury::account_id();
@@ -132,7 +132,7 @@ fn ensure_energy_sold_within_exchange_liquidity() {
 }
 
 #[test]
-fn ensure_no_energy_exchanged_upon_nothing_to_sell() {
+fn nothing_to_sell_emits_no_event() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
 
@@ -148,7 +148,7 @@ fn ensure_no_energy_exchanged_upon_nothing_to_sell() {
 }
 
 #[test]
-fn ensure_no_energy_exchange_failed_upon_empty_exchange() {
+fn empty_exchange_emits_no_event() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         let treasury = Treasury::account_id();
@@ -172,7 +172,7 @@ fn ensure_no_energy_exchange_failed_upon_empty_exchange() {
 }
 
 #[test]
-fn ensure_energy_exchange_failed_upon_failing_swap() {
+fn failing_swap_is_reported() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         let treasury = Treasury::account_id();
@@ -208,7 +208,7 @@ fn ensure_energy_exchange_failed_upon_failing_swap() {
 }
 
 #[test]
-fn ensure_energy_exchange_failed_upon_unpriced_energy() {
+fn unpriced_energy_is_reported_as_failed() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
         let treasury = Treasury::account_id();
