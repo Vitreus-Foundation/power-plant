@@ -226,6 +226,8 @@ impl pallet_nac_managing::Config for Test {
     type Currency = Balances;
     type VIPPCollectionId = VIPPCollectionId;
     type MaxVippNftsPerAccount = ConstU32<64>;
+    type MaxPendingVippAccounts = ConstU32<128>;
+    type MaxVippReconciliationsPerBlock = ConstU32<2>;
     type UnvestedBalance = VippUnvestedBalance;
     type OnVIPPChanged = Privileges;
 }

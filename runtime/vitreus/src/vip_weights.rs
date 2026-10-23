@@ -1,6 +1,6 @@
 //! Weight allowance for VIP staking callbacks.
 use crate::Runtime;
-use frame_support::weights::Weight;
+use frame_support::{traits::Get, weights::Weight};
 pub struct VipWeights;
 impl pallet_energy_generation::WeightInfo for VipWeights {
     fn stake_refresh_hook() -> Weight {
@@ -154,6 +154,26 @@ fn validator_removal_weight_for(accounts: u64) -> Weight {
     Weight::from_parts(5_000_000, 32_768)
         .saturating_add(<Runtime as frame_system::Config>::DbWeight::get().reads_writes(26, 4))
         .saturating_mul(accounts)
+}
+
+impl pallet_claiming::weights::WeightInfo for VipWeights {
+    fn mint_tokens_to_claim() -> Weight {
+        <pallet_claiming::weights::SubstrateWeight<Runtime> as pallet_claiming::weights::WeightInfo>::mint_tokens_to_claim()
+    }
+    fn claim() -> Weight {
+        // Both claiming instances use this upper envelope: ordinary claims run the full bounded NAC callback;
+        // Kickstart claims can mint one NFT and set one attribute.
+        <pallet_claiming::weights::SubstrateWeight<Runtime> as pallet_claiming::weights::WeightInfo>::claim()
+
+            .saturating_add(<pallet_nac_managing::weights::SubstrateWeight<Runtime> as pallet_nac_managing::WeightInfo>::transfer_vipp(
+                <Runtime as pallet_nac_managing::Config>::MaxVippNftsPerAccount::get(),
+            ))
+            .saturating_add(<pallet_nfts::weights::SubstrateWeight<Runtime> as pallet_nfts::WeightInfo>::force_mint())
+            .saturating_add(<pallet_nfts::weights::SubstrateWeight<Runtime> as pallet_nfts::WeightInfo>::force_set_attribute().saturating_mul(2))
+    }
+    fn mint_claim() -> Weight {
+        <pallet_claiming::weights::SubstrateWeight<Runtime> as pallet_claiming::weights::WeightInfo>::mint_claim()
+    }
 }
 
 #[cfg(test)]

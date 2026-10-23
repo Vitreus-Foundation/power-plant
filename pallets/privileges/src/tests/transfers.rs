@@ -147,6 +147,22 @@ fn inactive_source_cannot_reactivate_a_stale_entitlement_by_transferring_it() {
 }
 
 #[test]
+fn quarantined_entitlements_cannot_move_until_reconciled() {
+    for quarantined in [10, 20] {
+        ExtBuilder::default().build_and_execute(|| {
+            join_vip_and_vipp(10);
+            prepare_recipient(20, 2000);
+            let item = owned_vipp_ids(10)[0];
+            pallet_nac_managing::VippAccountingQuarantine::<Test>::insert(quarantined, ());
+            assert_noop!(
+                transfer(10, item, 20),
+                pallet_nac_managing::Error::<Test>::VippAccountingUnavailable
+            );
+        });
+    }
+}
+
+#[test]
 fn vipp_transfer_checks_the_entire_recipient_threshold_with_equality_allowed() {
     ExtBuilder::default().build_and_execute(|| {
         join_vip_and_vipp(10);

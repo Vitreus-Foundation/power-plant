@@ -30,6 +30,7 @@ pub mod mock;
 mod tests;
 
 mod accounting;
+mod breach_period;
 mod contribution_info;
 
 pub mod migration;
@@ -120,16 +121,31 @@ pub mod pallet {
     #[pallet::getter(fn current_date)]
     pub type CurrentDate<T: Config> = StorageValue<_, CurrentDateInfo, ValueQuery>;
 
-    /// Block whose timestamp has been applied.
+    /// Block whose timestamp has been applied; unset only before first use.
     #[pallet::storage]
     pub type TimestampSeenAtBlock<T: Config> = StorageValue<_, BlockNumberFor<T>>;
 
-    /// First stake and suspended-eligibility snapshot before this block's timestamp.
+    /// First stake cached before this block's timestamp, for UTC rollover.
     #[pallet::storage]
     pub type PreTimestampStake<T: Config> =
         StorageMap<_, Twox64Concat, T::AccountId, (BlockNumberFor<T>, PointsOf<T>, bool)>;
 
-    /// Accrual cannot resume automatically after changes to an unaccounted interval.
+    /// Year of the first unresolved balance breach, retained across rollover.
+    #[pallet::storage]
+    pub type VippBreachYear<T: Config> = StorageMap<_, Twox64Concat, T::AccountId, u32>;
+
+    /// Breaches during initialization whose actual UTC year awaits the inherent.
+    #[pallet::storage]
+    pub type PreTimestampVippBreaches<T: Config> =
+        StorageValue<_, BoundedVec<T::AccountId, ConstU32<1024>>, ValueQuery>;
+
+    /// Explicit historical decision for a deferred last-NFT loss. Inner None
+    /// means reviewed preservation of all prior years, not absence of approval.
+    #[pallet::storage]
+    pub type VippForfeitureApproval<T: Config> =
+        StorageMap<_, Twox64Concat, T::AccountId, Option<u32>>;
+
+    /// Automatic accrual is paused until the stale interval is reviewed.
     #[pallet::storage]
     pub type AccrualReviewRequired<T: Config> = StorageValue<_, bool, ValueQuery>;
 
@@ -181,6 +197,13 @@ pub mod pallet {
             account: T::AccountId,
             /// The new VIPP points value assigned to the account.
             points: PointsOf<T>,
+        },
+        /// Governance reviewed which, if any, historical VIPP year was forfeited.
+        VippForfeitureApproved {
+            /// Account with an unresolved balance breach.
+            account: T::AccountId,
+            /// Historical year to clear, or None to preserve prior years.
+            year: Option<u32>,
         },
     }
 
@@ -356,6 +379,10 @@ pub mod pallet {
             ensure!(year < current_year, Error::<T>::NotCorrectDate);
             ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
 
+            ensure!(
+                pallet_nac_managing::VippAccountingQuarantine::<T>::iter_keys().next().is_none(),
+                Error::<T>::AccountingPaused
+            );
             let vip: Vec<_> = VipPoints::<T>::iter_prefix_values(year)
                 .take(accounting::MAX_MEMBERS + 1)
                 .collect();
@@ -420,6 +447,31 @@ pub mod pallet {
             });
 
             Ok(Pays::No.into())
+        }
+        /// Approve a reviewed historical forfeiture decision before repairing a
+        /// breach that spans years. This call itself does not change any points.
+        #[pallet::call_index(16)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(8, 1))]
+        pub fn approve_vipp_forfeiture(
+            origin: OriginFor<T>,
+            account: T::AccountId,
+            year: Option<u32>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+            let first = VippBreachYear::<T>::get(&account).ok_or(Error::<T>::AccountingPaused)?;
+            ensure!(
+                pallet_nac_managing::Pallet::<T>::is_vipp_quarantined(&account),
+                Error::<T>::AccountingPaused
+            );
+            let current = Self::current_date().current_year as u32;
+            ensure!(first < current, Error::<T>::NotCorrectDate);
+            if let Some(year) = year {
+                ensure!(year >= first && year < current, Error::<T>::NotCorrectDate);
+                ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
+            }
+            VippForfeitureApproval::<T>::insert(&account, year);
+            Self::deposit_event(Event::<T>::VippForfeitureApproved { account, year });
+            Ok(())
         }
     }
 
@@ -594,6 +646,10 @@ impl<T: Config> Pallet<T> {
     #[frame_support::transactional]
     pub fn do_exit_vip(account: &T::AccountId) -> DispatchResult {
         accounting::ensure_ready::<T>()?;
+        ensure!(
+            !pallet_nac_managing::Pallet::<T>::is_vipp_quarantined(account),
+            Error::<T>::AccountingPaused
+        );
         // Legacy storage has no hard fan-out bound. Refuse an oversized exit
         // before penalties can trigger a validator-wide cache refresh.
         let key = pallet_energy_generation::Collaborations::<T>::hashed_key_for(account);
@@ -819,6 +875,7 @@ impl<T: Config, Moment> frame_support::traits::OnTimestampSet<Moment> for Pallet
             T::DbWeight::get().reads_writes(6, 1),
             frame_support::dispatch::DispatchClass::Mandatory,
         );
+        breach_period::resolve_timestamp::<T>();
         // Timestamp is an inherent, applied before user extrinsics. Charge the
         // bounded scan before dispatch admission, only on a date transition.
         if CurrentDate::<T>::exists() && !accounting::paused::<T>() {

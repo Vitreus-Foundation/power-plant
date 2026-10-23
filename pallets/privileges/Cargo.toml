@@ -33,6 +33,7 @@ log = { workspace = true }
 frame-benchmarking = { workspace = true, optional = true }
 
 [dev-dependencies]
+pallet-energy-fee = { workspace = true }
 pallet-authorship = { workspace = true }
 pallet-session = { workspace = true }
 pallet-balances = { workspace = true }
@@ -46,6 +47,7 @@ substrate-test-utils = { workspace = true }
 [features]
 default = ["std"]
 runtime-benchmarks = [
+    "pallet-energy-fee/runtime-benchmarks",
     "frame-benchmarking/runtime-benchmarks",
     "frame-support/runtime-benchmarks",
     "frame-system/runtime-benchmarks",
@@ -62,6 +64,7 @@ runtime-benchmarks = [
     "sp-staking/runtime-benchmarks",
 ]
 std = [
+    "pallet-energy-fee/std",
     "chrono/std",
     "frame-benchmarking/std",
     "frame-support/std",
@@ -91,6 +94,7 @@ std = [
     "sp-tracing/std",
 ]
 try-runtime = [
+    "pallet-energy-fee/try-runtime",
     "frame-support/try-runtime",
     "frame-system/try-runtime",
     "pallet-assets/try-runtime",

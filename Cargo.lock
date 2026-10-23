@@ -7397,6 +7397,7 @@ dependencies = [
  "pallet-authorship",
  "pallet-balances",
  "pallet-claiming",
+ "pallet-energy-fee",
  "pallet-energy-generation",
  "pallet-nac-managing",
  "pallet-nfts",

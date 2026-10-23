@@ -222,3 +222,173 @@ fn vip_and_nft_dispatches_before_timestamp_are_rejected_until_the_clock_is_known
         assert!(PreTimestampStake::<Test>::get(10).is_none());
     });
 }
+
+fn deferred_december_breach(two_nfts: bool) {
+    CurrentDate::<Test>::put(date(2025, 12, 31));
+    clock(2025, 12, 31);
+    join_vip_and_vipp(10);
+    System::set_block_number(1);
+    timestamp_hook();
+    if two_nfts {
+        System::set_block_number(2);
+        timestamp_hook();
+        claim_for_validator(1000);
+    }
+    VippMembers::<Test>::mutate(10, |member| member.as_mut().unwrap().points = 5000);
+    VippPoints::<Test>::insert(2024, 10, 777);
+    assert_ok!(Balances::force_set_balance(
+        RuntimeOrigin::root(),
+        10,
+        if two_nfts { 1000 } else { 100 }
+    ));
+    <NacManaging as pallet_energy_fee::OnWithdrawFeeHandler<AccountId>>::on_withdraw_fee(&10);
+    assert_eq!(VippBreachYear::<Test>::get(10), Some(2025));
+    pallet_nac_managing::VippReconciliationsThisBlock::<Test>::put(2);
+    NacManaging::finish_balance_changes();
+    assert!(NacManaging::is_vipp_quarantined(&10));
+    assert_eq!(owned_vipp_ids(10).len(), if two_nfts { 2 } else { 1 });
+    System::set_block_number(3);
+    clock(2026, 1, 1);
+    timestamp_hook();
+    assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
+    System::set_block_number(4);
+    clock(2026, 1, 2);
+    timestamp_hook();
+}
+
+#[test]
+fn quarantined_vipp_entitlement_cannot_generate_new_points() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        VippMembers::<Test>::mutate(10, |m| m.as_mut().unwrap().points = 456);
+        pallet_nac_managing::VippAccountingQuarantine::<Test>::insert(10, ());
+        clock(2020, 1, 2);
+        Privileges::update_quarter_info();
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 456);
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 20);
+    });
+}
+
+#[test]
+fn pre_timestamp_fee_check_preserves_closed_year_before_finalization_burn() {
+    ExtBuilder::default().build_and_execute(|| {
+        CurrentDate::<Test>::put(date(2025, 12, 31));
+        clock(2025, 12, 31);
+        join_vip_and_vipp(10);
+        System::set_block_number(1);
+        timestamp_hook();
+        System::set_block_number(2);
+        // Explicit fee checks can run before the timestamp, e.g. scheduled EVM calls.
+        assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 10, 100));
+        <NacManaging as pallet_energy_fee::OnWithdrawFeeHandler<AccountId>>::on_withdraw_fee(&10);
+        assert!(NacManaging::is_vipp_quarantined(&10));
+        assert_eq!(PreTimestampStake::<Test>::get(10), Some((2, 1000, false)));
+        assert!(VippBreachYear::<Test>::get(10).is_none());
+        assert!(PreTimestampVippBreaches::<Test>::get().contains(&10));
+        assert_ok!(EnergyGeneration::force_chill(RuntimeOrigin::root(), 10));
+        assert_eq!(PreTimestampStake::<Test>::get(10), Some((2, 1000, false)));
+        clock(2026, 1, 1);
+        timestamp_hook();
+        assert_eq!(Privileges::vipp_points(2025, 10), Some(950));
+        assert_eq!(Privileges::vip_points(2025, 10), Some(2));
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
+        assert_eq!(VippBreachYear::<Test>::get(10), Some(2026));
+        assert!(NacManaging::is_vipp_quarantined(&10));
+        NacManaging::finish_balance_changes();
+        assert!(Privileges::vipp_members(10).is_none());
+        assert!(owned_vipp_ids(10).is_empty());
+        assert_eq!(Privileges::vipp_points(2025, 10), Some(950));
+        assert!(VippBreachYear::<Test>::get(10).is_none());
+        System::set_block_number(3);
+        clock(2026, 1, 2);
+        timestamp_hook();
+        assert_eq!(Privileges::vipp_points(2025, 10), Some(950));
+        assert!(Privileges::vipp_members(10).is_none());
+    });
+}
+
+#[test]
+fn delayed_last_nft_burn_requires_review_before_removing_only_the_approved_archived_year() {
+    ExtBuilder::default().build_and_execute(|| {
+        deferred_december_breach(false);
+        let nft = owned_vipp_ids(10);
+        assert_noop!(
+            NacManaging::repair_vipp_balance(RuntimeOrigin::root(), 10),
+            Error::<Test>::AccountingPaused
+        );
+        assert_eq!(owned_vipp_ids(10), nft);
+        assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
+        assert!(NacManaging::is_vipp_quarantined(&10));
+        assert_ok!(Privileges::approve_vipp_forfeiture(RuntimeOrigin::root(), 10, Some(2025)));
+        assert_ok!(NacManaging::repair_vipp_balance(RuntimeOrigin::root(), 10));
+        assert!(Privileges::vipp_points(2025, 10).is_none());
+        assert_eq!(Privileges::vipp_points(2024, 10), Some(777));
+        assert!(owned_vipp_ids(10).is_empty());
+        assert!(Privileges::vipp_members(10).is_none());
+        assert!(!NacManaging::is_vipp_quarantined(&10));
+        assert!(VippBreachYear::<Test>::get(10).is_none());
+        assert!(VippForfeitureApproval::<Test>::get(10).is_none());
+    });
+}
+
+#[test]
+fn delayed_partial_nft_burn_preserves_archived_points_without_forfeiture_approval() {
+    ExtBuilder::default().build_and_execute(|| {
+        deferred_december_breach(true);
+        assert_ok!(NacManaging::repair_vipp_balance(RuntimeOrigin::root(), 10));
+        assert_eq!(owned_vipp_ids(10).len(), 1);
+        assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
+        assert_eq!(Privileges::vipp_points(2024, 10), Some(777));
+        assert!(Privileges::vipp_members(10).is_some());
+        assert!(VippBreachYear::<Test>::get(10).is_none());
+        assert!(!NacManaging::is_vipp_quarantined(&10));
+    });
+}
+
+#[test]
+fn worsening_breach_in_new_year_does_not_infer_forfeiture_of_the_first_breach_year() {
+    ExtBuilder::default().build_and_execute(|| {
+        deferred_december_breach(true);
+        // December's deficit would lose only one NFT. This later deficit loses both.
+        assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 10, 100));
+        <NacManaging as pallet_energy_fee::OnWithdrawFeeHandler<AccountId>>::on_withdraw_fee(&10);
+        assert_eq!(VippBreachYear::<Test>::get(10), Some(2025));
+        assert_noop!(
+            NacManaging::repair_vipp_balance(RuntimeOrigin::root(), 10),
+            Error::<Test>::AccountingPaused
+        );
+        assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
+        assert_ok!(Privileges::approve_vipp_forfeiture(RuntimeOrigin::root(), 10, None));
+        assert_ok!(NacManaging::repair_vipp_balance(RuntimeOrigin::root(), 10));
+        assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
+        assert_eq!(Privileges::vipp_points(2024, 10), Some(777));
+        assert!(Privileges::vipp_members(10).is_none());
+        assert!(owned_vipp_ids(10).is_empty());
+        assert!(VippForfeitureApproval::<Test>::get(10).is_none());
+    });
+}
+
+#[test]
+fn historical_forfeiture_approval_cannot_change_a_funded_year() {
+    ExtBuilder::default().build_and_execute(|| {
+        deferred_december_breach(false);
+        // Model a legacy externally configured pool; ordinary set_rewards rejects quarantine.
+        Rewards::<Test>::insert(
+            2025,
+            RewardsInfo::<Test> {
+                vip_points: 100,
+                vip_rewards: 200,
+                vipp_points: 5000,
+                vipp_rewards: 400,
+            },
+        );
+        let pool = Rewards::<Test>::get(2025).unwrap().encode();
+        assert_noop!(
+            Privileges::approve_vipp_forfeiture(RuntimeOrigin::root(), 10, Some(2025)),
+            Error::<Test>::YearRewardsAlreadySet
+        );
+        assert_eq!(Rewards::<Test>::get(2025).unwrap().encode(), pool);
+        assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
+        assert!(VippForfeitureApproval::<Test>::get(10).is_none());
+    });
+}
