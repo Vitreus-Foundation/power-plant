@@ -415,6 +415,35 @@ mod treasury {
         assert_eq!(asset_balance(&asset, &treasury), asset_before - broker_vtrs);
     }
 
+    /// With only a base unit of VTRS left at the broker, too little to pay for any energy, the
+    /// treasury's session hook must sell no `asset` and report nothing: dust is not a failed sale.
+    fn assert_skips_on_broker_vtrs_dust(asset: AssetId) {
+        let treasury = Treasury::account_id();
+
+        System::set_block_number(1);
+        // Rates other than one make the broker's conversions round down.
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_rational(7, 3));
+        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
+            SNRG::get(),
+            FixedU128::from_rational(7, 3),
+        );
+        Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get() + 1);
+
+        Balances::set_balance(&treasury, ExistentialDeposit::get());
+        assert_ok!(Assets::mint_into(asset, &treasury, AMOUNT));
+        let asset = NativeOrAssetId::WithId(asset);
+        let asset_before = asset_balance(&asset, &treasury);
+        let native_before = Balances::free_balance(treasury);
+
+        <TreasuryExtension as vitreus_runtime_common::OnSessionChange>::on_new_session(1);
+
+        assert!(!System::events()
+            .iter()
+            .any(|record| matches!(record.event, RuntimeEvent::TreasuryExtension(_))));
+        assert_eq!(asset_balance(&asset, &treasury), asset_before);
+        assert_eq!(Balances::free_balance(treasury), native_before);
+    }
+
     /// When the broker has no VTRS to pay, selling through `Exchange` must fail and leave the
     /// seller's energy and VTRS, and the energy issuance, as they were.
     fn assert_fails_without_broker_vtrs<Exchange>()
@@ -471,6 +500,21 @@ mod treasury {
     #[test]
     fn new_session_sells_lnrg_within_broker_vtrs() {
         new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(LNRG::get()))
+    }
+
+    #[test]
+    fn new_session_skips_vnrg_on_broker_vtrs_dust() {
+        new_test_ext().execute_with(|| assert_skips_on_broker_vtrs_dust(VNRG::get()))
+    }
+
+    #[test]
+    fn new_session_skips_snrg_on_broker_vtrs_dust() {
+        new_test_ext().execute_with(|| assert_skips_on_broker_vtrs_dust(SNRG::get()))
+    }
+
+    #[test]
+    fn new_session_skips_lnrg_on_broker_vtrs_dust() {
+        new_test_ext().execute_with(|| assert_skips_on_broker_vtrs_dust(LNRG::get()))
     }
 
     #[test]
