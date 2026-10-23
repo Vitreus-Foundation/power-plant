@@ -352,6 +352,11 @@ mod treasury {
     type TreasuryLiquidEnergyExchange =
         <Runtime as pallet_treasury_extension::Config>::LiquidEnergyExchange;
 
+    /// A rate at which the broker's conversions don't round.
+    const EXACT_RATE: FixedU128 = FixedU128::from_u32(1);
+    /// A rate at which the broker's conversions round down.
+    const ROUNDING_RATE: FixedU128 = FixedU128::from_rational(3, 2);
+
     /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
     fn fund_broker() {
         Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
@@ -390,29 +395,63 @@ mod treasury {
         assert_eq!(other_energy(), other_energy_before, "the sale must not touch other energy");
     }
 
-    /// With more `asset` than the broker can pay for, the treasury's session hook must sell as
-    /// much as the broker can pay out and keep the rest.
-    fn assert_sells_within_broker_vtrs(asset: AssetId) {
+    /// With more `asset_id` than the broker can pay for at `rate`, the treasury's session hook must
+    /// sell as much as the broker can pay out, report the sale and keep the rest.
+    fn assert_sells_within_broker_vtrs(asset_id: AssetId, rate: FixedU128) {
         let treasury = Treasury::account_id();
+        let broker = EnergyBroker::account_id();
+        let broker_vtrs =
+            || Balances::reducible_balance(&broker, Preservation::Preserve, Fortitude::Polite);
+        let lnrg = NativeOrAssetId::WithId(LNRG::get());
 
+        System::set_block_number(1);
         fund_broker();
-        let broker_vtrs = Balances::reducible_balance(
-            &EnergyBroker::account_id(),
-            Preservation::Preserve,
-            Fortitude::Polite,
-        );
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(rate);
+        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), rate);
+        let broker_vtrs_before = broker_vtrs();
 
         // More energy than the broker can pay for.
         Balances::set_balance(&treasury, ExistentialDeposit::get());
-        assert_ok!(Assets::mint_into(asset, &treasury, 2 * broker_vtrs));
-        let asset = NativeOrAssetId::WithId(asset);
+        assert_ok!(Assets::mint_into(asset_id, &treasury, 2 * broker_vtrs_before));
+        let asset = NativeOrAssetId::WithId(asset_id);
         let asset_before = asset_balance(&asset, &treasury);
         let native_before = Balances::free_balance(treasury);
+        let lnrg_issuance_before = asset_issuance(&lnrg);
 
         <TreasuryExtension as vitreus_runtime_common::OnSessionChange>::on_new_session(1);
 
-        assert_eq!(Balances::free_balance(treasury), native_before + broker_vtrs);
-        assert_eq!(asset_balance(&asset, &treasury), asset_before - broker_vtrs);
+        let sold = asset_before - asset_balance(&asset, &treasury);
+        let received = Balances::free_balance(treasury) - native_before;
+        assert!(sold > 0 && sold < asset_before, "the treasury must sell some energy, not all");
+        // Rounding can leave the broker dust, but must never make it pay more than it can.
+        assert!(received > 0 && received <= broker_vtrs_before);
+        assert_eq!(broker_vtrs(), broker_vtrs_before - received);
+        if rate == EXACT_RATE {
+            assert_eq!(received, broker_vtrs_before, "without rounding the broker pays out all");
+            assert_eq!(sold, broker_vtrs_before);
+        }
+
+        let sold_of = |id| if id == asset_id { sold } else { 0 };
+        System::assert_last_event(
+            pallet_treasury_extension::Event::<Runtime>::EnergyExchanged {
+                energy: sold_of(VNRG::get()),
+                static_energy: sold_of(SNRG::get()),
+                liquid_energy: sold_of(LNRG::get()),
+                native: received,
+            }
+            .into(),
+        );
+        assert!(!System::events().iter().any(|record| matches!(
+            record.event,
+            RuntimeEvent::TreasuryExtension(
+                pallet_treasury_extension::Event::EnergyExchangeFailed { .. }
+            )
+        )));
+
+        if asset_id == VNRG::get() {
+            // VNRG is sold as LNRG that only passes through the treasury.
+            assert_eq!(asset_issuance(&lnrg), lnrg_issuance_before);
+        }
     }
 
     /// With only a base unit of VTRS left at the broker, too little to pay for any energy, the
@@ -489,17 +528,32 @@ mod treasury {
 
     #[test]
     fn new_session_sells_vnrg_within_broker_vtrs() {
-        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(VNRG::get()))
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(VNRG::get(), EXACT_RATE))
     }
 
     #[test]
     fn new_session_sells_snrg_within_broker_vtrs() {
-        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(SNRG::get()))
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(SNRG::get(), EXACT_RATE))
     }
 
     #[test]
     fn new_session_sells_lnrg_within_broker_vtrs() {
-        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(LNRG::get()))
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(LNRG::get(), EXACT_RATE))
+    }
+
+    #[test]
+    fn new_session_sells_vnrg_within_broker_vtrs_despite_rounding() {
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(VNRG::get(), ROUNDING_RATE))
+    }
+
+    #[test]
+    fn new_session_sells_snrg_within_broker_vtrs_despite_rounding() {
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(SNRG::get(), ROUNDING_RATE))
+    }
+
+    #[test]
+    fn new_session_sells_lnrg_within_broker_vtrs_despite_rounding() {
+        new_test_ext().execute_with(|| assert_sells_within_broker_vtrs(LNRG::get(), ROUNDING_RATE))
     }
 
     #[test]
