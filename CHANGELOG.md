@@ -30,6 +30,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Stop re-creating the treasury's energy accounts every session in `pallet-treasury-extension`
 - Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
 
+- Fix `pallet-nac-managing` VIPP mint IDs and zero-value issuance, and register minted reward caps atomically in `pallet-privileges`
+
 ## [215] - 2026-10-19
 
 ### Added

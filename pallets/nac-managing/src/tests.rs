@@ -19,7 +19,7 @@
 
 use crate::{mock::*, *};
 
-use frame_support::{assert_err, assert_ok};
+use frame_support::{assert_err, assert_noop, assert_ok};
 use parity_scale_codec::Decode;
 
 type BalanceOf<Test> = <Test as pallet_balances::Config>::Balance;
@@ -154,4 +154,122 @@ fn on_claim_should_work() {
         let new_claimed = get_claimed(collection_id, item_id);
         assert_eq!(new_claimed, claimed + 1000);
     });
+}
+
+fn prepare_vipp_claim(amount: Balance) {
+    let _ = Balances::make_free_balance_be(&1, 10_000);
+    assert_ok!(NacManaging::create_collection(&1));
+    assert_ok!(NacManaging::create_collection(&1));
+    assert_ok!(NacManaging::do_mint(123, 1));
+    assert_ok!(NacManaging::on_claim(&1, amount, None));
+}
+
+#[test]
+fn mint_vipp_nft_should_work() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let (cap, id) = NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        assert_eq!(cap, 950);
+        assert_ne!(id, 123);
+        assert_eq!(Nfts::owner(1, id), Some(1));
+        assert_eq!(get_claimed(1, id), 1_000);
+        System::assert_last_event(Event::<Test>::VippNftMinted { owner: 1, item_id: id }.into());
+
+        System::set_block_number(2);
+        assert_eq!(NacManaging::mint_vipp_nft(&1).unwrap(), None);
+        assert_eq!(Nfts::owned_in_collection(&1, &1).collect::<Vec<_>>(), vec![id]);
+    });
+}
+
+#[test]
+fn zero_claim_does_not_mint_vipp() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(0);
+        assert_eq!(NacManaging::mint_vipp_nft(&1).unwrap(), None);
+        assert_eq!(Nfts::owned_in_collection(&1, &1).count(), 0);
+    });
+}
+
+#[test]
+fn mint_vipp_nft_attribute_failure_is_atomic() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        FailAttributeWrite::set(Some((1, CLAIM_AMOUNT_ATTRIBUTE_KEY.to_vec())));
+        assert_noop!(
+            NacManaging::mint_vipp_nft(&1),
+            DispatchError::Other("injected NFT attribute failure")
+        );
+        assert_eq!(Nfts::owned_in_collection(&1, &1).count(), 0);
+    });
+}
+
+#[test]
+fn mint_vipp_nft_id_collision_is_atomic() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let (_, id) = NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        // The legacy ID generator returns the same ID twice in one block.
+        assert_noop!(
+            NacManaging::on_claim(&1, 200u64, None),
+            pallet_nfts::Error::<Test>::AlreadyExists
+        );
+        assert_eq!(get_claimed(1, id), 1_000);
+        assert_eq!(get_claimed(0, 123), 1_000);
+
+        System::set_block_number(2);
+        assert_ok!(NacManaging::on_claim(&1, 200u64, None));
+        assert_eq!(get_claimed(0, 123), 1_200);
+        assert_eq!(NacManaging::owned_vipp_claims(&1).unwrap().len(), 2);
+    });
+}
+
+#[test]
+fn on_claim_with_invalid_attribute_fails() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        assert_ok!(<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+            &0,
+            &123,
+            &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            &[1]
+        ));
+        assert_noop!(NacManaging::on_claim(&1, 200u64, None), Error::<Test>::InvalidClaimAttribute);
+    });
+}
+
+#[test]
+fn on_claim_callback_failure_is_atomic() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        System::set_block_number(2);
+        FailVippCallback::set(true);
+        assert_noop!(
+            NacManaging::on_claim(&1, 200u64, None),
+            DispatchError::Other("injected VIPP callback failure")
+        );
+    });
+}
+
+#[test]
+fn on_claim_at_nft_limit_fails() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(64);
+        for id in 0..64 {
+            mint_manual_vipp(id, 1);
+        }
+        assert_noop!(NacManaging::on_claim(&1, 1u64, None), Error::<Test>::TooManyVippNfts);
+        assert_eq!(get_claimed(0, 123), 64);
+    });
+}
+
+fn mint_manual_vipp(id: ItemId, amount: Balance) {
+    let config = ItemConfig { settings: ItemSettings::all_enabled() };
+    assert_ok!(<Nfts as Mutate<AccountId, ItemConfig>>::mint_into(&1, &id, &1, &config, true));
+    assert_ok!(<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+        &1,
+        &id,
+        &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+        &amount.encode(),
+    ));
 }
