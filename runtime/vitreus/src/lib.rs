@@ -157,6 +157,7 @@ pub mod areas;
 mod energy;
 pub mod migrations;
 mod precompiles;
+mod vip_weights;
 mod weights;
 mod xcm_config;
 
@@ -855,7 +856,7 @@ impl pallet_energy_generation::Config for Runtime {
     type ValidatorExposureMultiplier = ReputationExposureMultiplier;
     type CooperatorExposureMultiplier = ();
     type OnVipMembershipHandler = Privileges;
-    type ThisWeightInfo = ();
+    type ThisWeightInfo = vip_weights::VipWeights;
     type UnixTime = Timestamp;
 }
 

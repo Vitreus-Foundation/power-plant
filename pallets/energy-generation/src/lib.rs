@@ -130,6 +130,8 @@
 pub mod testing_utils;
 
 #[cfg(test)]
+mod election_hook_tests;
+#[cfg(test)]
 pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
@@ -147,7 +149,7 @@ use frame_support::{
     BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use pallet_reputation::Reputation;
-use parity_scale_codec::{Decode, Encode, HasCompact, MaxEncodedLen};
+use parity_scale_codec::{Compact, Decode, Encode, HasCompact, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{Convert, Saturating, StaticLookup, Zero},
@@ -688,8 +690,29 @@ pub trait OnVipMembershipHandler<T, Res, Perbill> {
     /// Update active stake by VIP member.
     fn update_active_stake(account: &T) -> Res;
 
+    /// Remove one previously eligible delegation without rescanning every target.
+    /// The collaboration has been removed, while the cooperator target still
+    /// records its amount. Implementations without a cache can refresh normally.
+    fn remove_validator_delegation(account: &T, _validator: &T) -> Res {
+        Self::update_active_stake(account)
+    }
+
     /// Get tax percent of account.
     fn get_tax_percent(account: &T) -> Perbill;
+}
+
+/// Maximum collaborators accepted for a validator by new staking changes.
+/// Legacy storage remains decodable; oversized entries require explicit cleanup.
+pub const MAX_VALIDATOR_COLLABORATORS: u32 = 1024;
+
+/// Read the SCALE set length without decoding an entire legacy collaboration set.
+/// Callers charge the storage read and must not clamp oversized legacy populations.
+pub(crate) fn collaboration_count<T: Config>(stash: &T::AccountId) -> u32 {
+    let mut prefix = [0u8; 5];
+    sp_io::storage::read(&Collaborations::<T>::hashed_key_for(stash), &mut prefix, 0)
+        .and_then(|_| Compact::<u32>::decode(&mut prefix.as_slice()).ok())
+        .map(|length| length.0)
+        .unwrap_or_default()
 }
 
 /// Mode of era-forcing.
@@ -802,19 +825,35 @@ where
             .filter(|stash| !invulnerables.contains(stash))
             .collect::<Vec<_>>();
         let offence_session = offence.session_index();
+        let offence_in_active_era = Pallet::<T>::active_era()
+            .and_then(|era| Pallet::<T>::eras_start_session_index(era.index))
+            .map(|start_session| offence_session >= start_session)
+            .unwrap_or(false);
+
+        if offence_in_active_era && !offenders.is_empty() {
+            // This adapter is the ImOnline session-ending handler. Reserve the
+            // chill work (including VIP delegation-cache callbacks) before it
+            // runs, while initialization can still reduce extrinsic admission.
+            // Legacy oversized incoming collaboration sets still need review;
+            // a weight allowance cannot impose a bound on old encoded state.
+            let weight = offenders.iter().fold(
+                T::DbWeight::get().reads(offenders.len() as u64),
+                |weight, stash| {
+                    let collaborators = collaboration_count::<T>(stash);
+                    weight.saturating_add(T::ThisWeightInfo::chill_hook(collaborators))
+                },
+            );
+            frame_system::Pallet::<T>::register_extra_weight_unchecked(
+                weight,
+                frame_support::dispatch::DispatchClass::Mandatory,
+            );
+        }
 
         R::report_offence(reporters, offence)?;
 
-        if !offenders.is_empty() {
-            let offence_in_active_era = Pallet::<T>::active_era()
-                .and_then(|era| Pallet::<T>::eras_start_session_index(era.index))
-                .map(|start_session| offence_session >= start_session)
-                .unwrap_or(false);
-
-            if offence_in_active_era {
-                for stash in offenders.iter() {
-                    Pallet::<T>::chill_stash(stash);
-                }
+        if offence_in_active_era {
+            for stash in offenders.iter() {
+                Pallet::<T>::chill_stash(stash);
             }
         }
 

@@ -57,6 +57,13 @@ pub trait WeightInfo {
     fn kick(k: u32, ) -> Weight;
     fn cooperate(n: u32, ) -> Weight;
     fn chill() -> Weight;
+    /// Session-hook chill with the actual incoming collaboration count.
+    /// Dispatchable chills retain their static worst-case declaration.
+    fn chill_hook(_collaborators: u32) -> Weight { Self::chill() }
+    /// One stake-cache refresh performed by a slashing hook. Runtime weights
+    /// override this with the measured VIP callback; legacy mocks retain a
+    /// conservative ledger-update allowance.
+    fn stake_refresh_hook() -> Weight { Self::bond_extra() }
     fn set_payee() -> Weight;
     fn set_controller() -> Weight;
     fn set_validator_count() -> Weight;

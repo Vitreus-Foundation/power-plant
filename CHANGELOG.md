@@ -34,6 +34,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Fix `pallet-nac-managing` VIPP burns to use numeric claim order and roll back NFT, threshold and `pallet-privileges` cache changes together
 
+- Fix `pallet-energy-generation` VIP stake refreshes after unbonding, slashing and validator removal, including distinct stash and controller accounts
+
 ## [215] - 2026-10-19
 
 ### Added

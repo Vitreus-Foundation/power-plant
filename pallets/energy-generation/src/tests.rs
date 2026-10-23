@@ -6068,3 +6068,97 @@ mod byzantine_threshold_disabling_strategy {
         });
     }
 }
+
+#[test]
+fn slash_ledger_refresh_charges_hook_budget_and_preserves_penalty() {
+    use frame_support::{dispatch::DispatchClass, traits::Imbalance};
+
+    ExtBuilder::default().build_and_execute(|| {
+        let before = *System::block_weight().get(DispatchClass::Mandatory);
+        let mut reward = 0;
+        let mut imbalance = slashing::NegativeImbalanceOf::<Test>::zero();
+        assert_ok!(slashing::do_slash::<Test>(
+            &11,
+            SlashEntity::new(ReputationPoint(0), 100),
+            &mut reward,
+            &mut imbalance,
+            active_era(),
+        ));
+        assert_eq!(Balances::free_balance(11), 900);
+        assert_eq!(PowerPlant::ledger(10).unwrap().active, 900);
+        assert_eq!(
+            *System::block_weight().get(DispatchClass::Mandatory),
+            before.saturating_add(<Test as Config>::ThisWeightInfo::stake_refresh_hook()),
+        );
+    });
+}
+
+#[test]
+fn reputation_slash_chill_charges_removed_delegations() {
+    use frame_support::dispatch::DispatchClass;
+
+    ExtBuilder::default().build_and_execute(|| {
+        assert_eq!(crate::collaboration_count::<Test>(&11), 1);
+        assert_eq!(PowerPlant::get_active_stake(&101), 500);
+        pallet_reputation::AccountReputation::<Test>::remove(11);
+        let before = *System::block_weight().get(DispatchClass::Mandatory);
+        PowerPlant::check_reputation_validator(&11);
+        assert!(!Validators::<Test>::contains_key(11));
+        assert!(!Collaborations::<Test>::contains_key(11));
+        assert_eq!(PowerPlant::get_active_stake(&101), 300);
+        assert_eq!(
+            *System::block_weight().get(DispatchClass::Mandatory),
+            before.saturating_add(
+                <Test as frame_system::Config>::DbWeight::get()
+                    .reads(1)
+                    .saturating_add(<Test as Config>::ThisWeightInfo::chill_hook(1)),
+            ),
+        );
+    });
+}
+
+#[test]
+fn offline_chill_reserves_callbacks_before_reporting_and_keeps_chill_behavior() {
+    use frame_support::dispatch::DispatchClass;
+    use sp_staking::offence::{Offence, OffenceError, ReportOffence};
+
+    type Offender = pallet_session::historical::IdentificationTuple<Test>;
+    struct Offline(Offender);
+    impl Offence<Offender> for Offline {
+        const ID: [u8; 16] = *b"vip-test-offline";
+        type TimeSlot = u32;
+        fn offenders(&self) -> Vec<Offender> {
+            vec![self.0.clone()]
+        }
+        fn session_index(&self) -> u32 {
+            Session::current_index()
+        }
+        fn validator_set_count(&self) -> u32 {
+            1
+        }
+        fn time_slot(&self) -> u32 {
+            self.session_index()
+        }
+        fn slash_fraction(&self, _: u32) -> Perbill {
+            Perbill::zero()
+        }
+    }
+    struct Reporter;
+    impl ReportOffence<AccountId, Offender, Offline> for Reporter {
+        fn report_offence(_: Vec<AccountId>, _: Offline) -> Result<(), OffenceError> {
+            assert!(System::block_weight()
+                .get(DispatchClass::Mandatory)
+                .all_gte(<Test as Config>::ThisWeightInfo::chill(),));
+            assert!(Validators::<Test>::contains_key(11));
+            Ok(())
+        }
+        fn is_known_offence(_: &[Offender], _: &u32) -> bool {
+            false
+        }
+    }
+    ExtBuilder::default().build_and_execute(|| {
+        let offender = (11, PowerPlant::eras_stakers(active_era(), 11));
+        assert_ok!(ChillOnOffence::<Test, Reporter>::report_offence(vec![], Offline(offender)));
+        assert!(!Validators::<Test>::contains_key(11));
+    });
+}

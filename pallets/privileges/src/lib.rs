@@ -868,6 +868,20 @@ impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight, Perbill> for Pallet
         Weight::from_parts(1, 2)
     }
 
+    fn remove_validator_delegation(account: &T::AccountId, validator: &T::AccountId) -> Weight {
+        if !pallet_energy_generation::Pallet::<T>::is_user_validator(account) {
+            let removed = pallet_energy_generation::Pallet::<T>::cooperators(account)
+                .and_then(|cooperations| cooperations.targets.get(validator).copied())
+                .unwrap_or_default();
+            VipMembers::<T>::mutate(account, |member| {
+                if let Some(member) = member {
+                    member.active_stake = member.active_stake.saturating_sub(removed);
+                }
+            });
+        }
+        T::DbWeight::get().reads_writes(10, 2)
+    }
+
     fn get_tax_percent(account: &T::AccountId) -> Perbill {
         let current_date = Self::current_date();
         let vip_info = Self::vip_members(account);
