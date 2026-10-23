@@ -968,3 +968,20 @@ mod launchpad_free_trades {
         });
     }
 }
+
+#[test]
+fn unreleased_migrations_install_privileges_recovery_guards() {
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
+    new_test_ext().execute_with(|| {
+        System::set_block_number(10);
+        StorageVersion::new(1).put::<Privileges>();
+        pallet_privileges::VipPoints::<Runtime>::insert(2020, alith(), 123);
+        pallet_privileges::VippPoints::<Runtime>::insert(2020, alith(), 456);
+        <migrations::Unreleased as OnRuntimeUpgrade>::on_runtime_upgrade();
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(2));
+        assert!(pallet_privileges::AccrualReviewRequired::<Runtime>::get());
+        assert!(pallet_privileges::CacheRecoveryProgress::<Runtime>::exists());
+        assert_eq!(pallet_privileges::VipPoints::<Runtime>::get(2020, alith()), Some(123));
+        assert_eq!(pallet_privileges::VippPoints::<Runtime>::get(2020, alith()), Some(456));
+    });
+}

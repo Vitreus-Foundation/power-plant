@@ -9,7 +9,7 @@ use sp_runtime::DispatchError;
 
 pub(crate) const MAX_AUTO_DAYS: u32 = 7;
 pub(crate) const MAX_SOURCES_PER_STEP: usize = 64;
-pub(crate) const MAX_MEMBERS: usize = 1024;
+pub(crate) const MAX_MEMBERS: usize = migration::recovery::MAX_MEMBERS_PER_KIND as usize;
 type Sources<T> = BoundedVec<(<T as frame_system::Config>::AccountId, PointsOf<T>), ConstU32<1024>>;
 
 #[derive(Encode, Decode, TypeInfo)]
@@ -32,7 +32,9 @@ pub fn today<T: Config>() -> Result<CurrentDateInfo, DispatchError> {
 }
 
 pub fn paused<T: Config>() -> bool {
-    AccrualReviewRequired::<T>::get() || ApprovedCatchUp::<T>::exists()
+    migration::recovery::is_frozen::<T>()
+        || AccrualReviewRequired::<T>::get()
+        || ApprovedCatchUp::<T>::exists()
 }
 
 /// Initialization hooks run before the timestamp inherent. Once the first
@@ -247,6 +249,7 @@ pub fn advance<T: Config>(target: &CurrentDateInfo, frozen: Option<&CatchUp<T>>)
 /// Root approves using the current bounded sources for this specified interval.
 /// Repeat with another approved interval if the real clock advances meanwhile.
 pub fn approve<T: Config>(target: CurrentDateInfo) -> DispatchResult {
+    ensure!(!migration::recovery::is_frozen::<T>(), Error::<T>::AccountingPaused);
     if let Some(job) = ApprovedCatchUp::<T>::get() {
         ensure!(
             !Pallet::<T>::check_correct_date(&CurrentDate::<T>::get(), &job.target),
@@ -266,6 +269,7 @@ pub fn approve<T: Config>(target: CurrentDateInfo) -> DispatchResult {
 #[frame_support::transactional]
 pub fn step<T: Config>() -> DispatchResult {
     let mut job = ApprovedCatchUp::<T>::get().ok_or(Error::<T>::AccountingPaused)?;
+    ensure!(!migration::recovery::is_frozen::<T>(), Error::<T>::AccountingPaused);
     let anchor = CurrentDate::<T>::get();
     if !Pallet::<T>::check_correct_date(&anchor, &job.target) {
         return Ok(());
@@ -315,6 +319,7 @@ pub fn step<T: Config>() -> DispatchResult {
 /// Do not silently credit the days that passed while administrators reviewed
 /// the job. An extended interval needs another explicit source approval.
 pub fn finish<T: Config>() -> DispatchResult {
+    ensure!(!migration::recovery::is_frozen::<T>(), Error::<T>::AccountingPaused);
     ensure!(
         !Pallet::<T>::check_correct_date(&CurrentDate::<T>::get(), &today::<T>()?),
         Error::<T>::AccountingPaused

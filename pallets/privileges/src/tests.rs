@@ -9,6 +9,7 @@ mod accounting;
 mod calendar;
 mod fanout;
 mod legacy_accounting;
+mod recovery;
 mod threshold_checks;
 mod transfers;
 
