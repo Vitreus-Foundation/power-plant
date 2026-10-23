@@ -38,6 +38,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Fix `pallet-nac-managing` VIPP threshold equality and exclude unvested funds from both vesting pallets without double-counting balances
 
+- Fix `pallet-privileges` UTC day settlement, year rollover and penalty dates, preserving stake at the timestamp boundary and bounding automatic catch-up
+
 ## [215] - 2026-10-19
 
 ### Added
