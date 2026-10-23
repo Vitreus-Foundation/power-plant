@@ -211,6 +211,9 @@ pub mod pallet {
             Balance = <Self as pallet_balances::Config>::Balance,
         >;
 
+        /// Unvested native funds excluded from VIPP eligibility.
+        type UnvestedBalance: UnvestedBalance<Self::AccountId, Self::Balance>;
+
         /// Bound for per-account VIPP ownership scans and mutations.
         #[pallet::constant]
         type MaxVippNftsPerAccount: Get<u32>;
@@ -599,19 +602,18 @@ impl<T: Config> Pallet<T> {
         Self::try_get_claim_balance(account_id).ok().flatten()
     }
 
+    /// Total native funds excluding unvested funds without counting reserves twice.
+    pub fn eligible_vipp_balance(account: &T::AccountId) -> T::Balance {
+        T::Currency::total_balance(account)
+            .saturating_sub(T::UnvestedBalance::unvested_balance(account))
+    }
+
     /// Check threshold of account.
     pub fn threshold_meets_vipp_requirements(
         account: &T::AccountId,
         claim_balance: <T as pallet_balances::Config>::Balance,
     ) -> bool {
-        let free_balance = T::Currency::total_balance(account);
-        let perbill = Perbill::from_rational(95_u32, 100_u32);
-
-        if free_balance > perbill * claim_balance {
-            return true;
-        }
-
-        false
+        Self::eligible_vipp_balance(account) >= Perbill::from_percent(95) * claim_balance
     }
 
     /// Check VIPP threshold every transaction.
@@ -636,8 +638,8 @@ impl<T: Config> Pallet<T> {
             return Ok(());
         };
         let meets_threshold = |claim| {
-            let balance = T::Currency::total_balance(account);
-            balance.min(balance_limit.unwrap_or(balance)) > Perbill::from_percent(95) * claim
+            let balance = Self::eligible_vipp_balance(account);
+            balance.min(balance_limit.unwrap_or(balance)) >= Perbill::from_percent(95) * claim
         };
         if Self::is_vipp_inactive(account) || meets_threshold(claim) {
             return Ok(());
@@ -805,5 +807,17 @@ impl<AccountId, Balance, ItemId> OnVippStatusHandler<AccountId, Balance, ItemId>
     }
     fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) -> DispatchResult {
         Ok(())
+    }
+}
+
+/// Native funds still subject to vesting at the current block.
+pub trait UnvestedBalance<AccountId, Balance> {
+    /// Return unvested funds once, without adding overlapping locks or reserves.
+    fn unvested_balance(who: &AccountId) -> Balance;
+}
+
+impl<AccountId, Balance: Zero> UnvestedBalance<AccountId, Balance> for () {
+    fn unvested_balance(_who: &AccountId) -> Balance {
+        Balance::zero()
     }
 }

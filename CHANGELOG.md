@@ -36,6 +36,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Fix `pallet-energy-generation` VIP stake refreshes after unbonding, slashing and validator removal, including distinct stash and controller accounts
 
+- Fix `pallet-nac-managing` VIPP threshold equality and exclude unvested funds from both vesting pallets without double-counting balances
+
 ## [215] - 2026-10-19
 
 ### Added

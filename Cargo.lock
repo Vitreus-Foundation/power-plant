@@ -7206,6 +7206,8 @@ dependencies = [
  "pallet-nfts",
  "pallet-privileges",
  "pallet-reputation",
+ "pallet-simple-vesting",
+ "pallet-vesting",
  "parity-scale-codec",
  "rand_chacha 0.2.2",
  "scale-info",

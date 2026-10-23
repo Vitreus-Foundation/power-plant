@@ -969,6 +969,26 @@ impl pallet_nac_managing::Config for Runtime {
     type NftCollectionId = NftCollectionId;
     type VIPPCollectionId = VIPPCollectionId;
     type MaxVippNftsPerAccount = ConstU32<64>;
+    type UnvestedBalance = VippUnvestedBalance;
+}
+
+/// Exclude both locked and reserved, still-unvested VTRS from VIPP eligibility.
+pub struct VippUnvestedBalance;
+
+impl pallet_nac_managing::UnvestedBalance<AccountId, Balance> for VippUnvestedBalance {
+    fn unvested_balance(who: &AccountId) -> Balance {
+        let locked =
+            <Vesting as frame_support::traits::VestingSchedule<AccountId>>::vesting_balance(who)
+                .unwrap_or_default();
+        let reserved = SimpleVesting::vesting(who)
+            .map(|schedule| schedule.locked_at::<<Runtime as pallet_simple_vesting::Config>::BlockNumberToBalance>(System::block_number()))
+            .unwrap_or_default()
+            .min(<Balances as frame_support::traits::NamedReservableCurrency<AccountId>>::reserved_balance_named(b"vesting ", who))
+            // Generic reserve slashes do not update named-reserve metadata.
+            // Never exclude more vesting funds than still exist as reserves.
+            .min(<Balances as frame_support::traits::ReservableCurrency<AccountId>>::reserved_balance(who));
+        locked.saturating_add(reserved)
+    }
 }
 
 parameter_types! {
