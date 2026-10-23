@@ -186,10 +186,13 @@ parameter_types! {
     pub storage ExchangeLiquidity: Balance = Balance::MAX;
     /// The energy asset whose exchange fails every swap, if any.
     pub storage FailingExchange: Option<u32> = None;
+    /// The energy asset whose exchange has no price for it and quotes nothing, if any.
+    pub storage UnpricedExchange: Option<u32> = None;
 }
 
 /// Sells the energy asset `ID` for native currency at `EXCHANGE_RATE`, minting what it pays out of
-/// `ExchangeLiquidity`, and fails every swap while `FailingExchange` names the asset.
+/// `ExchangeLiquidity`. It fails every swap while `FailingExchange` names the asset, and quotes
+/// nothing while `UnpricedExchange` does.
 pub struct MockExchange<const ID: u32>;
 
 impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
@@ -197,10 +200,16 @@ impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
     type EnergyAsset = ItemOf<Assets, ConstU32<ID>, AccountId>;
 
     fn quote_price_exact_tokens_for_tokens(amount: Balance, _: bool) -> Option<Balance> {
+        if UnpricedExchange::get() == Some(ID) {
+            return None;
+        }
         amount.checked_mul(EXCHANGE_RATE)
     }
 
     fn quote_price_tokens_for_exact_tokens(amount: Balance, _: bool) -> Option<Balance> {
+        if UnpricedExchange::get() == Some(ID) {
+            return None;
+        }
         Some(amount / EXCHANGE_RATE)
     }
 

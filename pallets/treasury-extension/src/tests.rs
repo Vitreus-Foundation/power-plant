@@ -2,7 +2,7 @@ use crate::mock::*;
 use crate::Event;
 use frame_support::{assert_ok, traits::fungibles::Mutate};
 use pallet_treasury::Event as TreasuryEvent;
-use sp_runtime::TokenError;
+use sp_runtime::{DispatchError, TokenError};
 use vitreus_runtime_common::OnSessionChange;
 
 #[test]
@@ -186,6 +186,42 @@ fn ensure_energy_exchange_failed_upon_failing_swap() {
             Event::<Test>::EnergyExchangeFailed {
                 energy: None,
                 static_energy: Some(TokenError::FundsUnavailable.into()),
+                liquid_energy: None,
+            }
+            .into(),
+        );
+        let native = (10 + 30) * EXCHANGE_RATE;
+        System::assert_last_event(
+            Event::<Test>::EnergyExchanged {
+                energy: 10,
+                static_energy: 0,
+                liquid_energy: 30,
+                native,
+            }
+            .into(),
+        );
+        assert_eq!(Assets::balance(ENERGY, treasury), ENERGY_MIN_BALANCE);
+        assert_eq!(Assets::balance(STATIC_ENERGY, treasury), ENERGY_MIN_BALANCE + 20);
+        assert_eq!(Assets::balance(LIQUID_ENERGY, treasury), ENERGY_MIN_BALANCE);
+        assert_eq!(Balances::free_balance(treasury), native_before + native);
+    });
+}
+
+#[test]
+fn ensure_energy_exchange_failed_upon_unpriced_energy() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        let treasury = Treasury::account_id();
+        mint_treasury_energy(10, 20, 30);
+        UnpricedExchange::set(&Some(STATIC_ENERGY));
+        let native_before = Balances::free_balance(treasury);
+
+        <TreasuryExtension as OnSessionChange>::on_new_session(1);
+
+        System::assert_has_event(
+            Event::<Test>::EnergyExchangeFailed {
+                energy: None,
+                static_energy: Some(DispatchError::Unavailable),
                 liquid_energy: None,
             }
             .into(),

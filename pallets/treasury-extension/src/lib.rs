@@ -236,12 +236,18 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             Preservation::Preserve,
             Fortitude::Polite,
         );
+        let max_amount_out = Exchange::max_amount_out();
+
+        // Nothing to sell, or an exchange with nothing to pay out, is not a failure.
+        if balance.is_zero() || max_amount_out.is_zero() {
+            return Ok((Zero::zero(), Zero::zero()));
+        }
 
         // A swap for more than `max_amount_out` fails as a whole, so sell at most the input that
         // buys exactly that. The quote leaves the fee out: with a fee the payout is only smaller.
-        let max_amount_out = Exchange::max_amount_out();
+        // Without a quote the exchange can't price the energy, and that is a failure.
         let max_amount_in = Exchange::quote_price_tokens_for_exact_tokens(max_amount_out, false)
-            .unwrap_or_default();
+            .ok_or(DispatchError::Unavailable)?;
         let amount = balance.min(max_amount_in);
 
         if amount.is_zero() {
