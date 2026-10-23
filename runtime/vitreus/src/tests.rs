@@ -357,8 +357,8 @@ mod treasury {
     /// A rate at which the broker's conversions round down.
     const ROUNDING_RATE: FixedU128 = FixedU128::from_rational(3, 2);
     /// A rate at which a base unit of VTRS at the broker pays for no energy on either path: LNRG
-    /// rounds the output down to zero, SNRG asks for more than the unit. At `ROUNDING_RATE` the
-    /// SNRG path still swaps one for one.
+    /// rounds the output down to zero, SNRG would pay out more than the unit. At `ROUNDING_RATE`
+    /// the SNRG path still swaps one for one.
     const DUST_RATE: FixedU128 = FixedU128::from_rational(7, 3);
 
     /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
@@ -484,15 +484,21 @@ mod treasury {
     }
 
     /// With only a base unit of `asset` above its minimum balance in the treasury, too little to
-    /// buy any VTRS at `ROUNDING_RATE`, the treasury's session hook must sell nothing and report
-    /// nothing: dust is not a failed sale. Only the LNRG path, which VNRG shares, has such dust: at
-    /// a rate of at least one VTRS per SNRG a base unit of SNRG always buys some VTRS.
+    /// buy any VTRS, the treasury's session hook must sell nothing and report nothing: dust is not
+    /// a failed sale. Energy has such dust on either path when its base unit is worth less than
+    /// one of VTRS.
     fn assert_skips_treasury_dust(asset: AssetId) {
         let treasury = Treasury::account_id();
 
         System::set_block_number(1);
         fund_broker();
+        // Energy is worth two thirds of VTRS on both paths: the LNRG rate counts energy per VTRS,
+        // the SNRG rate VTRS per energy.
         pallet_dynamic_energy::ExchangeRate::<Runtime>::put(ROUNDING_RATE);
+        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
+            SNRG::get(),
+            FixedU128::from_rational(2, 3),
+        );
 
         Balances::set_balance(&treasury, ExistentialDeposit::get());
         let min_balance =
@@ -604,6 +610,11 @@ mod treasury {
     #[test]
     fn new_session_skips_treasury_vnrg_dust() {
         new_test_ext().execute_with(|| assert_skips_treasury_dust(VNRG::get()))
+    }
+
+    #[test]
+    fn new_session_skips_treasury_snrg_dust() {
+        new_test_ext().execute_with(|| assert_skips_treasury_dust(SNRG::get()))
     }
 
     #[test]
