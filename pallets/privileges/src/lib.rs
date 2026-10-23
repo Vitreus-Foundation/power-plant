@@ -145,6 +145,10 @@ pub mod pallet {
     pub type VippForfeitureApproval<T: Config> =
         StorageMap<_, Twox64Concat, T::AccountId, Option<u32>>;
 
+    /// Administrator-approved frozen catch-up sources and progress.
+    #[pallet::storage]
+    pub type ApprovedCatchUp<T: Config> = StorageValue<_, accounting::CatchUp<T>>;
+
     /// Automatic accrual is paused until the stale interval is reviewed.
     #[pallet::storage]
     pub type AccrualReviewRequired<T: Config> = StorageValue<_, bool, ValueQuery>;
@@ -204,6 +208,13 @@ pub mod pallet {
             account: T::AccountId,
             /// Historical year to clear, or None to preserve prior years.
             year: Option<u32>,
+        },
+        /// Governance approved a fixed source snapshot for an accounting interval.
+        CatchUpApproved {
+            /// Start of the unprocessed interval.
+            from: CurrentDateInfo,
+            /// Exclusive end of the approved interval.
+            target: CurrentDateInfo,
         },
     }
 
@@ -448,6 +459,40 @@ pub mod pallet {
 
             Ok(Pays::No.into())
         }
+        /// Approve current stake/caps as frozen sources for a reviewed interval.
+        /// This is not a reconstruction of historical stake. Verify it off chain.
+        #[pallet::call_index(13)]
+        #[pallet::weight(<T as Config>::WeightInfo::accounting(2048, 0, 0))]
+        pub fn approve_catch_up(
+            origin: OriginFor<T>,
+            year: i32,
+            month: u32,
+            day: u32,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+            let target = CurrentDateInfo::new::<T>(year, month, day)?;
+            let from = Self::current_date();
+            accounting::approve::<T>(target.clone())?;
+            Self::deposit_event(Event::<T>::CatchUpApproved { from, target });
+            Ok(())
+        }
+
+        /// Credit at most 64 frozen sources for at most 366 days.
+        #[pallet::call_index(14)]
+        #[pallet::weight(<T as Config>::WeightInfo::accounting(64, 366, 2))]
+        pub fn continue_catch_up(origin: OriginFor<T>) -> DispatchResult {
+            ensure_root(origin)?;
+            accounting::step::<T>()
+        }
+
+        /// Resume only after every approved day has been processed and reviewed.
+        #[pallet::call_index(15)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(5, 2))]
+        pub fn finish_catch_up(origin: OriginFor<T>) -> DispatchResult {
+            ensure_root(origin)?;
+            accounting::finish::<T>()
+        }
+
         /// Approve a reviewed historical forfeiture decision before repairing a
         /// breach that spans years. This call itself does not change any points.
         #[pallet::call_index(16)]
@@ -780,7 +825,7 @@ impl<T: Config> Pallet<T> {
     }
 
     fn advance_date(new_date: &CurrentDateInfo) -> DispatchResult {
-        accounting::advance::<T>(new_date)
+        accounting::advance::<T>(new_date, None)
     }
 
     /// Calculate multiplier based on the number of elapsed days in VIP.

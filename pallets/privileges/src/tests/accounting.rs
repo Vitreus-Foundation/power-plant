@@ -1,5 +1,6 @@
 use super::*;
 use crate::accounting as accrual;
+
 fn date(year: i32, month: u32, day: u32) -> CurrentDateInfo {
     CurrentDateInfo::new::<Test>(year, month, day).unwrap()
 }
@@ -15,31 +16,251 @@ fn clock(year: i32, month: u32, day: u32) {
     );
 }
 
-fn timestamp_hook() {
-    <Privileges as frame_support::traits::OnTimestampSet<u64>>::on_timestamp_set(Timestamp::get());
+fn run_approved_job() {
+    for _ in 0..1000 {
+        let job = accrual::ApprovedCatchUp::<Test>::get().unwrap();
+        if !Privileges::check_correct_date(&CurrentDate::<Test>::get(), &job.target) {
+            return;
+        }
+        assert_ok!(accrual::step::<Test>());
+    }
+    panic!("bounded catch-up did not finish");
 }
 
-fn populate_maximum_cached_population() {
-    for account in 1000..1000 + accrual::MAX_MEMBERS as u64 {
-        VipMembers::<Test>::insert(
-            account,
-            VipMemberInfo::<Test> {
-                start: 0,
-                tax_type: PenaltyType::Flat,
-                points: 0,
-                active_stake: 1000,
-            },
+#[test]
+fn long_interruption_freezes_points_and_rejects_membership_and_nft_mutations() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        join_vip_and_vipp(100);
+        let member = VippMembers::<Test>::get(10).unwrap().encode();
+        clock(2022, 1, 1);
+        Privileges::update_quarter_info();
+        assert_eq!(CurrentDate::<Test>::get(), date(2020, 1, 1));
+        assert_eq!(VippMembers::<Test>::get(10).unwrap().encode(), member);
+        assert_noop!(
+            Privileges::become_vip_status(RuntimeOrigin::signed(20), PenaltyType::Flat),
+            Error::<Test>::AccountingPaused
         );
-        VippMembers::<Test>::insert(
-            account,
-            VippMemberInfo::<Test> {
-                points: 0,
-                active_vipp_threshold: (0..64)
-                    .map(|item| (account as u32 * 64 + item, if item == 63 { 5 } else { 15 }))
-                    .collect(),
-            },
+        assert_noop!(
+            Privileges::exit_vip(RuntimeOrigin::signed(10)),
+            Error::<Test>::AccountingPaused
         );
+        assert_noop!(
+            Privileges::change_penalty_type(RuntimeOrigin::signed(10), PenaltyType::Declining),
+            Error::<Test>::AccountingPaused
+        );
+        assert_noop!(
+            NacManaging::transfer_vipp(RuntimeOrigin::signed(10), owned_vipp_ids(10)[0], 100),
+            Error::<Test>::AccountingPaused
+        );
+        assert_err!(accrual::ensure_ready::<Test>(), Error::<Test>::AccountingPaused);
+    });
+}
+
+#[test]
+fn approved_catchup_freezes_sources_while_live_staking_remains_operable() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        clock(2022, 1, 1);
+        assert_ok!(accrual::approve::<Test>(date(2022, 1, 1)));
+        assert_ok!(EnergyGeneration::unbond(RuntimeOrigin::signed(10), 800));
+        assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 200);
+        run_approved_job();
+        assert_eq!(Privileges::vipp_points(2020, 10), Some(366 * 950));
+        assert_eq!(Privileges::vipp_points(2021, 10), Some(365 * 950));
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
+        assert_ok!(accrual::finish::<Test>());
+        clock(2022, 1, 2);
+        Privileges::update_quarter_info();
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 200);
+    });
+}
+
+#[test]
+fn catchup_persists_cursor_and_credits_at_most_64_sources_in_one_step() {
+    ExtBuilder::default().build_and_execute(|| {
+        for account in 1000..1130 {
+            VipMembers::<Test>::insert(
+                account,
+                VipMemberInfo::<Test> {
+                    start: 0,
+                    tax_type: PenaltyType::Flat,
+                    points: 0,
+                    active_stake: 1000,
+                },
+            );
+        }
+        clock(2020, 1, 2);
+        assert_ok!(accrual::approve::<Test>(date(2020, 1, 2)));
+        assert_ok!(accrual::step::<Test>());
+        assert_eq!(VipMembers::<Test>::iter().filter(|(_, member)| member.points > 0).count(), 64);
+        assert_eq!(CurrentDate::<Test>::get(), date(2020, 1, 1));
+        let cursor = accrual::ApprovedCatchUp::<Test>::get().unwrap().source_cursor;
+        assert_eq!(cursor, 64);
+        System::set_block_number(99);
+        assert_ok!(accrual::step::<Test>());
+        assert_eq!(VipMembers::<Test>::iter().filter(|(_, member)| member.points > 0).count(), 128);
+        assert_eq!(CurrentDate::<Test>::get(), date(2020, 1, 1));
+        run_approved_job();
+        for (_, member) in VipMembers::<Test>::iter() {
+            assert_eq!(member.points, 20);
+        }
+        assert_eq!(CurrentDate::<Test>::get(), date(2020, 1, 2));
+        // Completed steps cannot credit the same interval a second time.
+        assert_ok!(accrual::step::<Test>());
+        assert_eq!(VipMembers::<Test>::iter().map(|(_, member)| member.points).sum::<u64>(), 2600);
+    });
+}
+
+#[test]
+fn catchup_limits_each_date_window_to_366_days() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        clock(2022, 1, 1);
+        assert_ok!(accrual::approve::<Test>(date(2022, 1, 1)));
+        assert_ok!(accrual::step::<Test>());
+        assert_eq!(CurrentDate::<Test>::get(), date(2021, 1, 1));
+        assert_eq!(Privileges::vipp_points(2020, 10), Some(366 * 950));
+        assert!(Privileges::vipp_points(2021, 10).is_none());
+        assert_err!(accrual::finish::<Test>(), Error::<Test>::AccountingPaused);
+        assert_ok!(accrual::step::<Test>());
+        assert_eq!(CurrentDate::<Test>::get(), date(2022, 1, 1));
+        assert_eq!(Privileges::vipp_points(2021, 10), Some(365 * 950));
+    });
+}
+
+#[test]
+fn catchup_cannot_replace_a_partially_processed_job() {
+    ExtBuilder::default().build_and_execute(|| {
+        for account in 1000..1070 {
+            VipMembers::<Test>::insert(
+                account,
+                VipMemberInfo::<Test> {
+                    start: 0,
+                    tax_type: PenaltyType::Flat,
+                    points: 0,
+                    active_stake: 1000,
+                },
+            );
+        }
+        clock(2020, 1, 3);
+        assert_ok!(accrual::approve::<Test>(date(2020, 1, 2)));
+        assert_ok!(accrual::step::<Test>());
+        let job = accrual::ApprovedCatchUp::<Test>::get().unwrap().encode();
+        assert_noop!(accrual::approve::<Test>(date(2020, 1, 3)), Error::<Test>::AccountingPaused);
+        assert_eq!(accrual::ApprovedCatchUp::<Test>::get().unwrap().encode(), job);
+    });
+}
+
+#[test]
+fn catchup_cannot_overwrite_a_funded_year_or_existing_annual_points() {
+    for funded in [false, true] {
+        ExtBuilder::default().build_and_execute(|| {
+            join_vip_and_vipp(10);
+            clock(2021, 1, 1);
+            if funded {
+                Rewards::<Test>::insert(
+                    2020,
+                    RewardsInfo::<Test> {
+                        vip_points: 100,
+                        vip_rewards: 200,
+                        vipp_points: 300,
+                        vipp_rewards: 400,
+                    },
+                );
+            } else {
+                VippPoints::<Test>::insert(2020, 10, 999);
+            }
+            assert_ok!(accrual::approve::<Test>(date(2021, 1, 1)));
+            let expected = if funded {
+                Error::<Test>::YearRewardsAlreadySet
+            } else {
+                Error::<Test>::HistoricalPointsAlreadyExist
+            };
+            assert_noop!(accrual::step::<Test>(), expected);
+            assert_eq!(CurrentDate::<Test>::get(), date(2020, 1, 1));
+            assert_eq!(Privileges::vip_members(10).unwrap().points, 0);
+            assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
+            assert!(VipPoints::<Test>::get(2020, 10).is_none());
+            if !funded {
+                assert_eq!(VippPoints::<Test>::get(2020, 10), Some(999));
+            }
+        });
     }
+}
+
+#[test]
+fn catchup_requires_new_approval_for_days_elapsed_during_review() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        clock(2020, 1, 2);
+        assert_ok!(accrual::approve::<Test>(date(2020, 1, 2)));
+        run_approved_job();
+        clock(2020, 1, 3);
+        assert_err!(accrual::finish::<Test>(), Error::<Test>::AccountingPaused);
+        Privileges::update_quarter_info();
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 950);
+        assert_ok!(accrual::approve::<Test>(date(2020, 1, 3)));
+        run_approved_job();
+        assert_ok!(accrual::finish::<Test>());
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 1900);
+    });
+}
+
+#[test]
+fn catchup_rejects_future_target_without_creating_a_job() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        assert_noop!(accrual::approve::<Test>(date(2020, 1, 2)), Error::<Test>::NotCorrectDate);
+        assert!(!accrual::ApprovedCatchUp::<Test>::exists());
+    });
+}
+
+#[test]
+fn accounting_population_and_cache_bounds_fail_without_partial_points() {
+    for oversized_cache in [false, true] {
+        ExtBuilder::default().build_and_execute(|| {
+            join_vip_and_vipp(10);
+            if oversized_cache {
+                VippMembers::<Test>::mutate(10, |m| {
+                    m.as_mut().unwrap().active_vipp_threshold = vec![(0, 1); 65]
+                });
+            } else {
+                for account in 1000..2024 {
+                    VipMembers::<Test>::insert(
+                        account,
+                        VipMemberInfo::<Test> {
+                            start: 0,
+                            tax_type: PenaltyType::Flat,
+                            points: 0,
+                            active_stake: 1000,
+                        },
+                    );
+                }
+            }
+            clock(2020, 1, 2);
+            assert_noop!(
+                accrual::approve::<Test>(date(2020, 1, 2)),
+                Error::<Test>::AccountingCapacityExceeded
+            );
+            assert!(!accrual::ApprovedCatchUp::<Test>::exists());
+            assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
+            assert_eq!(CurrentDate::<Test>::get(), date(2020, 1, 1));
+        });
+    }
+}
+
+#[test]
+fn quarantined_vipp_entitlement_cannot_generate_new_points() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        VippMembers::<Test>::mutate(10, |m| m.as_mut().unwrap().points = 456);
+        pallet_nac_managing::VippAccountingQuarantine::<Test>::insert(10, ());
+        clock(2020, 1, 2);
+        Privileges::update_quarter_info();
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 456);
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 20);
+    });
 }
 
 #[test]
@@ -96,6 +317,65 @@ fn timestamp_hook_credits_completed_day_once_before_any_user_dispatch() {
 }
 
 #[test]
+fn catchup_annual_conflict_preserves_prior_chunks_and_retries_only_unfinished_sources() {
+    ExtBuilder::default().build_and_execute(|| {
+        for account in 1000..1070 {
+            VipMembers::<Test>::insert(
+                account,
+                VipMemberInfo::<Test> {
+                    start: 0,
+                    tax_type: PenaltyType::Flat,
+                    points: 0,
+                    active_stake: 1000,
+                },
+            );
+        }
+        clock(2021, 1, 1);
+        assert_ok!(accrual::approve::<Test>(date(2021, 1, 1)));
+        let job = accrual::ApprovedCatchUp::<Test>::get().unwrap();
+        let first = job.vip[0].0;
+        let conflicting = job.vip[65].0;
+        VipPoints::<Test>::insert(2020, conflicting, 999);
+        assert_ok!(accrual::step::<Test>());
+        let first_saved = VipPoints::<Test>::get(2020, first).unwrap();
+        assert_eq!(accrual::ApprovedCatchUp::<Test>::get().unwrap().source_cursor, 64);
+        assert_noop!(accrual::step::<Test>(), Error::<Test>::HistoricalPointsAlreadyExist);
+        assert_eq!(accrual::ApprovedCatchUp::<Test>::get().unwrap().source_cursor, 64);
+        assert_eq!(VipPoints::<Test>::get(2020, first), Some(first_saved));
+        assert_eq!(VipPoints::<Test>::get(2020, conflicting), Some(999));
+        // Model an explicitly approved correction of the conflicting fixture row.
+        VipPoints::<Test>::remove(2020, conflicting);
+        assert_ok!(accrual::step::<Test>());
+        assert_eq!(VipPoints::<Test>::get(2020, first), Some(first_saved));
+        assert_eq!(VipPoints::<Test>::get(2020, conflicting), Some(first_saved));
+        assert_eq!(CurrentDate::<Test>::get(), date(2021, 1, 1));
+    });
+}
+
+fn populate_maximum_cached_population() {
+    for account in 1000..1000 + accrual::MAX_MEMBERS as u64 {
+        VipMembers::<Test>::insert(
+            account,
+            VipMemberInfo::<Test> {
+                start: 0,
+                tax_type: PenaltyType::Flat,
+                points: 0,
+                active_stake: 1000,
+            },
+        );
+        VippMembers::<Test>::insert(
+            account,
+            VippMemberInfo::<Test> {
+                points: 0,
+                active_vipp_threshold: (0..64)
+                    .map(|item| (account as u32 * 64 + item, if item == 63 { 5 } else { 15 }))
+                    .collect(),
+            },
+        );
+    }
+}
+
+#[test]
 fn maximum_population_daily_hook_processes_all_sources_once() {
     ExtBuilder::default().build_and_execute(|| {
         populate_maximum_cached_population();
@@ -112,6 +392,29 @@ fn maximum_population_daily_hook_processes_all_sources_once() {
         assert!(VippMembers::<Test>::iter().all(|(_, member)| member.points == 950));
         println!("native_test_timing scenario=daily_1024_vip_1024_vipp_64_caps_each elapsed_us={} (unit-test host timing, not runtime benchmark)", elapsed.as_micros());
     });
+}
+
+#[test]
+fn maximum_population_catchup_step_is_limited_to_64_sources_for_365_days() {
+    ExtBuilder::default().build_and_execute(|| {
+        populate_maximum_cached_population();
+        CurrentDate::<Test>::put(date(2021, 1, 1));
+        clock(2022, 1, 1);
+        assert_ok!(accrual::approve::<Test>(date(2022, 1, 1)));
+        let started = std::time::Instant::now();
+        assert_ok!(accrual::step::<Test>());
+        let elapsed = started.elapsed();
+        assert_eq!(CurrentDate::<Test>::get(), date(2021, 1, 1));
+        assert_eq!(VipPoints::<Test>::iter_prefix(2021).count(), 64);
+        assert_eq!(VippPoints::<Test>::iter_prefix(2021).count(), 0);
+        assert_eq!(accrual::ApprovedCatchUp::<Test>::get().unwrap().source_cursor, 64);
+        assert!(VippMembers::<Test>::iter().all(|(_, member)| member.points == 0));
+        println!("native_test_timing scenario=approved_64_of_2048_sources_365_days elapsed_us={} (unit-test host timing, not runtime benchmark)", elapsed.as_micros());
+    });
+}
+
+fn timestamp_hook() {
+    <Privileges as frame_support::traits::OnTimestampSet<u64>>::on_timestamp_set(Timestamp::get());
 }
 
 #[test]
@@ -223,49 +526,21 @@ fn vip_and_nft_dispatches_before_timestamp_are_rejected_until_the_clock_is_known
     });
 }
 
-fn deferred_december_breach(two_nfts: bool) {
-    CurrentDate::<Test>::put(date(2025, 12, 31));
-    clock(2025, 12, 31);
-    join_vip_and_vipp(10);
-    System::set_block_number(1);
-    timestamp_hook();
-    if two_nfts {
-        System::set_block_number(2);
-        timestamp_hook();
-        claim_for_validator(1000);
-    }
-    VippMembers::<Test>::mutate(10, |member| member.as_mut().unwrap().points = 5000);
-    VippPoints::<Test>::insert(2024, 10, 777);
-    assert_ok!(Balances::force_set_balance(
-        RuntimeOrigin::root(),
-        10,
-        if two_nfts { 1000 } else { 100 }
-    ));
-    <NacManaging as pallet_energy_fee::OnWithdrawFeeHandler<AccountId>>::on_withdraw_fee(&10);
-    assert_eq!(VippBreachYear::<Test>::get(10), Some(2025));
-    pallet_nac_managing::VippReconciliationsThisBlock::<Test>::put(2);
-    NacManaging::finish_balance_changes();
-    assert!(NacManaging::is_vipp_quarantined(&10));
-    assert_eq!(owned_vipp_ids(10).len(), if two_nfts { 2 } else { 1 });
-    System::set_block_number(3);
-    clock(2026, 1, 1);
-    timestamp_hook();
-    assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
-    System::set_block_number(4);
-    clock(2026, 1, 2);
-    timestamp_hook();
-}
-
 #[test]
-fn quarantined_vipp_entitlement_cannot_generate_new_points() {
+fn explicitly_approved_sources_use_live_stake_instead_of_initialization_snapshot() {
     ExtBuilder::default().build_and_execute(|| {
         join_vip_and_vipp(10);
-        VippMembers::<Test>::mutate(10, |m| m.as_mut().unwrap().points = 456);
-        pallet_nac_managing::VippAccountingQuarantine::<Test>::insert(10, ());
+        System::set_block_number(1);
+        timestamp_hook();
+        System::set_block_number(2);
+        assert_ok!(EnergyGeneration::unbond(RuntimeOrigin::signed(10), 300));
+        assert_eq!(PreTimestampStake::<Test>::get(10), Some((2, 1000, false)));
         clock(2020, 1, 2);
-        Privileges::update_quarter_info();
-        assert_eq!(Privileges::vipp_members(10).unwrap().points, 456);
-        assert_eq!(Privileges::vip_members(10).unwrap().points, 20);
+        // Approvals deliberately freeze the reviewed live source, even if a shadow exists.
+        assert_ok!(accrual::approve::<Test>(date(2020, 1, 2)));
+        let job = accrual::ApprovedCatchUp::<Test>::get().unwrap();
+        assert_eq!(job.vip.as_slice(), &[(10, 700)]);
+        assert_eq!(job.vipp.as_slice(), &[(10, 700)]);
     });
 }
 
@@ -305,6 +580,39 @@ fn pre_timestamp_fee_check_preserves_closed_year_before_finalization_burn() {
         assert_eq!(Privileges::vipp_points(2025, 10), Some(950));
         assert!(Privileges::vipp_members(10).is_none());
     });
+}
+
+fn deferred_december_breach(two_nfts: bool) {
+    CurrentDate::<Test>::put(date(2025, 12, 31));
+    clock(2025, 12, 31);
+    join_vip_and_vipp(10);
+    System::set_block_number(1);
+    timestamp_hook();
+    if two_nfts {
+        System::set_block_number(2);
+        timestamp_hook();
+        claim_for_validator(1000);
+    }
+    VippMembers::<Test>::mutate(10, |member| member.as_mut().unwrap().points = 5000);
+    VippPoints::<Test>::insert(2024, 10, 777);
+    assert_ok!(Balances::force_set_balance(
+        RuntimeOrigin::root(),
+        10,
+        if two_nfts { 1000 } else { 100 }
+    ));
+    <NacManaging as pallet_energy_fee::OnWithdrawFeeHandler<AccountId>>::on_withdraw_fee(&10);
+    assert_eq!(VippBreachYear::<Test>::get(10), Some(2025));
+    pallet_nac_managing::VippReconciliationsThisBlock::<Test>::put(2);
+    NacManaging::finish_balance_changes();
+    assert!(NacManaging::is_vipp_quarantined(&10));
+    assert_eq!(owned_vipp_ids(10).len(), if two_nfts { 2 } else { 1 });
+    System::set_block_number(3);
+    clock(2026, 1, 1);
+    timestamp_hook();
+    assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
+    System::set_block_number(4);
+    clock(2026, 1, 2);
+    timestamp_hook();
 }
 
 #[test]
