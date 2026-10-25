@@ -208,6 +208,58 @@ fn empty_exchange_emits_no_event() {
 }
 
 #[test]
+fn exchange_dust_emits_no_event() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        let treasury = Treasury::account_id();
+        mint_treasury_energy(10, 20, 30);
+        // The exchanges have less native currency than a unit of energy buys.
+        ExchangeLiquidity::set(&(EXCHANGE_RATE - 1));
+        let native_before = Balances::free_balance(treasury);
+
+        <TreasuryExtension as OnSessionChange>::on_new_session(1);
+
+        assert!(!System::events().iter().any(|record| matches!(
+            record.event,
+            RuntimeEvent::TreasuryExtension(
+                Event::<Test>::EnergyExchanged { .. } | Event::<Test>::EnergyExchangeFailed { .. }
+            )
+        )));
+        assert_eq!(Assets::balance(ENERGY, treasury), ENERGY_MIN_BALANCE + 10);
+        assert_eq!(Assets::balance(STATIC_ENERGY, treasury), ENERGY_MIN_BALANCE + 20);
+        assert_eq!(Assets::balance(LIQUID_ENERGY, treasury), ENERGY_MIN_BALANCE + 30);
+        assert_eq!(Balances::free_balance(treasury), native_before);
+    });
+}
+
+#[test]
+fn treasury_dust_emits_no_event() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        let treasury = Treasury::account_id();
+        // A unit of Static Energy, which buys less than a unit of native currency here.
+        mint_treasury_energy(0, 1, 0);
+        CheapEnergyExchange::set(&Some(STATIC_ENERGY));
+        // Plenty, but not unlimited: this exchange's quote for an unlimited payout would overflow.
+        ExchangeLiquidity::set(&(100 * EXCHANGE_RATE));
+        let native_before = Balances::free_balance(treasury);
+
+        <TreasuryExtension as OnSessionChange>::on_new_session(1);
+
+        assert!(!System::events().iter().any(|record| matches!(
+            record.event,
+            RuntimeEvent::TreasuryExtension(
+                Event::<Test>::EnergyExchanged { .. } | Event::<Test>::EnergyExchangeFailed { .. }
+            )
+        )));
+        assert_eq!(Assets::balance(ENERGY, treasury), ENERGY_MIN_BALANCE);
+        assert_eq!(Assets::balance(STATIC_ENERGY, treasury), ENERGY_MIN_BALANCE + 1);
+        assert_eq!(Assets::balance(LIQUID_ENERGY, treasury), ENERGY_MIN_BALANCE);
+        assert_eq!(Balances::free_balance(treasury), native_before);
+    });
+}
+
+#[test]
 fn failing_swap_is_reported() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);

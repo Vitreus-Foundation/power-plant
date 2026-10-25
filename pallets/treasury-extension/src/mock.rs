@@ -191,12 +191,14 @@ parameter_types! {
     pub storage UnpricedExchange: Option<u32> = None;
     /// The energy asset whose exchange rounds up the energy it quotes for an exact output, if any.
     pub storage RoundingUpExchange: Option<u32> = None;
+    /// The energy asset whose exchange pays a unit of native currency per `EXCHANGE_RATE` units of
+    /// energy instead, if any.
+    pub storage CheapEnergyExchange: Option<u32> = None;
 }
 
 /// Sells the energy asset `ID` for native currency at `EXCHANGE_RATE`, minting what it pays out of
-/// `ExchangeLiquidity`. It fails every swap while `FailingExchange` names the asset, quotes nothing
-/// while `UnpricedExchange` does, and rounds up the energy it quotes for an exact output while
-/// `RoundingUpExchange` does.
+/// `ExchangeLiquidity`. The `FailingExchange`, `UnpricedExchange`, `RoundingUpExchange` and
+/// `CheapEnergyExchange` settings change how it behaves for the asset they name.
 pub struct MockExchange<const ID: u32>;
 
 impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
@@ -204,17 +206,23 @@ impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
     type EnergyAsset = ItemOf<Assets, ConstU32<ID>, AccountId>;
 
     fn quote_price_exact_tokens_for_tokens(amount: Balance, _: bool) -> Option<Balance> {
-        if UnpricedExchange::get() == Some(ID) || amount == 0 {
+        if UnpricedExchange::get() == Some(ID) {
             return None;
         }
-        amount
-            .checked_mul(EXCHANGE_RATE)
-            .filter(|amount_out| *amount_out <= ExchangeLiquidity::get())
+        let amount_out = if CheapEnergyExchange::get() == Some(ID) {
+            Some(amount / EXCHANGE_RATE)
+        } else {
+            amount.checked_mul(EXCHANGE_RATE)
+        };
+        amount_out.filter(|amount_out| *amount_out != 0 && *amount_out <= ExchangeLiquidity::get())
     }
 
     fn quote_price_tokens_for_exact_tokens(amount: Balance, _: bool) -> Option<Balance> {
         if UnpricedExchange::get() == Some(ID) || amount == 0 || amount > ExchangeLiquidity::get() {
             return None;
+        }
+        if CheapEnergyExchange::get() == Some(ID) {
+            return amount.checked_mul(EXCHANGE_RATE);
         }
         if RoundingUpExchange::get() == Some(ID) {
             return Some(amount.div_ceil(EXCHANGE_RATE));
@@ -242,7 +250,11 @@ impl<const ID: u32> SwapFromEnergy<AccountId> for MockExchange<ID> {
         }
 
         // Like a real exchange, a swap for more than it can pay fails as a whole.
-        let amount_out = amount_in * EXCHANGE_RATE;
+        let amount_out = if CheapEnergyExchange::get() == Some(ID) {
+            amount_in / EXCHANGE_RATE
+        } else {
+            amount_in * EXCHANGE_RATE
+        };
         let liquidity_left = ExchangeLiquidity::get()
             .checked_sub(amount_out)
             .ok_or(TokenError::FundsUnavailable)?;
