@@ -12,7 +12,7 @@ Vitreus power-plant: a Substrate-based relay chain with EVM (Frontier). VTRS is 
 ## Networks
 
 - Runtime features `testnet-runtime` and `mainnet-runtime`; node features `testnet-native` and `mainnet-native`. Each network has its own `spec_name`.
-- Network-specific code goes behind its own network's feature, `#[cfg(feature = "testnet-runtime")]` or `#[cfg(feature = "mainnet-runtime")]`, never behind `not(...)` of the other. Everything else must build and pass tests on both networks.
+- Network-specific code goes behind its own network's feature, `#[cfg(feature = "testnet-runtime")]` or `#[cfg(feature = "mainnet-runtime")]`, never behind `not(...)` of the other. A value that differs by network can also come from `prod_or_fast!(mainnet, testnet)`: our builds turn on `fast-runtime` only through `testnet-runtime`. Everything else must build and pass tests on both networks.
 
 ## Commands
 
