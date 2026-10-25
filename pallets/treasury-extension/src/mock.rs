@@ -15,6 +15,7 @@ use frame_support::{
 };
 use frame_system::{EnsureRoot, EnsureRootWithSuccess, EnsureSigned};
 use pallet_treasury::TreasuryAccountId;
+use parity_scale_codec::{Decode, Encode};
 use sp_core::H256;
 
 use sp_runtime::{
@@ -178,57 +179,69 @@ pub(crate) const LIQUID_ENERGY: u32 = 2;
 /// The minimum balance of each energy asset.
 pub(crate) const ENERGY_MIN_BALANCE: Balance = 1;
 
-/// Native currency the mock exchanges pay per unit of energy.
+/// Native currency the mock exchanges pay per unit of energy, unless set otherwise.
 pub(crate) const EXCHANGE_RATE: Balance = 2;
+
+/// How the mock exchange of an energy asset behaves.
+#[derive(Clone, Copy, Encode, Decode)]
+pub struct ExchangeBehaviour {
+    /// Native currency it pays for energy, as `(native, energy)`, or `None` if it has no price for
+    /// the energy and quotes nothing.
+    pub price: Option<(Balance, Balance)>,
+    /// Whether it rounds up the energy it quotes for an exact output.
+    pub rounds_up: bool,
+    /// Whether it fails every swap.
+    pub fails: bool,
+}
 
 parameter_types! {
     pub const SpendThreshold: Permill = Permill::from_percent(50);
     /// Native currency the mock exchanges can still pay out, all together.
     pub storage ExchangeLiquidity: Balance = Balance::MAX;
-    /// The energy asset whose exchange fails every swap, if any.
-    pub storage FailingExchange: Option<u32> = None;
-    /// The energy asset whose exchange has no price for it and quotes nothing, if any.
-    pub storage UnpricedExchange: Option<u32> = None;
-    /// The energy asset whose exchange rounds up the energy it quotes for an exact output, if any.
-    pub storage RoundingUpExchange: Option<u32> = None;
-    /// The energy asset whose exchange pays a unit of native currency per `EXCHANGE_RATE` units of
-    /// energy instead, if any.
-    pub storage CheapEnergyExchange: Option<u32> = None;
+    /// How each mock exchange behaves, by the energy asset it sells.
+    pub storage Exchanges: [ExchangeBehaviour; 3] =
+        [ExchangeBehaviour { price: Some((EXCHANGE_RATE, 1)), rounds_up: false, fails: false }; 3];
 }
 
-/// Sells the energy asset `ID` for native currency at `EXCHANGE_RATE`, minting what it pays out of
-/// `ExchangeLiquidity`. The `FailingExchange`, `UnpricedExchange`, `RoundingUpExchange` and
-/// `CheapEnergyExchange` settings change how it behaves for the asset they name.
+/// Changes how the mock exchange of the energy asset `id` behaves.
+pub(crate) fn set_exchange(id: u32, change: impl FnOnce(&mut ExchangeBehaviour)) {
+    let mut exchanges = Exchanges::get();
+    change(&mut exchanges[id as usize]);
+    Exchanges::set(&exchanges);
+}
+
+/// Sells the energy asset `ID` for native currency as its entry in `Exchanges` says, minting what
+/// it pays out of `ExchangeLiquidity`.
 pub struct MockExchange<const ID: u32>;
+
+impl<const ID: u32> MockExchange<ID> {
+    fn behaviour() -> ExchangeBehaviour {
+        Exchanges::get()[ID as usize]
+    }
+}
 
 impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
     type Balance = Balance;
     type EnergyAsset = ItemOf<Assets, ConstU32<ID>, AccountId>;
 
     fn quote_price_exact_tokens_for_tokens(amount: Balance, _: bool) -> Option<Balance> {
-        if UnpricedExchange::get() == Some(ID) {
-            return None;
-        }
-        let amount_out = if CheapEnergyExchange::get() == Some(ID) {
-            Some(amount / EXCHANGE_RATE)
-        } else {
-            amount.checked_mul(EXCHANGE_RATE)
-        };
-        amount_out.filter(|amount_out| *amount_out != 0 && *amount_out <= ExchangeLiquidity::get())
+        let (native, energy) = Self::behaviour().price?;
+        let amount_out = amount.checked_mul(native)? / energy;
+        (amount_out != 0 && amount_out <= ExchangeLiquidity::get()).then_some(amount_out)
     }
 
     fn quote_price_tokens_for_exact_tokens(amount: Balance, _: bool) -> Option<Balance> {
-        if UnpricedExchange::get() == Some(ID) || amount == 0 || amount > ExchangeLiquidity::get() {
+        let behaviour = Self::behaviour();
+        let (native, energy) = behaviour.price?;
+        if amount == 0 || amount > ExchangeLiquidity::get() {
             return None;
         }
-        if CheapEnergyExchange::get() == Some(ID) {
-            return amount.checked_mul(EXCHANGE_RATE);
-        }
-        if RoundingUpExchange::get() == Some(ID) {
-            return Some(amount.div_ceil(EXCHANGE_RATE));
+        let numerator = amount.checked_mul(energy)?;
+        if behaviour.rounds_up {
+            return Some(numerator.div_ceil(native));
         }
         // Like a real exchange, it asks for at least one unit of energy.
-        Some((amount / EXCHANGE_RATE).max(1))
+        Some((numerator / native).max(1))
     }
 
     fn max_amount_out() -> Balance {
@@ -245,16 +258,14 @@ impl<const ID: u32> SwapFromEnergy<AccountId> for MockExchange<ID> {
         amount_in: Balance,
         keep_alive: bool,
     ) -> Result<Balance, DispatchError> {
-        if FailingExchange::get() == Some(ID) {
+        let behaviour = Self::behaviour();
+        if behaviour.fails {
             return Err(TokenError::FundsUnavailable.into());
         }
+        let (native, energy) = behaviour.price.ok_or(DispatchError::Unavailable)?;
 
         // Like a real exchange, a swap for more than it can pay fails as a whole.
-        let amount_out = if CheapEnergyExchange::get() == Some(ID) {
-            amount_in / EXCHANGE_RATE
-        } else {
-            amount_in * EXCHANGE_RATE
-        };
+        let amount_out = amount_in * native / energy;
         let liquidity_left = ExchangeLiquidity::get()
             .checked_sub(amount_out)
             .ok_or(TokenError::FundsUnavailable)?;

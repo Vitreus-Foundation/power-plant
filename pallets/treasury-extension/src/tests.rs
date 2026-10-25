@@ -141,7 +141,7 @@ fn energy_sale_stays_within_exchange_liquidity_despite_rounding_up() {
         // native currency to spare. For the 31 left after the Energy, the Static Energy exchange
         // quotes 16 Static Energy, rounded up, but they would buy 32.
         ExchangeLiquidity::set(&((10 + 15) * EXCHANGE_RATE + 1));
-        RoundingUpExchange::set(&Some(STATIC_ENERGY));
+        set_exchange(STATIC_ENERGY, |exchange| exchange.rounds_up = true);
         let native_before = Balances::free_balance(treasury);
 
         <TreasuryExtension as OnSessionChange>::on_new_session(1);
@@ -239,7 +239,7 @@ fn treasury_dust_emits_no_event() {
         let treasury = Treasury::account_id();
         // A unit of Static Energy, which buys less than a unit of native currency here.
         mint_treasury_energy(0, 1, 0);
-        CheapEnergyExchange::set(&Some(STATIC_ENERGY));
+        set_exchange(STATIC_ENERGY, |exchange| exchange.price = Some((1, EXCHANGE_RATE)));
         // Plenty, but not unlimited: this exchange's quote for an unlimited payout would overflow.
         ExchangeLiquidity::set(&(100 * EXCHANGE_RATE));
         let native_before = Balances::free_balance(treasury);
@@ -265,7 +265,7 @@ fn failing_swap_is_reported() {
         System::set_block_number(1);
         let treasury = Treasury::account_id();
         mint_treasury_energy(10, 20, 30);
-        FailingExchange::set(&Some(STATIC_ENERGY));
+        set_exchange(STATIC_ENERGY, |exchange| exchange.fails = true);
         let native_before = Balances::free_balance(treasury);
 
         <TreasuryExtension as OnSessionChange>::on_new_session(1);
@@ -301,7 +301,7 @@ fn unpriced_energy_is_reported_as_failed() {
         System::set_block_number(1);
         let treasury = Treasury::account_id();
         mint_treasury_energy(10, 20, 30);
-        UnpricedExchange::set(&Some(STATIC_ENERGY));
+        set_exchange(STATIC_ENERGY, |exchange| exchange.price = None);
         let native_before = Balances::free_balance(treasury);
 
         <TreasuryExtension as OnSessionChange>::on_new_session(1);
