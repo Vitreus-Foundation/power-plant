@@ -25,9 +25,7 @@ use polkadot_runtime_common::{auctions, paras_registrar, paras_sudo_wrapper, pro
 
 use polkadot_runtime_parachains::{
     assigner_coretime as parachains_assigner_coretime,
-    assigner_on_demand as parachains_assigner_on_demand,
-    assigner_parachains as parachains_assigner_parachains,
-    configuration as parachains_configuration,
+    assigner_on_demand as parachains_assigner_on_demand, configuration as parachains_configuration,
     configuration::ActiveConfigHrmpChannelSizeAndCapacityRatio,
     coretime, disputes as parachains_disputes,
     disputes::slashing as parachains_slashing,
@@ -1849,7 +1847,7 @@ impl parachains_paras::Config for Runtime {
     type QueueFootprinter = ParaInclusion;
     type OnNewHead = Registrar;
     type WeightInfo = weights::runtime_parachains_paras::WeightInfo<Runtime>;
-    type AssignCoretime = ();
+    type AssignCoretime = CoretimeAssignmentProvider;
 }
 
 parameter_types! {
@@ -1932,10 +1930,8 @@ impl parachains_paras_inherent::Config for Runtime {
 }
 
 impl parachains_scheduler::Config for Runtime {
-    type AssignmentProvider = ParaAssignmentProvider;
+    type AssignmentProvider = CoretimeAssignmentProvider;
 }
-
-impl parachains_assigner_parachains::Config for Runtime {}
 
 parameter_types! {
     pub const OnDemandTrafficDefaultValue: FixedU128 = FixedU128::from_u32(1);
@@ -2155,7 +2151,7 @@ construct_runtime!(
         ParaSessionInfo: parachains_session_info::{Pallet, Storage} = 71,
         ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 72,
         ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 73,
-        ParaAssignmentProvider: parachains_assigner_parachains = 74,
+        // ParaAssignmentProvider (removed) = 74,
         CoretimeAssignmentProvider: parachains_assigner_coretime = 75,
         OnDemandAssignmentProvider: parachains_assigner_on_demand = 76,
 
