@@ -132,6 +132,42 @@ fn energy_sale_stays_within_exchange_liquidity() {
 }
 
 #[test]
+fn energy_sale_stays_within_exchange_liquidity_despite_rounding_up() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        let treasury = Treasury::account_id();
+        mint_treasury_energy(10, 20, 30);
+        // The exchanges can pay for the 10 Energy and 15 of the 20 Static Energy, with a unit of
+        // native currency to spare. For the 31 left after the Energy, the Static Energy exchange
+        // quotes 16 Static Energy, rounded up, but they would buy 32.
+        ExchangeLiquidity::set(&((10 + 15) * EXCHANGE_RATE + 1));
+        RoundingUpExchange::set(&Some(STATIC_ENERGY));
+        let native_before = Balances::free_balance(treasury);
+
+        <TreasuryExtension as OnSessionChange>::on_new_session(1);
+
+        let native = (10 + 15) * EXCHANGE_RATE;
+        System::assert_last_event(
+            Event::<Test>::EnergyExchanged {
+                energy: 10,
+                static_energy: 15,
+                liquid_energy: 0,
+                native,
+            }
+            .into(),
+        );
+        assert!(!System::events().iter().any(|record| matches!(
+            record.event,
+            RuntimeEvent::TreasuryExtension(Event::<Test>::EnergyExchangeFailed { .. })
+        )));
+        assert_eq!(Assets::balance(ENERGY, treasury), ENERGY_MIN_BALANCE);
+        assert_eq!(Assets::balance(STATIC_ENERGY, treasury), ENERGY_MIN_BALANCE + 5);
+        assert_eq!(Assets::balance(LIQUID_ENERGY, treasury), ENERGY_MIN_BALANCE + 30);
+        assert_eq!(Balances::free_balance(treasury), native_before + native);
+    });
+}
+
+#[test]
 fn nothing_to_sell_emits_no_event() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);

@@ -248,13 +248,21 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
         // Without a quote the exchange can't price the energy, and that is a failure.
         let max_amount_in = Exchange::quote_price_tokens_for_exact_tokens(max_amount_out, false)
             .ok_or(DispatchError::Unavailable)?;
-        let amount = balance.min(max_amount_in);
+        let mut amount = balance.min(max_amount_in);
+
+        // An exchange that rounds the quoted input up can ask for a unit more than it can pay
+        // for, and won't quote that sale: then sell a unit less.
+        // TODO: once the exchange traits can tell the largest input an exchange pays for, take it
+        // from there instead of stepping back here.
+        let mut amount_out = Exchange::quote_price_exact_tokens_for_tokens(amount, false);
+        if amount_out.is_none() {
+            amount.saturating_dec();
+            amount_out = Exchange::quote_price_exact_tokens_for_tokens(amount, false);
+        }
 
         // Rounding can leave a sale that buys nothing: dust at the exchange or in the treasury.
         // A missing quote here means such a sale, not a failure: the energy has a price by now.
-        let amount_out =
-            Exchange::quote_price_exact_tokens_for_tokens(amount, false).unwrap_or_default();
-        if amount_out.is_zero() {
+        if amount_out.unwrap_or_default().is_zero() {
             return Ok((Zero::zero(), Zero::zero()));
         }
 
