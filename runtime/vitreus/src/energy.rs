@@ -35,6 +35,8 @@ pub type LiquidEnergyToNativeExchange =
 ///
 /// The broker has no VNRG → VTRS path, so the VNRG is converted 1:1 into LNRG and sold as LNRG.
 /// A failed sale rolls the conversion back.
+///
+/// Must not be reachable from user calls: the broker sells VNRG to users but never buys it back.
 pub struct EnergyToNativeExchange;
 
 impl QuotePriceFromEnergy for EnergyToNativeExchange {
