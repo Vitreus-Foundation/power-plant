@@ -87,8 +87,8 @@ pub trait QuotePriceIntoEnergy {
     /// Quotes the amount of native currency required to obtain the exact `amount` of energy.
     ///
     /// If `include_fee` is set to `true`, the price will include the swap fee.
-    /// If the swap cannot be priced, has a zero amount on either side or would supply more than
-    /// [`Self::max_amount_out`], `None` is returned.
+    /// If the swap cannot be priced, or `amount` is zero or exceeds [`Self::max_amount_out`],
+    /// `None` is returned.
     fn quote_price_tokens_for_exact_tokens(
         amount: Self::Balance,
         include_fee: bool,
@@ -124,8 +124,8 @@ pub trait QuotePriceFromEnergy {
     /// Quotes the amount of energy required to obtain the exact `amount` of native currency.
     ///
     /// If `include_fee` is set to `true`, the price will include the swap fee.
-    /// If the swap cannot be priced, has a zero amount on either side or would supply more than
-    /// [`Self::max_amount_out`], `None` is returned.
+    /// If the swap cannot be priced, or `amount` is zero or exceeds [`Self::max_amount_out`],
+    /// `None` is returned.
     fn quote_price_tokens_for_exact_tokens(
         amount: Self::Balance,
         include_fee: bool,
