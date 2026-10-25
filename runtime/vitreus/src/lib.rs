@@ -24,10 +24,12 @@ use polkadot_primitives::{
 use polkadot_runtime_common::{auctions, paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use polkadot_runtime_parachains::{
+    assigner_coretime as parachains_assigner_coretime,
+    assigner_on_demand as parachains_assigner_on_demand,
     assigner_parachains as parachains_assigner_parachains,
     configuration as parachains_configuration,
     configuration::ActiveConfigHrmpChannelSizeAndCapacityRatio,
-    disputes as parachains_disputes,
+    coretime, disputes as parachains_disputes,
     disputes::slashing as parachains_slashing,
     dmp as parachains_dmp, hrmp as parachains_hrmp, inclusion as parachains_inclusion,
     inclusion::{AggregateMessageOrigin, UmpQueueId},
@@ -128,8 +130,8 @@ use sp_consensus_beefy::{
 use sp_runtime::transaction_validity::InvalidTransaction;
 use vitreus_runtime_common::{ExposureMultiplier, QuotePrice};
 use xcm::{
-    latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
-    VersionedXcm,
+    latest::prelude::{AssetId as XcmAssetId, InteriorLocation, Junction},
+    VersionedAssetId, VersionedAssets, VersionedLocation, VersionedXcm,
 };
 use xcm_runtime_apis::{
     dry_run::{CallDryRunEffects, Error as XcmDryRunApiError, XcmDryRunEffects},
@@ -1935,6 +1937,57 @@ impl parachains_scheduler::Config for Runtime {
 
 impl parachains_assigner_parachains::Config for Runtime {}
 
+parameter_types! {
+    pub const OnDemandTrafficDefaultValue: FixedU128 = FixedU128::from_u32(1);
+    // Blocks of on-demand revenue kept for `request_revenue_at`: two timeslices of 80 blocks.
+    pub const MaxHistoricalRevenue: u32 = 2 * 80;
+    pub const OnDemandPalletId: PalletId = PalletId(*b"py/ondmd");
+}
+
+impl parachains_assigner_on_demand::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type TrafficDefaultValue = OnDemandTrafficDefaultValue;
+    type WeightInfo = weights::runtime_parachains_assigner_on_demand::WeightInfo<Runtime>;
+    type MaxHistoricalRevenue = MaxHistoricalRevenue;
+    type PalletId = OnDemandPalletId;
+}
+
+impl parachains_assigner_coretime::Config for Runtime {}
+
+parameter_types! {
+    // Parachain that `Coretime` accepts broker calls from, besides Root. It is in the system
+    // range, which only Root can register, and stays unregistered while Root assigns the cores.
+    pub const BrokerId: u32 = 1005;
+    pub const BrokerPalletId: PalletId = PalletId(*b"py/broke");
+    pub MaxXcmTransactWeight: Weight = Weight::from_parts(200_000_000, 20_000);
+}
+
+/// Account of the broker pallet on the coretime chain. Nothing is sent there while
+/// `coretime::Config::SendXcm` is `()`.
+pub struct BrokerPot;
+impl Get<InteriorLocation> for BrokerPot {
+    fn get() -> InteriorLocation {
+        Junction::AccountId32 { network: None, id: BrokerPalletId::get().into_account_truncating() }
+            .into()
+    }
+}
+
+impl coretime::Config for Runtime {
+    type RuntimeOrigin = RuntimeOrigin;
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BrokerId = BrokerId;
+    type BrokerPotLocation = BrokerPot;
+    type WeightInfo = weights::runtime_parachains_coretime::WeightInfo<Runtime>;
+    // There is no coretime chain, so nothing is sent to the broker.
+    type SendXcm = ();
+    type AssetTransactor = xcm_config::LocalAssetTransactor;
+    type AccountToLocation =
+        xcm_config::AliasesIntoAccountKey20<xcm_config::ThisNetwork, AccountId>;
+    type MaxXcmTransactWeight = MaxXcmTransactWeight;
+}
+
 impl parachains_initializer::Config for Runtime {
     type Randomness = pallet_babe::RandomnessFromOneEpochAgo<Runtime>;
     type ForceOrigin = EnsureRoot<AccountId>;
@@ -2103,12 +2156,15 @@ construct_runtime!(
         ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 72,
         ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 73,
         ParaAssignmentProvider: parachains_assigner_parachains = 74,
+        CoretimeAssignmentProvider: parachains_assigner_coretime = 75,
+        OnDemandAssignmentProvider: parachains_assigner_on_demand = 76,
 
         // Parachain Onboarding Pallets. Start indices at 80 to leave room.
         Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 80,
         Slots: slots::{Pallet, Call, Storage, Event<T>} = 81,
         ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 82,
         Auctions: auctions = 83,
+        Coretime: coretime = 85,
 
         // Pallet for sending XCM.
         XcmPallet: pallet_xcm::{Pallet, Call, Storage, Event<T>, Origin, Config<T>} = 99,
@@ -2350,6 +2406,8 @@ mod benches {
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
+        [polkadot_runtime_parachains::assigner_on_demand, OnDemandAssignmentProvider]
+        [polkadot_runtime_parachains::coretime, Coretime]
     );
 }
 
@@ -2359,6 +2417,8 @@ mod benches {
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
+        [polkadot_runtime_parachains::assigner_on_demand, OnDemandAssignmentProvider]
+        [polkadot_runtime_parachains::coretime, Coretime]
         [pallet_vitreus_dex, VitreusDex]
         [pallet_launchpad, Launchpad]
         [pallet_launch_treasury, LaunchTreasury]
