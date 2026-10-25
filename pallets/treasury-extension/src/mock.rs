@@ -6,6 +6,7 @@ use frame_support::traits::tokens::{
 use frame_support::PalletId;
 use frame_support::{
     derive_impl, parameter_types,
+    storage::with_storage_layer,
     traits::{
         fungible::{ItemOf, Mutate as _},
         fungibles::Mutate as _,
@@ -200,17 +201,20 @@ impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
     type EnergyAsset = ItemOf<Assets, ConstU32<ID>, AccountId>;
 
     fn quote_price_exact_tokens_for_tokens(amount: Balance, _: bool) -> Option<Balance> {
-        if UnpricedExchange::get() == Some(ID) {
+        if UnpricedExchange::get() == Some(ID) || amount == 0 {
             return None;
         }
-        amount.checked_mul(EXCHANGE_RATE)
+        amount
+            .checked_mul(EXCHANGE_RATE)
+            .filter(|amount_out| *amount_out <= ExchangeLiquidity::get())
     }
 
     fn quote_price_tokens_for_exact_tokens(amount: Balance, _: bool) -> Option<Balance> {
-        if UnpricedExchange::get() == Some(ID) {
+        if UnpricedExchange::get() == Some(ID) || amount == 0 || amount > ExchangeLiquidity::get() {
             return None;
         }
-        Some(amount / EXCHANGE_RATE)
+        // Like a real exchange, it asks for at least one unit of energy.
+        Some((amount / EXCHANGE_RATE).max(1))
     }
 
     fn max_amount_out() -> Balance {
@@ -239,11 +243,20 @@ impl<const ID: u32> SwapFromEnergy<AccountId> for MockExchange<ID> {
 
         let preservation =
             if keep_alive { Preservation::Preserve } else { Preservation::Expendable };
-        Assets::burn_from(ID, &who, amount_in, preservation, Precision::Exact, Fortitude::Polite)?;
+        with_storage_layer(|| {
+            Assets::burn_from(
+                ID,
+                &who,
+                amount_in,
+                preservation,
+                Precision::Exact,
+                Fortitude::Polite,
+            )?;
 
-        ExchangeLiquidity::set(&liquidity_left);
-        Balances::mint_into(&who, amount_out)?;
-        Ok(amount_out)
+            ExchangeLiquidity::set(&liquidity_left);
+            Balances::mint_into(&who, amount_out)?;
+            Ok(amount_out)
+        })
     }
 
     fn swap_tokens_for_exact_tokens(
