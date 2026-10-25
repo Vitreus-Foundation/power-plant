@@ -1403,7 +1403,8 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::SimpleVesting(..)
             | RuntimeCall::Multisig(..)
             | RuntimeCall::Proxy(..)
-            | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
+            | RuntimeCall::Reputation(..)
+            | RuntimeCall::OnDemandAssignmentProvider(..) => CallFee::Regular(Self::custom_fee()),
 
             // Experimental pallets, testnet only.
             #[cfg(feature = "testnet-runtime")]
