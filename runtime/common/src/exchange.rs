@@ -1,3 +1,19 @@
+//! Traits and implementations for exchanging native currency and energy.
+//!
+//! # Available Traits
+//! - [`QuotePrice`]: Quotes swaps between asset classes.
+//! - [`MaxAmountOut`]: The maximum amount a swap between asset classes can currently supply.
+//! - [`QuotePriceIntoEnergy`] and [`QuotePriceFromEnergy`]: Quotes swaps between native currency
+//!   and one energy asset, one direction each.
+//! - [`SwapIntoEnergy`] and [`SwapFromEnergy`]: Swaps between native currency and one energy
+//!   asset, one direction each.
+//!
+//! Exchanges implement [`Swap`], [`QuotePrice`] and [`MaxAmountOut`]. Pallets use the
+//! one-direction traits instead, with `EnergyAsset` bound to the fungible they hold, and don't see
+//! the exchange's paths or asset kinds. [`NativeEnergyExchange`] implements the one-direction
+//! traits on top of an exchange. `()` implements them as no exchange at all: it quotes nothing,
+//! can supply nothing and fails every swap with [`TokenError::Unsupported`].
+
 use frame_support::traits::{
     fungible::ItemOf,
     tokens::{fungibles, Balance},
@@ -50,7 +66,7 @@ pub trait MaxAmountOut: QuotePrice {
 
 /// Trait providing methods to quote swap prices for exchanging native currency for energy.
 pub trait QuotePriceIntoEnergy {
-    /// Measurement units of the asset classes for pricing.
+    /// Measurement units of both native currency and energy for pricing.
     type Balance: Balance;
     /// The energy asset being quoted, as a fungible.
     ///
@@ -59,12 +75,20 @@ pub trait QuotePriceIntoEnergy {
     type EnergyAsset;
 
     /// Quotes the amount of energy resulting from swapping the exact `amount` of native currency.
+    ///
+    /// If `include_fee` is set to `true`, the price will include the swap fee.
+    /// If the swap cannot be priced, has a zero amount on either side or would supply more than
+    /// [`Self::max_amount_out`], `None` is returned.
     fn quote_price_exact_tokens_for_tokens(
         amount: Self::Balance,
         include_fee: bool,
     ) -> Option<Self::Balance>;
 
     /// Quotes the amount of native currency required to obtain the exact `amount` of energy.
+    ///
+    /// If `include_fee` is set to `true`, the price will include the swap fee.
+    /// If the swap cannot be priced, has a zero amount on either side or would supply more than
+    /// [`Self::max_amount_out`], `None` is returned.
     fn quote_price_tokens_for_exact_tokens(
         amount: Self::Balance,
         include_fee: bool,
@@ -79,7 +103,7 @@ pub trait QuotePriceIntoEnergy {
 
 /// Trait providing methods to quote swap prices for exchanging energy for native currency.
 pub trait QuotePriceFromEnergy {
-    /// Measurement units of the asset classes for pricing.
+    /// Measurement units of both native currency and energy for pricing.
     type Balance: Balance;
     /// The energy asset being quoted, as a fungible.
     ///
@@ -88,12 +112,20 @@ pub trait QuotePriceFromEnergy {
     type EnergyAsset;
 
     /// Quotes the amount of native currency resulting from swapping the exact `amount` of energy.
+    ///
+    /// If `include_fee` is set to `true`, the price will include the swap fee.
+    /// If the swap cannot be priced, has a zero amount on either side or would supply more than
+    /// [`Self::max_amount_out`], `None` is returned.
     fn quote_price_exact_tokens_for_tokens(
         amount: Self::Balance,
         include_fee: bool,
     ) -> Option<Self::Balance>;
 
     /// Quotes the amount of energy required to obtain the exact `amount` of native currency.
+    ///
+    /// If `include_fee` is set to `true`, the price will include the swap fee.
+    /// If the swap cannot be priced, has a zero amount on either side or would supply more than
+    /// [`Self::max_amount_out`], `None` is returned.
     fn quote_price_tokens_for_exact_tokens(
         amount: Self::Balance,
         include_fee: bool,
@@ -106,9 +138,9 @@ pub trait QuotePriceFromEnergy {
     fn max_amount_out() -> Self::Balance;
 }
 
-/// A trait for swapping native currency for energy.
+/// Trait for providing methods to swap native currency for energy.
 pub trait SwapIntoEnergy<AccountId> {
-    /// The type in which the assets for swapping are measured.
+    /// Measurement units of both native currency and energy for swapping.
     type Balance: Balance;
     /// The energy asset being swapped, as a fungible.
     ///
@@ -116,14 +148,28 @@ pub trait SwapIntoEnergy<AccountId> {
     /// another asset.
     type EnergyAsset;
 
-    /// Swaps an exact amount of native currency for energy.
+    /// Swap exactly `amount_in` of native currency for energy.
+    ///
+    /// Withdraws the native currency from `who`, deposits the energy to `who`, respecting
+    /// `keep_alive`.
+    ///
+    /// If successful, returns the amount of energy acquired for the `amount_in`.
+    ///
+    /// This operation is expected to be atomic.
     fn swap_exact_tokens_for_tokens(
         who: AccountId,
         amount_in: Self::Balance,
         keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError>;
 
-    /// Swaps native currency for an exact amount of energy.
+    /// Take native currency and swap some amount for `amount_out` of energy.
+    ///
+    /// Withdraws the native currency from `who`, deposits the energy to `who`, respecting
+    /// `keep_alive`.
+    ///
+    /// If successful, returns the amount of native currency taken to provide `amount_out`.
+    ///
+    /// This operation is expected to be atomic.
     fn swap_tokens_for_exact_tokens(
         who: AccountId,
         amount_out: Self::Balance,
@@ -131,9 +177,9 @@ pub trait SwapIntoEnergy<AccountId> {
     ) -> Result<Self::Balance, DispatchError>;
 }
 
-/// A trait for swapping energy for native currency.
+/// Trait for providing methods to swap energy for native currency.
 pub trait SwapFromEnergy<AccountId> {
-    /// The type in which the assets for swapping are measured.
+    /// Measurement units of both native currency and energy for swapping.
     type Balance: Balance;
     /// The energy asset being swapped, as a fungible.
     ///
@@ -141,14 +187,28 @@ pub trait SwapFromEnergy<AccountId> {
     /// another asset.
     type EnergyAsset;
 
-    /// Swaps an exact amount of energy for native currency.
+    /// Swap exactly `amount_in` of energy for native currency.
+    ///
+    /// Withdraws the energy from `who`, deposits the native currency to `who`, respecting
+    /// `keep_alive`.
+    ///
+    /// If successful, returns the amount of native currency acquired for the `amount_in`.
+    ///
+    /// This operation is expected to be atomic.
     fn swap_exact_tokens_for_tokens(
         who: AccountId,
         amount_in: Self::Balance,
         keep_alive: bool,
     ) -> Result<Self::Balance, DispatchError>;
 
-    /// Swaps energy for an exact amount of native currency.
+    /// Take energy and swap some amount for `amount_out` of native currency.
+    ///
+    /// Withdraws the energy from `who`, deposits the native currency to `who`, respecting
+    /// `keep_alive`.
+    ///
+    /// If successful, returns the amount of energy taken to provide `amount_out`.
+    ///
+    /// This operation is expected to be atomic.
     fn swap_tokens_for_exact_tokens(
         who: AccountId,
         amount_out: Self::Balance,
@@ -156,10 +216,13 @@ pub trait SwapFromEnergy<AccountId> {
     ) -> Result<Self::Balance, DispatchError>;
 }
 
-/// An exchange for swapping between native tokens and energy.
+/// An exchange for swapping between native currency and energy.
 ///
 /// `EnergyAsset` is the energy asset as a fungible, an [`ItemOf`]; `Exchange` is called with the
 /// `ItemOf`'s asset id, converted into the exchange's asset kind.
+///
+/// It quotes and swaps along the native-to-energy and energy-to-native paths of `Exchange`, so its
+/// limits are `Exchange`'s `max_amount_out` and its swaps are as atomic as `Exchange`'s [`Swap`].
 pub struct NativeEnergyExchange<Exchange, NativeAsset, EnergyAsset>(
     core::marker::PhantomData<(Exchange, NativeAsset, EnergyAsset)>,
 );
