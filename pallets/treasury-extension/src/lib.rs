@@ -246,14 +246,15 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
         // A swap for more than `max_amount_out` fails as a whole, so sell at most the input that
         // buys exactly that. The quote leaves the fee out: with a fee the payout is only smaller.
         // Without a quote the exchange can't price the energy, and that is a failure.
+        // TODO: once the exchange traits can tell the largest input an exchange pays for, take it
+        // from there and drop both this quote and the step back below. The quote can overflow at
+        // an exchange with no limit.
         let max_amount_in = Exchange::quote_price_tokens_for_exact_tokens(max_amount_out, false)
             .ok_or(DispatchError::Unavailable)?;
         let mut amount = balance.min(max_amount_in);
 
         // An exchange that rounds the quoted input up can ask for a unit more than it can pay
         // for, and won't quote that sale: then sell a unit less.
-        // TODO: once the exchange traits can tell the largest input an exchange pays for, take it
-        // from there instead of stepping back here.
         let mut amount_out = Exchange::quote_price_exact_tokens_for_tokens(amount, false);
         if amount_out.is_none() {
             amount.saturating_dec();
