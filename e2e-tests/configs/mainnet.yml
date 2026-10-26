@@ -3,6 +3,7 @@ endpoint: wss://rpc-mainnet.vtrs.io:443
 host: 127.0.0.1
 # A block is built only on `dev_newBlock`.
 build-block-mode: Manual
+# Runtime logs up to info, on the scale from 0 (off) to 5 (trace).
 runtime-log-level: 3
 
 # The accounts the tests use. An account written into storage skips `OnNewAccount`, so it gets
