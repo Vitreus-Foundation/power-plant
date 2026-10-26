@@ -119,6 +119,8 @@ impl pallet_treasury::Config for Test {
     type BalanceConverter = UnityAssetBalanceConversion;
     type PayoutPeriod = PayoutPeriod;
     type WeightInfo = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = ();
 }
 
 parameter_types! {
