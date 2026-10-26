@@ -40,7 +40,6 @@ use polkadot_runtime_parachains::{
     shared as parachains_shared,
 };
 
-use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
     fungible,
@@ -154,13 +153,10 @@ pub use paras_sudo_wrapper::Call as ParasSudoWrapperCall;
 
 pub use areas::{deposit, CouncilCollective, TechnicalCollective};
 
-mod precompiles;
-mod helpers {
-    pub mod runner;
-}
 pub mod areas;
 mod energy;
 pub mod migrations;
+mod precompiles;
 mod weights;
 mod xcm_config;
 
@@ -1246,7 +1242,6 @@ impl pallet_dynamic_energy::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-    pub GetConstantGasLimit: U256 = U256::from(100_000);
 }
 
 impl pallet_energy_fee::Config for Runtime {
@@ -2216,35 +2211,8 @@ pub type Executive = frame_executive::Executive<
     Migrations,
 >;
 
-#[allow(dead_code)]
-fn transact_with_new_gas_limit(
-    transact_call: pallet_ethereum::Call<Runtime>,
-) -> pallet_ethereum::Call<Runtime> {
-    match transact_call {
-        transact { transaction } => {
-            let transaction = match transaction {
-                EthereumTransaction::Legacy(tx) => EthereumTransaction::Legacy(LegacyTransaction {
-                    gas_limit: GetConstantGasLimit::get(),
-                    ..tx
-                }),
-                EthereumTransaction::EIP1559(tx) => {
-                    EthereumTransaction::EIP1559(EIP1559Transaction {
-                        gas_limit: GetConstantGasLimit::get(),
-                        ..tx
-                    })
-                },
-                EthereumTransaction::EIP2930(tx) => {
-                    EthereumTransaction::EIP2930(EIP2930Transaction {
-                        gas_limit: GetConstantGasLimit::get(),
-                        ..tx
-                    })
-                },
-            };
-            pallet_ethereum::Call::new_call_variant_transact(transaction)
-        },
-        _ => transact_call,
-    }
-}
+// NAC level required for an Ethereum transaction.
+const CALL_ACCESS_LEVEL: u8 = 1;
 
 // user doesn't have NAC to dispatch transaction
 const ACCESS_RESTRICTED: u8 = u8::MAX;
@@ -2298,7 +2266,7 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                     }
                 }
 
-                if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
+                if !NacManaging::user_has_access(account_id, CALL_ACCESS_LEVEL) {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
                 };
 
