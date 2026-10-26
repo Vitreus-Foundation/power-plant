@@ -129,7 +129,7 @@ it('signed transfer pays flat fee in VNRG', async () => {
   expect(after.receiverNacLevel).toBe(1);
 });
 
-it('vtrs only sender buys fee energy from broker', async () => {
+it('VTRS-only sender buys fee energy from broker', async () => {
   const { api, dev } = fork;
   const receiver = freshAccount();
   const treasury = treasuryAccount(api);
