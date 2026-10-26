@@ -101,6 +101,17 @@ export const treasuryAccount = (api) => palletAccount(api, api.consts.treasury.p
 // The energy broker's pallet id isn't in the metadata.
 export const brokerAccount = (api) => palletAccount(api, new TextEncoder().encode('energybr'));
 
+// The free VTRS of an account at the block of `query`, in base units.
+export async function vtrsOf(query, address) {
+  return (await query.system.account(address)).data.free.toBigInt();
+}
+
+// The VNRG of an account at the block of `query`, in base units; `undefined` if it has none.
+export async function vnrgOf(query, address) {
+  const account = await query.assets.account(VNRG_ASSET_ID, address);
+  return account.isSome ? account.unwrap().balance.toBigInt() : undefined;
+}
+
 // The events of one extrinsic of the block.
 export async function extrinsicEvents(api, blockHash, txHash) {
   const block = await api.rpc.chain.getBlock(blockHash);

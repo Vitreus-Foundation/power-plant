@@ -12,6 +12,8 @@ import {
   setStorage,
   setupFork,
   treasuryAccount,
+  vnrgOf,
+  vtrsOf,
 } from './helpers.js';
 
 // `FixedU128`, the type of the fee multiplier, has 18 decimals.
@@ -55,24 +57,15 @@ it('signed transfer pays flat fee in VNRG', async () => {
 
   const state = async (blockHash) => {
     const { query } = await api.at(blockHash);
-    const [alithAccount, alithVnrg, receiverAccount, treasuryVnrg, vnrgAsset, burned, nac] =
-      await Promise.all([
-        query.system.account(alith.address),
-        query.assets.account(VNRG_ASSET_ID, alith.address),
-        query.system.account(receiver.address),
-        query.assets.account(VNRG_ASSET_ID, treasury),
-        query.assets.asset(VNRG_ASSET_ID),
-        query.energyFee.burnedEnergy(),
-        query.nacManaging.usersNft(receiver.address),
-      ]);
+    const nac = await query.nacManaging.usersNft(receiver.address);
     return {
       session: (await query.session.currentIndex()).toNumber(),
-      alithVtrs: alithAccount.data.free.toBigInt(),
-      alithVnrg: alithVnrg.unwrap().balance.toBigInt(),
-      receiverVtrs: receiverAccount.data.free.toBigInt(),
-      treasuryVnrg: treasuryVnrg.unwrapOrDefault().balance.toBigInt(),
-      vnrgSupply: vnrgAsset.unwrap().supply.toBigInt(),
-      burned: burned.toBigInt(),
+      alithVtrs: await vtrsOf(query, alith.address),
+      alithVnrg: await vnrgOf(query, alith.address),
+      receiverVtrs: await vtrsOf(query, receiver.address),
+      treasuryVnrg: (await vnrgOf(query, treasury)) ?? 0n,
+      vnrgSupply: (await query.assets.asset(VNRG_ASSET_ID)).unwrap().supply.toBigInt(),
+      burned: (await query.energyFee.burnedEnergy()).toBigInt(),
       receiverNacLevel: nac.isSome ? nac.unwrap()[1].toNumber() : undefined,
     };
   };
@@ -147,20 +140,15 @@ it('VTRS-only sender buys fee energy from broker', async () => {
 
   const state = async (blockHash) => {
     const { query } = await api.at(blockHash);
-    const vtrs = async (address) => (await query.system.account(address)).data.free.toBigInt();
-    const vnrg = async (address) => {
-      const account = await query.assets.account(VNRG_ASSET_ID, address);
-      return account.isSome ? account.unwrap().balance.toBigInt() : undefined;
-    };
     return {
       session: (await query.session.currentIndex()).toNumber(),
-      senderVtrs: await vtrs(baltathar.address),
-      senderVnrg: await vnrg(baltathar.address),
-      receiverVtrs: await vtrs(receiver.address),
-      brokerVtrs: await vtrs(broker),
-      brokerVnrg: await vnrg(broker),
-      treasuryVtrs: await vtrs(treasury),
-      treasuryVnrg: (await vnrg(treasury)) ?? 0n,
+      senderVtrs: await vtrsOf(query, baltathar.address),
+      senderVnrg: await vnrgOf(query, baltathar.address),
+      receiverVtrs: await vtrsOf(query, receiver.address),
+      brokerVtrs: await vtrsOf(query, broker),
+      brokerVnrg: await vnrgOf(query, broker),
+      treasuryVtrs: await vtrsOf(query, treasury),
+      treasuryVnrg: (await vnrgOf(query, treasury)) ?? 0n,
       vnrgSupply: (await query.assets.asset(VNRG_ASSET_ID)).unwrap().supply.toBigInt(),
       burned: (await query.energyFee.burnedEnergy()).toBigInt(),
     };
