@@ -60,8 +60,8 @@ it('signed transfer pays flat fee in VNRG', async () => {
     const nac = await query.nacManaging.usersNft(receiver.address);
     return {
       session: (await query.session.currentIndex()).toNumber(),
-      alithVtrs: await vtrsOf(query, alith.address),
-      alithVnrg: await vnrgOf(query, alith.address),
+      senderVtrs: await vtrsOf(query, alith.address),
+      senderVnrg: await vnrgOf(query, alith.address),
       receiverVtrs: await vtrsOf(query, receiver.address),
       treasuryVnrg: (await vnrgOf(query, treasury)) ?? 0n,
       vnrgSupply: (await query.assets.asset(VNRG_ASSET_ID)).unwrap().supply.toBigInt(),
@@ -111,9 +111,9 @@ it('signed transfer pays flat fee in VNRG', async () => {
   );
 
   // VTRS goes only to the transfer.
-  expect(after.alithVtrs).toBe(before.alithVtrs - amount);
+  expect(after.senderVtrs).toBe(before.senderVtrs - amount);
   expect(after.receiverVtrs).toBe(amount);
-  expect(after.alithVnrg).toBe(before.alithVnrg - fee);
+  expect(after.senderVnrg).toBe(before.senderVnrg - fee);
   expect(after.treasuryVnrg).toBe(before.treasuryVnrg + recycled);
   // `BurnedEnergy` starts from zero in every block, and no other fee is paid in this one.
   expect(after.burned).toBe(fee - recycled);
