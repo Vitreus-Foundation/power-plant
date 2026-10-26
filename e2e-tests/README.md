@@ -5,7 +5,7 @@ Tests of the runtime on a fork of mainnet's live state, made with
 parachain inherent and has no Ethereum JSON-RPC, so the node isn't tested here: consensus, p2p,
 parachain blocks and the EVM RPC are checked on a local network and the live networks.
 
-Requires Node.js 22 or newer.
+Requires Node.js 22.12 or newer.
 
 ## Fork mainnet
 
@@ -31,3 +31,17 @@ Flags after `--` override `configs/mainnet.yml`, for example
 - `--wasm-override` runs the fork on another wasm. The first block built on it runs the migrations
   only if the wasm's `spec_version` is higher than the one in `System.LastRuntimeUpgrade`.
 - That first block can take minutes: Chopsticks fetches every key the migrations read over RPC.
+
+## Tests
+
+```sh
+npm test
+```
+
+Each test file forks the latest finalized block with `configs/mainnet.yml` on a free port, so the
+tests need the RPC endpoint but not a running `npm run fork`. The config writes the accounts the
+tests use into storage, on the manual fork too: Alith
+(`0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac`, the well-known development account) with VTRS and
+VNRG. Such an account skips `OnNewAccount` and gets no NAC, while one created by a transfer gets
+NAC level 1. The tests take the expected amounts from the forked state, such as the fee multiplier
+and the base fee, so they don't depend on live balances.

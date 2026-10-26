@@ -4,12 +4,16 @@
   "private": true,
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.12"
   },
   "scripts": {
-    "fork": "chopsticks --config configs/mainnet.yml"
+    "fork": "chopsticks --config configs/mainnet.yml",
+    "test": "vitest run"
   },
   "dependencies": {
-    "@acala-network/chopsticks": "1.5.2"
+    "@acala-network/chopsticks": "1.5.2",
+    "@acala-network/chopsticks-testing": "1.5.2",
+    "@polkadot/api": "16.5.6",
+    "vitest": "5.0.5"
   }
 }

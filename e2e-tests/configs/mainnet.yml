@@ -4,3 +4,25 @@ host: 127.0.0.1
 # A block is built only on `dev_newBlock`.
 build-block-mode: Manual
 runtime-log-level: 3
+
+# The accounts the tests use. An account written into storage skips `OnNewAccount`, so it gets
+# no NAC.
+import-storage:
+  System:
+    Account:
+      # Alith, a well-known development account.
+      - - - "0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"
+        # VNRG isn't sufficient, so holding it takes a consumer reference.
+        - providers: 1
+          consumers: 1
+          data:
+            # 1000 VTRS, in base units (18 decimals).
+            free: "1000000000000000000000"
+            # The new-logic flag of `pallet_balances`, so the first transfer doesn't emit `Upgraded`.
+            flags: "0x80000000000000000000000000000000"
+  Assets:
+    Account:
+      - - [0, "0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"]
+        - # 100 VNRG (asset 0), in base units (18 decimals).
+          balance: "100000000000000000000"
+          reason: Consumer
