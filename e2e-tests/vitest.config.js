@@ -11,5 +11,9 @@ export default defineConfig({
     // Shows the setup's warnings, such as a missing `WASM`: when vitest detects an AI agent, it
     // otherwise hides the console output of passed tests.
     silent: false,
+    // Chopsticks logs every block at `info`; its warnings and errors, such as why a block fails to
+    // build, stay. `LOG_LEVEL=info npm test` brings the rest back. Runtime logs follow
+    // `runtime-log-level` in the config instead.
+    env: { LOG_LEVEL: process.env.LOG_LEVEL ?? 'warn' },
   },
 });
