@@ -15,6 +15,10 @@ import {
 // `FixedU128`, the type of the fee multiplier, has 18 decimals.
 const MULTIPLIER_ONE = 10n ** 18n;
 
+// The session hooks move the amounts the tests expect: the treasury swaps its energy, the broker
+// burns its VNRG above capacity, and the energy price changes.
+const NEW_SESSION = 'the block starts a new session, whose hooks move the amounts; re-run';
+
 let fork;
 
 beforeAll(async () => {
@@ -60,6 +64,7 @@ it('signed transfer pays flat fee in VNRG', async () => {
         query.nacManaging.usersNft(receiver.address),
       ]);
     return {
+      session: (await query.session.currentIndex()).toNumber(),
       alithVtrs: alithAccount.data.free.toBigInt(),
       alithVnrg: alithVnrg.unwrap().balance.toBigInt(),
       receiverVtrs: receiverAccount.data.free.toBigInt(),
@@ -81,6 +86,7 @@ it('signed transfer pays flat fee in VNRG', async () => {
   const events = await extrinsicEvents(api, blockHash, txHash);
   const after = await state(blockHash);
 
+  expect(after.session, NEW_SESSION).toBe(before.session);
   expect(events.some((e) => api.events.system.ExtrinsicSuccess.is(e))).toBe(true);
 
   const paid = findEvent(events, api.events.energyFee.EnergyFeePaid);
@@ -145,6 +151,7 @@ it('vtrs only sender buys fee energy from broker', async () => {
       return account.isSome ? account.unwrap().balance.toBigInt() : undefined;
     };
     return {
+      session: (await query.session.currentIndex()).toNumber(),
       senderVtrs: await vtrs(baltathar.address),
       senderVnrg: await vnrg(baltathar.address),
       receiverVtrs: await vtrs(receiver.address),
@@ -183,6 +190,7 @@ it('vtrs only sender buys fee energy from broker', async () => {
   const events = await extrinsicEvents(api, blockHash, txHash);
   const after = await state(blockHash);
 
+  expect(after.session, NEW_SESSION).toBe(before.session);
   expect(events.some((e) => api.events.system.ExtrinsicSuccess.is(e))).toBe(true);
 
   const swap = findEvent(events, api.events.energyBroker.SwapExecuted);
