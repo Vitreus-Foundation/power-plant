@@ -83,3 +83,9 @@ jobs:
       - run: cargo build --locked --features ${{ matrix.feature }}
 
       - run: cargo test --features ${{ matrix.feature }} --workspace --locked
+
+      # Only the benchmark tests: the other tests already ran above without the feature.
+      # They run on the pallet mocks, so the wasm build is skipped.
+      - run: cargo test --features ${{ matrix.feature }},runtime-benchmarks --workspace --locked benchmark
+        env:
+          SKIP_WASM_BUILD: 1
