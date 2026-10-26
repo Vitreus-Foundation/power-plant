@@ -7,14 +7,27 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- Add the `EnergyExchangeFailed` event to `pallet-treasury-extension`
+
 ### Changed
 
 - Refactor the energy exchanges of `pallet-energy-fee` and `pallet-treasury-extension` and add `max_amount_out` to them
+- Limit the treasury's energy sales in `pallet-treasury-extension` to the broker's liquidity
+- Report the energy sold per asset in the `EnergyExchanged` event of `pallet-treasury-extension`
+- Set `SpendPeriod` of the treasury to 1 day and `SpendThreshold` of `pallet-treasury-extension` to 1%, on testnet
 - Raise the launchpad's default graduation target on testnet from 3,000 to 4,600,000 VTRS
 
 ### Removed
 
 - Remove `pallet-uniques` and other unused dependencies from the runtime
+- Remove the unused `NacRunner` and other dead EVM code from the runtime
+
+### Fixed
+
+- Make the treasury's VNRG sales in `pallet-treasury-extension` atomic
+- Stop re-creating the treasury's energy accounts every session in `pallet-treasury-extension`
 
 ## [215] - 2026-10-19
 

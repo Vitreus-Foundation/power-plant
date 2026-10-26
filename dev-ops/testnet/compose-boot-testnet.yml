@@ -1,24 +1,26 @@
 version: "3.3"
 
+name: dev-ops
+
 services:
-  power_plant_fourth_node:
-    image: vitreusfoundation/power-plant:latest
-    container_name: power-plant-fourth-node
+  boot_node:
+    image: vitreusfoundation/power-plant:testnet-latest
+    container_name: power-plant-boot-node
     restart: always
     volumes:
       - node_data:/tmp/node
     command: >
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
-      --chain ./target/release/vitreus-power-plant-mainnet.json
-      --name backbone-node-4
+      --chain ./target/release/vitreus-power-plant-testnet.json
+      --name testnet-bootnode
       --port 30333
       --rpc-port 9944
       --rpc-methods=unsafe
+      --node-key ${NODE_KEY}
       --validator
       --prometheus-external
       --rpc-cors all
-      --sync warp
 
     ports:
       - "0.0.0.0:30333:30333/tcp"

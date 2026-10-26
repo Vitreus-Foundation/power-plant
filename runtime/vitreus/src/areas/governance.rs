@@ -1,5 +1,5 @@
 use crate::{
-    energy::{LiquidEnergyToNativeExchange, StaticEnergyToNativeExchange},
+    energy::{EnergyToNativeExchange, LiquidEnergyToNativeExchange, StaticEnergyToNativeExchange},
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
     EnergyAsset, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAndAssets, NativeAsset,
     NativeOrAssetId, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeHoldReason,
@@ -176,7 +176,7 @@ parameter_types! {
     pub const ProposalBond: Permill = Permill::from_percent(5);
     pub const ProposalBondMinimum: Balance = 10 * MILLI_VTRS;
     pub const ProposalBondMaximum: Balance = 10 * UNITS;
-    pub SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 40, "VITREUS_SPEND_PERIOD");
+    pub SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 1 * DAYS, "VITREUS_SPEND_PERIOD");
     pub const Burn: Permill = Permill::from_percent(0);
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const PayoutSpendPeriod: BlockNumber = 30 * DAYS;
@@ -287,7 +287,7 @@ impl pallet_treasury::Config<TechnicalCommitteeTreasury> for Runtime {
 }
 
 parameter_types! {
-    pub const SpendThreshold: Permill = Permill::from_percent(10);
+    pub const SpendThreshold: Permill = prod_or_fast!(Permill::from_percent(10), Permill::from_percent(1));
     pub const StakingRewardsPalletId: PalletId = PalletId(*b"stknrwrd");
     pub const LiquidityPalletId: PalletId = PalletId(*b"liquidty");
     pub const LiquidityReservesPalletId: PalletId = PalletId(*b"liqresrv");
@@ -314,6 +314,7 @@ impl pallet_treasury_extension::Config for Runtime {
     type EnergyAsset = EnergyAsset;
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
+    type EnergyExchange = EnergyToNativeExchange;
     type StaticEnergyExchange = StaticEnergyToNativeExchange;
     type LiquidEnergyExchange = LiquidEnergyToNativeExchange;
     type SpendThreshold = SpendThreshold;
