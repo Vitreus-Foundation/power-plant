@@ -1,5 +1,5 @@
 use crate::{
-    energy::{LiquidEnergyToNativeExchange, StaticEnergyToNativeExchange},
+    energy::{EnergyToNativeExchange, LiquidEnergyToNativeExchange, StaticEnergyToNativeExchange},
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
     EnergyAsset, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAndAssets, NativeAsset,
     NativeOrAssetId, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeHoldReason,
@@ -314,6 +314,7 @@ impl pallet_treasury_extension::Config for Runtime {
     type EnergyAsset = EnergyAsset;
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
+    type EnergyExchange = EnergyToNativeExchange;
     type StaticEnergyExchange = StaticEnergyToNativeExchange;
     type LiquidEnergyExchange = LiquidEnergyToNativeExchange;
     type SpendThreshold = SpendThreshold;

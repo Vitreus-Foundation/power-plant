@@ -94,7 +94,6 @@ pallet-xcm = { workspace = true }
 xcm-runtime-apis = { workspace = true }
 
 # Frontier
-ethereum = { workspace = true }
 fp-account = { workspace = true, features = ["serde"] }
 fp-evm = { workspace = true, features = ["serde"] }
 fp-rpc = { workspace = true }
@@ -144,6 +143,7 @@ vitreus-utility-runtime-api = { workspace = true }
 
 [dev-dependencies]
 energy-generation-runtime-api = { workspace = true, default-features = true }
+ethereum = { workspace = true, default-features = true }
 
 [build-dependencies]
 substrate-wasm-builder = { workspace = true, optional = true }
@@ -297,7 +297,6 @@ std = [
     "pallet-xcm/std",
     "xcm-runtime-apis/std",
     # Frontier
-    "ethereum/std",
     "fp-account/std",
     "fp-evm/std",
     "fp-rpc/std",
