@@ -18,12 +18,48 @@ export const alith = keyring.addFromUri(
 // A random account, so it doesn't exist on chain yet.
 export const freshAccount = () => keyring.addFromSeed(randomBytes(32));
 
-// A fork with the config of `npm run fork`, on a free port.
+// A fork with the config of `npm run fork`, on a free port. With `WASM`, the fork runs that wasm,
+// and the setup builds its first block, the one that runs the migrations, so the tests start on the
+// upgraded state; `fork.upgrade` keeps the versions and that block.
 export async function setupFork() {
   const config = await fetchConfig(
     fileURLToPath(new URL('../configs/mainnet.yml', import.meta.url)),
   );
-  return setupContextWithConfig({ ...config, port: 0 });
+  const wasm = process.env.WASM;
+  if (!wasm) {
+    console.warn("WASM isn't set: the tests run on the runtime on chain, not on a build.");
+  }
+  const fork = await setupContextWithConfig({
+    ...config,
+    port: 0,
+    ...(wasm && { 'wasm-override': wasm }),
+    // Longer than the vitest timeouts, so a slow block fails the test rather than an RPC call.
+    timeout: 60 * 60 * 1000,
+  });
+  if (wasm) {
+    fork.upgrade = await buildUpgradeBlock(fork);
+  }
+  return fork;
+}
+
+async function buildUpgradeBlock({ api, dev }) {
+  // With `wasm-override`, the head already reports the wasm's version, while
+  // `LastRuntimeUpgrade` still holds the one that ran on chain.
+  const to = (await api.rpc.state.getRuntimeVersion()).specVersion.toNumber();
+  const from = (await api.query.system.lastRuntimeUpgrade()).unwrap().specVersion.toNumber();
+  if (to <= from) {
+    console.warn(
+      `The migrations don't run: the wasm's spec_version ${to} isn't higher than ${from} on chain.`,
+    );
+  }
+  const blockHash = await dev.newBlock();
+  return { from, to, blockHash };
+}
+
+// The number of failed extrinsics in the block.
+export async function failedExtrinsics(api, blockHash) {
+  const events = await (await api.at(blockHash)).query.system.events();
+  return events.filter(({ event }) => api.events.system.ExtrinsicFailed.is(event)).length;
 }
 
 // The treasury's account: `modl` and its pallet id, padded with zeros.

@@ -45,3 +45,16 @@ tests use into storage, on the manual fork too: Alith
 VNRG. Such an account skips `OnNewAccount` and gets no NAC, while one created by a transfer gets
 NAC level 1. The tests take the expected amounts from the forked state, such as the fee multiplier
 and the base fee, so they don't depend on live balances.
+
+Without `WASM`, the tests run on the runtime on chain, so they check the tests themselves rather
+than a build, and the setup warns about it. To run them on another wasm, such as a release's
+`vitreus_power_plant_mainnet_runtime-vN.compact.compressed.wasm`:
+
+```sh
+WASM=<wasm> npm test
+```
+
+The setup of each test file then builds the upgrade block first, so the tests run on the migrated
+state; that block takes minutes. The migrations run only if the wasm's `spec_version` is higher than
+the one on chain: otherwise the setup warns, and `upgraded runtime builds blocks`, which runs only
+with `WASM`, fails. To test an unreleased build, raise its `spec_version` locally.
