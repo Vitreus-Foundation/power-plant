@@ -129,6 +129,9 @@ cargo test --features testnet-native --workspace
 cargo test -p pallet-energy-broker
 ```
 
+The [e2e tests](e2e-tests/README.md) check the runtime on a fork of mainnet's live state.
+In `e2e-tests`, run `npm ci` once, then `npm test`.
+
 ## Security Considerations
 
 1. **Access Control**
