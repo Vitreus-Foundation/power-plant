@@ -145,6 +145,32 @@ parameter_types! {
 type CollectionId = u32;
 type ItemId = u32;
 
+// `()` implements the nfts helper only for `MultiSigner` and `MultiSignature`, not for the test types.
+// Compiled when `pallet-nfts` has `runtime-benchmarks`, which another crate in the build can switch on.
+pallet_nfts::runtime_benchmarks_enabled! {
+    pub struct NftsBenchmarkHelper;
+
+    impl pallet_nfts::BenchmarkHelper<CollectionId, ItemId, AccountPublic, AccountId, Signature>
+        for NftsBenchmarkHelper
+    {
+        fn collection(i: u16) -> CollectionId {
+            i.into()
+        }
+
+        fn item(i: u16) -> ItemId {
+            i.into()
+        }
+
+        fn signer() -> (AccountPublic, AccountId) {
+            (UintAuthorityId(1), 1)
+        }
+
+        fn sign(signer: &AccountPublic, message: &[u8]) -> Signature {
+            TestSignature(signer.0, message.to_vec())
+        }
+    }
+}
+
 impl pallet_nfts::Config for Test {
     type RuntimeEvent = RuntimeEvent;
     type CollectionId = CollectionId;
@@ -168,8 +194,9 @@ impl pallet_nfts::Config for Test {
     type KeyLimit = ConstU32<50>;
     type ValueLimit = ConstU32<50>;
     type WeightInfo = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
+    pallet_nfts::runtime_benchmarks_enabled! {
+        type Helper = NftsBenchmarkHelper;
+    }
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
     type Locker = ();
 }
