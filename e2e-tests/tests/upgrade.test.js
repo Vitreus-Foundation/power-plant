@@ -24,11 +24,11 @@ describe.skipIf(!process.env.WASM)('with WASM', () => {
     const version = await api.rpc.state.getRuntimeVersion(upgrade.blockHash);
     expect(lastUpgrade.specVersion.toNumber()).toBe(upgrade.to);
     expect(lastUpgrade.specName.toString()).toBe(version.specName.toString());
-    expect(await failedExtrinsics(api, upgrade.blockHash)).toBe(0);
+    expect(await failedExtrinsics(api, upgrade.blockHash)).toEqual([]);
 
     for (let i = 0; i < 3; i++) {
       const blockHash = await dev.newBlock();
-      expect(await failedExtrinsics(api, blockHash)).toBe(0);
+      expect(await failedExtrinsics(api, blockHash)).toEqual([]);
     }
     expect((await api.rpc.state.getRuntimeVersion()).specVersion.toNumber()).toBe(upgrade.to);
   });

@@ -68,10 +68,24 @@ export async function setStorage({ dev }, values) {
   return dev.newBlock();
 }
 
-// The number of failed extrinsics in the block.
+// The errors of the failed extrinsics among the events, empty if none failed. A pallet's error
+// reads as `pallet.Error`, such as `balances.InsufficientBalance`.
+export function dispatchErrors(api, events) {
+  return events
+    .filter((event) => api.events.system.ExtrinsicFailed.is(event))
+    .map(({ data: { dispatchError } }) => {
+      if (!dispatchError.isModule) {
+        return dispatchError.toString();
+      }
+      const { section, name } = api.registry.findMetaError(dispatchError.asModule);
+      return `${section}.${name}`;
+    });
+}
+
+// The errors of the extrinsics that failed in the block, as `dispatchErrors` gives them.
 export async function failedExtrinsics(api, blockHash) {
-  const events = await (await api.at(blockHash)).query.system.events();
-  return events.filter(({ event }) => api.events.system.ExtrinsicFailed.is(event)).length;
+  const records = await (await api.at(blockHash)).query.system.events();
+  return dispatchErrors(api, records.map(({ event }) => event));
 }
 
 // The account of a pallet id: `modl` and the id, padded with zeros.

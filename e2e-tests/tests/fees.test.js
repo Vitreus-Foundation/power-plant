@@ -5,6 +5,7 @@ import {
   alith,
   baltathar,
   brokerAccount,
+  dispatchErrors,
   extrinsicEvents,
   freshAccount,
   mulPermill,
@@ -88,7 +89,7 @@ it('signed transfer pays flat fee in VNRG', async () => {
   const after = await state(blockHash);
 
   expect(after.session, NEW_SESSION).toBe(before.session);
-  expect(events.some((e) => api.events.system.ExtrinsicSuccess.is(e))).toBe(true);
+  expect(dispatchErrors(api, events)).toEqual([]);
 
   const paid = findEvent(events, api.events.energyFee.EnergyFeePaid);
   expect(paid.who.toString()).toBe(alith.address);
@@ -192,7 +193,7 @@ it('VTRS-only sender buys fee energy from broker', async () => {
   const after = await state(blockHash);
 
   expect(after.session, NEW_SESSION).toBe(before.session);
-  expect(events.some((e) => api.events.system.ExtrinsicSuccess.is(e))).toBe(true);
+  expect(dispatchErrors(api, events)).toEqual([]);
 
   const swap = findEvent(events, api.events.energyBroker.SwapExecuted);
   expect(swap.who.toString()).toBe(baltathar.address);
