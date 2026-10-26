@@ -122,13 +122,15 @@ parameter_types! {
     /// Curve fee split creator 50 / protocol 25 / treasury 25; existing
     /// launches keep their snapshot.
     ///
-    /// `graduation_target` is a placeholder. With these defaults a trade is
+    /// `graduation_target` is the VTRS a launch raises on its curve before it
+    /// graduates and that raise seeds its DEX pool, so it sets how deep a new
+    /// pool starts. With these defaults a trade is
     /// free from 200 × one call's energy fee in VTRS (`LaunchpadFreeTradeFee`),
     /// and no trade on a curve can be larger than its target, so free trades
     /// need a target well above 200 × the fee. If the target is not above
     /// it, no trade on the launch is ever free.
     pub LaunchpadDefaultParams: pallet_launchpad::LaunchParams<Balance> = pallet_launchpad::LaunchParams {
-        graduation_target: 3_000 * UNITS,
+        graduation_target: 4_600_000 * UNITS,
         curve_fee_bps: 100,
         protocol_share_bps: 2_500,
         treasury_share_bps: 2_500,

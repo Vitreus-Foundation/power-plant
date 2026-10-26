@@ -9,6 +9,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ### Changed
 
+- Raise the launchpad's default graduation target on testnet from 3,000 to 4,600,000 VTRS
 - Refactor the energy exchanges of `pallet-energy-fee` and `pallet-treasury-extension` and add `max_amount_out` to them
 
 ### Removed
