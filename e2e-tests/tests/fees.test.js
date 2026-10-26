@@ -8,6 +8,7 @@ import {
   extrinsicEvents,
   freshAccount,
   mulPermill,
+  setStorage,
   setupFork,
   treasuryAccount,
 } from './helpers.js';
@@ -135,7 +136,7 @@ it('vtrs only sender buys fee energy from broker', async () => {
   const broker = brokerAccount(api);
   const amount = UNIT;
   // The broker sells the energy from its own VNRG; give it enough, whatever it holds on chain.
-  await dev.setStorage({
+  await setStorage(fork, {
     Assets: {
       Account: [
         [[VNRG_ASSET_ID, broker], { balance: (100n * UNIT).toString(), reason: 'Consumer' }],

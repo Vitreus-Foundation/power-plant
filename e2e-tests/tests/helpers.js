@@ -61,6 +61,13 @@ async function buildUpgradeBlock({ api, dev }) {
   return { from, to, blockHash };
 }
 
+// `dev.setStorage` changes the head without changing its hash, and polkadot.js caches reads at a
+// hash. The block built on top has the new values under a hash without cached reads.
+export async function setStorage({ dev }, values) {
+  await dev.setStorage(values);
+  return dev.newBlock();
+}
+
 // The number of failed extrinsics in the block.
 export async function failedExtrinsics(api, blockHash) {
   const events = await (await api.at(blockHash)).query.system.events();
