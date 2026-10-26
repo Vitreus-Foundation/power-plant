@@ -1,5 +1,7 @@
 version: "3.3"
 
+name: dev-ops
+
 services:
   archive_node:
     image: vitreusfoundation/power-plant:testnet-latest
@@ -11,14 +13,15 @@ services:
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
       --chain ./target/release/vitreus-power-plant-testnet.json
-      --name testnet-archive-2
+      --name testnet-archive
       --port 30333
       --rpc-port 9944
       --rpc-external
-      --rpc-max-connections 5000
       --prometheus-external
+      --rpc-max-connections 5000
       --rpc-cors all
       --state-pruning archive
+      --enable-offchain-indexing true
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
