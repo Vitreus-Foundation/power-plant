@@ -1,0 +1,15 @@
+{
+  "name": "vitreus-e2e-tests",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "fork": "chopsticks --config configs/mainnet.yml"
+  },
+  "dependencies": {
+    "@acala-network/chopsticks": "1.5.2"
+  }
+}

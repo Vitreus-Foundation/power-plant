@@ -1,0 +1,6 @@
+endpoint: wss://rpc-mainnet.vtrs.io:443
+# Chopsticks listens on all interfaces by default; the fork and its `dev_*` methods stay local.
+host: 127.0.0.1
+# A block is built only on `dev_newBlock`.
+build-block-mode: Manual
+runtime-log-level: 3
