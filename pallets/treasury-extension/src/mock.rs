@@ -1,19 +1,28 @@
 use crate as pallet_treasury_extension;
 
-use frame_support::traits::tokens::{PayFromAccount, UnityAssetBalanceConversion};
+use frame_support::traits::tokens::{
+    Fortitude, PayFromAccount, Precision, Preservation, UnityAssetBalanceConversion,
+};
 use frame_support::PalletId;
 use frame_support::{
     derive_impl, parameter_types,
-    traits::{ConstU128, ConstU32, ConstU64, Everything},
+    storage::with_storage_layer,
+    traits::{
+        fungible::{ItemOf, Mutate as _},
+        fungibles::Mutate as _,
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything,
+    },
 };
-use frame_system::{EnsureRoot, EnsureRootWithSuccess};
+use frame_system::{EnsureRoot, EnsureRootWithSuccess, EnsureSigned};
 use pallet_treasury::TreasuryAccountId;
+use parity_scale_codec::{Decode, Encode};
 use sp_core::H256;
 
 use sp_runtime::{
     traits::{BlakeTwo256, IdentityLookup},
-    BuildStorage, Permill,
+    BuildStorage, DispatchError, Permill, TokenError,
 };
+use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
 
 // 2 gVTRS
 const VTRS_INITIAL_BALANCE: u128 = 2_000_000_000_000_000_000_000_000_000;
@@ -36,6 +45,7 @@ frame_support::construct_runtime!(
     {
         System: frame_system,
         Balances: pallet_balances,
+        Assets: pallet_assets,
         Bounties: pallet_bounties,
         Treasury: pallet_treasury,
         TreasuryExtension: pallet_treasury_extension,
@@ -83,6 +93,20 @@ impl pallet_balances::Config for Test {
     type FreezeIdentifier = ();
     type MaxFreezes = ();
     type RuntimeHoldReason = ();
+}
+
+#[derive_impl(pallet_assets::config_preludes::TestDefaultConfig)]
+impl pallet_assets::Config for Test {
+    type Balance = Balance;
+    type Currency = Balances;
+    type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type AssetDeposit = ConstU128<1>;
+    type AssetAccountDeposit = ConstU128<10>;
+    type MetadataDepositBase = ConstU128<1>;
+    type MetadataDepositPerByte = ConstU128<1>;
+    type ApprovalDeposit = ConstU128<1>;
+    type Freezer = ();
 }
 
 parameter_types! {
@@ -150,17 +174,139 @@ impl pallet_bounties::Config for Test {
     type WeightInfo = ();
 }
 
+pub(crate) const ENERGY: u32 = 0;
+pub(crate) const STATIC_ENERGY: u32 = 1;
+pub(crate) const LIQUID_ENERGY: u32 = 2;
+
+/// The minimum balance of each energy asset.
+pub(crate) const ENERGY_MIN_BALANCE: Balance = 1;
+
+/// Native currency the mock exchanges pay per unit of energy, unless set otherwise.
+pub(crate) const EXCHANGE_RATE: Balance = 2;
+
+/// How the mock exchange of an energy asset behaves.
+#[derive(Clone, Copy, Encode, Decode)]
+pub struct ExchangeBehaviour {
+    /// Native currency it pays for energy, as `(native, energy)`, or `None` if it has no price for
+    /// the energy and quotes nothing.
+    pub price: Option<(Balance, Balance)>,
+    /// Whether it rounds up the energy it quotes for an exact output.
+    pub rounds_up: bool,
+    /// Whether it fails every swap.
+    pub fails: bool,
+}
+
 parameter_types! {
     pub const SpendThreshold: Permill = Permill::from_percent(50);
+    /// Native currency the mock exchanges can still pay out, all together.
+    pub storage ExchangeLiquidity: Balance = Balance::MAX;
+    /// How each mock exchange behaves, by the energy asset it sells.
+    pub storage Exchanges: [ExchangeBehaviour; 3] =
+        [ExchangeBehaviour { price: Some((EXCHANGE_RATE, 1)), rounds_up: false, fails: false }; 3];
+}
+
+/// Changes how the mock exchange of the energy asset `id` behaves.
+pub(crate) fn set_exchange(id: u32, change: impl FnOnce(&mut ExchangeBehaviour)) {
+    let mut exchanges = Exchanges::get();
+    change(&mut exchanges[id as usize]);
+    Exchanges::set(&exchanges);
+}
+
+/// Sells the energy asset `ID` for native currency as its entry in `Exchanges` says, minting what
+/// it pays out of `ExchangeLiquidity`.
+pub struct MockExchange<const ID: u32>;
+
+impl<const ID: u32> MockExchange<ID> {
+    fn behaviour() -> ExchangeBehaviour {
+        Exchanges::get()[ID as usize]
+    }
+}
+
+impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
+    type Balance = Balance;
+    type EnergyAsset = ItemOf<Assets, ConstU32<ID>, AccountId>;
+
+    fn quote_price_exact_tokens_for_tokens(amount: Balance, _: bool) -> Option<Balance> {
+        let (native, energy) = Self::behaviour().price?;
+        let amount_out = amount.checked_mul(native)? / energy;
+        (amount_out != 0 && amount_out <= ExchangeLiquidity::get()).then_some(amount_out)
+    }
+
+    fn quote_price_tokens_for_exact_tokens(amount: Balance, _: bool) -> Option<Balance> {
+        let behaviour = Self::behaviour();
+        let (native, energy) = behaviour.price?;
+        if amount == 0 || amount > ExchangeLiquidity::get() {
+            return None;
+        }
+        let numerator = amount.checked_mul(energy)?;
+        if behaviour.rounds_up {
+            return Some(numerator.div_ceil(native));
+        }
+        // Like a real exchange, it asks for at least one unit of energy.
+        Some((numerator / native).max(1))
+    }
+
+    fn max_amount_out() -> Balance {
+        ExchangeLiquidity::get()
+    }
+}
+
+impl<const ID: u32> SwapFromEnergy<AccountId> for MockExchange<ID> {
+    type Balance = Balance;
+    type EnergyAsset = ItemOf<Assets, ConstU32<ID>, AccountId>;
+
+    fn swap_exact_tokens_for_tokens(
+        who: AccountId,
+        amount_in: Balance,
+        keep_alive: bool,
+    ) -> Result<Balance, DispatchError> {
+        let behaviour = Self::behaviour();
+        if behaviour.fails {
+            return Err(TokenError::FundsUnavailable.into());
+        }
+        let (native, energy) = behaviour.price.ok_or(DispatchError::Unavailable)?;
+
+        // Like a real exchange, a swap for more than it can pay fails as a whole.
+        let amount_out = amount_in * native / energy;
+        let liquidity_left = ExchangeLiquidity::get()
+            .checked_sub(amount_out)
+            .ok_or(TokenError::FundsUnavailable)?;
+
+        let preservation =
+            if keep_alive { Preservation::Preserve } else { Preservation::Expendable };
+        with_storage_layer(|| {
+            Assets::burn_from(
+                ID,
+                &who,
+                amount_in,
+                preservation,
+                Precision::Exact,
+                Fortitude::Polite,
+            )?;
+
+            ExchangeLiquidity::set(&liquidity_left);
+            Balances::mint_into(&who, amount_out)?;
+            Ok(amount_out)
+        })
+    }
+
+    fn swap_tokens_for_exact_tokens(
+        _who: AccountId,
+        _amount_out: Balance,
+        _keep_alive: bool,
+    ) -> Result<Balance, DispatchError> {
+        Err(TokenError::Unsupported.into())
+    }
 }
 
 impl crate::Config for Test {
     type RuntimeEvent = RuntimeEvent;
-    type EnergyAsset = ();
-    type StaticEnergyAsset = ();
-    type LiquidEnergyAsset = ();
-    type StaticEnergyExchange = ();
-    type LiquidEnergyExchange = ();
+    type EnergyAsset = ItemOf<Assets, ConstU32<ENERGY>, AccountId>;
+    type StaticEnergyAsset = ItemOf<Assets, ConstU32<STATIC_ENERGY>, AccountId>;
+    type LiquidEnergyAsset = ItemOf<Assets, ConstU32<LIQUID_ENERGY>, AccountId>;
+    type EnergyExchange = MockExchange<ENERGY>;
+    type StaticEnergyExchange = MockExchange<STATIC_ENERGY>;
+    type LiquidEnergyExchange = MockExchange<LIQUID_ENERGY>;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = ();
     type TreasuryTargetBalance = ();
@@ -179,6 +325,17 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (BOB, VTRS_INITIAL_BALANCE),
             (Treasury::account_id(), 1000),
         ],
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
+
+    pallet_assets::GenesisConfig::<Test> {
+        assets: vec![
+            (ENERGY, ALICE, false, ENERGY_MIN_BALANCE),
+            (STATIC_ENERGY, ALICE, false, ENERGY_MIN_BALANCE),
+            (LIQUID_ENERGY, ALICE, false, ENERGY_MIN_BALANCE),
+        ],
+        ..Default::default()
     }
     .assimilate_storage(&mut t)
     .unwrap();
