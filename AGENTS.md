@@ -56,8 +56,9 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 The flow is in README.md. These are the parts agents get wrong:
 
 - A PR that changes the runtime or a pallet adds entries under `## [Unreleased]` in `CHANGELOG.md`, runtime refactors included. Each entry starts with a verb and names the pallet or API it changes. Related small changes can share an entry. A PR that changes neither, such as a CI or docs change, ticks "Does not require a CHANGELOG entry" in its description, or the CHANGELOG check fails.
-- Add new entries at the end of their subsection. Don't reorder or rewrite entries added by other PRs; on a rebase conflict, keep both sides' entries, yours last. Only a release PR may reorder, merge and reword them, keeping every change covered.
+- Add new entries at the end of their subsection. Don't reorder or rewrite entries added by other PRs; on a conflict, keep both sides' entries, yours last. Only a release PR may reorder, merge and reword them, keeping every change covered.
 - By merge time, a PR's entries describe its final diff: when the PR changes, update its entries instead of adding lines for follow-up commits.
+- Entries can be added after approval: the CHANGELOG check is required, so a PR can't merge without them. In a review, a missing entry or a failing CHANGELOG check alone is no reason to request changes.
 - Don't change `spec_version` or `transaction_version`; only a release PR does. Storage migrations go to `Unreleased` in `runtime/vitreus/src/migrations.rs`; a migration for one network goes behind its feature.
 
 ## Pull requests
