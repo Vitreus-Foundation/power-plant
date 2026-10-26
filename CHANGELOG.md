@@ -17,6 +17,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Limit the treasury's energy sales in `pallet-treasury-extension` to the broker's liquidity
 - Report the energy sold per asset in the `EnergyExchanged` event of `pallet-treasury-extension`
 - Set `SpendPeriod` of the treasury to 1 day and `SpendThreshold` of `pallet-treasury-extension` to 1%, on testnet
+- Raise the launchpad's default graduation target on testnet from 3,000 to 4,600,000 VTRS
 
 ### Removed
 
