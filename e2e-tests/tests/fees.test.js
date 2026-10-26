@@ -3,6 +3,8 @@ import {
   UNIT,
   VNRG_ASSET_ID,
   alith,
+  baltathar,
+  brokerAccount,
   extrinsicEvents,
   freshAccount,
   mulPermill,
@@ -22,6 +24,22 @@ beforeAll(async () => {
 afterAll(async () => {
   await fork?.teardown();
 });
+
+// A Balances call pays the flat fee: the fee multiplier times the base fee, rounded down. The
+// treasury gets the fee recycling rate of the fee; the rest is burned.
+async function flatFee(query) {
+  const multiplier = (await query.transactionPayment.nextFeeMultiplier()).toBigInt();
+  const baseFee = (await query.energyFee.baseFee()).toBigInt();
+  const fee = (multiplier * baseFee) / MULTIPLIER_ONE;
+  const recycled = mulPermill(fee, (await query.treasuryExtension.feeRecyclingRate()).toBigInt());
+  return { fee, recycled };
+}
+
+function findEvent(events, kind) {
+  const found = events.find((event) => kind.is(event));
+  expect(found, kind.meta.name.toString()).toBeDefined();
+  return found.data;
+}
 
 it('signed transfer pays flat fee in VNRG', async () => {
   const { api, dev } = fork;
@@ -53,13 +71,7 @@ it('signed transfer pays flat fee in VNRG', async () => {
   };
 
   const parentHash = (await api.rpc.chain.getHeader()).hash;
-  const { query } = await api.at(parentHash);
-  // A Balances call pays the flat fee: the fee multiplier times the base fee, rounded down.
-  const multiplier = (await query.transactionPayment.nextFeeMultiplier()).toBigInt();
-  const baseFee = (await query.energyFee.baseFee()).toBigInt();
-  const fee = (multiplier * baseFee) / MULTIPLIER_ONE;
-  // The treasury gets the fee recycling rate of the fee; the rest is burned.
-  const recycled = mulPermill(fee, (await query.treasuryExtension.feeRecyclingRate()).toBigInt());
+  const { fee, recycled } = await flatFee((await api.at(parentHash)).query);
   const before = await state(parentHash);
 
   const txHash = await api.tx.balances
@@ -69,34 +81,33 @@ it('signed transfer pays flat fee in VNRG', async () => {
   const events = await extrinsicEvents(api, blockHash, txHash);
   const after = await state(blockHash);
 
-  const event = (kind) => {
-    const found = events.find((e) => kind.is(e));
-    expect(found, kind.meta.name.toString()).toBeDefined();
-    return found.data;
-  };
   expect(events.some((e) => api.events.system.ExtrinsicSuccess.is(e))).toBe(true);
 
-  const paid = event(api.events.energyFee.EnergyFeePaid);
+  const paid = findEvent(events, api.events.energyFee.EnergyFeePaid);
   expect(paid.who.toString()).toBe(alith.address);
   expect(paid.amount.toBigInt()).toBe(fee);
 
-  const withdrawn = event(api.events.assets.Withdrawn);
+  const withdrawn = findEvent(events, api.events.assets.Withdrawn);
   expect(withdrawn.assetId.toNumber()).toBe(VNRG_ASSET_ID);
   expect(withdrawn.who.toString()).toBe(alith.address);
   expect(withdrawn.amount.toBigInt()).toBe(fee);
 
-  const deposited = event(api.events.assets.Deposited);
+  const deposited = findEvent(events, api.events.assets.Deposited);
   expect(deposited.assetId.toNumber()).toBe(VNRG_ASSET_ID);
   expect(deposited.who.toString()).toBe(treasury);
   expect(deposited.amount.toBigInt()).toBe(recycled);
 
-  const transfer = event(api.events.balances.Transfer);
+  const transfer = findEvent(events, api.events.balances.Transfer);
   expect(transfer.from.toString()).toBe(alith.address);
   expect(transfer.to.toString()).toBe(receiver.address);
   expect(transfer.amount.toBigInt()).toBe(amount);
 
-  expect(event(api.events.system.NewAccount).account.toString()).toBe(receiver.address);
-  expect(event(api.events.nacManaging.NftMinted).owner.toString()).toBe(receiver.address);
+  expect(findEvent(events, api.events.system.NewAccount).account.toString()).toBe(
+    receiver.address,
+  );
+  expect(findEvent(events, api.events.nacManaging.NftMinted).owner.toString()).toBe(
+    receiver.address,
+  );
 
   // VTRS goes only to the transfer.
   expect(after.alithVtrs).toBe(before.alithVtrs - amount);
@@ -109,4 +120,99 @@ it('signed transfer pays flat fee in VNRG', async () => {
   // The receiver is created by the transfer, so `OnNewAccount` gives it NAC level 1.
   expect(before.receiverNacLevel).toBeUndefined();
   expect(after.receiverNacLevel).toBe(1);
+});
+
+it('vtrs only sender buys fee energy from broker', async () => {
+  const { api, dev } = fork;
+  const receiver = freshAccount();
+  const treasury = treasuryAccount(api);
+  const broker = brokerAccount(api);
+  const amount = UNIT;
+  // The broker sells the energy from its own VNRG; give it enough, whatever it holds on chain.
+  await dev.setStorage({
+    Assets: {
+      Account: [
+        [[VNRG_ASSET_ID, broker], { balance: (100n * UNIT).toString(), reason: 'Consumer' }],
+      ],
+    },
+  });
+
+  const state = async (blockHash) => {
+    const { query } = await api.at(blockHash);
+    const vtrs = async (address) => (await query.system.account(address)).data.free.toBigInt();
+    const vnrg = async (address) => {
+      const account = await query.assets.account(VNRG_ASSET_ID, address);
+      return account.isSome ? account.unwrap().balance.toBigInt() : undefined;
+    };
+    return {
+      senderVtrs: await vtrs(baltathar.address),
+      senderVnrg: await vnrg(baltathar.address),
+      receiverVtrs: await vtrs(receiver.address),
+      brokerVtrs: await vtrs(broker),
+      brokerVnrg: await vnrg(broker),
+      treasuryVtrs: await vtrs(treasury),
+      treasuryVnrg: (await vnrg(treasury)) ?? 0n,
+      vnrgSupply: (await query.assets.asset(VNRG_ASSET_ID)).unwrap().supply.toBigInt(),
+      burned: (await query.energyFee.burnedEnergy()).toBigInt(),
+    };
+  };
+
+  const parentHash = (await api.rpc.chain.getHeader()).hash;
+  const parent = await api.at(parentHash);
+  const { fee, recycled } = await flatFee(parent.query);
+  // The VTRS the broker charges for the fee energy, with or without its swap fee.
+  const quote = async (includeFee) => {
+    const price = await parent.call.energyBrokerApi.quotePriceTokensForExactTokens(
+      null,
+      'Native',
+      { WithId: VNRG_ASSET_ID },
+      fee,
+      includeFee,
+    );
+    expect(price.isSome, 'the broker quotes the fee energy').toBe(true);
+    return price.unwrap().toBigInt();
+  };
+  const price = await quote(true);
+  const swapFee = price - (await quote(false));
+  const before = await state(parentHash);
+
+  const txHash = await api.tx.balances
+    .transferKeepAlive(receiver.address, amount)
+    .signAndSend(baltathar);
+  const blockHash = await dev.newBlock();
+  const events = await extrinsicEvents(api, blockHash, txHash);
+  const after = await state(blockHash);
+
+  expect(events.some((e) => api.events.system.ExtrinsicSuccess.is(e))).toBe(true);
+
+  const swap = findEvent(events, api.events.energyBroker.SwapExecuted);
+  expect(swap.who.toString()).toBe(baltathar.address);
+  expect(swap.recipient.toString()).toBe(baltathar.address);
+  expect(swap.path[0].isNative).toBe(true);
+  expect(swap.path[1].asWithId.toNumber()).toBe(VNRG_ASSET_ID);
+  expect(swap.amountIn.toBigInt()).toBe(price);
+  expect(swap.amountOut.toBigInt()).toBe(fee);
+
+  const paid = findEvent(events, api.events.energyFee.EnergyFeePaid);
+  expect(paid.who.toString()).toBe(baltathar.address);
+  expect(paid.amount.toBigInt()).toBe(fee);
+
+  const transfer = findEvent(events, api.events.balances.Transfer);
+  expect(transfer.from.toString()).toBe(baltathar.address);
+  expect(transfer.to.toString()).toBe(receiver.address);
+  expect(transfer.amount.toBigInt()).toBe(amount);
+
+  // Baltathar pays the transfer and the energy in VTRS and ends without VNRG: it buys only the fee.
+  expect(after.senderVtrs).toBe(before.senderVtrs - amount - price);
+  expect(before.senderVnrg).toBeUndefined();
+  expect(after.senderVnrg).toBeUndefined();
+  expect(after.receiverVtrs).toBe(amount);
+  // The broker keeps the price without the swap fee and gives away the fee energy.
+  expect(after.brokerVtrs).toBe(before.brokerVtrs + price - swapFee);
+  expect(after.brokerVnrg).toBe(before.brokerVnrg - fee);
+  // The treasury gets the swap fee in VTRS and the recycled part of the fee in VNRG.
+  expect(after.treasuryVtrs).toBe(before.treasuryVtrs + swapFee);
+  expect(after.treasuryVnrg).toBe(before.treasuryVnrg + recycled);
+  expect(after.burned).toBe(fee - recycled);
+  expect(after.vnrgSupply).toBe(before.vnrgSupply - (fee - recycled));
 });

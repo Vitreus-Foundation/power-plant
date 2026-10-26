@@ -40,11 +40,13 @@ npm test
 
 Each test file forks the latest finalized block with `configs/mainnet.yml` on a free port, so the
 tests need the RPC endpoint but not a running `npm run fork`. The config writes the accounts the
-tests use into storage, on the manual fork too: Alith
-(`0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac`, the well-known development account) with VTRS and
-VNRG. Such an account skips `OnNewAccount` and gets no NAC, while one created by a transfer gets
-NAC level 1. The tests take the expected amounts from the forked state, such as the fee multiplier
-and the base fee, so they don't depend on live balances.
+tests use into storage, on the manual fork too: the well-known development accounts Alith
+(`0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac`) with VTRS and VNRG, and Baltathar
+(`0x3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0`) with VTRS only, whose fees the broker covers. Such
+an account skips `OnNewAccount` and gets no NAC, while one created by a transfer gets NAC level 1.
+A test that needs more, such as the broker's liquidity, sets it itself. The tests take the expected
+amounts from the forked state, such as the fee multiplier, the base fee and the broker's quote, so
+they don't depend on live balances.
 
 Without `WASM`, the tests run on the runtime on chain, so they check the tests themselves rather
 than a build, and the setup warns about it. To run them on another wasm, such as a release's

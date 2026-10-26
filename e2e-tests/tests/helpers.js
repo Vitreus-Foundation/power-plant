@@ -15,6 +15,11 @@ export const alith = keyring.addFromUri(
   '0x5fb92d6e98884f76de468fa3f6278f8807c48bebc13595d45af5bdc4da702133',
 );
 
+// Moonbeam's second well-known development account; `configs/mainnet.yml` gives it VTRS only.
+export const baltathar = keyring.addFromUri(
+  '0x8075991ce870b93a8870eca0c0f91913d12f47948ca0fd25b49c6fa7cdbeee8b',
+);
+
 // A random account, so it doesn't exist on chain yet.
 export const freshAccount = () => keyring.addFromSeed(randomBytes(32));
 
@@ -62,13 +67,18 @@ export async function failedExtrinsics(api, blockHash) {
   return events.filter(({ event }) => api.events.system.ExtrinsicFailed.is(event)).length;
 }
 
-// The treasury's account: `modl` and its pallet id, padded with zeros.
-export function treasuryAccount(api) {
+// The account of a pallet id: `modl` and the id, padded with zeros.
+function palletAccount(api, id) {
   const account = new Uint8Array(20);
   account.set(new TextEncoder().encode('modl'));
-  account.set(api.consts.treasury.palletId.toU8a(), 4);
+  account.set(id, 4);
   return api.createType('AccountId20', account).toString();
 }
+
+export const treasuryAccount = (api) => palletAccount(api, api.consts.treasury.palletId.toU8a());
+
+// The energy broker's pallet id isn't in the metadata.
+export const brokerAccount = (api) => palletAccount(api, new TextEncoder().encode('energybr'));
 
 // The events of one extrinsic of the block.
 export async function extrinsicEvents(api, blockHash, txHash) {
