@@ -196,6 +196,8 @@ fn pays_no_refunds_fee() {
         assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance);
         assert_eq!(BalancesVNRG::balance(&FEE_DEST), 0);
         assert_eq!(BurnedEnergy::<Test>::get(), 0);
+        assert_eq!(ReportedEnergyBurn::get(), 0);
+        assert_eq!(FeeWithdrawals::get(), vec![ALICE]);
 
         System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: 0 }.into());
     });
@@ -261,6 +263,8 @@ fn pays_no_refunds_exchanged_fee_in_vnrg() {
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance - vtrs_fee);
         assert_eq!(BalancesVNRG::balance(&FEE_DEST), 0);
         assert_eq!(BurnedEnergy::<Test>::get(), 0);
+        assert_eq!(ReportedEnergyBurn::get(), 0);
+        assert_eq!(FeeWithdrawals::get(), vec![ALICE]);
 
         System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: 0 }.into());
     });
@@ -312,6 +316,8 @@ fn zero_fee_withdraws_nothing() {
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance);
         assert_eq!(BalancesVNRG::balance(&FEE_DEST), 0);
         assert_eq!(BurnedEnergy::<Test>::get(), 0);
+        assert_eq!(ReportedEnergyBurn::get(), 0);
+        assert!(FeeWithdrawals::get().is_empty());
         assert!(System::events().is_empty());
     });
 }
@@ -518,6 +524,8 @@ fn fee_exchange_spends_snrg_before_lnrg() {
             Perbill::from_rational(2u32, 10u32).mul_floor(fee)
         );
         assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(ReportedEnergyBurn::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(FeeWithdrawals::get(), vec![ALICE]);
 
         System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
     });
@@ -583,6 +591,8 @@ fn fee_exchange_buys_only_shortfall_with_vtrs() {
             Perbill::from_rational(2u32, 10u32).mul_floor(fee)
         );
         assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(ReportedEnergyBurn::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(FeeWithdrawals::get(), vec![ALICE]);
 
         System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
     });
@@ -624,6 +634,8 @@ fn evm_fee_exchange_spends_snrg_before_lnrg() {
             Perbill::from_rational(2u32, 10u32).mul_floor(fee)
         );
         assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(ReportedEnergyBurn::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(FeeWithdrawals::get(), vec![ALICE]);
 
         System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
     });
@@ -669,8 +681,87 @@ fn evm_fee_exchange_buys_only_shortfall_with_vtrs() {
             Perbill::from_rational(2u32, 10u32).mul_floor(fee)
         );
         assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(ReportedEnergyBurn::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(FeeWithdrawals::get(), vec![ALICE]);
 
         System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
+    });
+}
+
+#[test]
+fn fee_withdrawal_fails_without_enough_vtrs() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(0).execute_with(|| {
+        // CHARLIE holds no energy and only half of the VTRS needed to buy the fee.
+        let vtrs_balance = VNRG_TO_VTRS_RATE
+            .checked_mul_int(fee / 2)
+            .expect("Expected to calculate fee in VTRS");
+        BalancesVTRS::mint_into(&CHARLIE, vtrs_balance).expect("Expected to mint VTRS");
+        System::set_block_number(1);
+        let transfer_amount: Balance = 1_000_000_000;
+
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+
+        let dispatch_info: DispatchInfo =
+            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        assert_eq!(
+            <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+                &CHARLIE,
+                &assets_transfer_call,
+                &dispatch_info,
+                computed_fee,
+                0,
+            )
+            .err(),
+            Some(TransactionValidityError::Invalid(InvalidTransaction::Payment))
+        );
+
+        assert_eq!(BalancesVNRG::balance(&CHARLIE), 0);
+        assert_eq!(BalancesVTRS::balance(&CHARLIE), vtrs_balance);
+        assert_eq!(ReportedEnergyBurn::get(), 0);
+        assert!(FeeWithdrawals::get().is_empty());
+        assert!(System::events().is_empty());
+    });
+}
+
+#[test]
+fn evm_fee_withdrawal_fails_without_enough_vtrs() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(0).execute_with(|| {
+        // CHARLIE holds no energy and only half of the VTRS needed to buy the fee.
+        let vtrs_balance = VNRG_TO_VTRS_RATE
+            .checked_mul_int(fee / 2)
+            .expect("Expected to calculate fee in VTRS");
+        BalancesVTRS::mint_into(&CHARLIE, vtrs_balance).expect("Expected to mint VTRS");
+        System::set_block_number(1);
+
+        // fee equals arbitrary number since we don't take it into account
+        assert_eq!(
+            <EnergyFee as OnChargeEVMTransaction<Test>>::withdraw_fee(
+                &CHARLIE.into(),
+                1_234_567_890.into(),
+            )
+            .err()
+            .map(DispatchError::from),
+            Some(pallet_evm::Error::<Test>::BalanceLow.into())
+        );
+
+        assert_eq!(BalancesVNRG::balance(&CHARLIE), 0);
+        assert_eq!(BalancesVTRS::balance(&CHARLIE), vtrs_balance);
+        assert_eq!(ReportedEnergyBurn::get(), 0);
+        assert!(FeeWithdrawals::get().is_empty());
+        assert!(System::events().is_empty());
     });
 }
 
