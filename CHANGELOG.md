@@ -44,6 +44,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Bound `pallet-nac-managing` fee and claim threshold reconciliation per block and preserve captured deficits and their year until reviewed repair
 
+- Add explicitly approved, bounded catch-up to `pallet-privileges` while keeping historical source assumptions frozen and existing annual results protected
+
 ## [215] - 2026-10-19
 
 ### Added

@@ -1,14 +1,27 @@
-//! Bounded settlement of completed UTC days and annual point snapshots.
+//! Bounded UTC accounting and explicitly approved recovery of a stale clock.
+//!
+//! A frozen source is an administrator-approved assumption for an interval, not
+//! evidence of historical stake. Historical reconstruction belongs off chain.
 use super::*;
 use frame_support::{traits::ConstU32, BoundedVec};
 use parity_scale_codec::MaxEncodedLen;
 use sp_runtime::DispatchError;
 
 pub(crate) const MAX_AUTO_DAYS: u32 = 7;
+pub(crate) const MAX_SOURCES_PER_STEP: usize = 64;
 pub(crate) const MAX_MEMBERS: usize = 1024;
 type Sources<T> = BoundedVec<(<T as frame_system::Config>::AccountId, PointsOf<T>), ConstU32<1024>>;
 
-pub use crate::AccrualReviewRequired;
+#[derive(Encode, Decode, TypeInfo)]
+#[scale_info(skip_type_params(T))]
+pub struct CatchUp<T: Config> {
+    pub target: CurrentDateInfo,
+    pub source_cursor: u32,
+    pub vip: Sources<T>,
+    pub vipp: Sources<T>,
+}
+
+pub use crate::{AccrualReviewRequired, ApprovedCatchUp};
 
 pub fn today<T: Config>() -> Result<CurrentDateInfo, DispatchError> {
     let now = i64::try_from(<T as Config>::UnixTime::now().as_secs())
@@ -19,7 +32,7 @@ pub fn today<T: Config>() -> Result<CurrentDateInfo, DispatchError> {
 }
 
 pub fn paused<T: Config>() -> bool {
-    AccrualReviewRequired::<T>::get()
+    AccrualReviewRequired::<T>::get() || ApprovedCatchUp::<T>::exists()
 }
 
 /// Initialization hooks run before the timestamp inherent. Once the first
@@ -66,7 +79,9 @@ pub fn before_stake_change<T: Config>(account: &T::AccountId) {
         }
     }
     if let Ok(now) = today::<T>() {
-        if Pallet::<T>::check_correct_date(&CurrentDate::<T>::get(), &now) {
+        if Pallet::<T>::check_correct_date(&CurrentDate::<T>::get(), &now)
+            && !ApprovedCatchUp::<T>::exists()
+        {
             AccrualReviewRequired::<T>::put(true);
         }
     }
@@ -163,11 +178,16 @@ fn sources<T: Config>(
 /// Preserve each day's rounding but write each account at most once per year
 /// segment. Work is bounded by 2 * 1024 members and 366 completed days.
 #[frame_support::transactional]
-pub fn advance<T: Config>(target: &CurrentDateInfo) -> DispatchResult {
+pub fn advance<T: Config>(target: &CurrentDateInfo, frozen: Option<&CatchUp<T>>) -> DispatchResult {
     let mut cursor = CurrentDate::<T>::get();
     ensure!(within_limit::<T>(&cursor, target)?, Error::<T>::AccountingPaused);
-    let (vip, vipp) = sources::<T>(true)?;
-    let (vip, vipp) = (&vip, &vipp);
+    let owned;
+    let (vip, vipp) = if let Some(job) = frozen {
+        (&job.vip, &job.vipp)
+    } else {
+        owned = sources::<T>(true)?;
+        (&owned.0, &owned.1)
+    };
     // A 366-day window can close two years (e.g. Dec 31 of a common year).
     let mut segments: Vec<(u32, Vec<Perquintill>, bool)> = Vec::new();
     while Pallet::<T>::check_correct_date(&cursor, target) {
@@ -221,5 +241,91 @@ pub fn advance<T: Config>(target: &CurrentDateInfo) -> DispatchResult {
         VippMembers::<T>::insert(who, member);
     }
     CurrentDate::<T>::put(cursor);
+    Ok(())
+}
+
+/// Root approves using the current bounded sources for this specified interval.
+/// Repeat with another approved interval if the real clock advances meanwhile.
+pub fn approve<T: Config>(target: CurrentDateInfo) -> DispatchResult {
+    if let Some(job) = ApprovedCatchUp::<T>::get() {
+        ensure!(
+            !Pallet::<T>::check_correct_date(&CurrentDate::<T>::get(), &job.target),
+            Error::<T>::AccountingPaused
+        );
+    }
+    ensure!(
+        Pallet::<T>::check_correct_date(&CurrentDate::<T>::get(), &target),
+        Error::<T>::NotCorrectDate
+    );
+    ensure!(!Pallet::<T>::check_correct_date(&today::<T>()?, &target), Error::<T>::NotCorrectDate);
+    let (vip, vipp) = sources::<T>(false)?;
+    ApprovedCatchUp::<T>::put(CatchUp::<T> { target, source_cursor: 0, vip, vipp });
+    Ok(())
+}
+
+#[frame_support::transactional]
+pub fn step<T: Config>() -> DispatchResult {
+    let mut job = ApprovedCatchUp::<T>::get().ok_or(Error::<T>::AccountingPaused)?;
+    let anchor = CurrentDate::<T>::get();
+    if !Pallet::<T>::check_correct_date(&anchor, &job.target) {
+        return Ok(());
+    }
+    let mut limit = anchor.clone();
+    limit.add_days::<T>(MAX_UPDATE_DAYS.into())?;
+    let target = if Pallet::<T>::check_correct_date(&limit, &job.target) {
+        limit
+    } else {
+        job.target.clone()
+    };
+    let start = job.source_cursor as usize;
+    let end = (start + MAX_SOURCES_PER_STEP).min(job.vip.len() + job.vipp.len());
+    let vip: Vec<_> = job
+        .vip
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i >= start && *i < end)
+        .map(|(_, source)| source.clone())
+        .collect();
+    let vipp: Vec<_> = job
+        .vipp
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| *i + job.vip.len() >= start && *i + job.vip.len() < end)
+        .map(|(_, source)| source.clone())
+        .collect();
+    let chunk = CatchUp::<T> {
+        target: target.clone(),
+        source_cursor: 0,
+        vip: vip.try_into().map_err(|_| Error::<T>::AccountingCapacityExceeded)?,
+        vipp: vipp.try_into().map_err(|_| Error::<T>::AccountingCapacityExceeded)?,
+    };
+    advance::<T>(&target, Some(&chunk))?;
+    if end == job.vip.len() + job.vipp.len() {
+        job.source_cursor = 0;
+    } else {
+        // Annual rows are already persisted for the processed accounts, but the
+        // global clock commits only after every source finished this window.
+        CurrentDate::<T>::put(anchor);
+        job.source_cursor = end as u32;
+    }
+    ApprovedCatchUp::<T>::put(job);
+    Ok(())
+}
+
+/// Do not silently credit the days that passed while administrators reviewed
+/// the job. An extended interval needs another explicit source approval.
+pub fn finish<T: Config>() -> DispatchResult {
+    ensure!(
+        !Pallet::<T>::check_correct_date(&CurrentDate::<T>::get(), &today::<T>()?),
+        Error::<T>::AccountingPaused
+    );
+    if let Some(job) = ApprovedCatchUp::<T>::get() {
+        ensure!(
+            !Pallet::<T>::check_correct_date(&CurrentDate::<T>::get(), &job.target),
+            Error::<T>::AccountingPaused
+        );
+    }
+    ApprovedCatchUp::<T>::kill();
+    AccrualReviewRequired::<T>::kill();
     Ok(())
 }
