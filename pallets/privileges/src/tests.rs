@@ -5,6 +5,8 @@ use frame_support::traits::fungible::Inspect;
 use frame_support::{assert_err, assert_noop, assert_ok};
 use substrate_test_utils::assert_eq_uvec;
 
+mod vipp_cache_migration;
+
 #[test]
 fn test_data_building() {
     // Valid date creation.
@@ -836,6 +838,38 @@ fn join_vip_and_vipp(account: AccountId) {
 }
 
 #[test]
+fn vipp_cache_migration_keeps_existing_cap_on_additional_claim() {
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        let nft = owned_vipp_ids(10)[0];
+        let (_, nac) = NacManaging::get_nac_level(&10).unwrap();
+        assert_ne!(nft, nac);
+        VippMembers::<Test>::insert(
+            10,
+            VippMemberInfo::<Test> { points: 123, active_vipp_threshold: vec![(nac, 950)] },
+        );
+        VipPoints::<Test>::insert(2019, 10, 456);
+        VippPoints::<Test>::insert(2019, 10, 789);
+        StorageVersion::new(1).put::<Privileges>();
+
+        crate::migration::RepairVippCache::<Test>::on_runtime_upgrade();
+
+        let repaired = Privileges::vipp_members(10).unwrap();
+        assert_eq!(repaired.active_vipp_threshold, vec![(nft, 950)]);
+        assert_eq!(repaired.points, 123);
+        System::set_block_number(2);
+        claim_for_validator(100);
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.active_vipp_threshold.iter().map(|(_, cap)| cap).sum::<u64>(), 1045);
+        assert_eq!(member.points, 123);
+        assert_eq!(VipPoints::<Test>::get(2019, 10), Some(456));
+        assert_eq!(VippPoints::<Test>::get(2019, 10), Some(789));
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(2));
+    });
+}
+
+#[test]
 fn test_claims_before_becoming_vip() {
     ExtBuilder::default().build_and_execute(|| {
         claim_for_validator(200);
@@ -897,6 +931,7 @@ fn vip_entry_resets_cached_points_after_mint() {
 
 #[test]
 fn vip_entry_refreshes_registered_caps_without_mint() {
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
     ExtBuilder::default().build_and_execute(|| {
         claim_for_validator(200);
         let (_, id) = NacManaging::mint_vipp_nft(&10).unwrap().unwrap();
@@ -904,6 +939,8 @@ fn vip_entry_refreshes_registered_caps_without_mint() {
             10,
             VippMemberInfo::<Test> { points: 123, active_vipp_threshold: vec![(id, 1)] },
         );
+        StorageVersion::new(1).put::<Privileges>();
+        crate::migration::RepairVippCache::<Test>::on_runtime_upgrade();
         assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
         assert_eq!(owned_vipp_ids(10), vec![id]);
         let member = Privileges::vipp_members(10).unwrap();

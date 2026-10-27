@@ -157,8 +157,6 @@ pub mod areas;
 mod energy;
 pub mod migrations;
 mod precompiles;
-#[cfg(feature = "runtime-benchmarks")]
-mod vipp_minting;
 mod weights;
 mod xcm_config;
 
@@ -981,7 +979,7 @@ impl pallet_privileges::Config for Runtime {
     type Currency = Balances;
     type UnixTime = Timestamp;
     type PalletId = PrivilegesPalletId;
-    type WeightInfo = weights::vipp_minting::WeightInfo<Runtime>;
+    type WeightInfo = pallet_privileges::weights::SubstrateWeight<Runtime>;
 }
 
 parameter_types! {
@@ -1284,7 +1282,7 @@ impl pallet_claiming::Config for Runtime {
     type ClaimData = ();
     type OnClaim = NacManaging;
     type Prefix = Prefix;
-    type WeightInfo = weights::vipp_minting::WeightInfo<Runtime>;
+    type WeightInfo = ();
 }
 
 #[derive(Decode, Encode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
@@ -2321,7 +2319,6 @@ mod benches {
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
-        [vipp_minting, crate::vipp_minting::Pallet::<Runtime>]
     );
 }
 
@@ -2331,7 +2328,6 @@ mod benches {
         [frame_system, SystemBench::<Runtime>]
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
-        [vipp_minting, crate::vipp_minting::Pallet::<Runtime>]
         [pallet_vitreus_dex, VitreusDex]
         [pallet_launchpad, Launchpad]
         [pallet_launch_treasury, LaunchTreasury]

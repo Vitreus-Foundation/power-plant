@@ -27,7 +27,7 @@ pub type V0215 = (
     ClearManualBridgeFeeStorage,
 );
 
-pub type Unreleased = ();
+pub type Unreleased = (pallet_privileges::migration::RepairVippCache<Runtime>,);
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {

@@ -132,7 +132,7 @@ pub mod pallet {
     use frame_support::traits::UnixTime;
     use frame_system::{ensure_root, ensure_signed};
 
-    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]
@@ -247,6 +247,13 @@ pub mod pallet {
             /// The new VIPP points value assigned to the account.
             points: PointsOf<T>,
         },
+        /// Cache repair was rejected; membership and its storage version remain unchanged.
+        VippCacheMigrationFailed {
+            /// Account that failed validation, when available.
+            account: Option<T::AccountId>,
+            /// Invalid backing, attributes, or an exceeded migration bound.
+            error: sp_runtime::DispatchError,
+        },
     }
 
     #[pallet::error]
@@ -269,6 +276,12 @@ pub mod pallet {
         NotEnoughTokensForClaim,
         /// Account points have no valid denominator or exceed the frozen pool total.
         InvalidRewardPoints,
+        /// Owned VIPP claims exceed the claim recorded on the account's NAC.
+        InvalidVippBacking,
+        /// Cache repair exceeds its account limit or reserved database weight.
+        VippCacheMigrationTooLarge,
+        /// An existing VIPP membership cannot be decoded.
+        InvalidVippCache,
     }
 
     #[pallet::call]
@@ -572,7 +585,12 @@ impl<T: Config> Pallet<T> {
         if let Some((amount, item_id)) = pallet_nac_managing::Pallet::<T>::can_mint_vipp(account)? {
             return Self::register_vipp_nft(account, amount.into(), item_id, true);
         }
-        Self::sync_vipp_membership(account, true)
+        VippMembers::<T>::mutate(account, |member| {
+            if let Some(info) = member {
+                info.points = Default::default();
+            }
+        });
+        Ok(())
     }
 
     /// Register an NFT after its mint or accounted transfer has succeeded.
@@ -588,11 +606,20 @@ impl<T: Config> Pallet<T> {
             return Ok(());
         }
         VippMembers::<T>::try_mutate(account, |member| -> DispatchResult {
+            if amount.is_zero() && member.is_none() {
+                return Ok(());
+            }
             let info = member.get_or_insert(VippMemberInfo::<T> {
                 points: Default::default(),
                 active_vipp_threshold: Vec::new(),
             });
-            if let Some((_, value)) =
+            if reset_points {
+                info.points = Default::default();
+            }
+            info.active_vipp_threshold.retain(|(_, value)| !value.is_zero());
+            if amount.is_zero() {
+                info.active_vipp_threshold.retain(|(id, _)| *id != item_id);
+            } else if let Some((_, value)) =
                 info.active_vipp_threshold.iter_mut().find(|(id, _)| *id == item_id)
             {
                 *value = amount;
@@ -605,47 +632,7 @@ impl<T: Config> Pallet<T> {
                 info.active_vipp_threshold.push((item_id, amount));
             }
             Ok(())
-        })?;
-        Self::sync_vipp_membership(account, reset_points)
-    }
-
-    /// Refresh registered NFT caps without activating unaccounted ownership.
-    fn sync_vipp_membership(account: &T::AccountId, reset_points: bool) -> DispatchResult {
-        if !VipMembers::<T>::contains_key(account)
-            || pallet_nac_managing::Pallet::<T>::is_vipp_inactive(account)
-        {
-            VippMembers::<T>::remove(account);
-            return Ok(());
-        }
-        let previous = VippMembers::<T>::get(account);
-        let retain_points = previous.is_some();
-        let registered = previous.map(|member| member.active_vipp_threshold).unwrap_or_default();
-        let owned = pallet_nac_managing::Pallet::<T>::owned_vipp_claims(account)?;
-        let has_owned_claim = owned.iter().any(|(_, amount)| !amount.is_zero());
-        // Ownership alone does not prove that the previous owner's entitlement
-        // and the recipient's NAC threshold were updated during a transfer.
-        let active_vipp_threshold: Vec<_> = owned
-            .into_iter()
-            .filter(|(id, amount)| {
-                !amount.is_zero() && registered.iter().any(|(registered, _)| registered == id)
-            })
-            .map(|(item_id, amount)| (item_id, (Perbill::from_percent(95) * amount).into()))
-            .collect();
-        // Keep accumulated points while unresolved positive NFTs still exist,
-        // but give unregistered items no accrual cap until backing is reconciled.
-        if active_vipp_threshold.is_empty() && !(retain_points && has_owned_claim) {
-            VippMembers::<T>::remove(account);
-        } else {
-            VippMembers::<T>::mutate(account, |member| {
-                let points = if reset_points {
-                    Default::default()
-                } else {
-                    member.as_ref().map(|info| info.points).unwrap_or_default()
-                };
-                *member = Some(VippMemberInfo::<T> { points, active_vipp_threshold });
-            });
-        }
-        Ok(())
+        })
     }
 
     /// Exit VIP.

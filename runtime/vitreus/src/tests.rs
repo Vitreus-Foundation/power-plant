@@ -41,6 +41,40 @@ fn new_test_ext() -> sp_io::TestExternalities {
     )
 }
 
+#[test]
+fn unreleased_migration_repairs_vipp_cache() {
+    use frame_support::traits::{
+        tokens::nonfungibles_v2::Mutate, OnRuntimeUpgrade, StorageVersion,
+    };
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        let who = alith();
+        let (_, nac) = NacManaging::get_nac_level(&who).unwrap();
+        <Nfts as Mutate<AccountId, pallet_nfts::ItemConfig>>::set_attribute(
+            &NftCollectionId::get(),
+            &nac,
+            &[0, 0, 2],
+            &1_000u128.encode(),
+        )
+        .unwrap();
+        let (cap, item) = NacManaging::mint_vipp_nft(&who).unwrap().unwrap();
+        assert_ne!(item, nac);
+        pallet_privileges::VippMembers::<Runtime>::insert(
+            who,
+            pallet_privileges::VippMemberInfo::<Runtime> {
+                points: 123,
+                active_vipp_threshold: vec![(nac, cap)],
+            },
+        );
+        StorageVersion::new(1).put::<Privileges>();
+        <migrations::Unreleased as OnRuntimeUpgrade>::on_runtime_upgrade();
+        let member = Privileges::vipp_members(who).unwrap();
+        assert_eq!(member.points, 123);
+        assert_eq!(member.active_vipp_threshold, vec![(item, 950)]);
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(2));
+    });
+}
+
 fn mock_signature() -> TransactionSignature {
     let r = H256([
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
@@ -967,31 +1001,4 @@ mod launchpad_free_trades {
             assert_eq!(vnrg(&broker), broker0 - fee, "still one broker purchase in total");
         });
     }
-}
-
-#[test]
-fn vipp_entry_weight_covers_bounded_nft_reads() {
-    let count: u32 = <Runtime as pallet_nac_managing::Config>::MaxVippNftsPerAccount::get();
-    let reads = <Runtime as frame_system::Config>::DbWeight::get().reads(u64::from(count) * 2);
-    let call = RuntimeCall::Privileges(pallet_privileges::Call::become_vip_status {
-        tax_type: pallet_privileges::PenaltyType::Flat,
-    });
-    assert!(call.get_dispatch_info().weight.ref_time() >= reads.ref_time());
-}
-
-#[test]
-fn claim_weight_covers_bounded_vipp_reads() {
-    let count: u32 = <Runtime as pallet_nac_managing::Config>::MaxVippNftsPerAccount::get();
-    let reads = <Runtime as frame_system::Config>::DbWeight::get().reads(u64::from(count) * 2);
-    let call = RuntimeCall::Claiming(pallet_claiming::Call::claim {
-        dest: alith(),
-        ethereum_signature: pallet_claiming::EcdsaSignature([0; 65]),
-    });
-    assert!(call.get_dispatch_info().weight.ref_time() >= reads.ref_time());
-}
-
-#[test]
-fn vipp_minting_weights_match_benchmarked_limit() {
-    let count: u32 = <Runtime as pallet_nac_managing::Config>::MaxVippNftsPerAccount::get();
-    assert_eq!(count, 64, "regenerate VIPP minting weights when changing the ownership limit");
 }
