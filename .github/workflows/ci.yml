@@ -78,9 +78,10 @@ jobs:
           cache-key: ${{ matrix.feature }}
           cache-save-if: ${{ github.ref == 'refs/heads/main' }}
 
+      # A mirror that stalls is dropped after 10 s, and apt moves on to the next one in its list.
       - run: |
-          sudo apt-get update
-          sudo apt-get install -y protobuf-compiler libclang-dev libssl-dev
+          sudo apt-get -o Acquire::http::Timeout=10 update
+          sudo apt-get -o Acquire::http::Timeout=10 install -y protobuf-compiler libclang-dev libssl-dev
 
       # Before build and test: check mode reports compile errors and lints sooner.
       # Clippy lints only native code, so it skips the wasm build; `cargo build` does it.
