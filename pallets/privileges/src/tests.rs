@@ -1113,3 +1113,201 @@ fn test_partial_burn_with_unregistered_nft() {
         assert_eq!(owned_vipp_ids(10), vec![retained_id]);
     });
 }
+
+#[test]
+fn vip_stake_cache_uses_reduced_delegations_after_unbonding() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(100);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 2));
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, 500);
+
+        assert_ok!(EnergyGeneration::unbond(RuntimeOrigin::signed(100), 100));
+        assert_eq!(
+            EnergyGeneration::cooperators(100).unwrap().targets.values().sum::<Balance>(),
+            400
+        );
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 400);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 3));
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, 900);
+        // Preserve the existing Perquintill rounding: 500/51 -> 10, 400/52 -> 8.
+        assert_eq!(Privileges::vip_members(100).unwrap().points, 18);
+    });
+}
+
+#[test]
+fn vip_stake_cache_tracks_each_validator_chill_without_wiping_points_or_nfts() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(100);
+        let ids = owned_vipp_ids(100);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 2));
+
+        assert_ok!(EnergyGeneration::chill(RuntimeOrigin::signed(10)));
+        assert_eq!(EnergyGeneration::get_active_stake(&100), 300);
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 300);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 3));
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, 800);
+
+        assert_ok!(EnergyGeneration::chill(RuntimeOrigin::signed(20)));
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 0);
+        let vip_points = Privileges::vip_members(100).unwrap().points;
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 4));
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, 800);
+        assert_eq!(Privileges::vip_members(100).unwrap().points, vip_points);
+        assert_eq!(owned_vipp_ids(100), ids);
+    });
+}
+
+#[test]
+fn vip_stake_cache_tracks_forced_validator_removal() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(100);
+        assert_ok!(EnergyGeneration::force_chill(RuntimeOrigin::root(), 10));
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 300);
+        assert_ok!(EnergyGeneration::force_unstake(RuntimeOrigin::root(), 20, 0));
+        assert_eq!(EnergyGeneration::get_active_stake(&100), 0);
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 0);
+    });
+}
+
+#[test]
+fn vip_stake_cache_tracks_validator_chilled_by_a_vip_exit_penalty() {
+    ExtBuilder::default().min_common_validator_bond(500).build_and_execute(|| {
+        join_vip_and_vipp(100);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(20), PenaltyType::Flat));
+        let ids = owned_vipp_ids(100);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 2, 1));
+        let points = Privileges::vipp_members(100).unwrap().points;
+        assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(20)));
+        assert!(!EnergyGeneration::is_user_validator(&20));
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 200);
+        assert_eq!(Privileges::vipp_members(100).unwrap().points, points);
+        assert_eq!(owned_vipp_ids(100), ids);
+    });
+}
+
+#[test]
+fn vip_stake_cache_tracks_cooperator_becoming_a_validator_without_resetting_points() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(100);
+        assert_ok!(EnergyGeneration::bond_extra(RuntimeOrigin::signed(100), 100));
+        // The extra solo stake is inactive while this account is a cooperator.
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 500);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 2));
+        let points = Privileges::vip_members(100).unwrap().points;
+        let vipp = Privileges::vipp_members(100).unwrap();
+        let ids = owned_vipp_ids(100);
+
+        assert_ok!(EnergyGeneration::validate(RuntimeOrigin::signed(100), Default::default()));
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 600);
+        assert_eq!(Privileges::vip_members(100).unwrap().points, points);
+        assert_eq!(Privileges::vipp_members(100), Some(vipp));
+        assert_eq!(owned_vipp_ids(100), ids);
+    });
+}
+
+#[test]
+fn vip_stake_cache_tracks_validator_switching_to_cooperation() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        join_vip_and_vipp(100);
+        let ids = owned_vipp_ids(10);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 2));
+        let vip_points = Privileges::vip_members(10).unwrap().points;
+        let vipp_points = Privileges::vipp_members(10).unwrap().points;
+
+        assert_ok!(EnergyGeneration::cooperate(RuntimeOrigin::signed(10), vec![(20, 700)]));
+        assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 700);
+        assert_eq!(EnergyGeneration::get_active_stake(&100), 300);
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 300);
+        assert_eq!(Privileges::vip_members(10).unwrap().points, vip_points);
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, vipp_points);
+        assert_eq!(owned_vipp_ids(10), ids);
+    });
+}
+
+#[test]
+fn vip_stake_cache_uses_stash_ledger_when_joining_with_a_separate_controller() {
+    ExtBuilder::default().build_and_execute(|| {
+        assert_ok!(EnergyGeneration::set_controller(RuntimeOrigin::signed(10), 11));
+        join_vip_and_vipp(10);
+        assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 1000);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 2));
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 20);
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 950);
+    });
+}
+
+#[test]
+fn vip_stake_cache_updates_stash_after_controller_changes() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        assert_ok!(EnergyGeneration::set_controller(RuntimeOrigin::signed(10), 11));
+        assert_ok!(EnergyGeneration::unbond(RuntimeOrigin::signed(11), 100));
+        assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 900);
+        assert_ok!(EnergyGeneration::rebond(RuntimeOrigin::signed(11), 50));
+        assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 950);
+        assert_ok!(EnergyGeneration::bond_extra(RuntimeOrigin::signed(10), 100));
+        assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 1050);
+        assert!(Privileges::vip_members(11).is_none());
+    });
+}
+
+#[test]
+fn vip_exit_penalizes_the_stash_with_a_separate_controller() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        assert_ok!(EnergyGeneration::set_controller(RuntimeOrigin::signed(10), 11));
+        let controller_balance = Balances::free_balance(11);
+        let stash_balance = Balances::free_balance(10);
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 2, 1));
+
+        assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(10)));
+        assert_eq!(EnergyGeneration::ledger(11).unwrap().active, 825);
+        assert!(EnergyGeneration::ledger(10).is_none());
+        assert_eq!(Balances::free_balance(10), stash_balance - 175);
+        assert_eq!(Balances::free_balance(11), controller_balance);
+        assert!(owned_vipp_ids(10).is_empty());
+        assert!(Privileges::vip_members(10).is_none());
+    });
+}
+
+#[test]
+fn vip_stake_cache_updates_after_cooperator_slashing() {
+    use frame_support::traits::Imbalance;
+    use pallet_energy_generation::slashing::{self, SlashEntity};
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(100);
+        let mut imbalance = slashing::NegativeImbalanceOf::<Test>::zero();
+        assert_ok!(slashing::do_slash::<Test>(
+            &100,
+            SlashEntity { stake: 100, reputation: Default::default() },
+            &mut 0,
+            &mut imbalance,
+            0,
+        ));
+        assert_eq!(EnergyGeneration::ledger(100).unwrap().active, 400);
+        assert_eq!(
+            EnergyGeneration::cooperators(100).unwrap().targets.values().sum::<Balance>(),
+            400
+        );
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 400);
+    });
+}
+
+#[test]
+fn vip_stake_cache_updates_when_validator_loses_collaborative_eligibility() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(100);
+        // Keep validators eligible for solo staking while raising the collaboration tier.
+        CollaborativeValidatorReputationTier::set(pallet_reputation::ReputationTier::Vanguard(2));
+        pallet_energy_generation::ForceEra::<Test>::put(
+            pallet_energy_generation::Forcing::ForceNew,
+        );
+        <EnergyGeneration as pallet_session::SessionManager<AccountId>>::new_session(1);
+        CollaborativeValidatorReputationTier::set(pallet_reputation::ReputationTier::Vanguard(1));
+        assert!(EnergyGeneration::is_user_validator(&10));
+        assert!(EnergyGeneration::collaborations(10).is_none());
+        assert_eq!(EnergyGeneration::get_active_stake(&100), 0);
+        assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 0);
+    });
+}
