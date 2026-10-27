@@ -18,6 +18,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Report the energy sold per asset in the `EnergyExchanged` event of `pallet-treasury-extension`
 - Set `SpendPeriod` of the treasury to 1 day and `SpendThreshold` of `pallet-treasury-extension` to 1%, on testnet
 - Raise the launchpad's default graduation target on testnet from 3,000 to 4,600,000 VTRS
+- Let only Root submit public proposals in `pallet-democracy` and lengthen its periods, on testnet
 
 ### Removed
 
