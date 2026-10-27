@@ -9,6 +9,7 @@ mod accounting;
 mod calendar;
 mod fanout;
 mod legacy_accounting;
+mod transfers;
 
 fn advance_test_date(origin: RuntimeOrigin, year: i32, month: u32, day: u32) -> DispatchResult {
     let target = CurrentDateInfo::new::<Test>(year, month, day)?;
@@ -1177,28 +1178,4 @@ fn claim_rewards_works() {
             Error::<Test>::NoRewardsForAccount
         );
     })
-}
-
-#[test]
-fn test_unaccounted_vipp_transfer_does_not_activate_recipients() {
-    ExtBuilder::default().build_and_execute(|| {
-        join_vip_and_vipp(10);
-        assert_ok!(NacManaging::mint(RuntimeOrigin::root(), 2, 20));
-        let item = owned_vipp_ids(10)[0];
-
-        for (sender, recipient) in [(10, 20), (20, 100)] {
-            assert_ok!(Nfts::transfer(RuntimeOrigin::signed(sender), 1, item, recipient));
-            assert_ok!(Privileges::become_vip_status(
-                RuntimeOrigin::signed(recipient),
-                PenaltyType::Flat
-            ));
-            assert!(NacManaging::get_claim_balance(&recipient).is_none());
-            assert!(Privileges::vipp_members(recipient).is_none());
-        }
-
-        // Moving an NFT without updating its backing must not create additional
-        // recipients of points. Ownership repair requires separate reconciliation.
-        assert_ok!(Privileges::update_time(RuntimeOrigin::root(), 2020, 1, 2));
-        assert_eq!(VippMembers::<Test>::iter_values().map(|m| m.points).sum::<u64>(), 950);
-    });
 }

@@ -888,7 +888,7 @@ impl pallet_nfts::Config for Runtime {
     type CreateOrigin = frame_system::EnsureNever<AccountId>;
     #[cfg(feature = "testnet-runtime")]
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<AccountId>>;
-    type Locker = ();
+    type Locker = pallet_nac_managing::transfers::VippNftLocker<Runtime>;
     type CollectionDeposit = CollectionDeposit;
     type ItemDeposit = ItemDeposit;
     type MetadataDepositBase = MetadataDepositBase;

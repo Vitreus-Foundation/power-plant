@@ -104,7 +104,7 @@ use frame_support::{
     pallet_prelude::{BoundedVec, DispatchResult},
     storage::with_storage_layer,
     traits::{
-        tokens::nonfungibles_v2::{Create, Inspect, InspectEnumerable, Mutate},
+        tokens::nonfungibles_v2::{Create, Inspect, InspectEnumerable, Mutate, Transfer},
         Currency, Get, Incrementable, OnNewAccount,
     },
 };
@@ -130,6 +130,7 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+pub mod transfers;
 pub mod weights;
 
 type CollectionConfigFor<T> = CollectionConfig<
@@ -177,7 +178,8 @@ pub mod pallet {
         type Nfts: Inspect<Self::AccountId, ItemId = Self::ItemId, CollectionId = Self::CollectionId>
             + Mutate<Self::AccountId, ItemConfig>
             + Create<Self::AccountId, CollectionConfigFor<Self>>
-            + InspectEnumerable<Self::AccountId>;
+            + InspectEnumerable<Self::AccountId>
+            + Transfer<Self::AccountId>;
 
         /// The collection id type.
         type CollectionId: MaybeSerializeDeserialize
@@ -237,6 +239,10 @@ pub mod pallet {
     pub type UsersNft<T: Config> =
         StorageMap<_, Blake2_128Concat, T::AccountId, (T::ItemId, u8), OptionQuery>;
 
+    /// Item temporarily unlocked by an atomic VIPP operation.
+    #[pallet::storage]
+    pub type VippMutationItem<T: Config> = StorageValue<_, T::ItemId, OptionQuery>;
+
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
     pub enum Event<T: Config> {
@@ -285,6 +291,14 @@ pub mod pallet {
         InvalidClaimAttribute,
         /// Ownership exceeds the bounded VIPP accounting limit.
         TooManyVippNfts,
+        /// The account does not own the VIPP item.
+        NotVippOwner,
+        /// The destination cannot receive VIPP membership.
+        InvalidVippRecipient,
+        /// The recipient cannot back its increased threshold.
+        InsufficientVippBalance,
+        /// Ownership and threshold changes would be inconsistent.
+        InvalidVippTransfer,
     }
 
     #[pallet::call]
@@ -346,6 +360,16 @@ pub mod pallet {
             let nac_level = Self::get_nac_level(&owner).ok_or(Error::<T>::NftNotFound)?.0;
             Self::deposit_event(Event::UserNacLevel { nac_level, owner });
             Ok(())
+        }
+        /// Transfer a VIPP NFT together with its threshold and reward accounting.
+        #[pallet::call_index(3)]
+        #[pallet::weight(<T as Config>::WeightInfo::transfer_vipp(T::MaxVippNftsPerAccount::get()))]
+        pub fn transfer_vipp(
+            origin: OriginFor<T>,
+            item_id: T::ItemId,
+            destination: T::AccountId,
+        ) -> DispatchResult {
+            Self::do_transfer_vipp(&frame_system::ensure_signed(origin)?, item_id, &destination)
         }
     }
 
@@ -668,7 +692,7 @@ impl<T: Config> Pallet<T> {
         amount: T::Balance,
     ) -> DispatchResult {
         let collection = T::VIPPCollectionId::get();
-        T::Nfts::burn(&collection, &item_id, Some(account))?;
+        Self::with_vipp_mutation(item_id, || T::Nfts::burn(&collection, &item_id, Some(account)))?;
         Self::decrease_thrsehold(account, amount)?;
         if T::Nfts::owned_in_collection(&collection, account).next().is_none() {
             Self::set_inactive_attribute_vipp(account)?;
@@ -798,6 +822,10 @@ impl<T: Config> OnWithdrawFeeHandler<T::AccountId> for Pallet<T> {
 
 /// Handler for updating, burning VIPP status.
 pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
+    /// Whether the account may receive an accounted VIPP transfer.
+    fn can_receive_vipp(_who: &AccountId) -> bool {
+        false
+    }
     /// Settle completed periods before changing entitlement.
     fn ensure_accounting_ready() -> DispatchResult {
         Ok(())

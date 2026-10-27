@@ -40,6 +40,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Fix `pallet-privileges` UTC day settlement, year rollover and penalty dates, preserving stake at the timestamp boundary and bounding automatic catch-up
 
+- Add atomic VIPP transfers to `pallet-nac-managing` and block NFT transfer, burn, sale and swap paths that bypass entitlement accounting
+
 ## [215] - 2026-10-19
 
 ### Added
