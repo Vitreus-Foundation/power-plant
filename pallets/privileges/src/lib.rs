@@ -267,6 +267,8 @@ pub mod pallet {
         YearRewardsAlreadySet,
         /// Error indicating insufficient tokens for a claim.
         NotEnoughTokensForClaim,
+        /// Account points have no valid denominator or exceed the frozen pool total.
+        InvalidRewardPoints,
     }
 
     #[pallet::call]
@@ -452,17 +454,19 @@ pub mod pallet {
 
             let rewards = Self::rewards(year).ok_or(Error::<T>::NoRewardsForAccount)?;
 
-            let vip_rewards = if let Some(vip_points) = VipPoints::<T>::take(year, &who) {
-                Perquintill::from_rational(vip_points, rewards.vip_points) * rewards.vip_rewards
-            } else {
-                return Err(Error::<T>::NoRewardsForAccount.into());
-            };
-
-            let vipp_rewards = if let Some(vipp_points) = VippPoints::<T>::take(year, &who) {
-                Perquintill::from_rational(vipp_points, rewards.vipp_points) * rewards.vipp_rewards
-            } else {
-                BalanceOf::<T>::zero()
-            };
+            let vip_points = VipPoints::<T>::take(year, &who);
+            let vipp_points = VippPoints::<T>::take(year, &who);
+            ensure!(vip_points.is_some() || vipp_points.is_some(), Error::<T>::NoRewardsForAccount);
+            let vip_rewards = Self::reward_share(
+                vip_points.unwrap_or_default(),
+                rewards.vip_points,
+                rewards.vip_rewards,
+            )?;
+            let vipp_rewards = Self::reward_share(
+                vipp_points.unwrap_or_default(),
+                rewards.vipp_points,
+                rewards.vipp_rewards,
+            )?;
 
             <T as Config>::Currency::transfer(
                 &Self::account_id(),
@@ -525,6 +529,18 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+    fn reward_share(
+        points: PointsOf<T>,
+        total_points: PointsOf<T>,
+        rewards: BalanceOf<T>,
+    ) -> Result<BalanceOf<T>, sp_runtime::DispatchError> {
+        if points.is_zero() {
+            return Ok(BalanceOf::<T>::zero());
+        }
+        ensure!(!total_points.is_zero() && points <= total_points, Error::<T>::InvalidRewardPoints);
+        Ok(Perquintill::from_rational(points, total_points) * rewards)
+    }
+
     /// The account ID that holds the rewards.
     pub fn account_id() -> T::AccountId {
         T::PalletId::get().into_account_truncating()
