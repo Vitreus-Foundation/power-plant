@@ -480,7 +480,7 @@ parameter_types! {
 impl pallet_timestamp::Config for Runtime {
     /// A timestamp: milliseconds since the unix epoch.
     type Moment = Moment;
-    type OnTimestampSet = Babe;
+    type OnTimestampSet = (Babe, Privileges);
     type MinimumPeriod = MinimumPeriod;
     type WeightInfo = ();
 }

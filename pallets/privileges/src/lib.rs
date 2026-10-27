@@ -1,81 +1,4 @@
-//!
-//! # Module Overview
-//!
-//! This module defines a pallet for managing VIP and VIPP membership
-//! in a Substrate-based blockchain. The pallet provides mechanisms for managing VIP memberships,
-//! calculating loyalty points, updating membership information, handling penalties, and tracking
-//! contributions. The primary aim is to manage memberships based on contributions, energy generation,
-//! and reputation within the network.
-//!
-//! # Key Features and Components
-//!
-//! - **VIP Membership Management**:
-//!   - **Storage**:
-//!     - **`VipMembers`**: Tracks information related to VIP members, including active stake,
-//!       contribution information, and tax type.
-//!     - **`VippMembers`**: Stores details about VIPP members who qualify for a special status
-//!       due to their exceptional contributions or activity.
-//!
-//! - **Extrinsic and Core Functions**:
-//!   - **`add_new_vip_member()`**: Adds a new VIP member with initial details such as the stake,
-//!     contribution, and tax type. This extrinsic is available only to root users to ensure proper
-//!     control and security.
-//!   - **`update_quarter_info()`**: Updates the quarterly information for all VIP members, including
-//!     active stake and contribution points. This function helps ensure that each VIP's membership
-//!     information is up to date and reflects recent activity.
-//!   - **`on_claim()`**: Handles updates when users claim rewards, which affects their VIP status
-//!     and potentially increments their loyalty points.
-//!
-//! - **Membership Handling and Contributions**:
-//!   - **Tax Management**: Each VIP member has an associated `tax_type`, which determines the penalty
-//!     and reward system. Depending on the current quarter, the tax percentage may vary, and different
-//!     penalties or perks are applied based on the member's behavior and activity.
-//!   - **Stake-Based Calculations**: Calculations are performed based on the active stake of VIP members.
-//!     Functions like `calculate_points()` use stake information to calculate points that affect the
-//!     member's level and rewards.
-//!
-//! - **Quarter and Year Management**:
-//!   - **`check_correct_date()`**: Ensures that new date information is accurate and chronologically
-//!     correct, preventing any inconsistency in the progression of quarterly or yearly membership data.
-//!   - **Constants**: Constants such as `MAX_UPDATE_DAYS`, `FREE_PENALTY_PERIOD_MONTH_NUMBER`, and
-//!     `YEAR_FIRST_MONTH` are used to manage quarterly and yearly information effectively, ensuring
-//!     a consistent membership management cycle.
-//!
-//! # Access Control and Security
-//!
-//! - **Root-Only Access**: Certain extrinsic, such as adding a new VIP member, are restricted to
-//!   root users (`ensure_root`). This restriction ensures that only authorized users can add new
-//!   members to the VIP pool, providing an essential layer of access control.
-//! - **Verification and Error Handling**: Functions include verification steps to ensure that all
-//!   data is accurate, such as `check_correct_date()` to validate date progression. Errors are
-//!   handled via `ensure()` statements, maintaining the integrity of the system's state.
-//!
-//! # Developer Notes
-//!
-//! - **Integration with Other Pallets**: This pallet integrates closely with `pallet_energy_generation`
-//!   and `pallet_nac_managing`, leveraging energy generation data and NAC-level information to
-//!   determine VIP status and manage stake-based interactions.
-//! - **Weight Information**: Weights are defined for each extrinsic to represent the computational
-//!   cost of the operation. The weight implementation (`WeightInfo`) is used to ensure the efficient
-//!   and fair pricing of each operation based on its resource consumption.
-//! - **Time Management**: The pallet relies on `UnixTime` for computing durations like years and
-//!   quarters. This reliance helps ensure that the state updates are accurate and aligned with
-//!   real-world time, which is crucial for membership updates and loyalty point calculations.
-//!
-//! # Usage Scenarios
-//!
-//! - **VIP Membership Addition**: An administrator can add a new VIP member to the blockchain
-//!   using `add_new_vip_member()`, setting the initial parameters such as active stake, contribution
-//!   information, and associated tax type. This functionality allows rewarding users who have made
-//!   significant contributions to the network.
-//! - **Updating Stake and Contributions**: The quarterly update functionality (`update_quarter_info()`)
-//!   ensures that each VIP member’s contribution and stake are recalculated periodically. This feature
-//!   helps maintain an up-to-date record of each member’s activity, ensuring that rewards and penalties
-//!   are assigned fairly.
-//! - **Reward Claim Handling**: When users claim rewards, the `on_claim()` function updates their
-//!   VIP membership status and recalculates their loyalty points. This ensures that claiming rewards
-//!   has a direct impact on the user's status, encouraging active participation.
-//!
+//! VIP/VIPP membership, completed UTC days and annual reward pools.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![warn(missing_docs)]
@@ -106,6 +29,7 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+mod accounting;
 mod contribution_info;
 
 pub mod migration;
@@ -118,9 +42,6 @@ const MAX_UPDATE_DAYS: u32 = 366;
 
 const FREE_PENALTY_PERIOD_MONTH_NUMBER: u32 = 1;
 
-const YEAR_FIRST_MONTH: u32 = 1;
-const YEAR_FIRST_DAY: u32 = 1;
-
 type BalanceOf<T> =
     <<T as Config>::Currency as Currency<<T as frame_system::Config>::AccountId>>::Balance;
 type PointsOf<T> = <T as pallet_energy_generation::Config>::StakeBalance;
@@ -130,6 +51,7 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_support::traits::UnixTime;
+    use frame_system::pallet_prelude::BlockNumberFor;
     use frame_system::{ensure_root, ensure_signed};
 
     const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
@@ -197,6 +119,19 @@ pub mod pallet {
     #[pallet::storage]
     #[pallet::getter(fn current_date)]
     pub type CurrentDate<T: Config> = StorageValue<_, CurrentDateInfo, ValueQuery>;
+
+    /// Block whose timestamp has been applied.
+    #[pallet::storage]
+    pub type TimestampSeenAtBlock<T: Config> = StorageValue<_, BlockNumberFor<T>>;
+
+    /// First stake and suspended-eligibility snapshot before this block's timestamp.
+    #[pallet::storage]
+    pub type PreTimestampStake<T: Config> =
+        StorageMap<_, Twox64Concat, T::AccountId, (BlockNumberFor<T>, PointsOf<T>, bool)>;
+
+    /// Accrual cannot resume automatically after changes to an unaccounted interval.
+    #[pallet::storage]
+    pub type AccrualReviewRequired<T: Config> = StorageValue<_, bool, ValueQuery>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -267,8 +202,14 @@ pub mod pallet {
         YearRewardsAlreadySet,
         /// Error indicating insufficient tokens for a claim.
         NotEnoughTokensForClaim,
-        /// Account points have no valid denominator or exceed the frozen pool total.
+        /// Account points exceed the frozen pool total or have no valid denominator.
         InvalidRewardPoints,
+        /// Accounting is awaiting bounded catch-up or explicit state review.
+        AccountingPaused,
+        /// A bounded member or NFT processing limit was exceeded.
+        AccountingCapacityExceeded,
+        /// An existing historical record must never be overwritten by catch-up.
+        HistoricalPointsAlreadyExist,
     }
 
     #[pallet::call]
@@ -299,36 +240,18 @@ pub mod pallet {
             new_date_day: u32,
         ) -> DispatchResult {
             ensure_root(origin)?;
-            let mut current_date = Self::current_date();
+            ensure!(!accounting::paused::<T>(), Error::<T>::AccountingPaused);
+            let current_date = Self::current_date();
             let new_date = CurrentDateInfo::new::<T>(new_date_year, new_date_month, new_date_day)?;
 
             if !Self::check_correct_date(&current_date, &new_date) {
                 return Err(Error::<T>::NotCorrectDate.into());
             }
 
-            let mut updated_days = 0;
-
-            while Self::check_correct_date(&current_date, &new_date)
-                && updated_days < MAX_UPDATE_DAYS
-            {
-                current_date.add_days::<T>(1)?;
-                // Accrual of VIP points for users who have VIP status.
-                Self::update_points_for_time(current_date.days_since_new_year);
-
-                // Accrual of VIPP points for users who have VIPP status.
-                Self::update_vipp_points_for_time(current_date.days_since_new_year);
-                if current_date.current_month == YEAR_FIRST_MONTH
-                    && current_date.current_day == YEAR_FIRST_DAY
-                {
-                    Self::save_year_info(current_date.current_year as u32 - 1);
-                }
-
-                updated_days += 1;
-            }
-
-            CurrentDate::<T>::put(new_date);
-
-            Ok(())
+            let mut limit = current_date;
+            limit.add_days::<T>(accounting::MAX_AUTO_DAYS.into())?;
+            ensure!(!Self::check_correct_date(&limit, &new_date), Error::<T>::NotCorrectDate);
+            Self::advance_date(&new_date)
         }
 
         /// Exit VIP.
@@ -362,6 +285,7 @@ pub mod pallet {
             points: PointsOf<T>,
         ) -> DispatchResult {
             ensure_root(origin)?;
+            accounting::ensure_ready::<T>()?;
 
             let current_year = Self::current_date().current_year as u32;
 
@@ -393,6 +317,7 @@ pub mod pallet {
             points: PointsOf<T>,
         ) -> DispatchResult {
             ensure_root(origin)?;
+            accounting::ensure_ready::<T>()?;
 
             let current_year = Self::current_date().current_year as u32;
 
@@ -424,16 +349,28 @@ pub mod pallet {
             vipp_rewards: BalanceOf<T>,
         ) -> DispatchResult {
             ensure_root(origin)?;
+            accounting::ensure_ready::<T>()?;
 
             let current_year = Self::current_date().current_year as u32;
 
             ensure!(year < current_year, Error::<T>::NotCorrectDate);
             ensure!(Self::are_rewards_not_set(year), Error::<T>::YearRewardsAlreadySet);
 
-            let vip_points = VipPoints::<T>::iter_prefix_values(year)
+            let vip: Vec<_> = VipPoints::<T>::iter_prefix_values(year)
+                .take(accounting::MAX_MEMBERS + 1)
+                .collect();
+            let vipp: Vec<_> = VippPoints::<T>::iter_prefix_values(year)
+                .take(accounting::MAX_MEMBERS + 1)
+                .collect();
+            ensure!(
+                vip.len() <= accounting::MAX_MEMBERS && vipp.len() <= accounting::MAX_MEMBERS,
+                Error::<T>::AccountingCapacityExceeded
+            );
+            let vip_points = vip
+                .into_iter()
                 .fold(PointsOf::<T>::zero(), |total, points| total.saturating_add(points));
-
-            let vipp_points = VippPoints::<T>::iter_prefix_values(year)
+            let vipp_points = vipp
+                .into_iter()
                 .fold(PointsOf::<T>::zero(), |total, points| total.saturating_add(points));
 
             Rewards::<T>::insert(
@@ -529,6 +466,7 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+    /// Calculate a share without turning a zero denominator into a full pool payout.
     fn reward_share(
         points: PointsOf<T>,
         total_points: PointsOf<T>,
@@ -549,7 +487,10 @@ impl<T: Config> Pallet<T> {
     /// Set user privilege as VIP.
     #[frame_support::transactional]
     fn do_set_user_privilege(account: &T::AccountId, tax_type: PenaltyType) -> DispatchResult {
+        // Settle completed days before inserting the new member.
+        accounting::ensure_ready::<T>()?;
         let now_as_millis_u64 = <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>();
+        accounting::ensure_member_capacity::<T>(account)?;
         let active_stake = pallet_energy_generation::Pallet::<T>::get_active_stake(account);
 
         let vip_member_info = VipMemberInfo {
@@ -563,7 +504,7 @@ impl<T: Config> Pallet<T> {
         Self::do_set_vipp_status(account)
     }
 
-    /// Set VIP member VIPP status.
+    /// Initialize a new VIP membership from the NFTs actually owned by the account.
     fn do_set_vipp_status(account: &T::AccountId) -> DispatchResult {
         if pallet_nac_managing::Pallet::<T>::is_vipp_inactive(account) {
             VippMembers::<T>::remove(account);
@@ -586,6 +527,7 @@ impl<T: Config> Pallet<T> {
         {
             return Ok(());
         }
+        accounting::ensure_vipp_capacity::<T>(account)?;
         VippMembers::<T>::try_mutate(account, |member| -> DispatchResult {
             let info = member.get_or_insert(VippMemberInfo::<T> {
                 points: Default::default(),
@@ -635,6 +577,7 @@ impl<T: Config> Pallet<T> {
         if active_vipp_threshold.is_empty() && !(retain_points && has_owned_claim) {
             VippMembers::<T>::remove(account);
         } else {
+            accounting::ensure_vipp_capacity::<T>(account)?;
             VippMembers::<T>::mutate(account, |member| {
                 let points = if reset_points {
                     Default::default()
@@ -650,6 +593,20 @@ impl<T: Config> Pallet<T> {
     /// Exit VIP.
     #[frame_support::transactional]
     pub fn do_exit_vip(account: &T::AccountId) -> DispatchResult {
+        accounting::ensure_ready::<T>()?;
+        // Legacy storage has no hard fan-out bound. Refuse an oversized exit
+        // before penalties can trigger a validator-wide cache refresh.
+        let key = pallet_energy_generation::Collaborations::<T>::hashed_key_for(account);
+        let mut prefix = [0u8; 5];
+        if sp_io::storage::read(&key, &mut prefix, 0).is_some() {
+            let count = parity_scale_codec::Compact::<u32>::decode(&mut prefix.as_slice())
+                .map_err(|_| Error::<T>::AccountingCapacityExceeded)?
+                .0;
+            ensure!(
+                count <= pallet_energy_generation::MAX_VALIDATOR_COLLABORATORS,
+                Error::<T>::AccountingCapacityExceeded
+            );
+        }
         let current_date = Self::current_date();
         let vip_info = Self::vip_members(account);
         match vip_info {
@@ -667,6 +624,7 @@ impl<T: Config> Pallet<T> {
                 }
 
                 VipMembers::<T>::remove(account);
+                PreTimestampStake::<T>::remove(account);
                 let had_vipp = VippMembers::<T>::take(account).is_some();
                 if had_vipp
                     || !pallet_nac_managing::Pallet::<T>::owned_vipp_claims(account)?.is_empty()
@@ -689,6 +647,7 @@ impl<T: Config> Pallet<T> {
         account: &T::AccountId,
         new_penalty_type: PenaltyType,
     ) -> DispatchResult {
+        accounting::ensure_ready::<T>()?;
         ensure!(Self::is_penalty_free_period(), Error::<T>::IsNotPenaltyFreePeriod);
         VipMembers::<T>::try_mutate::<_, _, Error<T>, _>(account, |vip_config| {
             if let Some(vip) = vip_config {
@@ -726,103 +685,51 @@ impl<T: Config> Pallet<T> {
     }
 
     /// Is now penalty-free period.
+    fn effective_penalty_date() -> CurrentDateInfo {
+        let accounted = Self::current_date();
+        match accounting::today::<T>() {
+            Ok(today) if Self::check_correct_date(&accounted, &today) => today,
+            _ => accounted,
+        }
+    }
+
     fn is_penalty_free_period() -> bool {
-        let current_date = Self::current_date();
+        let current_date = Self::effective_penalty_date();
 
         current_date.current_month == FREE_PENALTY_PERIOD_MONTH_NUMBER
     }
 
-    /// Update current quarter info.
+    /// Settle up to seven closed UTC days. Longer interruptions require an
+    /// explicitly reviewed frozen-source job; partial automatic catch-up is unsafe.
     pub fn update_quarter_info() {
-        let now_as_millis_u64 =
-            <T as Config>::UnixTime::now().as_millis().saturated_into::<u64>() / 1000u64;
-        let new_date =
-            DateTime::from_timestamp(i64::try_from(now_as_millis_u64).unwrap(), 0).unwrap();
-
-        let current_date = Self::current_date();
-        let new_date =
-            CurrentDateInfo::new::<T>(new_date.year(), new_date.month(), new_date.day()).unwrap();
-
-        if current_date.days_since_new_year != new_date.days_since_new_year {
-            // Accrual of VIP points for users who have VIP status.
-            Self::update_points_for_time(new_date.days_since_new_year);
-
-            // Accrual of VIPP points for users who have VIPP status.
-            Self::update_vipp_points_for_time(new_date.days_since_new_year);
-
-            if new_date.current_month == YEAR_FIRST_MONTH && new_date.current_day == YEAR_FIRST_DAY
-            {
-                Self::save_year_info(new_date.current_year as u32 - 1);
+        if !CurrentDate::<T>::exists() || accounting::paused::<T>() {
+            return;
+        }
+        let Ok(new_date) = accounting::today::<T>() else {
+            return;
+        };
+        let current = Self::current_date();
+        let mut limit = current.clone();
+        if limit.add_days::<T>(accounting::MAX_AUTO_DAYS.into()).is_err()
+            || Self::check_correct_date(&limit, &new_date)
+        {
+            return;
+        }
+        if Self::check_correct_date(&current, &new_date) {
+            if let Err(error) = Self::advance_date(&new_date) {
+                accounting::AccrualReviewRequired::<T>::put(true);
+                log::error!(target: "runtime::privileges", "VIP date update failed: {:?}", error);
             }
-
-            CurrentDate::<T>::put(new_date);
         }
     }
 
-    /// Updates the VIP points for the time since the last time the account was updated.
-    pub fn update_points_for_time(elapsed_day: u64) {
-        if elapsed_day == 0 {
-            return;
-        }
-
-        VipMembers::<T>::translate(|_, mut old_info: VipMemberInfo<T>| {
-            let multiplier = Self::calculate_multiplier(elapsed_day);
-            let points = Self::calculate_points(old_info.active_stake, multiplier);
-            let new_points = old_info.points.saturating_add(points);
-            old_info.points = new_points;
-            Some(old_info)
-        });
-    }
-
-    /// Updates the VIPP points for the time since the last time the account was updated.
-    pub fn update_vipp_points_for_time(elapsed_day: u64) {
-        if elapsed_day == 0 {
-            return;
-        }
-
-        VippMembers::<T>::translate(|acc, mut old_info: VippMemberInfo<T>| {
-            let threshold = old_info.active_vipp_threshold.iter().fold(
-                <T as pallet_energy_generation::Config>::StakeBalance::default(),
-                |acc, (_, balance)| acc + *balance,
-            );
-
-            let vip_member_info = VipMembers::<T>::get(acc);
-            let active_stake = match vip_member_info {
-                None => <T as pallet_energy_generation::Config>::StakeBalance::default(),
-                Some(info) => info.active_stake,
-            };
-            if threshold >= active_stake {
-                let new_points = old_info.points.saturating_add(active_stake);
-                old_info.points = new_points;
-            } else {
-                let new_points = old_info.points.saturating_add(threshold);
-                old_info.points = new_points;
-            }
-
-            Some(old_info)
-        });
+    fn advance_date(new_date: &CurrentDateInfo) -> DispatchResult {
+        accounting::advance::<T>(new_date)
     }
 
     /// Calculate multiplier based on the number of elapsed days in VIP.
     fn calculate_multiplier(elapsed_day: u64) -> Perquintill {
         Perquintill::from_rational(1, INCREASE_VIP_POINTS_CONSTANT + elapsed_day)
-    }
-
-    /// Save VIP year information to pay rewards.
-    pub fn save_year_info(year: u32) {
-        VipMembers::<T>::translate(|account, mut vip_info: VipMemberInfo<T>| {
-            VipPoints::<T>::insert(year, account, vip_info.points);
-
-            vip_info.points.set_zero();
-            Some(vip_info)
-        });
-
-        VippMembers::<T>::translate(|account, mut vipp_info: VippMemberInfo<T>| {
-            VippPoints::<T>::insert(year, account, vipp_info.points);
-
-            vipp_info.points.set_zero();
-            Some(vipp_info)
-        });
     }
 
     /// Calculate VIP points for account.
@@ -844,10 +751,12 @@ impl<T: Config> Pallet<T> {
 impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight, Perbill> for Pallet<T> {
     fn change_quarter_info() -> Weight {
         Self::update_quarter_info();
-        Weight::from_parts(1, 1)
+        T::DbWeight::get().reads(6)
     }
 
     fn kick_account_from_vip(account: &T::AccountId) -> Weight {
+        Self::update_quarter_info();
+        accounting::before_stake_change::<T>(account);
         VipMembers::<T>::mutate(account, |vip_info| {
             if let Some(vip_info) = vip_info {
                 vip_info.active_stake =
@@ -855,20 +764,25 @@ impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight, Perbill> for Pallet
             }
         });
 
-        Weight::from_parts(1, 1)
+        T::DbWeight::get().reads_writes(10, 2)
     }
 
     fn update_active_stake(account: &T::AccountId) -> Weight {
+        // The cache still contains the pre-mutation stake at this point.
+        Self::update_quarter_info();
+        accounting::before_stake_change::<T>(account);
         VipMembers::<T>::mutate(account, |vip_info| {
             if let Some(vip_info) = vip_info {
                 vip_info.active_stake =
                     pallet_energy_generation::Pallet::<T>::get_active_stake(account);
             }
         });
-        Weight::from_parts(1, 2)
+        T::DbWeight::get().reads_writes(270, 2)
     }
 
     fn remove_validator_delegation(account: &T::AccountId, validator: &T::AccountId) -> Weight {
+        Self::update_quarter_info();
+        accounting::before_stake_change::<T>(account);
         if !pallet_energy_generation::Pallet::<T>::is_user_validator(account) {
             let removed = pallet_energy_generation::Pallet::<T>::cooperators(account)
                 .and_then(|cooperations| cooperations.targets.get(validator).copied())
@@ -883,7 +797,8 @@ impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight, Perbill> for Pallet
     }
 
     fn get_tax_percent(account: &T::AccountId) -> Perbill {
-        let current_date = Self::current_date();
+        Self::update_quarter_info();
+        let current_date = Self::effective_penalty_date();
         let vip_info = Self::vip_members(account);
         match vip_info {
             Some(vip_member_info) => {
@@ -895,5 +810,32 @@ impl<T: Config> OnVipMembershipHandler<T::AccountId, Weight, Perbill> for Pallet
             },
             None => Perbill::default(),
         }
+    }
+}
+
+impl<T: Config, Moment> frame_support::traits::OnTimestampSet<Moment> for Pallet<T> {
+    fn on_timestamp_set(_: Moment) {
+        frame_system::Pallet::<T>::register_extra_weight_unchecked(
+            T::DbWeight::get().reads_writes(6, 1),
+            frame_support::dispatch::DispatchClass::Mandatory,
+        );
+        // Timestamp is an inherent, applied before user extrinsics. Charge the
+        // bounded scan before dispatch admission, only on a date transition.
+        if CurrentDate::<T>::exists() && !accounting::paused::<T>() {
+            if let Ok(today) = accounting::today::<T>() {
+                let mut limit = Self::current_date();
+                if Self::check_correct_date(&limit, &today)
+                    && limit.add_days::<T>(accounting::MAX_AUTO_DAYS.into()).is_ok()
+                    && !Self::check_correct_date(&limit, &today)
+                {
+                    frame_system::Pallet::<T>::register_extra_weight_unchecked(
+                        <T as Config>::WeightInfo::accounting(2048, 7, 1),
+                        frame_support::dispatch::DispatchClass::Mandatory,
+                    );
+                    Self::update_quarter_info();
+                }
+            }
+        }
+        TimestampSeenAtBlock::<T>::put(frame_system::Pallet::<T>::block_number());
     }
 }

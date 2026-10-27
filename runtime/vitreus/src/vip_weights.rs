@@ -140,8 +140,7 @@ impl pallet_energy_generation::WeightInfo for VipWeights {
 }
 
 fn stake_refresh_weight(refreshes: u64) -> Weight {
-    Weight::from_parts(16_000_000_000, 6_291_456)
-        .saturating_add(<Runtime as frame_system::Config>::DbWeight::get().reads_writes(272, 2))
+    <<Runtime as pallet_privileges::Config>::WeightInfo as pallet_privileges::WeightInfo>::refresh_active_stake()
         .saturating_add(Weight::from_parts(0, 16 * 1024))
         .saturating_add(<Runtime as frame_system::Config>::DbWeight::get().reads_writes(8, 2))
         .saturating_mul(refreshes)

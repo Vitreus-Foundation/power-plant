@@ -484,6 +484,7 @@ impl<T: Config> Pallet<T> {
 
     /// Mint VIPP nft to account.
     pub fn mint_vipp_nft(account: &T::AccountId) -> Result<VippMintFor<T>, DispatchError> {
+        T::OnVIPPChanged::ensure_accounting_ready()?;
         let Some((claim_balance, nac_id)) = Self::try_get_claim_balance(account)? else {
             return Ok(None);
         };
@@ -627,6 +628,7 @@ impl<T: Config> Pallet<T> {
     /// Reconcile the complete bounded ownership set atomically.
     #[frame_support::transactional]
     pub fn try_check_account_threshold(account: &T::AccountId) -> DispatchResult {
+        T::OnVIPPChanged::ensure_accounting_ready()?;
         Self::check_threshold_with_limit(account, None)
     }
 
@@ -676,6 +678,7 @@ impl<T: Config> Pallet<T> {
 
     /// Burn the smallest claim and update accounting atomically.
     pub fn burn_vipp_nft(account: &T::AccountId) -> Result<bool, DispatchError> {
+        T::OnVIPPChanged::ensure_accounting_ready()?;
         let smallest =
             Self::owned_vipp_claims(account)?.into_iter().min_by_key(|(_, amount)| *amount);
         with_storage_layer(|| {
@@ -750,6 +753,7 @@ where
 {
     #[frame_support::transactional]
     fn on_claim(who: &T::AccountId, amount: Balance, _data: Option<()>) -> DispatchResult {
+        T::OnVIPPChanged::ensure_accounting_ready()?;
         let collection = T::NftCollectionId::get();
         let item = T::Nfts::owned_in_collection(&collection, who)
             .next()
@@ -794,6 +798,10 @@ impl<T: Config> OnWithdrawFeeHandler<T::AccountId> for Pallet<T> {
 
 /// Handler for updating, burning VIPP status.
 pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
+    /// Settle completed periods before changing entitlement.
+    fn ensure_accounting_ready() -> DispatchResult {
+        Ok(())
+    }
     /// Handle a minting new VIPP NFT.
     fn mint_vipp(who: &AccountId, _amount: Balance, item_id: ItemId) -> DispatchResult;
 
