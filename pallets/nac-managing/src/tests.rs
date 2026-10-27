@@ -273,3 +273,139 @@ fn mint_manual_vipp(id: ItemId, amount: Balance) {
         &amount.encode(),
     ));
 }
+
+#[test]
+fn vipp_burn_selects_the_smallest_decoded_claim() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(257);
+        mint_manual_vipp(700, 256);
+        mint_manual_vipp(701, 1);
+
+        // Little-endian SCALE bytes order 256 before 1, unlike their numeric values.
+        assert_ok!(NacManaging::burn_vipp_nft(&1));
+        assert_eq!(Nfts::owner(1, 700), Some(1));
+        assert_eq!(Nfts::owner(1, 701), None);
+        assert_eq!(get_claimed(0, 123), 256);
+        assert!(!NacManaging::is_vipp_inactive(&1));
+    });
+}
+
+#[test]
+fn vipp_burn_rolls_back_if_nac_threshold_update_fails() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let (_, id) = NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        FailAttributeWrite::set(Some((0, CLAIM_AMOUNT_ATTRIBUTE_KEY.to_vec())));
+        assert_noop!(
+            NacManaging::burn_vipp_nft(&1),
+            DispatchError::Other("injected NFT attribute failure")
+        );
+        assert_eq!(Nfts::owner(1, id), Some(1));
+        assert_eq!(get_claimed(0, 123), 1_000);
+    });
+}
+
+#[test]
+fn vipp_last_burn_marks_nac_inactive_and_cannot_be_reissued() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        assert!(NacManaging::mint_vipp_nft(&1).unwrap().is_some());
+        assert_eq!(NacManaging::burn_vipp_nft(&1), Ok(true));
+        assert_eq!(Nfts::system_attribute(&0, Some(&123), &VIPP_STATUS_EXIST), Some(vec![1]));
+        System::set_block_number(2);
+        assert_ok!(NacManaging::on_claim(&1, 1_000u64, None));
+        assert_eq!(NacManaging::can_mint_vipp(&1).unwrap(), None);
+    });
+}
+
+#[test]
+fn vipp_burn_rolls_back_if_marking_the_nac_inactive_fails() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let (_, id) = NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        FailAttributeWrite::set(Some((0, VIPP_STATUS_EXIST.to_vec())));
+        assert_noop!(
+            NacManaging::burn_vipp_nft(&1),
+            DispatchError::Other("injected NFT attribute failure")
+        );
+        assert_eq!(Nfts::owner(1, id), Some(1));
+        assert_eq!(get_claimed(0, 123), 1_000);
+    });
+}
+
+#[test]
+fn vipp_malformed_claim_is_not_treated_as_zero_or_burned() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let (_, id) = NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        assert_ok!(<Nfts as Mutate<AccountId, ItemConfig>>::set_attribute(
+            &1,
+            &id,
+            &CLAIM_AMOUNT_ATTRIBUTE_KEY,
+            &[1]
+        ));
+        assert_noop!(NacManaging::burn_vipp_nft(&1), Error::<Test>::InvalidClaimAttribute);
+        assert_eq!(Nfts::owner(1, id), Some(1));
+    });
+}
+
+#[test]
+fn failed_burn_callback_rolls_back_nft_threshold_and_inactive_flag_together() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        FailVippCallback::set(true);
+        assert_noop!(
+            NacManaging::burn_vipp_nft(&1),
+            DispatchError::Other("injected VIPP callback failure")
+        );
+    });
+}
+
+#[test]
+fn threshold_reconciliation_rolls_back_earlier_burns_if_a_later_callback_fails() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(100);
+        NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        System::set_block_number(2);
+        assert_ok!(NacManaging::on_claim(&1, 200u64, None));
+        let owned = NacManaging::owned_vipp_claims(&1).unwrap();
+        let second_id = owned.iter().find(|(_, amount)| *amount == 200).unwrap().0;
+        let _ = Balances::make_free_balance_be(&1, 50);
+        FailVippCallbackOnItem::set(Some(second_id));
+        assert_noop!(
+            NacManaging::try_check_account_threshold(&1),
+            DispatchError::Other("injected VIPP callback failure")
+        );
+        assert_eq!(NacManaging::owned_vipp_claims(&1).unwrap(), owned);
+        assert_eq!(get_claimed(0, 123), 300);
+        assert!(!NacManaging::is_vipp_inactive(&1));
+    });
+}
+
+#[test]
+fn oversized_legacy_ownership_is_not_partially_burned() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        for id in 0..65 {
+            mint_manual_vipp(id, 1);
+        }
+        let _ = Balances::make_free_balance_be(&1, 1);
+        assert_noop!(NacManaging::try_check_account_threshold(&1), Error::<Test>::TooManyVippNfts);
+        assert_eq!(Nfts::owned_in_collection(&1, &1).count(), 65);
+        assert_noop!(NacManaging::burn_vipp_nft(&1), Error::<Test>::TooManyVippNfts);
+    });
+}
+
+#[test]
+fn legacy_zero_value_nfts_do_not_make_threshold_reconciliation_loop_forever() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        mint_manual_vipp(0, 0);
+        mint_manual_vipp(1, 1_000);
+        let _ = Balances::make_free_balance_be(&1, 949);
+        assert_ok!(NacManaging::try_check_account_threshold(&1));
+        assert_eq!(Nfts::owned_in_collection(&1, &1).count(), 0);
+        assert!(NacManaging::is_vipp_inactive(&1));
+    });
+}

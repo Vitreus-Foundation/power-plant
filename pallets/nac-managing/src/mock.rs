@@ -93,6 +93,7 @@ parameter_types! {
     pub TestItemDeposit: u64 = 0;
     pub static FailAttributeWrite: Option<(u32, Vec<u8>)> = None;
     pub static FailVippCallback: bool = false;
+    pub static FailVippCallbackOnItem: Option<ItemId> = None;
 }
 
 pub type CollectionId = u32;
@@ -183,13 +184,15 @@ impl crate::OnVippStatusHandler<AccountId, Balance, ItemId> for TestVippCallback
         _amount: Balance,
         _item_id: ItemId,
     ) -> sp_runtime::DispatchResult {
-        if FailVippCallback::get() {
+        if FailVippCallback::get() || FailVippCallbackOnItem::get() == Some(_item_id) {
             return Err(sp_runtime::DispatchError::Other("injected VIPP callback failure"));
         }
         Ok(())
     }
 
-    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) {}
+    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) -> sp_runtime::DispatchResult {
+        Self::mint_vipp(_who, 0, _item_id)
+    }
 }
 
 parameter_types! {
@@ -250,6 +253,7 @@ impl pallet_balances::Config for Test {
 pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
     FailAttributeWrite::set(None);
     FailVippCallback::set(false);
+    FailVippCallbackOnItem::set(None);
     let t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
 
     let mut ext = sp_io::TestExternalities::new(t);
