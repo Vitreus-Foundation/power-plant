@@ -2,8 +2,11 @@
 
 use crate::{mock::*, BurnedEnergy, BurnedEnergyThreshold, CheckEnergyFee, Event};
 use frame_support::{
-    dispatch::{DispatchInfo, GetDispatchInfo, PostDispatchInfo},
-    traits::{fungible::Inspect, Hooks},
+    dispatch::{DispatchInfo, GetDispatchInfo, Pays, PostDispatchInfo},
+    traits::{
+        fungible::{Inspect, Mutate},
+        Hooks,
+    },
 };
 use frame_system::{
     mocking::MockUncheckedExtrinsic,
@@ -138,6 +141,178 @@ fn withdraw_fee_with_custom_coefficients_works() {
         System::assert_has_event(
             Event::<Test>::EnergyFeePaid { who: ALICE, amount: constant_fee }.into(),
         );
+    });
+}
+
+#[test]
+fn pays_no_refunds_fee() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
+        let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
+        let transfer_amount: Balance = 1_000_000_000;
+
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+
+        let dispatch_info: DispatchInfo =
+            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        let withdraw_result = <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+
+        assert_eq!(
+            BalancesVNRG::balance(&ALICE),
+            initial_energy_balance - GetConstantEnergyFee::get(),
+        );
+
+        let post_dispatch_info: PostDispatchInfo =
+            PostDispatchInfo { actual_weight: None, pays_fee: Pays::No };
+
+        assert!(<EnergyFee as OnChargeTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE,
+            &dispatch_info,
+            &post_dispatch_info,
+            computed_fee,
+            0,
+            withdraw_result
+        )
+        .is_ok());
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance);
+        assert_eq!(BalancesVNRG::balance(&FEE_DEST), 0);
+        assert_eq!(BurnedEnergy::<Test>::get(), 0);
+
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: 0 }.into());
+    });
+}
+
+#[test]
+fn pays_no_refunds_exchanged_fee_in_vnrg() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(fee / 4).execute_with(|| {
+        System::set_block_number(1);
+        // VNRG, SNRG and LNRG cover a quarter of the fee each, VTRS buys the last quarter.
+        StaticEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint SNRG");
+        LiquidEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint LNRG");
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+        let transfer_amount: Balance = 1_000_000_000;
+
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+
+        let dispatch_info: DispatchInfo =
+            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        let withdraw_result = <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+
+        let post_dispatch_info: PostDispatchInfo =
+            PostDispatchInfo { actual_weight: None, pays_fee: Pays::No };
+
+        assert!(<EnergyFee as OnChargeTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE,
+            &dispatch_info,
+            &post_dispatch_info,
+            computed_fee,
+            0,
+            withdraw_result
+        )
+        .is_ok());
+
+        let vtrs_fee = VNRG_TO_VTRS_RATE
+            .checked_mul_int(fee / 4)
+            .expect("Expected to calculate missing fee in VTRS");
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), fee);
+        assert_eq!(StaticEnergyAsset::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::total_issuance(), 0);
+        assert_eq!(LiquidEnergyAsset::balance(&ALICE), 0);
+        assert_eq!(LiquidEnergyAsset::total_issuance(), 0);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance - vtrs_fee);
+        assert_eq!(BalancesVNRG::balance(&FEE_DEST), 0);
+        assert_eq!(BurnedEnergy::<Test>::get(), 0);
+
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: 0 }.into());
+    });
+}
+
+#[test]
+fn zero_fee_withdraws_nothing() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
+        let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+
+        let system_remark_call: RuntimeCall =
+            RuntimeCall::System(frame_system::Call::remark { remark: [1u8; 32].to_vec() });
+
+        let dispatch_info: DispatchInfo = DispatchInfo {
+            weight: SystemWeight::<Test>::remark(32),
+            pays_fee: Pays::No,
+            ..Default::default()
+        };
+
+        let extrinsic_len: u32 =
+            Extrinsic::new_signed(system_remark_call.clone(), ALICE, (), ()).encode().len() as u32;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+        assert_eq!(computed_fee, 0);
+
+        let withdraw_result = <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &system_remark_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+        assert!(withdraw_result.is_none());
+
+        assert!(<EnergyFee as OnChargeTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE,
+            &dispatch_info,
+            &PostDispatchInfo::default(),
+            computed_fee,
+            0,
+            withdraw_result
+        )
+        .is_ok());
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance);
+        assert_eq!(BalancesVNRG::balance(&FEE_DEST), 0);
+        assert_eq!(BurnedEnergy::<Test>::get(), 0);
+        assert!(System::events().is_empty());
     });
 }
 
@@ -284,6 +459,251 @@ fn vtrs_exchange_during_withdraw_fee_with_stock_coefficients_works() {
             .expect("Expected to calculate missing fee in VTRS");
 
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance.saturating_sub(vtrs_fee),);
+    });
+}
+
+#[test]
+fn fee_exchange_spends_snrg_before_lnrg() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(fee / 4).execute_with(|| {
+        System::set_block_number(1);
+        // VNRG and SNRG cover a quarter of the fee each, LNRG covers the rest.
+        StaticEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint SNRG");
+        LiquidEnergyAsset::mint_into(&ALICE, fee).expect("Expected to mint LNRG");
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+        let transfer_amount: Balance = 1_000_000_000;
+
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+
+        let dispatch_info: DispatchInfo =
+            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        let withdraw_result = <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+
+        assert!(<EnergyFee as OnChargeTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE,
+            &dispatch_info,
+            &PostDispatchInfo::default(),
+            computed_fee,
+            0,
+            withdraw_result
+        )
+        .is_ok());
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::total_issuance(), 0);
+        assert_eq!(LiquidEnergyAsset::balance(&ALICE), fee / 2);
+        assert_eq!(LiquidEnergyAsset::total_issuance(), fee / 2);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance);
+        assert_eq!(
+            BalancesVNRG::balance(&FEE_DEST),
+            Perbill::from_rational(2u32, 10u32).mul_floor(fee)
+        );
+        assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
+    });
+}
+
+#[test]
+fn fee_exchange_buys_only_shortfall_with_vtrs() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(fee / 4).execute_with(|| {
+        System::set_block_number(1);
+        // VNRG, SNRG and LNRG cover a quarter of the fee each, VTRS buys the last quarter.
+        StaticEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint SNRG");
+        LiquidEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint LNRG");
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+        let transfer_amount: Balance = 1_000_000_000;
+
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: transfer_amount,
+            });
+
+        let dispatch_info: DispatchInfo =
+            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        let withdraw_result = <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &assets_transfer_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+
+        assert!(<EnergyFee as OnChargeTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE,
+            &dispatch_info,
+            &PostDispatchInfo::default(),
+            computed_fee,
+            0,
+            withdraw_result
+        )
+        .is_ok());
+
+        let vtrs_fee = VNRG_TO_VTRS_RATE
+            .checked_mul_int(fee / 4)
+            .expect("Expected to calculate missing fee in VTRS");
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::total_issuance(), 0);
+        assert_eq!(LiquidEnergyAsset::balance(&ALICE), 0);
+        assert_eq!(LiquidEnergyAsset::total_issuance(), 0);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance - vtrs_fee);
+        assert_eq!(
+            BalancesVNRG::balance(&FEE_DEST),
+            Perbill::from_rational(2u32, 10u32).mul_floor(fee)
+        );
+        assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
+    });
+}
+
+#[test]
+fn evm_fee_exchange_spends_snrg_before_lnrg() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(fee / 4).execute_with(|| {
+        System::set_block_number(1);
+        // VNRG and SNRG cover a quarter of the fee each, LNRG covers the rest.
+        StaticEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint SNRG");
+        LiquidEnergyAsset::mint_into(&ALICE, fee).expect("Expected to mint LNRG");
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+
+        // fee equals arbitrary number since we don't take it into account
+        let withdraw_result = <EnergyFee as OnChargeEVMTransaction<Test>>::withdraw_fee(
+            &ALICE.into(),
+            1_234_567_890.into(),
+        )
+        .expect("Expected to withdraw fee");
+
+        assert!(<EnergyFee as OnChargeEVMTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE.into(),
+            0.into(),
+            0.into(),
+            withdraw_result
+        )
+        .is_none());
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::total_issuance(), 0);
+        assert_eq!(LiquidEnergyAsset::balance(&ALICE), fee / 2);
+        assert_eq!(LiquidEnergyAsset::total_issuance(), fee / 2);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance);
+        assert_eq!(
+            BalancesVNRG::balance(&FEE_DEST),
+            Perbill::from_rational(2u32, 10u32).mul_floor(fee)
+        );
+        assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
+    });
+}
+
+#[test]
+fn evm_fee_exchange_buys_only_shortfall_with_vtrs() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(fee / 4).execute_with(|| {
+        System::set_block_number(1);
+        // VNRG, SNRG and LNRG cover a quarter of the fee each, VTRS buys the last quarter.
+        StaticEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint SNRG");
+        LiquidEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint LNRG");
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+
+        // fee equals arbitrary number since we don't take it into account
+        let withdraw_result = <EnergyFee as OnChargeEVMTransaction<Test>>::withdraw_fee(
+            &ALICE.into(),
+            1_234_567_890.into(),
+        )
+        .expect("Expected to withdraw fee");
+
+        assert!(<EnergyFee as OnChargeEVMTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE.into(),
+            0.into(),
+            0.into(),
+            withdraw_result
+        )
+        .is_none());
+
+        let vtrs_fee = VNRG_TO_VTRS_RATE
+            .checked_mul_int(fee / 4)
+            .expect("Expected to calculate missing fee in VTRS");
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::balance(&ALICE), 0);
+        assert_eq!(StaticEnergyAsset::total_issuance(), 0);
+        assert_eq!(LiquidEnergyAsset::balance(&ALICE), 0);
+        assert_eq!(LiquidEnergyAsset::total_issuance(), 0);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance - vtrs_fee);
+        assert_eq!(
+            BalancesVNRG::balance(&FEE_DEST),
+            Perbill::from_rational(2u32, 10u32).mul_floor(fee)
+        );
+        assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
+    });
+}
+
+#[test]
+fn fee_parts_quote_vtrs_only_for_energy_shortfall() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(fee / 4).execute_with(|| {
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+        let vtrs_for = |energy: Balance| {
+            VNRG_TO_VTRS_RATE
+                .checked_mul_int(energy)
+                .expect("Expected to calculate fee in VTRS")
+        };
+
+        assert_eq!(
+            EnergyFee::calculate_fee_parts(&ALICE, fee),
+            Some((fee / 4, vtrs_for(3 * fee / 4)))
+        );
+
+        StaticEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint SNRG");
+        LiquidEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint LNRG");
+        assert_eq!(
+            EnergyFee::calculate_fee_parts(&ALICE, fee),
+            Some((3 * fee / 4, vtrs_for(fee / 4)))
+        );
+
+        LiquidEnergyAsset::mint_into(&ALICE, fee / 4).expect("Expected to mint LNRG");
+        assert_eq!(EnergyFee::calculate_fee_parts(&ALICE, fee), Some((fee, 0)));
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), fee / 4);
+        assert_eq!(StaticEnergyAsset::balance(&ALICE), fee / 4);
+        assert_eq!(LiquidEnergyAsset::balance(&ALICE), fee / 2);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance);
     });
 }
 
@@ -536,6 +956,12 @@ fn update_base_fee_works() {
         assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance - constant_fee_1,);
 
         let constant_fee_2 = 100;
+        assert_eq!(
+            EnergyFee::update_base_fee(RawOrigin::Signed(ALICE).into(), constant_fee_2),
+            Err(DispatchError::BadOrigin.into())
+        );
+        assert_eq!(EnergyFee::base_fee(), constant_fee_1);
+
         EnergyFee::update_base_fee(RuntimeOrigin::root(), constant_fee_2)
             .expect("Expected to set a new base fee");
 
