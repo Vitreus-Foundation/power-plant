@@ -570,7 +570,7 @@ impl<T: Config> Pallet<T> {
             return Ok(());
         }
         if let Some((amount, item_id)) = pallet_nac_managing::Pallet::<T>::can_mint_vipp(account)? {
-            Self::register_vipp_nft(account, amount.into(), item_id)?;
+            return Self::register_vipp_nft(account, amount.into(), item_id, true);
         }
         Self::sync_vipp_membership(account, true)
     }
@@ -580,6 +580,7 @@ impl<T: Config> Pallet<T> {
         account: &T::AccountId,
         amount: T::StakeBalance,
         item_id: T::ItemId,
+        reset_points: bool,
     ) -> DispatchResult {
         if !VipMembers::<T>::contains_key(account)
             || pallet_nac_managing::Pallet::<T>::is_vipp_inactive(account)
@@ -605,7 +606,7 @@ impl<T: Config> Pallet<T> {
             }
             Ok(())
         })?;
-        Self::sync_vipp_membership(account, false)
+        Self::sync_vipp_membership(account, reset_points)
     }
 
     /// Refresh registered NFT caps without activating unaccounted ownership.

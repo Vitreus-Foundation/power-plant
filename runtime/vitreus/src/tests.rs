@@ -968,3 +968,30 @@ mod launchpad_free_trades {
         });
     }
 }
+
+#[test]
+fn vipp_entry_weight_covers_bounded_nft_reads() {
+    let count: u32 = <Runtime as pallet_nac_managing::Config>::MaxVippNftsPerAccount::get();
+    let reads = <Runtime as frame_system::Config>::DbWeight::get().reads(u64::from(count) * 2);
+    let call = RuntimeCall::Privileges(pallet_privileges::Call::become_vip_status {
+        tax_type: pallet_privileges::PenaltyType::Flat,
+    });
+    assert!(call.get_dispatch_info().weight.ref_time() >= reads.ref_time());
+}
+
+#[test]
+fn claim_weight_covers_bounded_vipp_reads() {
+    let count: u32 = <Runtime as pallet_nac_managing::Config>::MaxVippNftsPerAccount::get();
+    let reads = <Runtime as frame_system::Config>::DbWeight::get().reads(u64::from(count) * 2);
+    let call = RuntimeCall::Claiming(pallet_claiming::Call::claim {
+        dest: alith(),
+        ethereum_signature: pallet_claiming::EcdsaSignature([0; 65]),
+    });
+    assert!(call.get_dispatch_info().weight.ref_time() >= reads.ref_time());
+}
+
+#[test]
+fn vipp_minting_weights_match_benchmarked_limit() {
+    let count: u32 = <Runtime as pallet_nac_managing::Config>::MaxVippNftsPerAccount::get();
+    assert_eq!(count, 64, "regenerate VIPP minting weights when changing the ownership limit");
+}

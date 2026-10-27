@@ -157,7 +157,7 @@ impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> fo
         amount: T::StakeBalance,
         item_id: T::ItemId,
     ) -> DispatchResult {
-        Self::register_vipp_nft(who, amount, item_id)
+        Self::register_vipp_nft(who, amount, item_id, false)
     }
 
     fn burn_vipp_nft(who: &T::AccountId, item_id: T::ItemId) {

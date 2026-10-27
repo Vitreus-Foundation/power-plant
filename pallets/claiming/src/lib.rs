@@ -290,9 +290,8 @@ pub mod pallet {
         ///
         /// <weight>
         /// The weight of this call is invariant over the input parameters.
-        /// Weight includes logic to validate unsigned `claim` call.
-        ///
-        /// Total Complexity: O(1)
+        /// Weight includes unsigned validation, vesting and the configured `OnClaim` handler.
+        /// Its storage bounds must be included by the runtime weight implementation.
         /// </weight>
         #[pallet::call_index(0)]
         #[pallet::weight(<T as Config<I>>::WeightInfo::claim())]

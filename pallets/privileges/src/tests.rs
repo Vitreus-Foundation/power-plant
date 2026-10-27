@@ -881,6 +881,38 @@ fn test_existing_vipp_nft_on_vip_entry() {
 }
 
 #[test]
+fn vip_entry_resets_cached_points_after_mint() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        VippMembers::<Test>::insert(
+            10,
+            VippMemberInfo::<Test> { points: 123, active_vipp_threshold: vec![] },
+        );
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.points, 0);
+        assert_eq!(member.active_vipp_threshold, vec![(owned_vipp_ids(10)[0], 190)]);
+    });
+}
+
+#[test]
+fn vip_entry_refreshes_registered_caps_without_mint() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        let (_, id) = NacManaging::mint_vipp_nft(&10).unwrap().unwrap();
+        VippMembers::<Test>::insert(
+            10,
+            VippMemberInfo::<Test> { points: 123, active_vipp_threshold: vec![(id, 1)] },
+        );
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        assert_eq!(owned_vipp_ids(10), vec![id]);
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.points, 0);
+        assert_eq!(member.active_vipp_threshold, vec![(id, 190)]);
+    });
+}
+
+#[test]
 fn test_additional_claim_failure() {
     ExtBuilder::default().build_and_execute(|| {
         claim_for_validator(200);
