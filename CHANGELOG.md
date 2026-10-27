@@ -42,6 +42,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Add atomic VIPP transfers to `pallet-nac-managing` and block NFT transfer, burn, sale and swap paths that bypass entitlement accounting
 
+- Bound `pallet-nac-managing` fee and claim threshold reconciliation per block and preserve captured deficits and their year until reviewed repair
+
 ## [215] - 2026-10-19
 
 ### Added

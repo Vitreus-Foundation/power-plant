@@ -15,6 +15,7 @@ pub trait WeightInfo {
     fn set_rewards() -> Weight;
     fn claim_rewards() -> Weight;
     fn refresh_active_stake() -> Weight;
+    fn resolve_timestamp_breaches() -> Weight;
 }
 
 pub struct SubstrateWeight<T>(PhantomData<T>);
@@ -50,7 +51,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
     fn refresh_active_stake() -> Weight {
         operation_weight(T::DbWeight::get(), 16_000_000_000, 272, 2, 6_291_456)
     }
-
+    fn resolve_timestamp_breaches() -> Weight {
+        operation_weight(T::DbWeight::get(), 4_000_000_000, 1032, 1030, 3_145_728)
+    }
 }
 
 impl WeightInfo for () {
@@ -85,7 +88,9 @@ impl WeightInfo for () {
     fn refresh_active_stake() -> Weight {
         operation_weight(RocksDbWeight::get(), 16_000_000_000, 272, 2, 6_291_456)
     }
-
+    fn resolve_timestamp_breaches() -> Weight {
+        operation_weight(RocksDbWeight::get(), 4_000_000_000, 1032, 1030, 3_145_728)
+    }
 }
 
 // Account/day work preserves per-day rounding; year segments bound annual writes.

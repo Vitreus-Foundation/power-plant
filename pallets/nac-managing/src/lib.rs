@@ -130,6 +130,7 @@ pub mod mock;
 #[cfg(test)]
 mod tests;
 
+mod threshold_checks;
 pub mod transfers;
 pub mod weights;
 
@@ -163,6 +164,7 @@ pub mod pallet {
     use super::*;
     use frame_support::pallet_prelude::*;
     use frame_support::traits::LockableCurrency;
+    use frame_system::ensure_signed;
 
     #[pallet::pallet]
     pub struct Pallet<T>(_);
@@ -213,12 +215,20 @@ pub mod pallet {
             Balance = <Self as pallet_balances::Config>::Balance,
         >;
 
-        /// Unvested native funds excluded from VIPP eligibility.
+        /// Currently unvested native funds, excluded from VIPP eligibility.
         type UnvestedBalance: UnvestedBalance<Self::AccountId, Self::Balance>;
 
-        /// Bound for per-account VIPP ownership scans and mutations.
+        /// Bound for all per-account VIPP ownership scans and mutations.
         #[pallet::constant]
         type MaxVippNftsPerAccount: Get<u32>;
+
+        /// Bound for accounts whose final balance state is checked at block finalization.
+        #[pallet::constant]
+        type MaxPendingVippAccounts: Get<u32>;
+
+        /// Maximum expensive automatic reconciliations reserved in each block.
+        #[pallet::constant]
+        type MaxVippReconciliationsPerBlock: Get<u32>;
 
         /// Handler for VIPP members.
         type OnVIPPChanged: OnVippStatusHandler<
@@ -239,9 +249,65 @@ pub mod pallet {
     pub type UsersNft<T: Config> =
         StorageMap<_, Blake2_128Concat, T::AccountId, (T::ItemId, u8), OptionQuery>;
 
-    /// Item temporarily unlocked by an atomic VIPP operation.
+    /// Item temporarily unlocked by an atomic VIPP accounting operation.
     #[pallet::storage]
     pub type VippMutationItem<T: Config> = StorageValue<_, T::ItemId, OptionQuery>;
+
+    /// Accounts requiring a final check once related balance metadata is committed.
+    #[pallet::storage]
+    pub type PendingVippBalanceChanges<T: Config> =
+        StorageValue<_, BoundedVec<T::AccountId, T::MaxPendingVippAccounts>, ValueQuery>;
+
+    /// Account currently being reconciled, preventing deposit-refund recursion.
+    #[pallet::storage]
+    pub type ProcessingVippBalanceChange<T: Config> = StorageValue<_, T::AccountId, OptionQuery>;
+
+    /// Accounts requiring reconciliation before reward accounting may resume.
+    #[pallet::storage]
+    pub type VippAccountingQuarantine<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, (), OptionQuery>;
+
+    /// Lowest eligible balance observed while an account requires reconciliation.
+    #[pallet::storage]
+    pub type VippBreachBalance<T: Config> =
+        StorageMap<_, Blake2_128Concat, T::AccountId, T::Balance, OptionQuery>;
+
+    /// Narrow permission for an explicitly approved root balance reconciliation.
+    #[pallet::storage]
+    pub type VippRepairInProgress<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+    /// Expensive automatic checks already executed in this block.
+    #[pallet::storage]
+    pub type VippReconciliationsThisBlock<T: Config> = StorageValue<_, u32, ValueQuery>;
+
+    #[pallet::hooks]
+    impl<T: Config> Hooks<BlockNumberFor<T>> for Pallet<T> {
+        fn on_initialize(_now: BlockNumberFor<T>) -> Weight {
+            VippReconciliationsThisBlock::<T>::kill();
+            let pending = u64::from(T::MaxPendingVippAccounts::get());
+            let reconciliations = u64::from(T::MaxVippReconciliationsPerBlock::get());
+            // Finalization can perform a light check for every queued account,
+            // even after its heavy-reconciliation budget has been exhausted.
+            // The complete observer envelope also covers these lighter checks.
+            <T as Config>::WeightInfo::check_vipp_threshold(T::MaxVippNftsPerAccount::get())
+                .saturating_mul(reconciliations)
+                .saturating_add(
+                    <T as Config>::WeightInfo::balance_observer().saturating_mul(pending),
+                )
+                // Queue take/merge and guards; quarantine/budget reads per account;
+                // accounting-ready guards and processing markers per repair.
+                .saturating_add(
+                    T::DbWeight::get().reads_writes(
+                        4 + 2 * pending + 16 * reconciliations,
+                        3 + 3 * reconciliations,
+                    ),
+                )
+        }
+
+        fn on_finalize(_now: BlockNumberFor<T>) {
+            Self::finish_balance_changes();
+        }
+    }
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -277,6 +343,18 @@ pub mod pallet {
             /// The VIPP NFT unique ID.
             item_id: T::ItemId,
         },
+
+        /// Accounting could not be safely reconciled; native funds remain usable.
+        VippAccountingQuarantined {
+            /// Account requiring review and repair before further accrual.
+            owner: T::AccountId,
+        },
+
+        /// A reviewed account was reconciled against its recorded balance breach.
+        VippBalanceRepaired {
+            /// Account whose actual NFT state and threshold were reconciled.
+            owner: T::AccountId,
+        },
     }
 
     #[pallet::error]
@@ -287,7 +365,7 @@ pub mod pallet {
         NftAlreadyExist,
         /// NAC level is not correct.
         NacLevelIsIncorrect,
-        /// A claim attribute is missing or cannot be decoded completely.
+        /// A VIPP or NAC claim attribute is missing or cannot be decoded.
         InvalidClaimAttribute,
         /// Ownership exceeds the bounded VIPP accounting limit.
         TooManyVippNfts,
@@ -295,10 +373,12 @@ pub mod pallet {
         NotVippOwner,
         /// The destination cannot receive VIPP membership.
         InvalidVippRecipient,
-        /// The recipient cannot back its increased threshold.
+        /// The recipient cannot back the increased VIPP threshold.
         InsufficientVippBalance,
-        /// Ownership and threshold changes would be inconsistent.
+        /// The transfer would produce inconsistent VIPP accounting.
         InvalidVippTransfer,
+        /// Accounting requires repair before VIPP ownership can change.
+        VippAccountingUnavailable,
     }
 
     #[pallet::call]
@@ -361,6 +441,7 @@ pub mod pallet {
             Self::deposit_event(Event::UserNacLevel { nac_level, owner });
             Ok(())
         }
+
         /// Transfer a VIPP NFT together with its threshold and reward accounting.
         #[pallet::call_index(3)]
         #[pallet::weight(<T as Config>::WeightInfo::transfer_vipp(T::MaxVippNftsPerAccount::get()))]
@@ -369,7 +450,28 @@ pub mod pallet {
             item_id: T::ItemId,
             destination: T::AccountId,
         ) -> DispatchResult {
-            Self::do_transfer_vipp(&frame_system::ensure_signed(origin)?, item_id, &destination)
+            Self::do_transfer_vipp(&ensure_signed(origin)?, item_id, &destination)
+        }
+
+        /// Reconcile a quarantined account using its captured deficit, even if
+        /// funds were subsequently restored. This can burn VIPP NFTs.
+        #[pallet::call_index(4)]
+        #[pallet::weight(<T as Config>::WeightInfo::check_vipp_threshold(T::MaxVippNftsPerAccount::get()))]
+        #[frame_support::transactional]
+        pub fn repair_vipp_balance(origin: OriginFor<T>, owner: T::AccountId) -> DispatchResult {
+            T::AdminOrigin::ensure_origin(origin)?;
+            T::OnVIPPChanged::ensure_repair_ready()?;
+            ensure!(!VippRepairInProgress::<T>::get(), Error::<T>::VippAccountingUnavailable);
+            let limit = if Self::is_vipp_quarantined(&owner) {
+                VippBreachBalance::<T>::get(&owner).ok_or(Error::<T>::VippAccountingUnavailable)?
+            } else {
+                Self::eligible_vipp_balance(&owner)
+            };
+            VippRepairInProgress::<T>::put(true);
+            Self::repair_balance_with_limit(&owner, limit)?;
+            VippRepairInProgress::<T>::kill();
+            Self::deposit_event(Event::<T>::VippBalanceRepaired { owner });
+            Ok(())
         }
     }
 
@@ -498,7 +600,7 @@ impl<T: Config> Pallet<T> {
                 T::Nfts::system_attribute(&collection_id, Some(&item_id), &NAC_LEVEL_ATTRIBUTE_KEY);
 
             return match nac_level {
-                Some(bytes) => Some((bytes[0], item_id)),
+                Some(bytes) => bytes.first().copied().map(|level| (level, item_id)),
                 None => Some((DEFAULT_NAC_LEVEL, item_id)),
             };
         }
@@ -506,9 +608,11 @@ impl<T: Config> Pallet<T> {
         None
     }
 
-    /// Mint VIPP nft to account.
+    /// Mint a positive, previously unrepresented claim amount as a VIPP NFT.
+    /// Returns the 95% reward cap and the actual VIPP item ID.
     pub fn mint_vipp_nft(account: &T::AccountId) -> Result<VippMintFor<T>, DispatchError> {
         T::OnVIPPChanged::ensure_accounting_ready()?;
+        ensure!(!Self::is_vipp_quarantined(account), Error::<T>::VippAccountingUnavailable);
         let Some((claim_balance, nac_id)) = Self::try_get_claim_balance(account)? else {
             return Ok(None);
         };
@@ -550,7 +654,7 @@ impl<T: Config> Pallet<T> {
         })
     }
 
-    /// can mint VIPP NFT to account.
+    /// Mint a VIPP NFT when the NAC is eligible and has a positive uncovered claim.
     pub fn can_mint_vipp(account: &T::AccountId) -> Result<VippMintFor<T>, DispatchError> {
         Self::mint_vipp_nft(account)
     }
@@ -567,7 +671,8 @@ impl<T: Config> Pallet<T> {
         })
     }
 
-    /// Actual owned VIPP IDs and raw claim amounts, before applying the 95% cap.
+    /// Actual owned VIPP IDs and their raw claim amounts, before the 95% factor.
+    /// Malformed attributes must not silently become zero-value entitlements.
     pub fn owned_vipp_claims(account: &T::AccountId) -> Result<VippClaimsFor<T>, DispatchError> {
         let collection = T::VIPPCollectionId::get();
         let items: Vec<_> = T::Nfts::owned_in_collection(&collection, account)
@@ -593,7 +698,14 @@ impl<T: Config> Pallet<T> {
             .collect()
     }
 
-    /// Read the NAC claim and reject malformed or trailing attribute bytes.
+    /// Get user claim balance.
+    pub fn get_claim_balance(
+        account_id: &T::AccountId,
+    ) -> Option<(T::Balance, <T as Config>::ItemId)> {
+        Self::try_get_claim_balance(account_id).ok().flatten()
+    }
+
+    /// Read the NAC claim without treating malformed accounting as no claim.
     pub fn try_get_claim_balance(
         account_id: &T::AccountId,
     ) -> Result<NacClaimFor<T>, DispatchError> {
@@ -620,20 +732,14 @@ impl<T: Config> Pallet<T> {
         Ok(None)
     }
 
-    /// Get user claim balance.
-    pub fn get_claim_balance(
-        account_id: &T::AccountId,
-    ) -> Option<(T::Balance, <T as Config>::ItemId)> {
-        Self::try_get_claim_balance(account_id).ok().flatten()
-    }
-
-    /// Total native funds excluding unvested funds without counting reserves twice.
+    /// Total native funds excluding unvested funds. Locks and reserves are
+    /// subsets of the total balance and must not be counted a second time.
     pub fn eligible_vipp_balance(account: &T::AccountId) -> T::Balance {
         T::Currency::total_balance(account)
             .saturating_sub(T::UnvestedBalance::unvested_balance(account))
     }
 
-    /// Check threshold of account.
+    /// Check the inclusive 95% threshold against eligible native funds.
     pub fn threshold_meets_vipp_requirements(
         account: &T::AccountId,
         claim_balance: <T as pallet_balances::Config>::Balance,
@@ -641,18 +747,18 @@ impl<T: Config> Pallet<T> {
         Self::eligible_vipp_balance(account) >= Perbill::from_percent(95) * claim_balance
     }
 
-    /// Check VIPP threshold every transaction.
+    /// Check VIPP threshold when a fee is withdrawn.
     pub fn check_account_threshold(account: &T::AccountId) {
         if let Err(error) = Self::try_check_account_threshold(account) {
             log::error!(target: "runtime::nac-managing", "VIPP threshold update failed: {:?}", error);
         }
     }
 
-    /// Burn VIPP NFT (return true if the VIPP was burned).
-    /// Reconcile the complete bounded ownership set atomically.
+    /// Reconcile a threshold atomically, with work bounded by the NFT limit.
+    /// Malformed or oversized legacy ownership is left unchanged for repair.
     #[frame_support::transactional]
     pub fn try_check_account_threshold(account: &T::AccountId) -> DispatchResult {
-        T::OnVIPPChanged::ensure_accounting_ready()?;
+        Self::ensure_vipp_reconciliation_ready()?;
         Self::check_threshold_with_limit(account, None)
     }
 
@@ -686,6 +792,22 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
+    /// Burn the smallest VIPP NFT by decoded claim amount, atomically with its accounting.
+    pub fn burn_vipp_nft(account: &T::AccountId) -> Result<bool, DispatchError> {
+        Self::ensure_vipp_reconciliation_ready()?;
+        let smallest =
+            Self::owned_vipp_claims(account)?.into_iter().min_by_key(|(_, amount)| *amount);
+        with_storage_layer(|| {
+            if let Some((item_id, amount)) = smallest {
+                Self::burn_vipp_item(account, item_id, amount)?;
+                Ok(true)
+            } else {
+                Self::set_inactive_attribute_vipp(account)?;
+                Ok(false)
+            }
+        })
+    }
+
     fn burn_vipp_item(
         account: &T::AccountId,
         item_id: T::ItemId,
@@ -700,23 +822,28 @@ impl<T: Config> Pallet<T> {
         T::OnVIPPChanged::burn_vipp_nft(account, item_id)
     }
 
-    /// Burn the smallest claim and update accounting atomically.
-    pub fn burn_vipp_nft(account: &T::AccountId) -> Result<bool, DispatchError> {
-        T::OnVIPPChanged::ensure_accounting_ready()?;
-        let smallest =
-            Self::owned_vipp_claims(account)?.into_iter().min_by_key(|(_, amount)| *amount);
-        with_storage_layer(|| {
-            if let Some((item_id, amount)) = smallest {
-                Self::burn_vipp_item(account, item_id, amount)?;
-                Ok(true)
-            } else {
-                Self::set_inactive_attribute_vipp(account)?;
-                Ok(false)
-            }
-        })
+    /// Permit only the scoped root repair to reconcile balances during maintenance.
+    pub fn ensure_vipp_reconciliation_ready() -> DispatchResult {
+        if VippRepairInProgress::<T>::get() {
+            Ok(())
+        } else {
+            T::OnVIPPChanged::ensure_accounting_ready()
+        }
     }
 
-    /// Set VIPP inactive status for NAC.
+    fn repair_balance_with_limit(account: &T::AccountId, limit: T::Balance) -> DispatchResult {
+        let owned = Self::owned_vipp_claims(account)?;
+        ensure!(
+            owned.is_empty() || Self::try_get_claim_balance(account)?.is_some(),
+            Error::<T>::InvalidClaimAttribute
+        );
+        Self::check_threshold_with_limit(account, Some(limit))?;
+        VippAccountingQuarantine::<T>::remove(account);
+        VippBreachBalance::<T>::remove(account);
+        T::OnVIPPChanged::reconcile_vipp(account)
+    }
+
+    /// Mark the NAC inactive after the last VIPP NFT is removed.
     fn set_inactive_attribute_vipp(account: &T::AccountId) -> DispatchResult {
         let (_, item_id) = Self::get_nac_level(account).ok_or(Error::<T>::NftNotFound)?;
         T::Nfts::set_attribute(&T::NftCollectionId::get(), &item_id, &VIPP_STATUS_EXIST, &[1])
@@ -778,6 +905,7 @@ where
     #[frame_support::transactional]
     fn on_claim(who: &T::AccountId, amount: Balance, _data: Option<()>) -> DispatchResult {
         T::OnVIPPChanged::ensure_accounting_ready()?;
+        ensure!(!Self::is_vipp_quarantined(who), Error::<T>::VippAccountingUnavailable);
         let collection = T::NftCollectionId::get();
         let item = T::Nfts::owned_in_collection(&collection, who)
             .next()
@@ -810,40 +938,46 @@ where
             }
         }
 
+        // Check the new threshold after the claim has changed native balances
+        // and vesting schedules; an earlier fee check cannot see this state.
+        Self::check_observed_balance(who);
+
         Ok(())
     }
 }
 
 impl<T: Config> OnWithdrawFeeHandler<T::AccountId> for Pallet<T> {
     fn on_withdraw_fee(who: &T::AccountId) {
-        Pallet::<T>::check_account_threshold(who);
+        Pallet::<T>::check_observed_balance(who);
     }
 }
 
 /// Handler for updating, burning VIPP status.
 pub trait OnVippStatusHandler<AccountId, Balance, ItemId> {
-    /// Whether the account may receive an accounted VIPP transfer.
-    fn can_receive_vipp(_who: &AccountId) -> bool {
-        false
+    /// Remember when an unresolved breach began, including across year rollover.
+    fn on_balance_breach(_who: &AccountId) {}
+
+    /// Whether an explicitly approved root repair can proceed in the current phase.
+    fn ensure_repair_ready() -> DispatchResult {
+        Self::ensure_accounting_ready()
     }
-    /// Settle completed periods before changing entitlement.
+    /// Refresh verified ownership after a bounded accounting repair.
+    fn reconcile_vipp(_who: &AccountId) -> DispatchResult {
+        Ok(())
+    }
+    /// Settle elapsed periods or reject mutation while an explicit repair is active.
     fn ensure_accounting_ready() -> DispatchResult {
         Ok(())
+    }
+    /// Whether the account may receive a VIPP NFT through an accounted transfer.
+    fn can_receive_vipp(_who: &AccountId) -> bool {
+        false
     }
     /// Handle a minting new VIPP NFT.
     fn mint_vipp(who: &AccountId, _amount: Balance, item_id: ItemId) -> DispatchResult;
 
     /// Burning VIPP NFT.
     fn burn_vipp_nft(who: &AccountId, item_id: ItemId) -> DispatchResult;
-}
-
-impl<AccountId, Balance, ItemId> OnVippStatusHandler<AccountId, Balance, ItemId> for () {
-    fn mint_vipp(_who: &AccountId, _amount: Balance, _item_id: ItemId) -> DispatchResult {
-        Ok(())
-    }
-    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) -> DispatchResult {
-        Ok(())
-    }
 }
 
 /// Native funds still subject to vesting at the current block.
@@ -855,5 +989,14 @@ pub trait UnvestedBalance<AccountId, Balance> {
 impl<AccountId, Balance: Zero> UnvestedBalance<AccountId, Balance> for () {
     fn unvested_balance(_who: &AccountId) -> Balance {
         Balance::zero()
+    }
+}
+
+impl<AccountId, Balance, ItemId> OnVippStatusHandler<AccountId, Balance, ItemId> for () {
+    fn mint_vipp(_who: &AccountId, _amount: Balance, _item_id: ItemId) -> DispatchResult {
+        Ok(())
+    }
+    fn burn_vipp_nft(_who: &AccountId, _item_id: ItemId) -> DispatchResult {
+        Ok(())
     }
 }

@@ -969,6 +969,8 @@ impl pallet_nac_managing::Config for Runtime {
     type NftCollectionId = NftCollectionId;
     type VIPPCollectionId = VIPPCollectionId;
     type MaxVippNftsPerAccount = ConstU32<64>;
+    type MaxPendingVippAccounts = ConstU32<128>;
+    type MaxVippReconciliationsPerBlock = ConstU32<1>;
     type UnvestedBalance = VippUnvestedBalance;
 }
 
@@ -1303,7 +1305,7 @@ impl pallet_claiming::Config for Runtime {
     type ClaimData = ();
     type OnClaim = NacManaging;
     type Prefix = Prefix;
-    type WeightInfo = ();
+    type WeightInfo = vip_weights::VipWeights;
 }
 
 #[derive(Decode, Encode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
@@ -1356,7 +1358,7 @@ impl pallet_claiming::Config<pallet_claiming::Instance1> for Runtime {
     type ClaimData = KickstartClaimData;
     type OnClaim = KickstartClaimHandler;
     type Prefix = Prefix;
-    type WeightInfo = ();
+    type WeightInfo = vip_weights::VipWeights;
 }
 
 parameter_types! {

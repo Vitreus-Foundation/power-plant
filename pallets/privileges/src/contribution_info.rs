@@ -152,13 +152,26 @@ pub struct RewardsInfo<T: Config> {
 }
 
 impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> for Pallet<T> {
-    fn can_receive_vipp(who: &T::AccountId) -> bool {
-        VipMembers::<T>::contains_key(who)
+    fn on_balance_breach(who: &T::AccountId) {
+        // Explicit fee checks can precede this block's timestamp. Preserve the
+        // prior day's source before quarantine changes its eligibility.
+        accounting::before_stake_change::<T>(who);
+        breach_period::record::<T>(who);
+    }
+
+    fn reconcile_vipp(who: &T::AccountId) -> DispatchResult {
+        Self::sync_vipp_membership(who, false)?;
+        breach_period::settle::<T>(who)
     }
 
     fn ensure_accounting_ready() -> DispatchResult {
         accounting::ensure_ready::<T>()
     }
+
+    fn can_receive_vipp(who: &T::AccountId) -> bool {
+        VipMembers::<T>::contains_key(who)
+    }
+
     fn mint_vipp(
         who: &T::AccountId,
         amount: T::StakeBalance,
@@ -167,6 +180,7 @@ impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> fo
         Self::update_quarter_info();
         Self::register_vipp_nft(who, amount, item_id)
     }
+
     fn burn_vipp_nft(who: &T::AccountId, _item_id: T::ItemId) -> DispatchResult {
         Self::update_quarter_info();
         Self::sync_vipp_membership(who, false)

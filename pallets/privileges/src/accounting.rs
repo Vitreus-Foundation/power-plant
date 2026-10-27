@@ -54,7 +54,14 @@ pub fn before_stake_change<T: Config>(account: &T::AccountId) {
         let block = frame_system::Pallet::<T>::block_number();
         if PreTimestampStake::<T>::get(account).is_none_or(|(saved, _, _)| saved != block) {
             if let Some(member) = VipMembers::<T>::get(account) {
-                PreTimestampStake::<T>::insert(account, (block, member.active_stake, false));
+                PreTimestampStake::<T>::insert(
+                    account,
+                    (
+                        block,
+                        member.active_stake,
+                        pallet_nac_managing::Pallet::<T>::is_vipp_quarantined(account),
+                    ),
+                );
             }
         }
     }
@@ -139,9 +146,10 @@ fn sources<T: Config>(
         } else {
             None
         };
-        let (stake, quarantined) = snapshot
-            .map(|(_, stake, quarantined)| (stake, quarantined))
-            .unwrap_or_else(|| (live_stake, false));
+        let (stake, quarantined) =
+            snapshot.map(|(_, stake, quarantined)| (stake, quarantined)).unwrap_or_else(|| {
+                (live_stake, pallet_nac_managing::Pallet::<T>::is_vipp_quarantined(&who))
+            });
         let eligible = if quarantined { PointsOf::<T>::zero() } else { stake.min(cap) };
         vipp.push((who, eligible));
     }

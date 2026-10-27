@@ -180,6 +180,8 @@ impl crate::Config for Test {
     type OnVIPPChanged = TestVippCallback;
     type UnvestedBalance = TestUnvestedBalance;
     type MaxVippNftsPerAccount = ConstU32<64>;
+    type MaxPendingVippAccounts = ConstU32<128>;
+    type MaxVippReconciliationsPerBlock = ConstU32<2>;
 }
 
 pub struct TestUnvestedBalance;
@@ -226,7 +228,6 @@ impl crate::OnVippStatusHandler<AccountId, Balance, ItemId> for TestVippCallback
     fn can_receive_vipp(_who: &AccountId) -> bool {
         true
     }
-
     fn mint_vipp(
         _who: &AccountId,
         _amount: Balance,

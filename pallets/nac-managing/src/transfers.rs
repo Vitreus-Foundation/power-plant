@@ -53,6 +53,10 @@ impl<T: Config> Pallet<T> {
         if sender == destination {
             return Ok(());
         }
+        ensure!(
+            !Self::is_vipp_quarantined(sender) && !Self::is_vipp_quarantined(destination),
+            Error::<T>::VippAccountingUnavailable
+        );
         ensure!(!Self::is_vipp_inactive(sender), Error::<T>::InvalidVippTransfer);
         ensure!(
             !Self::is_vipp_inactive(destination) && T::OnVIPPChanged::can_receive_vipp(destination),
