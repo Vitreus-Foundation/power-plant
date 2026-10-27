@@ -353,12 +353,12 @@ impl pallet_bounties::Config for Runtime {
 }
 
 parameter_types! {
-    pub LaunchPeriod: BlockNumber = prod_or_fast!(3 * DAYS, 3 * MINUTES, "VITREUS_LAUNCH_PERIOD");
-    pub VotingPeriod: BlockNumber = prod_or_fast!(3 * DAYS, 3 * MINUTES, "VITREUS_VOTING_PERIOD");
-    pub FastTrackVotingPeriod: BlockNumber = prod_or_fast!(3 * HOURS, MINUTES, "VITREUS_FAST_TRACK_VOTING_PERIOD");
+    pub LaunchPeriod: BlockNumber = prod_or_fast!(3 * DAYS, 3 * HOURS, "VITREUS_LAUNCH_PERIOD");
+    pub VotingPeriod: BlockNumber = prod_or_fast!(3 * DAYS, 3 * HOURS, "VITREUS_VOTING_PERIOD");
+    pub FastTrackVotingPeriod: BlockNumber = prod_or_fast!(3 * HOURS, 3 * MINUTES, "VITREUS_FAST_TRACK_VOTING_PERIOD");
     pub const MinimumDeposit: Balance = UNITS;
-    pub EnactmentPeriod: BlockNumber = prod_or_fast!(3 * DAYS, MINUTES, "VITREUS_ENACTMENT_PERIOD");
-    pub CooloffPeriod: BlockNumber = prod_or_fast!(7 * DAYS, MINUTES, "VITREUS_COOLOFF_PERIOD");
+    pub EnactmentPeriod: BlockNumber = prod_or_fast!(3 * DAYS, 3 * HOURS, "VITREUS_ENACTMENT_PERIOD");
+    pub CooloffPeriod: BlockNumber = prod_or_fast!(7 * DAYS, 7 * HOURS, "VITREUS_COOLOFF_PERIOD");
     pub const InstantAllowed: bool = true;
     pub const MaxVotes: u32 = 100;
     pub const MaxProposals: u32 = 100;
@@ -398,7 +398,11 @@ impl pallet_democracy::Config for Runtime {
         pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 1>,
         frame_system::EnsureRoot<AccountId>,
     >;
+    #[cfg(feature = "mainnet-runtime")]
     type SubmitOrigin = frame_system::EnsureSigned<AccountId>;
+    // Only Root submits public proposals on testnet, with the deposit reserved from the treasury.
+    #[cfg(feature = "testnet-runtime")]
+    type SubmitOrigin = frame_system::EnsureRootWithSuccess<AccountId, TreasuryAccountId<Runtime>>;
     /// Two thirds of the technical committee can have an `ExternalMajority/ExternalDefault` vote
     /// be tabled immediately and with a shorter voting/enactment period.
     type FastTrackOrigin = EitherOfDiverse<
