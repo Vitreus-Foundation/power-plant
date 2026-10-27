@@ -19,6 +19,9 @@
 
 use crate::{mock::*, *};
 
+use frame_support::traits::{
+    LockableCurrency, ReservableCurrency, VestingSchedule, WithdrawReasons,
+};
 use frame_support::{assert_err, assert_noop, assert_ok};
 use parity_scale_codec::Decode;
 
@@ -407,5 +410,124 @@ fn legacy_zero_value_nfts_do_not_make_threshold_reconciliation_loop_forever() {
         assert_ok!(NacManaging::try_check_account_threshold(&1));
         assert_eq!(Nfts::owned_in_collection(&1, &1).count(), 0);
         assert!(NacManaging::is_vipp_inactive(&1));
+    });
+}
+
+#[test]
+fn exact_vipp_threshold_is_eligible_and_does_not_burn_the_nft() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let _ = Balances::make_free_balance_be(&1, 950);
+        assert!(NacManaging::threshold_meets_vipp_requirements(&1, 1_000));
+        let (_, id) = NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        NacManaging::check_account_threshold(&1);
+        assert_eq!(Nfts::owner(1, id), Some(1));
+        assert!(!NacManaging::is_vipp_inactive(&1));
+    });
+}
+
+#[test]
+fn one_unit_below_threshold_burns_but_one_above_preserves_the_nft() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let (_, id) = NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        let _ = Balances::make_free_balance_be(&1, 951);
+        NacManaging::check_account_threshold(&1);
+        assert_eq!(Nfts::owner(1, id), Some(1));
+        let _ = Balances::make_free_balance_be(&1, 949);
+        NacManaging::check_account_threshold(&1);
+        assert_eq!(Nfts::owner(1, id), None);
+        assert!(NacManaging::is_vipp_inactive(&1));
+    });
+}
+
+#[test]
+fn locked_and_reserved_funds_count_once_towards_the_threshold() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let _ = Balances::make_free_balance_be(&1, 950);
+        assert_ok!(Balances::reserve(&1, 300));
+        Balances::set_lock(*b"vip-test", &1, 600, WithdrawReasons::all());
+        assert_eq!(Balances::free_balance(1), 650);
+        assert_eq!(Balances::reserved_balance(1), 300);
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 950);
+        assert!(NacManaging::threshold_meets_vipp_requirements(&1, 1_000));
+        assert!(!NacManaging::threshold_meets_vipp_requirements(&1, 1_002));
+    });
+}
+
+#[test]
+fn vesting_is_excluded_until_it_unlocks_without_requiring_a_vest_call() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let _ = Balances::make_free_balance_be(&1, 1_000);
+        assert_ok!(Vesting::add_vesting_schedule(&1, 100, 10, 1));
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 900);
+        assert_eq!(NacManaging::mint_vipp_nft(&1), Ok(None));
+        System::set_block_number(6);
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 950);
+        assert!(NacManaging::mint_vipp_nft(&1).unwrap().is_some());
+        System::set_block_number(11);
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 1_000);
+        // The storage schedule and old currency lock still exist until vest is called.
+        assert!(pallet_vesting::Vesting::<Test>::contains_key(1));
+    });
+}
+
+#[test]
+fn multiple_vesting_schedules_are_excluded_at_the_current_block() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let _ = Balances::make_free_balance_be(&1, 1_000);
+        assert_ok!(Vesting::add_vesting_schedule(&1, 100, 10, 1));
+        assert_ok!(Vesting::add_vesting_schedule(&1, 200, 20, 1));
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 700);
+        System::set_block_number(6);
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 850);
+        System::set_block_number(11);
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 1_000);
+    });
+}
+
+#[test]
+fn simple_and_standard_vesting_are_excluded_without_double_counting_reserves() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(1_000);
+        let _ = Balances::make_free_balance_be(&1, 1_000);
+        let _ = Balances::make_free_balance_be(&2, 1_000);
+        assert_ok!(Vesting::add_vesting_schedule(&1, 200, 20, 1));
+        assert_ok!(SimpleVesting::force_vested_transfer(
+            RuntimeOrigin::root(),
+            2,
+            1,
+            pallet_simple_vesting::VestingInfo::new(300, 30, 1),
+        ));
+        assert_ok!(Balances::reserve(&1, 50));
+        assert_eq!(Balances::total_balance(&1), 1_300);
+        assert_eq!(Balances::reserved_balance(1), 350);
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 800);
+        System::set_block_number(6);
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 1_050);
+        System::set_block_number(11);
+        assert_eq!(NacManaging::eligible_vipp_balance(&1), 1_300);
+        // Elapsed vesting remains reserved until an explicit vest operation.
+        assert_eq!(Balances::reserved_balance(1), 350);
+    });
+}
+
+#[test]
+fn threshold_reconciliation_stops_at_equality_after_the_smallest_burn() {
+    new_test_ext().execute_with(|| {
+        prepare_vipp_claim(100);
+        NacManaging::mint_vipp_nft(&1).unwrap().unwrap();
+        System::set_block_number(2);
+        assert_ok!(NacManaging::on_claim(&1, 200u64, None));
+        let _ = Balances::make_free_balance_be(&1, 190);
+        assert_ok!(NacManaging::try_check_account_threshold(&1));
+        let owned = NacManaging::owned_vipp_claims(&1).unwrap();
+        assert_eq!(owned.len(), 1);
+        assert_eq!(owned[0].1, 200);
+        assert_eq!(get_claimed(0, 123), 200);
+        assert!(!NacManaging::is_vipp_inactive(&1));
     });
 }

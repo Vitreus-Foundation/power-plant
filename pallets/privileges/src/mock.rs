@@ -226,6 +226,7 @@ impl pallet_nac_managing::Config for Test {
     type Currency = Balances;
     type VIPPCollectionId = VIPPCollectionId;
     type MaxVippNftsPerAccount = ConstU32<64>;
+    type UnvestedBalance = VippUnvestedBalance;
     type OnVIPPChanged = Privileges;
 }
 
@@ -844,4 +845,13 @@ fn to_ascii_hex(data: &[u8]) -> Vec<u8> {
         push_nibble(b % 16);
     }
     r
+}
+
+pub struct VippUnvestedBalance;
+
+impl pallet_nac_managing::UnvestedBalance<AccountId, Balance> for VippUnvestedBalance {
+    fn unvested_balance(who: &AccountId) -> Balance {
+        <Vesting as frame_support::traits::VestingSchedule<AccountId>>::vesting_balance(who)
+            .unwrap_or_default()
+    }
 }

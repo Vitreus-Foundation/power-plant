@@ -1311,3 +1311,26 @@ fn vip_stake_cache_updates_when_validator_loses_collaborative_eligibility() {
         assert_eq!(Privileges::vip_members(100).unwrap().active_stake, 0);
     });
 }
+
+#[test]
+fn vipp_threshold_burn_selects_numeric_minimum_and_preserves_remaining_points() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(256);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        let original_id = owned_vipp_ids(10)[0];
+        assert_ok!(advance_test_date(RuntimeOrigin::root(), 2020, 1, 2));
+        let original_points = Privileges::vipp_members(10).unwrap().points;
+        System::set_block_number(2);
+        claim_for_validator(1);
+        assert_eq!(owned_vipp_ids(10).len(), 2);
+
+        // 243 is below floor(95% of 257) = 244 and exactly covers floor(95% of 256).
+        // SCALE(256) starts with 0, whereas SCALE(1) starts with 1: byte ordering is wrong.
+        assert_ok!(Balances::force_set_balance(RuntimeOrigin::root(), 10, 243));
+        NacManaging::check_account_threshold(&10);
+        assert_eq!(owned_vipp_ids(10), vec![original_id]);
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.points, original_points);
+        assert_eq!(member.active_vipp_threshold, vec![(original_id, 243)]);
+    });
+}

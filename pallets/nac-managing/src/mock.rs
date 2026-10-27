@@ -23,13 +23,16 @@ use crate::{self as pallet_nac_managing, *};
 
 use frame_support::{
     derive_impl, parameter_types,
-    traits::{AsEnsureOriginWithArg, ConstU32, ConstU64},
+    traits::{
+        AsEnsureOriginWithArg, ConstU32, ConstU64, NamedReservableCurrency, VestingSchedule,
+        WithdrawReasons,
+    },
     weights::constants::RocksDbWeight,
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use parity_scale_codec::Compact;
 use sp_core::H256;
-use sp_runtime::traits::BlakeTwo256;
+use sp_runtime::traits::{BlakeTwo256, Identity};
 use sp_runtime::{
     testing::{TestSignature, UintAuthorityId},
     traits::IdentityLookup,
@@ -58,6 +61,8 @@ frame_support::construct_runtime!(
         Nfts: pallet_nfts,
         Reputation: pallet_reputation,
         NacManaging: pallet_nac_managing,
+        Vesting: pallet_vesting,
+        SimpleVesting: pallet_simple_vesting,
     }
 );
 
@@ -173,7 +178,46 @@ impl crate::Config for Test {
     type Currency = Balances;
     type VIPPCollectionId = VIPPCollectionId;
     type OnVIPPChanged = TestVippCallback;
+    type UnvestedBalance = TestUnvestedBalance;
     type MaxVippNftsPerAccount = ConstU32<64>;
+}
+
+pub struct TestUnvestedBalance;
+
+impl UnvestedBalance<AccountId, Balance> for TestUnvestedBalance {
+    fn unvested_balance(who: &AccountId) -> Balance {
+        let standard = Vesting::vesting_balance(who).unwrap_or_default();
+        let reserved = SimpleVesting::vesting(who)
+            .map(|schedule| schedule.locked_at::<Identity>(System::block_number()))
+            .unwrap_or_default()
+            .min(Balances::reserved_balance_named(b"vesting ", who))
+            .min(Balances::reserved_balance(who));
+        standard.saturating_add(reserved)
+    }
+}
+
+parameter_types! {
+    pub const MinVestedTransfer: Balance = 1;
+    pub UnvestedFundsAllowedWithdrawReasons: WithdrawReasons =
+        WithdrawReasons::except(WithdrawReasons::TRANSFER | WithdrawReasons::RESERVE);
+}
+
+impl pallet_vesting::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BlockNumberToBalance = Identity;
+    type MinVestedTransfer = MinVestedTransfer;
+    type WeightInfo = ();
+    type UnvestedFundsAllowedWithdrawReasons = UnvestedFundsAllowedWithdrawReasons;
+    type BlockNumberProvider = System;
+    const MAX_VESTING_SCHEDULES: u32 = 28;
+}
+
+impl pallet_simple_vesting::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BlockNumberToBalance = Identity;
+    type Slash = ();
 }
 
 pub struct TestVippCallback;
