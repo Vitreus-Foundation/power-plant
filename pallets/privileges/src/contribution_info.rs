@@ -164,6 +164,16 @@ impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> fo
         breach_period::settle::<T>(who)
     }
 
+    fn ensure_repair_ready() -> DispatchResult {
+        if !accounting::ApprovedCatchUp::<T>::exists()
+            && migration::recovery::CacheRecoveryProgress::<T>::get()
+                .is_some_and(|p| p.phase == migration::recovery::Phase::AwaitingReview)
+        {
+            return Ok(());
+        }
+        accounting::ensure_ready::<T>()
+    }
+
     fn ensure_accounting_ready() -> DispatchResult {
         accounting::ensure_ready::<T>()
     }

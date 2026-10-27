@@ -46,6 +46,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Add explicitly approved, bounded catch-up to `pallet-privileges` while keeping historical source assumptions frozen and existing annual results protected
 
+- Install reviewed `pallet-privileges` cache recovery through the runtime migration list, preserving historical points and keeping accrual paused until explicit completion
+
 ## [215] - 2026-10-19
 
 ### Added

@@ -55,7 +55,7 @@ pub mod pallet {
     use frame_system::pallet_prelude::BlockNumberFor;
     use frame_system::{ensure_root, ensure_signed};
 
-    const STORAGE_VERSION: StorageVersion = StorageVersion::new(1);
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(2);
 
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]
@@ -152,6 +152,15 @@ pub mod pallet {
     /// Automatic accrual is paused until the stale interval is reviewed.
     #[pallet::storage]
     pub type AccrualReviewRequired<T: Config> = StorageValue<_, bool, ValueQuery>;
+
+    /// Cursor and counters of the bounded cache recovery.
+    #[pallet::storage]
+    pub type CacheRecoveryProgress<T: Config> = StorageValue<_, migration::recovery::Progress>;
+
+    /// Original evidence and unresolved differences for each recovered account.
+    #[pallet::storage]
+    pub type CacheRecoveryReviews<T: Config> =
+        StorageMap<_, Twox64Concat, T::AccountId, migration::recovery::Review<T>>;
 
     #[pallet::event]
     #[pallet::generate_deposit(pub(super) fn deposit_event)]
@@ -459,6 +468,58 @@ pub mod pallet {
 
             Ok(Pays::No.into())
         }
+        /// Freeze accrual and start bounded cache recovery without changing points.
+        #[pallet::call_index(8)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(3, 2))]
+        pub fn begin_cache_recovery(origin: OriginFor<T>) -> DispatchResult {
+            ensure_root(origin)?;
+            ensure!(!accounting::ApprovedCatchUp::<T>::exists(), Error::<T>::AccountingPaused);
+            ensure!(migration::recovery::begin::<T>(), Error::<T>::AccountingPaused);
+            accounting::AccrualReviewRequired::<T>::put(true);
+            Ok(())
+        }
+
+        /// Repair at most sixteen accounts; ambiguous records remain for review.
+        #[pallet::call_index(9)]
+        #[pallet::weight(<T as Config>::WeightInfo::recovery(*accounts, 64))]
+        pub fn continue_cache_recovery(origin: OriginFor<T>, accounts: u32) -> DispatchResult {
+            ensure_root(origin)?;
+            migration::recovery::step::<T>(accounts, 64).map(|_| ())
+        }
+
+        /// Recheck one record after an authoritative state repair.
+        #[pallet::call_index(10)]
+        #[pallet::weight(<T as Config>::WeightInfo::recovery(1, 64))]
+        pub fn retry_cache_recovery(origin: OriginFor<T>, account: T::AccountId) -> DispatchResult {
+            ensure_root(origin)?;
+            migration::recovery::retry_account::<T>(&account, 64)
+        }
+
+        /// Acknowledge reviewed differences; this does not recalculate history.
+        #[pallet::call_index(11)]
+        #[pallet::weight(<T as Config>::WeightInfo::recovery(accounts.len() as u32, 0))]
+        pub fn acknowledge_cache_recovery(
+            origin: OriginFor<T>,
+            accounts: BoundedVec<T::AccountId, ConstU32<16>>,
+        ) -> DispatchResult {
+            ensure_root(origin)?;
+            migration::recovery::acknowledge::<T>(&accounts)
+        }
+
+        /// Complete reviewed cache recovery, keeping calendar accrual paused.
+        #[pallet::call_index(12)]
+        #[pallet::weight(T::DbWeight::get().reads_writes(3, 2))]
+        pub fn finish_cache_recovery(origin: OriginFor<T>) -> DispatchResult {
+            ensure_root(origin)?;
+            ensure!(
+                pallet_nac_managing::VippAccountingQuarantine::<T>::iter_keys().next().is_none(),
+                Error::<T>::AccountingPaused
+            );
+            migration::recovery::finish::<T>()?;
+            STORAGE_VERSION.put::<Pallet<T>>();
+            Ok(())
+        }
+
         /// Approve current stake/caps as frozen sources for a reviewed interval.
         /// This is not a reconstruction of historical stake. Verify it off chain.
         #[pallet::call_index(13)]

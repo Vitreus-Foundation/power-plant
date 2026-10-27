@@ -1,5 +1,6 @@
 use super::*;
 use crate::accounting as accrual;
+use crate::migration::recovery;
 
 fn date(year: i32, month: u32, day: u32) -> CurrentDateInfo {
     CurrentDateInfo::new::<Test>(year, month, day).unwrap()
@@ -264,6 +265,35 @@ fn quarantined_vipp_entitlement_cannot_generate_new_points() {
 }
 
 #[test]
+fn cache_recovery_does_not_move_old_date_or_automatically_approve_repaired_sources() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        let old_date = CurrentDate::<Test>::get();
+        assert!(recovery::begin::<Test>());
+        accrual::AccrualReviewRequired::<Test>::put(true);
+        clock(2020, 1, 2);
+        Privileges::update_quarter_info();
+        assert_eq!(CurrentDate::<Test>::get(), old_date);
+        assert_err!(accrual::approve::<Test>(date(2020, 1, 2)), Error::<Test>::AccountingPaused);
+        for _ in 0..10 {
+            if recovery::step::<Test>(16, 64).unwrap().phase == recovery::Phase::AwaitingReview {
+                break;
+            }
+        }
+        assert_ok!(recovery::finish::<Test>());
+        assert!(accrual::paused::<Test>());
+        Privileges::update_quarter_info();
+        assert_eq!(CurrentDate::<Test>::get(), old_date);
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 0);
+        assert_ok!(accrual::approve::<Test>(date(2020, 1, 2)));
+        run_approved_job();
+        assert_ok!(accrual::finish::<Test>());
+        assert!(!accrual::paused::<Test>());
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 950);
+    });
+}
+
+#[test]
 fn paused_accounting_uses_actual_month_for_unbond_penalty() {
     for (anchor, now, expected_penalty) in
         [((2020, 1, 1), (2020, 2, 1), 70), ((2025, 12, 31), (2026, 1, 1), 0)]
@@ -410,6 +440,150 @@ fn maximum_population_catchup_step_is_limited_to_64_sources_for_365_days() {
         assert_eq!(accrual::ApprovedCatchUp::<Test>::get().unwrap().source_cursor, 64);
         assert!(VippMembers::<Test>::iter().all(|(_, member)| member.points == 0));
         println!("native_test_timing scenario=approved_64_of_2048_sources_365_days elapsed_us={} (unit-test host timing, not runtime benchmark)", elapsed.as_micros());
+    });
+}
+
+#[test]
+fn runtime_upgrade_installs_schema_but_preserves_state_and_pauses_until_reviewed_recovery() {
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        VipMembers::<Test>::mutate(10, |member| {
+            let member = member.as_mut().unwrap();
+            member.points = 123;
+            member.active_stake = 0;
+        });
+        VippMembers::<Test>::mutate(10, |member| member.as_mut().unwrap().points = 456);
+        VipPoints::<Test>::insert(2019, 10, 789);
+        let original_vip = VipMembers::<Test>::get(10).unwrap().encode();
+        let original_vipp = VippMembers::<Test>::get(10).unwrap().encode();
+        let original_date = CurrentDate::<Test>::get();
+        StorageVersion::new(1).put::<Privileges>();
+
+        <crate::migration::MigrateToV2<Test> as OnRuntimeUpgrade>::on_runtime_upgrade();
+        let initial = recovery::CacheRecoveryProgress::<Test>::get().unwrap();
+        assert_eq!(initial.scanned_rows, 0);
+        assert!(initial.cursor.is_empty());
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(2));
+        assert_eq!(VipMembers::<Test>::get(10).unwrap().encode(), original_vip);
+        assert_eq!(VippMembers::<Test>::get(10).unwrap().encode(), original_vipp);
+        assert_eq!(CurrentDate::<Test>::get(), original_date);
+        assert!(accrual::AccrualReviewRequired::<Test>::get());
+        assert_noop!(
+            Privileges::exit_vip(RuntimeOrigin::signed(10)),
+            Error::<Test>::AccountingPaused
+        );
+
+        assert_ok!(Privileges::continue_cache_recovery(RuntimeOrigin::root(), 1));
+        let progress = recovery::CacheRecoveryProgress::<Test>::get().unwrap();
+        let review = recovery::CacheRecoveryReviews::<Test>::get(10).unwrap().encode();
+        assert_eq!(progress.scanned_rows, 1);
+        <crate::migration::MigrateToV2<Test> as OnRuntimeUpgrade>::on_runtime_upgrade();
+        assert_eq!(recovery::CacheRecoveryProgress::<Test>::get().unwrap(), progress);
+        assert_eq!(recovery::CacheRecoveryReviews::<Test>::get(10).unwrap().encode(), review);
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(2));
+
+        assert_ok!(Privileges::continue_cache_recovery(RuntimeOrigin::root(), 16));
+        assert_noop!(
+            Privileges::finish_cache_recovery(RuntimeOrigin::root()),
+            sp_runtime::DispatchError::Other("Recovery still requires review")
+        );
+        assert_ok!(Privileges::acknowledge_cache_recovery(
+            RuntimeOrigin::root(),
+            vec![10].try_into().unwrap()
+        ));
+        assert_ok!(Privileges::finish_cache_recovery(RuntimeOrigin::root()));
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(2));
+        assert_eq!(Privileges::vip_members(10).unwrap().points, 123);
+        assert_eq!(Privileges::vip_members(10).unwrap().active_stake, 1000);
+        assert_eq!(Privileges::vipp_members(10).unwrap().points, 456);
+        assert_eq!(Privileges::vip_points(2019, 10), Some(789));
+        assert_eq!(CurrentDate::<Test>::get(), original_date);
+        assert!(accrual::paused::<Test>());
+        assert_ok!(Privileges::finish_catch_up(RuntimeOrigin::root()));
+        <crate::migration::MigrateToV2<Test> as OnRuntimeUpgrade>::on_runtime_upgrade();
+        assert!(!accrual::paused::<Test>());
+    });
+}
+
+#[test]
+fn runtime_upgrade_does_not_certify_an_undecodable_recovery_guard() {
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        let before = VipMembers::<Test>::get(10).unwrap().encode();
+        StorageVersion::new(1).put::<Privileges>();
+        sp_io::storage::set(&recovery::CacheRecoveryProgress::<Test>::hashed_key(), &[255]);
+
+        <crate::migration::MigrateToV2<Test> as OnRuntimeUpgrade>::on_runtime_upgrade();
+
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(1));
+        assert!(accrual::AccrualReviewRequired::<Test>::get());
+        assert_noop!(
+            Privileges::exit_vip(RuntimeOrigin::signed(10)),
+            Error::<Test>::AccountingPaused
+        );
+        assert_eq!(VipMembers::<Test>::get(10).unwrap().encode(), before);
+        assert!(Privileges::finish_cache_recovery(RuntimeOrigin::root()).is_err());
+    });
+}
+
+#[test]
+fn maintenance_wrappers_require_root_and_reject_unbounded_or_unreviewed_work() {
+    use sp_runtime::DispatchError;
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        assert_noop!(
+            Privileges::update_time(RuntimeOrigin::root(), 2020, 1, 9),
+            Error::<Test>::NotCorrectDate
+        );
+        assert_noop!(
+            Privileges::begin_cache_recovery(RuntimeOrigin::signed(10)),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            Privileges::continue_cache_recovery(RuntimeOrigin::signed(10), 16),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            Privileges::retry_cache_recovery(RuntimeOrigin::signed(10), 10),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            Privileges::acknowledge_cache_recovery(
+                RuntimeOrigin::signed(10),
+                vec![10].try_into().unwrap()
+            ),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            Privileges::finish_cache_recovery(RuntimeOrigin::signed(10)),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            Privileges::approve_catch_up(RuntimeOrigin::signed(10), 2020, 1, 2),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            Privileges::continue_catch_up(RuntimeOrigin::signed(10)),
+            DispatchError::BadOrigin
+        );
+        assert_noop!(
+            Privileges::finish_catch_up(RuntimeOrigin::signed(10)),
+            DispatchError::BadOrigin
+        );
+        assert_ok!(Privileges::begin_cache_recovery(RuntimeOrigin::root()));
+        assert_noop!(
+            Privileges::continue_cache_recovery(RuntimeOrigin::root(), 17),
+            DispatchError::Other("Invalid recovery batch limits")
+        );
+        assert_noop!(
+            Privileges::continue_cache_recovery(RuntimeOrigin::root(), 0),
+            DispatchError::Other("Invalid recovery batch limits")
+        );
+        assert_eq!(recovery::CacheRecoveryProgress::<Test>::get().unwrap().scanned_rows, 0);
+        assert_ok!(Privileges::continue_cache_recovery(RuntimeOrigin::root(), 16));
+        assert_eq!(recovery::CacheRecoveryProgress::<Test>::get().unwrap().scanned_rows, 2);
     });
 }
 
@@ -698,5 +872,20 @@ fn historical_forfeiture_approval_cannot_change_a_funded_year() {
         assert_eq!(Rewards::<Test>::get(2025).unwrap().encode(), pool);
         assert_eq!(Privileges::vipp_points(2025, 10), Some(5000));
         assert!(VippForfeitureApproval::<Test>::get(10).is_none());
+    });
+}
+
+#[test]
+fn recovery_migration_preserves_newer_schema_and_member_points() {
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        let before = VipMembers::<Test>::get(10).unwrap().encode();
+        StorageVersion::new(3).put::<Privileges>();
+        <crate::migration::MigrateToV2<Test> as OnRuntimeUpgrade>::on_runtime_upgrade();
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(3));
+        assert_eq!(VipMembers::<Test>::get(10).unwrap().encode(), before);
+        assert!(!recovery::CacheRecoveryProgress::<Test>::exists());
+        assert!(!accrual::AccrualReviewRequired::<Test>::get());
     });
 }

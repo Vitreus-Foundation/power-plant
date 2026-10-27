@@ -6,6 +6,7 @@ use frame_support::{traits::Get, weights::{Weight, constants::RocksDbWeight}};
 
 pub trait WeightInfo {
     fn accounting(members: u32, days: u32, years: u32) -> Weight;
+    fn recovery(accounts: u32, nfts: u32) -> Weight;
     fn set_quarter_revenue() -> Weight;
     fn become_vip_status() -> Weight;
     fn exit_vip() -> Weight;
@@ -23,7 +24,9 @@ impl<T: frame_system::Config> WeightInfo for SubstrateWeight<T> {
     fn accounting(members: u32, days: u32, years: u32) -> Weight {
         accounting_weight(T::DbWeight::get(), members, days, years)
     }
-
+    fn recovery(accounts: u32, nfts: u32) -> Weight {
+        recovery_weight(T::DbWeight::get(), accounts, nfts)
+    }
     fn set_quarter_revenue() -> Weight {
         Self::accounting(2048, 7, 1)
     }
@@ -60,7 +63,9 @@ impl WeightInfo for () {
     fn accounting(members: u32, days: u32, years: u32) -> Weight {
         accounting_weight(RocksDbWeight::get(), members, days, years)
     }
-
+    fn recovery(accounts: u32, nfts: u32) -> Weight {
+        recovery_weight(RocksDbWeight::get(), accounts, nfts)
+    }
     fn set_quarter_revenue() -> Weight {
         Self::accounting(2048, 7, 1)
     }
@@ -106,6 +111,18 @@ fn accounting_weight(db: frame_support::weights::RuntimeDbWeight, members: u32, 
         .saturating_add(db.reads_writes(
             8_u64.saturating_add(m.saturating_mul(3)),
             4_u64.saturating_add(m.saturating_mul(1_u64.saturating_add(y))),
+        ))
+}
+
+// Charge the maximum supported NFT ownership for every account, including legacy
+// cache decoding and staking target scans, regardless of the requested NFT limit.
+fn recovery_weight(db: frame_support::weights::RuntimeDbWeight, accounts: u32, _nfts: u32) -> Weight {
+    let a = u64::from(accounts);
+    Weight::from_parts(2_000_000_000, 1_048_576)
+        .saturating_add(Weight::from_parts(20_000_000_000, 6_291_456).saturating_mul(a))
+        .saturating_add(db.reads_writes(
+            8_u64.saturating_add(a.saturating_mul(500)),
+            4_u64.saturating_add(a.saturating_mul(8)),
         ))
 }
 
