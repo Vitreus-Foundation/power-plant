@@ -61,6 +61,25 @@ fn asset_issuance(asset: &NativeOrAssetId) -> Balance {
     NativeAndAssets::total_issuance(asset.clone())
 }
 
+/// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
+fn fund_broker() {
+    Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
+    pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+    pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
+        SNRG::get(),
+        FixedU128::from_u32(1),
+    );
+}
+
+/// The VTRS the broker can pay out.
+fn broker_vtrs() -> Balance {
+    Balances::reducible_balance(
+        &EnergyBroker::account_id(),
+        Preservation::Preserve,
+        Fortitude::Polite,
+    )
+}
+
 #[test]
 fn configured_base_extrinsic_weight_is_evm_compatible() {
     let min_ethereum_transaction_weight = WeightPerGas::get() * 21_000;
@@ -231,10 +250,20 @@ fn energy_fee_exchange_is_limited_by_broker_vnrg() {
 
 mod energy_broker {
     use super::*;
-    use frame_support::assert_ok;
+    use frame_support::{assert_noop, assert_ok};
 
     fn energy_sale() -> Balance {
         pallet_dynamic_energy::SessionEnergySale::<Runtime>::get()
+    }
+
+    fn energy_payout() -> Balance {
+        pallet_dynamic_energy::SessionEnergyPayout::<Runtime>::get()
+    }
+
+    /// Sets the payout quota of the session to `factor` payout budgets of `budget` VTRS.
+    fn set_payout_quota(budget: Balance, factor: u32) {
+        pallet_dynamic_energy::SessionPayoutBudget::<Runtime>::put(budget);
+        assert_ok!(DynamicEnergy::set_payout_quota_factor(RuntimeOrigin::root(), Some(factor)));
     }
 
     /// Converting `source` into VNRG must be quoted one-to-one and cost no swap fee.
@@ -283,6 +312,7 @@ mod energy_broker {
         let broker_input_before = asset_balance(&input, &broker);
         let broker_native_before = Balances::free_balance(broker);
         let sale_before = energy_sale();
+        let payout_before = energy_payout();
 
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(alith()),
@@ -310,8 +340,10 @@ mod energy_broker {
         assert_eq!(asset_balance(&input, &broker), broker_input_before);
         assert_eq!(Balances::free_balance(broker), broker_native_before);
 
-        // Converting between energy assets is not a trade, so it must not feed the rate.
+        // Converting between energy assets is not a trade, so it must not feed the rate or count
+        // against the payout quota.
         assert_eq!(energy_sale(), sale_before);
+        assert_eq!(energy_payout(), payout_before);
     }
 
     #[test]
@@ -335,14 +367,152 @@ mod energy_broker {
     fn lnrg_conversion_burns_and_mints_without_touching_the_broker() {
         new_test_ext().execute_with(|| assert_conversion_burns_and_mints(LNRG::get()))
     }
+
+    #[test]
+    fn lnrg_conversion_ignores_payout_quota() {
+        new_test_ext().execute_with(|| {
+            let lnrg_sale = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
+
+            // A quota without a payout budget closes the LNRG → VTRS path, but not the conversion.
+            assert_ok!(DynamicEnergy::set_payout_quota_factor(RuntimeOrigin::root(), Some(2)));
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_sale), 0);
+
+            assert_conversion_burns_and_mints(LNRG::get());
+        })
+    }
+
+    #[test]
+    fn lnrg_sale_is_limited_by_payout_quota() {
+        new_test_ext().execute_with(|| {
+            System::set_block_number(1);
+            let lnrg = NativeOrAssetId::WithId(LNRG::get());
+            let path = (lnrg.clone(), NativeOrAssetId::Native);
+            let broker = EnergyBroker::account_id();
+
+            // A quota of two budgets of 10 VTRS, far below the broker's VTRS.
+            fund_broker();
+            set_payout_quota(10 * vtrs::UNITS, 2);
+            assert_eq!(EnergyBroker::max_amount_out(&path), 20 * vtrs::UNITS);
+
+            // At one energy per VTRS and the 1% swap fee, 25 LNRG would be paid 24.75 VTRS.
+            let too_much = 25 * vtrs::UNITS;
+            assert_eq!(
+                <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
+                    lnrg.clone(),
+                    NativeOrAssetId::Native,
+                    too_much,
+                    true,
+                ),
+                None,
+            );
+            assert_noop!(
+                EnergyBroker::swap_exact_tokens_for_tokens(
+                    RuntimeOrigin::signed(alith()),
+                    alith(),
+                    path.clone(),
+                    too_much,
+                    None,
+                    false,
+                ),
+                pallet_energy_broker::Error::<Runtime>::InsufficientLiquidity
+            );
+
+            // A sale within the quota is paid, and its payout counts against the quota.
+            let amount_in = 10 * vtrs::UNITS;
+            let exchange_in = amount_in / 100 * 99;
+            let payout = exchange_in;
+            let lnrg_before = asset_balance(&lnrg, &alith());
+            let alith_vtrs_before = Balances::free_balance(alith());
+            let broker_vtrs_before = Balances::free_balance(broker);
+
+            assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+                RuntimeOrigin::signed(alith()),
+                alith(),
+                path.clone(),
+                amount_in,
+                None,
+                false,
+            ));
+
+            assert_eq!(asset_balance(&lnrg, &alith()), lnrg_before - amount_in);
+            assert_eq!(Balances::free_balance(alith()), alith_vtrs_before + payout);
+            assert_eq!(Balances::free_balance(broker), broker_vtrs_before - payout);
+            assert_eq!(energy_sale(), exchange_in);
+            assert_eq!(energy_payout(), payout);
+            assert_eq!(EnergyBroker::max_amount_out(&path), 20 * vtrs::UNITS - payout);
+            System::assert_has_event(
+                pallet_energy_broker::Event::<Runtime>::SwapExecuted {
+                    who: alith(),
+                    recipient: alith(),
+                    path,
+                    amount_in,
+                    amount_out: payout,
+                }
+                .into(),
+            );
+        })
+    }
+
+    #[test]
+    fn lnrg_sale_has_no_payout_quota_without_factor() {
+        new_test_ext().execute_with(|| {
+            let path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
+
+            // Without a factor only the broker's VTRS limit the sale, whatever the payout budget.
+            fund_broker();
+            pallet_dynamic_energy::SessionPayoutBudget::<Runtime>::put(10 * vtrs::UNITS);
+            assert_eq!(EnergyBroker::max_amount_out(&path), broker_vtrs());
+        })
+    }
+
+    #[test]
+    fn snrg_sale_is_not_limited_by_payout_quota() {
+        new_test_ext().execute_with(|| {
+            let snrg_path = (NativeOrAssetId::WithId(SNRG::get()), NativeOrAssetId::Native);
+            let lnrg_path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
+
+            fund_broker();
+            Balances::set_balance(&EnergyBroker::account_id(), 50 * vtrs::UNITS);
+            set_payout_quota(10 * vtrs::UNITS, 2);
+
+            // The legacy SNRG buyback is not an energy sale: only the broker's VTRS limit it.
+            assert_eq!(EnergyBroker::max_amount_out(&snrg_path), broker_vtrs());
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 20 * vtrs::UNITS);
+
+            // It pays out of the same VTRS, though, so it can leave LNRG sales less than the quota.
+            assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
+                RuntimeOrigin::signed(alith()),
+                alith(),
+                snrg_path,
+                broker_vtrs() - 5 * vtrs::UNITS,
+                None,
+                false,
+            ));
+
+            assert_eq!(broker_vtrs(), 5 * vtrs::UNITS);
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 5 * vtrs::UNITS);
+            assert_eq!(energy_sale(), 0);
+            assert_eq!(energy_payout(), 0);
+
+            // An LNRG sale for more than the broker has left fails, though it is within the quota.
+            assert_noop!(
+                EnergyBroker::swap_tokens_for_exact_tokens(
+                    RuntimeOrigin::signed(alith()),
+                    alith(),
+                    lnrg_path,
+                    6 * vtrs::UNITS,
+                    None,
+                    false,
+                ),
+                pallet_energy_broker::Error::<Runtime>::InsufficientLiquidity
+            );
+        })
+    }
 }
 
 mod treasury {
     use super::*;
-    use frame_support::{
-        assert_ok,
-        traits::tokens::{Fortitude, Preservation},
-    };
+    use frame_support::assert_ok;
     use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
 
     // The treasury's exchanges as its config wires them, so the tests check what it actually uses.
@@ -360,16 +530,6 @@ mod treasury {
     /// rounds the output down to zero, SNRG would pay out more than the unit. At `ROUNDING_RATE`
     /// the SNRG path still swaps one for one.
     const DUST_RATE: FixedU128 = FixedU128::from_rational(7, 3);
-
-    /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
-    fn fund_broker() {
-        Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
-            SNRG::get(),
-            FixedU128::from_u32(1),
-        );
-    }
 
     /// Selling `AMOUNT` of `asset` through `Exchange` must take exactly that much, pay VTRS and
     /// leave the seller's other energy as it was.
@@ -403,9 +563,6 @@ mod treasury {
     /// sell as much as the broker can pay out, report the sale and keep the rest.
     fn assert_sells_within_broker_vtrs(asset_id: AssetId, rate: FixedU128) {
         let treasury = Treasury::account_id();
-        let broker = EnergyBroker::account_id();
-        let broker_vtrs =
-            || Balances::reducible_balance(&broker, Preservation::Preserve, Fortitude::Polite);
         let lnrg = NativeOrAssetId::WithId(LNRG::get());
 
         System::set_block_number(1);

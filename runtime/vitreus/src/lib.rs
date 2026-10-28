@@ -1084,6 +1084,13 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToNativeConverter {
         DynamicEnergyConversion::to_asset_balance(amount_out, Self::SOURCE).ok()
     }
 
+    /// The broker's VTRS, but no more than the payout quota of the session still allows.
+    fn reducible_balance(broker: &AccountId) -> Balance {
+        let reserve =
+            Balances::reducible_balance(broker, Preservation::Preserve, Fortitude::Polite);
+        DynamicEnergy::remaining_payout_quota().map_or(reserve, |quota| reserve.min(quota))
+    }
+
     fn resolve(
         broker: &AccountId,
         credit: Credit<AccountId, NativeAndAssets>,
