@@ -179,6 +179,95 @@ fn calculating_long_era_energy_generation_works() {
 }
 
 #[test]
+fn calculating_exchange_rate_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        // a 600 s session at 10% APR earns 1/525_960 of the stake: 31_557_600 s / 600 s * 10
+        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+
+        // the rate is the energy sold per native unit the stake earns over the session
+        start_session(1);
+        let rate = FixedU128::from_rational(ENERGY_SALE, 1_000_000);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
+        System::assert_last_event(Event::<Test>::ExchangeRateUpdated { rate }.into());
+
+        // the warehouse capacity multiplier doubles the earnings: 0.02*x + 1 is 2 at the mock
+        // warehouse fill of 50%
+        let zero = FixedI128::zero();
+        let c = FixedI128::from_rational(2, 100);
+        MultiplierCoefficients::<Test>::put([zero, zero, c, FixedI128::one()]);
+
+        start_session(2);
+        let rate = FixedU128::from_rational(ENERGY_SALE, 2_000_000);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
+
+        // so does an APR of 20%
+        AnnualPercentageRate::<Test>::put(200);
+
+        start_session(3);
+        let rate = FixedU128::from_rational(ENERGY_SALE, 4_000_000);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
+
+        // and a session that lasts twice as long as expected, as session 4 is skipped
+        start_session(5);
+        let rate = FixedU128::from_rational(ENERGY_SALE, 8_000_000);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
+        System::assert_last_event(Event::<Test>::ExchangeRateUpdated { rate }.into());
+    });
+}
+
+#[test]
+fn calculating_smoothed_exchange_rate_works() {
+    new_test_ext().execute_with(|| {
+        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+
+        start_session(1);
+        let old_rate = FixedU128::from_rational(ENERGY_SALE, 1_000_000);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(old_rate));
+
+        // a smooth factor of 3 gives the new value a weight of 2/(3+1), a half; twice the sale
+        // gives a new value of twice the old rate
+        ExchangeRateSmoothFactor::<Test>::put(3);
+        EnergySaleOverride::<Test>::put(2 * ENERGY_SALE);
+
+        start_session(2);
+        let new_rate = FixedU128::from_rational(2 * ENERGY_SALE, 1_000_000);
+        let rate = FixedU128::from_rational(3 * ENERGY_SALE, 2 * 1_000_000);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
+
+        let params = Pallet::<Test>::exchange_rate_parameters();
+        assert_eq!(params.new_rate, Some(new_rate));
+        assert_eq!(params.old_rate, Some(old_rate));
+        assert_eq!(params.smooth_factor, 3);
+    });
+}
+
+#[test]
+fn calculating_exchange_rate_without_stake_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        start_session(1);
+        let rate = FixedU128::from_rational(ENERGY_SALE, 1_000_000);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
+
+        // with no stake there is nothing earned to divide by, so the rate stays as it was
+        TotalStakeOverride::<Test>::put(0);
+        System::reset_events();
+
+        start_session(2);
+        assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
+        assert_eq!(Pallet::<Test>::exchange_rate_parameters().new_rate, None);
+        assert!(!System::events().iter().any(|record| matches!(
+            record.event,
+            RuntimeEvent::DynamicEnergy(Event::ExchangeRateUpdated { .. })
+        )));
+    });
+}
+
+#[test]
 fn calculating_zero_exchange_rate_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
@@ -202,6 +291,47 @@ fn calculating_zero_exchange_rate_works() {
 }
 
 #[test]
+fn calculating_payout_budget_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        // a 600 s session at 10% APR earns 1/525_960 of the stake: 31_557_600 s / 600 s * 10
+        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+
+        start_session(1);
+        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(1_000_000));
+
+        // 0.02*x + 1, which is 2 at the mock warehouse fill of 50%
+        let zero = FixedI128::zero();
+        let c = FixedI128::from_rational(2, 100);
+        MultiplierCoefficients::<Test>::put([zero, zero, c, FixedI128::one()]);
+
+        start_session(2);
+        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(2_000_000));
+
+        let unavailable: RuntimeEvent = Event::<Test>::SessionPayoutBudgetUnavailable.into();
+        assert!(System::events().iter().all(|record| record.event != unavailable));
+    });
+}
+
+#[test]
+fn calculating_zero_payout_budget_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        start_session(1);
+        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(1_000_000));
+
+        // with no stake there is no payout budget: it is reported, and the old one is not kept
+        TotalStakeOverride::<Test>::put(0);
+        start_session(2);
+        assert_eq!(SessionPayoutBudget::<Test>::get(), None);
+        System::assert_last_event(Event::<Test>::SessionPayoutBudgetUnavailable.into());
+    });
+}
+
+#[test]
 fn calculating_sold_energy_works() {
     new_test_ext().execute_with(|| {
         start_session(0);
@@ -213,6 +343,22 @@ fn calculating_sold_energy_works() {
 
         start_session(1);
         assert_eq!(SessionEnergySale::<Test>::get(), 0);
+    });
+}
+
+#[test]
+fn calculating_energy_payout_works() {
+    new_test_ext().execute_with(|| {
+        start_session(0);
+        assert_eq!(SessionEnergyPayout::<Test>::get(), 0);
+
+        Pallet::<Test>::on_energy_sell(500, 50);
+        Pallet::<Test>::on_energy_sell(1000, 100);
+        assert_eq!(SessionEnergySale::<Test>::get(), 1500);
+        assert_eq!(SessionEnergyPayout::<Test>::get(), 150);
+
+        start_session(1);
+        assert_eq!(SessionEnergyPayout::<Test>::get(), 0);
     });
 }
 

@@ -175,6 +175,17 @@ pub mod pallet {
     #[pallet::storage]
     pub type SessionEnergySale<T: Config> = StorageValue<_, EnergyOf<T>, ValueQuery>;
 
+    /// The total payout for the energy sold during the session, in the native currency.
+    #[pallet::storage]
+    pub type SessionEnergyPayout<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
+
+    /// The payout budget of the session in the native currency, the payout its energy sales are
+    /// priced at: what the total stake earns at the annual percentage rate over
+    /// `ExpectedSessionDuration`, scaled by the warehouse capacity multiplier. `None` if it could
+    /// not be calculated or is zero, e.g. with no stake.
+    #[pallet::storage]
+    pub type SessionPayoutBudget<T: Config> = StorageValue<_, StakeOf<T>>;
+
     /// Energy generation per session of the active era.
     /// Sessions of previous eras are removed when an era starts.
     #[pallet::storage]
@@ -213,6 +224,9 @@ pub mod pallet {
         MultiplierCoefficientsUpdated { coefficients: [FixedI128; 4] },
         /// The VNRG/VTRS exchange rate was updated.
         ExchangeRateUpdated { rate: FixedU128 },
+        /// The payout budget of the new session could not be calculated or is zero, e.g. with no
+        /// stake.
+        SessionPayoutBudgetUnavailable,
     }
 
     #[pallet::error]
@@ -532,12 +546,39 @@ impl<T: Config> Pallet<T> {
         }
     }
 
+    /// Sets the payout budget of the session that starts now. Must run after
+    /// `update_exchange_rate`: the budget uses the total stake, APR and multiplier the rate was
+    /// calculated with, over the expected session duration, as the real one is not known yet.
+    fn update_payout_budget() {
+        let ExchangeRateParameters { total_stake, apr, multiplier, .. } =
+            ExchangeRateParams::<T>::get();
+
+        let budget = Self::calculate_payout_budget(
+            total_stake,
+            T::ExpectedSessionDuration::get(),
+            apr,
+            multiplier,
+        )
+        .filter(|budget| !budget.is_zero());
+
+        if budget.is_none() {
+            log::warn!(
+                target: LOG_TARGET,
+                "Payout budget is unavailable: total_stake: {:?}, apr: {:?}, multiplier: {:?}",
+                total_stake, apr, multiplier
+            );
+            Self::deposit_event(Event::SessionPayoutBudgetUnavailable);
+        }
+
+        SessionPayoutBudget::<T>::set(budget);
+    }
+
     fn calculate_generation_rate(energy_burn: EnergyOf<T>) -> Option<EnergyOf<T>> {
         Some(energy_burn.max(MinimumEnergyGeneration::<T>::get().unwrap_or_default()))
     }
 
-    /// Calculates exchange rate by the following rule:
-    /// `energy_sale * seconds_in_year / total_stake * seconds_in_period * APR * capacity_multiplier`
+    /// Calculates the exchange rate, the energy sold per native unit of the payout budget:
+    /// `energy_sale / budget`.
     fn calculate_exchange_rate(
         energy_sale: EnergyOf<T>,
         total_stake: StakeOf<T>,
@@ -545,30 +586,59 @@ impl<T: Config> Pallet<T> {
         apr: u32,
         multiplier: FixedU128,
     ) -> Option<FixedU128> {
-        let multiplier = multiplier.into_inner();
-
         log::trace!(
             target: LOG_TARGET,
             "energy_sale: {:?}, total_stake: {:?}, duration: {:?}, multiplier: {:?}",
-            energy_sale, total_stake, duration, multiplier
+            energy_sale, total_stake, duration, multiplier.into_inner()
         );
 
-        let numerator = T::HigherPrecisionBalance::from(energy_sale)
-            .checked_mul(&1000u32.into())? // APR
-            .checked_mul(&SECONDS_IN_YEAR.into())? // duration
-            .checked_mul(&FixedU128::DIV.into())?; // multiplier
+        let (budget_numerator, budget_denominator) =
+            Self::payout_budget_fraction(total_stake, duration, apr, multiplier)?;
 
-        let denominator = T::HigherPrecisionBalance::from(total_stake)
-            .checked_mul(&apr.into())?
-            .checked_mul(&duration.into())?
-            .checked_mul(&multiplier.into())?;
-
-        let raw = numerator
+        let raw = T::HigherPrecisionBalance::from(energy_sale)
+            .checked_mul(&budget_denominator)?
             .checked_mul(&FixedU128::DIV.into())?
-            .checked_div(&denominator)?
+            .checked_div(&budget_numerator)?
             .checked_into()?;
 
         Some(FixedU128::from_inner(raw))
+    }
+
+    /// Calculates the payout budget, rounded down.
+    fn calculate_payout_budget(
+        total_stake: StakeOf<T>,
+        duration: u32,
+        apr: u32,
+        multiplier: FixedU128,
+    ) -> Option<StakeOf<T>> {
+        let (numerator, denominator) =
+            Self::payout_budget_fraction(total_stake, duration, apr, multiplier)?;
+
+        numerator.checked_div(&denominator)?.checked_into::<u128>()?.checked_into()
+    }
+
+    /// The payout budget, what `total_stake` earns at the APR over `duration` seconds, scaled by
+    /// the warehouse capacity multiplier, as the fraction `numerator / denominator`:
+    /// `total_stake * APR * duration / seconds_in_year * capacity_multiplier`.
+    ///
+    /// The exchange rate divides by the fraction, not by the rounded budget, which can be zero
+    /// with a small stake.
+    fn payout_budget_fraction(
+        total_stake: StakeOf<T>,
+        duration: u32,
+        apr: u32,
+        multiplier: FixedU128,
+    ) -> Option<(T::HigherPrecisionBalance, T::HigherPrecisionBalance)> {
+        let numerator = T::HigherPrecisionBalance::from(total_stake)
+            .checked_mul(&apr.into())?
+            .checked_mul(&duration.into())?
+            .checked_mul(&multiplier.into_inner().into())?;
+
+        let denominator = T::HigherPrecisionBalance::from(1000u32) // APR
+            .checked_mul(&SECONDS_IN_YEAR.into())? // duration
+            .checked_mul(&FixedU128::DIV.into())?; // multiplier
+
+        Some((numerator, denominator))
     }
 
     fn smooth_value<N>(value: N, old_value: N, smooth_factor: u32) -> N
@@ -588,8 +658,9 @@ impl<T: Config> OnEnergyBurn<EnergyOf<T>> for Pallet<T> {
 }
 
 impl<T: Config> OnEnergySell<EnergyOf<T>> for Pallet<T> {
-    fn on_energy_sell(amount: EnergyOf<T>, _payout: EnergyOf<T>) {
+    fn on_energy_sell(amount: EnergyOf<T>, payout: StakeOf<T>) {
         SessionEnergySale::<T>::mutate(|total| total.saturating_accrue(amount));
+        SessionEnergyPayout::<T>::mutate(|total| total.saturating_accrue(payout));
     }
 }
 
@@ -605,10 +676,12 @@ impl<T: Config> OnSessionChange for Pallet<T> {
 
         Self::update_generation_rate(index);
         Self::update_exchange_rate(index, duration);
+        Self::update_payout_budget();
 
         SessionStartTime::<T>::put(now);
         SessionEnergyBurn::<T>::put(EnergyOf::<T>::zero());
         SessionEnergySale::<T>::put(EnergyOf::<T>::zero());
+        SessionEnergyPayout::<T>::put(StakeOf::<T>::zero());
 
         Self::prune_energy_generation(index);
     }
