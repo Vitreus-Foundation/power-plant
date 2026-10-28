@@ -62,6 +62,37 @@ fn setting_overflowing_multiplier_coefficients_fails() {
 }
 
 #[test]
+fn setting_payout_quota_factor_works() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+
+        assert_ok!(Pallet::<Test>::set_payout_quota_factor(RuntimeOrigin::root(), Some(12)));
+        assert_eq!(PayoutQuotaFactor::<Test>::get(), Some(12));
+        System::assert_last_event(Event::<Test>::PayoutQuotaFactorSet { value: Some(12) }.into());
+
+        assert_ok!(Pallet::<Test>::set_payout_quota_factor(RuntimeOrigin::root(), None));
+        assert_eq!(PayoutQuotaFactor::<Test>::get(), None);
+        System::assert_last_event(Event::<Test>::PayoutQuotaFactorSet { value: None }.into());
+
+        assert_noop!(
+            Pallet::<Test>::set_payout_quota_factor(RuntimeOrigin::signed(1), Some(12)),
+            sp_runtime::DispatchError::BadOrigin
+        );
+    });
+}
+
+#[test]
+fn setting_zero_payout_quota_factor_fails() {
+    new_test_ext().execute_with(|| {
+        // a quota of zero budgets would stop all energy sales
+        assert_noop!(
+            Pallet::<Test>::set_payout_quota_factor(RuntimeOrigin::root(), Some(0)),
+            Error::<Test>::InvalidPayoutQuotaFactor
+        );
+    });
+}
+
+#[test]
 fn calculating_polynomial_works() {
     // on-chain coefficients: -0.000001*x^3 + 0.000147*x^2 - 0.009475*x + 1.228239
     let coefficients = [
@@ -359,6 +390,51 @@ fn calculating_energy_payout_works() {
 
         start_session(1);
         assert_eq!(SessionEnergyPayout::<Test>::get(), 0);
+    });
+}
+
+#[test]
+fn calculating_remaining_payout_quota_works() {
+    new_test_ext().execute_with(|| {
+        // a payout budget of 1_000_000, as in `calculating_payout_budget_works`
+        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        start_session(1);
+
+        // no quota without a factor
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), None);
+
+        // two budgets, less what the energy sold during the session was paid
+        PayoutQuotaFactor::<Test>::put(2);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2_000_000));
+
+        Pallet::<Test>::on_energy_sell(500, 500_000);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(1_500_000));
+
+        // a new factor applies at once
+        PayoutQuotaFactor::<Test>::put(3);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2_500_000));
+
+        // a payout above the quota leaves nothing
+        Pallet::<Test>::on_energy_sell(500, 3_000_000);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(0));
+
+        // a new session opens a new quota
+        start_session(2);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(3_000_000));
+    });
+}
+
+#[test]
+fn calculating_remaining_payout_quota_without_budget_works() {
+    new_test_ext().execute_with(|| {
+        PayoutQuotaFactor::<Test>::put(2);
+
+        // with no stake there is no payout budget, so nothing can be paid out
+        TotalStakeOverride::<Test>::put(0);
+        start_session(1);
+
+        assert_eq!(SessionPayoutBudget::<Test>::get(), None);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(0));
     });
 }
 

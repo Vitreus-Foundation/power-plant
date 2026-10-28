@@ -186,6 +186,11 @@ pub mod pallet {
     #[pallet::storage]
     pub type SessionPayoutBudget<T: Config> = StorageValue<_, StakeOf<T>>;
 
+    /// The payout quota in payout budgets: the energy sales of a session are paid out at most
+    /// this many budgets. `None` for no quota.
+    #[pallet::storage]
+    pub type PayoutQuotaFactor<T: Config> = StorageValue<_, u32>;
+
     /// Energy generation per session of the active era.
     /// Sessions of previous eras are removed when an era starts.
     #[pallet::storage]
@@ -225,8 +230,10 @@ pub mod pallet {
         /// The VNRG/VTRS exchange rate was updated.
         ExchangeRateUpdated { rate: FixedU128 },
         /// The payout budget of the new session could not be calculated or is zero, e.g. with no
-        /// stake.
+        /// stake. With a payout quota, the energy sales of the session are paid nothing.
         SessionPayoutBudgetUnavailable,
+        /// The payout quota factor was set, or removed with `None`.
+        PayoutQuotaFactorSet { value: Option<u32> },
     }
 
     #[pallet::error]
@@ -237,6 +244,8 @@ pub mod pallet {
         InvalidMultiplierCoefficients,
         /// Invalid annual percentage rate value.
         InvalidAnnualPercentageRate,
+        /// A payout quota of zero budgets, which would stop all energy sales.
+        InvalidPayoutQuotaFactor,
     }
 
     #[pallet::genesis_config]
@@ -392,10 +401,40 @@ pub mod pallet {
 
             Ok(())
         }
+
+        /// Set the payout quota factor: the energy sales of a session are paid out at most this
+        /// many payout budgets. `None` removes the quota. A new factor applies at once, to the
+        /// current session too.
+        #[pallet::call_index(8)]
+        #[pallet::weight(T::DbWeight::get().writes(1))]
+        pub fn set_payout_quota_factor(origin: OriginFor<T>, value: Option<u32>) -> DispatchResult {
+            T::ManageOrigin::ensure_origin(origin)?;
+
+            ensure!(value != Some(0), Error::<T>::InvalidPayoutQuotaFactor);
+            PayoutQuotaFactor::<T>::set(value);
+            Self::deposit_event(Event::PayoutQuotaFactorSet { value });
+
+            Ok(())
+        }
     }
 }
 
 impl<T: Config> Pallet<T> {
+    /// What the energy sales of the current session can still be paid out, in the native
+    /// currency: `PayoutQuotaFactor` payout budgets less the payout so far. `None` without a
+    /// quota. It is calculated on every call, so a new factor applies at once.
+    pub fn remaining_payout_quota() -> Option<StakeOf<T>> {
+        let factor = PayoutQuotaFactor::<T>::get()?;
+
+        // Without a payout budget nothing is paid out; `update_payout_budget` reports it.
+        let Some(budget) = SessionPayoutBudget::<T>::get() else {
+            return Some(Zero::zero());
+        };
+
+        let quota = budget.saturating_mul(factor.into());
+        Some(quota.saturating_sub(SessionEnergyPayout::<T>::get()))
+    }
+
     /// Calculates warehouse capacity multiplier using `a*x^3+b*x^2+c*x+d` polynomial.
     pub fn calculate_warehouse_capacity_multiplier() -> FixedU128 {
         // `Perbill` caps the fill at 100%, even with zero capacity, so `x` (the fill in percents)
