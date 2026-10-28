@@ -1,6 +1,11 @@
 use crate::{mock::*, *};
 use frame_support::{assert_noop, assert_ok};
 
+/// The payout budget of a mock session at `BUDGET_STAKE`, with the default APR and multiplier.
+const PAYOUT_BUDGET: u128 = 1_000_000;
+/// A 600 s mock session at 10% APR earns 1/525_960 of the stake: 31_557_600 s / 600 s * 10.
+const BUDGET_STAKE: u128 = 525_960 * PAYOUT_BUDGET;
+
 #[test]
 fn setting_zero_annual_percentage_rate_fails() {
     new_test_ext().execute_with(|| {
@@ -214,12 +219,11 @@ fn calculating_exchange_rate_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
 
-        // a 600 s session at 10% APR earns 1/525_960 of the stake: 31_557_600 s / 600 s * 10
-        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        TotalStakeOverride::<Test>::put(BUDGET_STAKE);
 
         // the rate is the energy sold per native unit the stake earns over the session
         start_session(1);
-        let rate = FixedU128::from_rational(ENERGY_SALE, 1_000_000);
+        let rate = FixedU128::from_rational(ENERGY_SALE, PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
         System::assert_last_event(Event::<Test>::ExchangeRateUpdated { rate }.into());
 
@@ -230,19 +234,19 @@ fn calculating_exchange_rate_works() {
         MultiplierCoefficients::<Test>::put([zero, zero, c, FixedI128::one()]);
 
         start_session(2);
-        let rate = FixedU128::from_rational(ENERGY_SALE, 2_000_000);
+        let rate = FixedU128::from_rational(ENERGY_SALE, 2 * PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
 
         // so does an APR of 20%
         AnnualPercentageRate::<Test>::put(200);
 
         start_session(3);
-        let rate = FixedU128::from_rational(ENERGY_SALE, 4_000_000);
+        let rate = FixedU128::from_rational(ENERGY_SALE, 4 * PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
 
         // and a session that lasts twice as long as expected, as session 4 is skipped
         start_session(5);
-        let rate = FixedU128::from_rational(ENERGY_SALE, 8_000_000);
+        let rate = FixedU128::from_rational(ENERGY_SALE, 8 * PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
         System::assert_last_event(Event::<Test>::ExchangeRateUpdated { rate }.into());
     });
@@ -251,10 +255,10 @@ fn calculating_exchange_rate_works() {
 #[test]
 fn calculating_smoothed_exchange_rate_works() {
     new_test_ext().execute_with(|| {
-        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        TotalStakeOverride::<Test>::put(BUDGET_STAKE);
 
         start_session(1);
-        let old_rate = FixedU128::from_rational(ENERGY_SALE, 1_000_000);
+        let old_rate = FixedU128::from_rational(ENERGY_SALE, PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(old_rate));
 
         // a smooth factor of 3 gives the new value a weight of 2/(3+1), a half; twice the sale
@@ -263,8 +267,8 @@ fn calculating_smoothed_exchange_rate_works() {
         EnergySaleOverride::<Test>::put(2 * ENERGY_SALE);
 
         start_session(2);
-        let new_rate = FixedU128::from_rational(2 * ENERGY_SALE, 1_000_000);
-        let rate = FixedU128::from_rational(3 * ENERGY_SALE, 2 * 1_000_000);
+        let new_rate = FixedU128::from_rational(2 * ENERGY_SALE, PAYOUT_BUDGET);
+        let rate = FixedU128::from_rational(3 * ENERGY_SALE, 2 * PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
 
         let params = Pallet::<Test>::exchange_rate_parameters();
@@ -279,9 +283,9 @@ fn calculating_exchange_rate_without_stake_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
 
-        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        TotalStakeOverride::<Test>::put(BUDGET_STAKE);
         start_session(1);
-        let rate = FixedU128::from_rational(ENERGY_SALE, 1_000_000);
+        let rate = FixedU128::from_rational(ENERGY_SALE, PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
 
         // with no stake there is nothing earned to divide by, so the rate stays as it was
@@ -326,11 +330,10 @@ fn calculating_payout_budget_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
 
-        // a 600 s session at 10% APR earns 1/525_960 of the stake: 31_557_600 s / 600 s * 10
-        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        TotalStakeOverride::<Test>::put(BUDGET_STAKE);
 
         start_session(1);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(1_000_000));
+        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(PAYOUT_BUDGET));
 
         // 0.02*x + 1, which is 2 at the mock warehouse fill of 50%
         let zero = FixedI128::zero();
@@ -338,7 +341,7 @@ fn calculating_payout_budget_works() {
         MultiplierCoefficients::<Test>::put([zero, zero, c, FixedI128::one()]);
 
         start_session(2);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(2_000_000));
+        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(2 * PAYOUT_BUDGET));
 
         let unavailable: RuntimeEvent = Event::<Test>::SessionPayoutBudgetUnavailable.into();
         assert!(System::events().iter().all(|record| record.event != unavailable));
@@ -350,9 +353,9 @@ fn calculating_zero_payout_budget_works() {
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
 
-        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        TotalStakeOverride::<Test>::put(BUDGET_STAKE);
         start_session(1);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(1_000_000));
+        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(PAYOUT_BUDGET));
 
         // with no stake there is no payout budget: it is reported, and the old one is not kept
         TotalStakeOverride::<Test>::put(0);
@@ -396,8 +399,7 @@ fn calculating_energy_payout_works() {
 #[test]
 fn calculating_remaining_payout_quota_works() {
     new_test_ext().execute_with(|| {
-        // a payout budget of 1_000_000, as in `calculating_payout_budget_works`
-        TotalStakeOverride::<Test>::put(525_960 * 1_000_000);
+        TotalStakeOverride::<Test>::put(BUDGET_STAKE);
         start_session(1);
 
         // no quota without a factor
@@ -405,22 +407,23 @@ fn calculating_remaining_payout_quota_works() {
 
         // two budgets, less what the energy sold during the session was paid
         PayoutQuotaFactor::<Test>::put(2);
-        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2_000_000));
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2 * PAYOUT_BUDGET));
 
-        Pallet::<Test>::on_energy_sell(500, 500_000);
-        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(1_500_000));
+        let paid = PAYOUT_BUDGET / 2;
+        Pallet::<Test>::on_energy_sell(500, paid);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2 * PAYOUT_BUDGET - paid));
 
         // a new factor applies at once
         PayoutQuotaFactor::<Test>::put(3);
-        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2_500_000));
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(3 * PAYOUT_BUDGET - paid));
 
         // a payout above the quota leaves nothing
-        Pallet::<Test>::on_energy_sell(500, 3_000_000);
+        Pallet::<Test>::on_energy_sell(500, 3 * PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(0));
 
         // a new session opens a new quota
         start_session(2);
-        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(3_000_000));
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(3 * PAYOUT_BUDGET));
     });
 }
 

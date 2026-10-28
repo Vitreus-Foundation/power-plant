@@ -374,11 +374,14 @@ mod energy_broker {
     #[test]
     fn lnrg_conversion_ignores_payout_quota() {
         new_test_ext().execute_with(|| {
-            let lnrg_sale = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
+            let lnrg_path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
+
+            fund_broker();
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), broker_vtrs());
 
             // A quota without a payout budget closes the LNRG → VTRS path, but not the conversion.
             assert_ok!(DynamicEnergy::set_payout_quota_factor(RuntimeOrigin::root(), Some(2)));
-            assert_eq!(EnergyBroker::max_amount_out(&lnrg_sale), 0);
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 0);
 
             assert_conversion_burns_and_mints(LNRG::get());
         })
@@ -469,7 +472,7 @@ mod energy_broker {
     }
 
     #[test]
-    fn snrg_sale_is_not_limited_by_payout_quota() {
+    fn snrg_buyback_is_not_limited_by_payout_quota() {
         new_test_ext().execute_with(|| {
             let snrg_path = (NativeOrAssetId::WithId(SNRG::get()), NativeOrAssetId::Native);
             let lnrg_path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
@@ -483,15 +486,24 @@ mod energy_broker {
             assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 20 * vtrs::UNITS);
 
             // It pays out of the same VTRS, though, so it can leave LNRG sales less than the quota.
+            let snrg = NativeOrAssetId::WithId(SNRG::get());
+            let paid_out = broker_vtrs() - 5 * vtrs::UNITS;
+            let snrg_in = EnergyBroker::get_amount_in(paid_out, &snrg_path, true)
+                .expect("the SNRG path must price the sale");
+            let snrg_before = asset_balance(&snrg, &alith());
+            let alith_vtrs_before = Balances::free_balance(alith());
+
             assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
                 RuntimeOrigin::signed(alith()),
                 alith(),
                 snrg_path,
-                broker_vtrs() - 5 * vtrs::UNITS,
+                paid_out,
                 None,
                 false,
             ));
 
+            assert_eq!(asset_balance(&snrg, &alith()), snrg_before - snrg_in);
+            assert_eq!(Balances::free_balance(alith()), alith_vtrs_before + paid_out);
             assert_eq!(broker_vtrs(), 5 * vtrs::UNITS);
             assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 5 * vtrs::UNITS);
             assert_eq!(energy_sale(), 0);
@@ -838,8 +850,14 @@ mod treasury {
             let treasury = Treasury::account_id();
             let lnrg = NativeOrAssetId::WithId(LNRG::get());
 
-            // No payout quota: the order alone decides where the treasury's sale counts.
+            // No payout quota: the order alone decides where the treasury's sale counts. The rate
+            // is calculated from the session's own sales, and from a stake whose payout budget
+            // over an expected session is whole on both networks.
+            System::set_block_number(1);
             fund_broker();
+            pallet_dynamic_energy::EnergySaleOverride::<Runtime>::kill();
+            let stake = 525_960 * 1_000_000_000;
+            pallet_dynamic_energy::TotalStakeOverride::<Runtime>::put(stake);
             Balances::set_balance(&treasury, ExistentialDeposit::get());
             assert_ok!(Assets::mint_into(LNRG::get(), &treasury, AMOUNT));
             let lnrg_before = asset_balance(&lnrg, &treasury);
@@ -847,11 +865,29 @@ mod treasury {
 
             change_session(1);
 
+            // At one energy per VTRS and without a fee, the treasury is paid what it sells.
             let sold = lnrg_before - asset_balance(&lnrg, &treasury);
             assert!(sold > 0, "the treasury must sell its LNRG");
             assert_eq!(Balances::free_balance(treasury), native_before + sold);
-            // The treasury sells before dynamic-energy closes the session, so its sale feeds the
-            // closing session's rate, and the new session starts with no sales.
+            System::assert_has_event(
+                pallet_treasury_extension::Event::<Runtime>::EnergyExchanged {
+                    energy: 0,
+                    static_energy: 0,
+                    liquid_energy: sold,
+                    native: sold,
+                }
+                .into(),
+            );
+
+            // The treasury sells before dynamic-energy closes the session, so the new rate is its
+            // sale per native unit of the payout budget: 10% APR over the expected session ...
+            let budget = stake * u128::from(ExpectedSessionDuration::get()) / (10 * 31_557_600);
+            let rate = FixedU128::from_inner(sold * FixedU128::DIV / budget);
+            assert_eq!(pallet_dynamic_energy::ExchangeRate::<Runtime>::get(), Some(rate));
+            System::assert_has_event(
+                pallet_dynamic_energy::Event::<Runtime>::ExchangeRateUpdated { rate }.into(),
+            );
+            // ... and the new session starts with no sales.
             assert_eq!(energy_sale(), 0);
             assert_eq!(energy_payout(), 0);
         })
