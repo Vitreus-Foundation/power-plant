@@ -840,7 +840,11 @@ impl pallet_energy_generation::Config for Runtime {
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = ();
-    type SessionChangeListeners = (EnergyBroker, DynamicEnergy, TreasuryExtension);
+    // The order matters. The treasury sells what is left of the closing session's payout quota,
+    // so its sale counts towards that session. The broker then updates its capacity and burns the
+    // surplus, and dynamic-energy closes the session: it calculates the rate from the warehouse
+    // fill after the burn and opens the next payout quota.
+    type SessionChangeListeners = (TreasuryExtension, EnergyBroker, DynamicEnergy);
     type Reward = ();
     type RewardRemainder = Treasury;
     type RuntimeEvent = RuntimeEvent;

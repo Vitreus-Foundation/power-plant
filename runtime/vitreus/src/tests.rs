@@ -80,6 +80,23 @@ fn broker_vtrs() -> Balance {
     )
 }
 
+fn energy_sale() -> Balance {
+    pallet_dynamic_energy::SessionEnergySale::<Runtime>::get()
+}
+
+fn energy_payout() -> Balance {
+    pallet_dynamic_energy::SessionEnergyPayout::<Runtime>::get()
+}
+
+/// Sets the payout quota of the session to `factor` payout budgets of `budget` VTRS.
+fn set_payout_quota(budget: Balance, factor: u32) {
+    pallet_dynamic_energy::SessionPayoutBudget::<Runtime>::put(budget);
+    frame_support::assert_ok!(DynamicEnergy::set_payout_quota_factor(
+        RuntimeOrigin::root(),
+        Some(factor)
+    ));
+}
+
 #[test]
 fn configured_base_extrinsic_weight_is_evm_compatible() {
     let min_ethereum_transaction_weight = WeightPerGas::get() * 21_000;
@@ -251,20 +268,6 @@ fn energy_fee_exchange_is_limited_by_broker_vnrg() {
 mod energy_broker {
     use super::*;
     use frame_support::{assert_noop, assert_ok};
-
-    fn energy_sale() -> Balance {
-        pallet_dynamic_energy::SessionEnergySale::<Runtime>::get()
-    }
-
-    fn energy_payout() -> Balance {
-        pallet_dynamic_energy::SessionEnergyPayout::<Runtime>::get()
-    }
-
-    /// Sets the payout quota of the session to `factor` payout budgets of `budget` VTRS.
-    fn set_payout_quota(budget: Balance, factor: u32) {
-        pallet_dynamic_energy::SessionPayoutBudget::<Runtime>::put(budget);
-        assert_ok!(DynamicEnergy::set_payout_quota_factor(RuntimeOrigin::root(), Some(factor)));
-    }
 
     /// Converting `source` into VNRG must be quoted one-to-one and cost no swap fee.
     fn assert_conversion_is_one_to_one_and_without_swap_fee(source: AssetId) {
@@ -531,6 +534,12 @@ mod treasury {
     /// the SNRG path still swaps one for one.
     const DUST_RATE: FixedU128 = FixedU128::from_rational(7, 3);
 
+    /// Changes the session through the listeners as the runtime wires them, in their order.
+    fn change_session(index: SessionIndex) {
+        <<Runtime as pallet_energy_generation::Config>::SessionChangeListeners as
+            vitreus_runtime_common::OnSessionChange>::on_new_session(index);
+    }
+
     /// Selling `AMOUNT` of `asset` through `Exchange` must take exactly that much, pay VTRS and
     /// leave the seller's other energy as it was.
     fn assert_sells_for_vtrs<Exchange>(asset: AssetId)
@@ -777,6 +786,75 @@ mod treasury {
     #[test]
     fn new_session_skips_treasury_lnrg_dust() {
         new_test_ext().execute_with(|| assert_skips_treasury_dust(LNRG::get()))
+    }
+
+    #[test]
+    fn new_session_sells_lnrg_within_payout_quota() {
+        new_test_ext().execute_with(|| {
+            let treasury = Treasury::account_id();
+            let lnrg = NativeOrAssetId::WithId(LNRG::get());
+
+            System::set_block_number(1);
+            fund_broker();
+            // A quota of two budgets of 10 VTRS, of which a user's sale takes 9.9 VTRS.
+            set_payout_quota(10 * vtrs::UNITS, 2);
+            assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
+                RuntimeOrigin::signed(alith()),
+                alith(),
+                (lnrg.clone(), NativeOrAssetId::Native),
+                10 * vtrs::UNITS,
+                None,
+                false,
+            ));
+            let leftover = 20 * vtrs::UNITS - energy_payout();
+
+            // More LNRG than the leftover pays for.
+            Balances::set_balance(&treasury, ExistentialDeposit::get());
+            assert_ok!(Assets::mint_into(LNRG::get(), &treasury, 2 * leftover));
+            let lnrg_before = asset_balance(&lnrg, &treasury);
+            let native_before = Balances::free_balance(treasury);
+
+            change_session(1);
+
+            // The treasury sells what is left of the closing session's quota, at one energy per
+            // VTRS and without a fee, and keeps the rest.
+            assert_eq!(asset_balance(&lnrg, &treasury), lnrg_before - leftover);
+            assert_eq!(Balances::free_balance(treasury), native_before + leftover);
+            System::assert_has_event(
+                pallet_treasury_extension::Event::<Runtime>::EnergyExchanged {
+                    energy: 0,
+                    static_energy: 0,
+                    liquid_energy: leftover,
+                    native: leftover,
+                }
+                .into(),
+            );
+        })
+    }
+
+    #[test]
+    fn new_session_counts_treasury_sale_towards_closing_session() {
+        new_test_ext().execute_with(|| {
+            let treasury = Treasury::account_id();
+            let lnrg = NativeOrAssetId::WithId(LNRG::get());
+
+            // No payout quota: the order alone decides where the treasury's sale counts.
+            fund_broker();
+            Balances::set_balance(&treasury, ExistentialDeposit::get());
+            assert_ok!(Assets::mint_into(LNRG::get(), &treasury, AMOUNT));
+            let lnrg_before = asset_balance(&lnrg, &treasury);
+            let native_before = Balances::free_balance(treasury);
+
+            change_session(1);
+
+            let sold = lnrg_before - asset_balance(&lnrg, &treasury);
+            assert!(sold > 0, "the treasury must sell its LNRG");
+            assert_eq!(Balances::free_balance(treasury), native_before + sold);
+            // The treasury sells before dynamic-energy closes the session, so its sale feeds the
+            // closing session's rate, and the new session starts with no sales.
+            assert_eq!(energy_sale(), 0);
+            assert_eq!(energy_payout(), 0);
+        })
     }
 
     #[test]
