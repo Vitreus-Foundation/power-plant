@@ -187,14 +187,14 @@ fn calculating_zero_exchange_rate_works() {
         EnergySaleOverride::<Test>::kill();
         TotalStakeOverride::<Test>::put(100_000_000 * unit);
 
-        Pallet::<Test>::on_energy_sell(10_000 * unit);
+        Pallet::<Test>::on_energy_sell(10_000 * unit, 0);
         start_session(1);
         let rate = Pallet::<Test>::exchange_rate().unwrap();
         assert!(!rate.is_zero());
 
         // at this stake, a sale of 1 gives a rate that rounds down to zero, which must not
         // replace the previous one
-        Pallet::<Test>::on_energy_sell(1);
+        Pallet::<Test>::on_energy_sell(1, 0);
         start_session(2);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(rate));
         System::assert_last_event(Event::<Test>::ExchangeRateUpdated { rate }.into());
@@ -207,8 +207,8 @@ fn calculating_sold_energy_works() {
         start_session(0);
         assert_eq!(SessionEnergySale::<Test>::get(), 0);
 
-        Pallet::<Test>::on_energy_sell(500);
-        Pallet::<Test>::on_energy_sell(1000);
+        Pallet::<Test>::on_energy_sell(500, 0);
+        Pallet::<Test>::on_energy_sell(1000, 0);
         assert_eq!(SessionEnergySale::<Test>::get(), 1500);
 
         start_session(1);

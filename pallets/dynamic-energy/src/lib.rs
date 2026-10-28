@@ -588,7 +588,7 @@ impl<T: Config> OnEnergyBurn<EnergyOf<T>> for Pallet<T> {
 }
 
 impl<T: Config> OnEnergySell<EnergyOf<T>> for Pallet<T> {
-    fn on_energy_sell(amount: EnergyOf<T>) {
+    fn on_energy_sell(amount: EnergyOf<T>, _payout: EnergyOf<T>) {
         SessionEnergySale::<T>::mutate(|total| total.saturating_accrue(amount));
     }
 }

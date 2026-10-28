@@ -553,7 +553,7 @@ pub mod pallet {
             if !energy_deposited.is_zero() {
                 Self::burn_surplus_energy(&broker_account);
 
-                T::OnEnergySell::on_energy_sell(energy_deposited);
+                T::OnEnergySell::on_energy_sell(energy_deposited, amount_out);
             }
 
             Ok(())
