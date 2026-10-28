@@ -28,6 +28,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Make the treasury's VNRG sales in `pallet-treasury-extension` atomic
 - Stop re-creating the treasury's energy accounts every session in `pallet-treasury-extension`
+- Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
 
 ## [215] - 2026-10-19
 
