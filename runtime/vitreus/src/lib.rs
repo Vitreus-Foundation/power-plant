@@ -840,7 +840,11 @@ impl pallet_energy_generation::Config for Runtime {
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = ();
-    type SessionChangeListeners = (EnergyBroker, DynamicEnergy, TreasuryExtension);
+    // The order matters. The treasury sells what is left of the closing session's payout quota,
+    // so its sale counts towards that session. The broker then updates its capacity and burns the
+    // surplus, and dynamic-energy closes the session: it calculates the rate from the warehouse
+    // fill after the burn and opens the next payout quota.
+    type SessionChangeListeners = (TreasuryExtension, EnergyBroker, DynamicEnergy);
     type Reward = ();
     type RewardRemainder = Treasury;
     type RuntimeEvent = RuntimeEvent;
@@ -1082,6 +1086,13 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToNativeConverter {
 
     fn get_amount_in(amount_out: Balance) -> Option<Balance> {
         DynamicEnergyConversion::to_asset_balance(amount_out, Self::SOURCE).ok()
+    }
+
+    /// The broker's VTRS, but no more than the payout quota of the session still allows.
+    fn reducible_balance(broker: &AccountId) -> Balance {
+        let reserve =
+            Balances::reducible_balance(broker, Preservation::Preserve, Fortitude::Polite);
+        DynamicEnergy::remaining_payout_quota().map_or(reserve, |quota| reserve.min(quota))
     }
 
     fn resolve(
