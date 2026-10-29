@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::{self as pallet_energy_fee, FeeCreditOf};
+use crate::{self as pallet_energy_fee, FeeCreditOf, OnWithdrawFeeHandler};
 use crate::{CallFee, CustomFee};
 use fp_account::AccountId20;
 
@@ -28,7 +28,7 @@ use sp_runtime::{
     traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup, Zero},
     BuildStorage, DispatchError, Permill,
 };
-use vitreus_runtime_common::{QuotePriceIntoEnergy, SwapIntoEnergy};
+use vitreus_runtime_common::{OnEnergyBurn, QuotePriceIntoEnergy, SwapIntoEnergy};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -37,13 +37,16 @@ pub(crate) type AssetId = u32;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
-pub(crate) type StaticEnergyAsset = ItemOf<Assets, ConstU32<2>, AccountId>;
-pub(crate) type LiquidEnergyAsset = ItemOf<Assets, ConstU32<3>, AccountId>;
+pub(crate) type StaticEnergyAsset = ItemOf<Assets, ConstU32<SNRG>, AccountId>;
+pub(crate) type LiquidEnergyAsset = ItemOf<Assets, ConstU32<LNRG>, AccountId>;
 
 pub(crate) const VNRG: AssetId = 1;
+pub(crate) const SNRG: AssetId = 2;
+pub(crate) const LNRG: AssetId = 3;
 pub(crate) const ALICE: AccountId = AccountId20([1u8; 20]);
 pub(crate) const BOB: AccountId = AccountId20([2u8; 20]);
 pub(crate) const FEE_DEST: AccountId = AccountId20([3u8; 20]);
+pub(crate) const CHARLIE: AccountId = AccountId20([4u8; 20]);
 
 /// 10^9 with 18 decimals
 /// 1 VNRG = VNRG_TO_VTRS_RATE VTRS
@@ -146,6 +149,28 @@ impl<GetAccountId: Get<AccountId>> OnUnbalanced<FeeCreditOf<Test>>
     }
 }
 
+// Record what the fee hooks receive, so tests can check it.
+parameter_types! {
+    pub static ReportedEnergyBurn: Balance = 0;
+    pub static FeeWithdrawals: Vec<AccountId> = Vec::new();
+}
+
+pub struct MockOnEnergyBurn;
+
+impl OnEnergyBurn<Balance> for MockOnEnergyBurn {
+    fn on_energy_burn(amount: Balance) {
+        ReportedEnergyBurn::mutate(|total| *total = total.saturating_add(amount));
+    }
+}
+
+pub struct MockOnWithdrawFee;
+
+impl OnWithdrawFeeHandler<AccountId> for MockOnWithdrawFee {
+    fn on_withdraw_fee(who: &AccountId) {
+        FeeWithdrawals::mutate(|accounts| accounts.push(*who));
+    }
+}
+
 pub struct MockEnergyExchange;
 
 impl QuotePriceIntoEnergy for MockEnergyExchange {
@@ -226,8 +251,8 @@ impl pallet_energy_fee::Config for Test {
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
     type EnergyExchange = MockEnergyExchange;
-    type OnWithdrawFee = ();
-    type OnEnergyBurn = ();
+    type OnWithdrawFee = MockOnWithdrawFee;
+    type OnEnergyBurn = MockOnEnergyBurn;
     type FeeRecyclingRate = FeeRecyclingRate;
     type FeeRecyclingDestination = FeeBurnDestination<FeeBurnAccount>;
 }
@@ -398,8 +423,12 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
 
     pallet_assets::GenesisConfig::<Test> {
         accounts: vec![(GetVNRG::get(), BOB, 1000)].into_iter().chain(alice_account).collect(),
-        assets: vec![(GetVNRG::get(), BOB, false, 1)],
-        metadata: vec![(GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
+        assets: vec![(GetVNRG::get(), BOB, false, 1), (SNRG, BOB, false, 1), (LNRG, BOB, false, 1)],
+        metadata: vec![
+            (GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18),
+            (SNRG, b"SNRG".to_vec(), b"SNRG".to_vec(), 18),
+            (LNRG, b"LNRG".to_vec(), b"LNRG".to_vec(), 18),
+        ],
         next_asset_id: None,
     }
     .assimilate_storage(&mut t)
