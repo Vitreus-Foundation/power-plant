@@ -51,7 +51,6 @@ use {
     sc_client_api::BlockBackend,
     sc_consensus_grandpa::{self, FinalityProofProvider as GrandpaFinalityProofProvider},
     sc_transaction_pool_api::OffchainTransactionPoolFactory,
-    sp_core::traits::SpawnNamed,
     sp_core::U256,
 };
 
@@ -73,9 +72,6 @@ pub use {
     sp_blockchain::{HeaderBackend, HeaderMetadata},
     sp_consensus_babe::BabeApi,
 };
-
-#[cfg(feature = "full-node")]
-use polkadot_node_subsystem::jaeger;
 
 #[cfg(feature = "full-node")]
 use sc_service::KeystoreContainer;
@@ -162,25 +158,6 @@ pub fn open_database(db_source: &DatabaseSource) -> Result<Arc<dyn Database>, Er
     Ok(parachains_db)
 }
 
-/// Initialize the `Jeager` collector. The destination must listen
-/// on the given address and port for `UDP` packets.
-#[cfg(any(test, feature = "full-node"))]
-fn jaeger_launch_collector_with_agent(
-    spawner: impl SpawnNamed,
-    config: &Configuration,
-    agent: Option<std::net::SocketAddr>,
-) -> Result<(), Error> {
-    if let Some(agent) = agent {
-        let cfg = jaeger::JaegerConfig::builder()
-            .agent(agent)
-            .named(&config.network.node_name)
-            .build();
-
-        jaeger::Jaeger::new(cfg).launch(spawner)?;
-    }
-    Ok(())
-}
-
 #[cfg(feature = "full-node")]
 type FullSelectChain = SelectRelayChain<FullBackend>;
 #[cfg(feature = "full-node")]
@@ -208,7 +185,6 @@ struct Basics {
 #[cfg(feature = "full-node")]
 fn new_partial_basics(
     config: &mut Configuration,
-    jaeger_agent: Option<std::net::SocketAddr>,
     telemetry_worker_handle: Option<TelemetryWorkerHandle>,
 ) -> Result<Basics, Error> {
     let telemetry = config
@@ -258,8 +234,6 @@ fn new_partial_basics(
         }
         telemetry
     });
-
-    jaeger_launch_collector_with_agent(task_manager.spawn_handle(), &*config, jaeger_agent)?;
 
     Ok(Basics { task_manager, client, backend, keystore_container, telemetry })
 }
@@ -524,7 +498,7 @@ pub fn new_full<
         is_parachain_node,
         enable_beefy,
         force_authoring_backoff,
-        jaeger_agent,
+        jaeger_agent: _,
         telemetry_worker_handle,
         node_version,
         secure_validator_mode,
@@ -555,7 +529,7 @@ pub fn new_full<
     let disable_grandpa = config.disable_grandpa;
     let name = config.network.node_name.clone();
 
-    let basics = new_partial_basics(&mut config, jaeger_agent, telemetry_worker_handle)?;
+    let basics = new_partial_basics(&mut config, telemetry_worker_handle)?;
 
     let prometheus_registry = config.prometheus_registry().cloned();
 
@@ -1272,12 +1246,11 @@ pub fn new_full<
 
 #[cfg(feature = "full-node")]
 macro_rules! chain_ops {
-    ($config:expr, $eth_config:expr, $jaeger_agent:expr, $telemetry_worker_handle:expr) => {{
+    ($config:expr, $eth_config:expr, $telemetry_worker_handle:expr) => {{
         let telemetry_worker_handle = $telemetry_worker_handle;
-        let jaeger_agent = $jaeger_agent;
         let eth_config = $eth_config;
         let mut config = $config;
-        let basics = new_partial_basics(config, jaeger_agent, telemetry_worker_handle)?;
+        let basics = new_partial_basics(config, telemetry_worker_handle)?;
 
         use ::sc_consensus::LongestChain;
         // use the longest chain selection, since there is no overseer available
@@ -1306,7 +1279,6 @@ macro_rules! chain_ops {
 pub fn new_chain_ops(
     config: &mut Configuration,
     eth_config: &EthConfiguration,
-    jaeger_agent: Option<std::net::SocketAddr>,
 ) -> Result<
     (
         Arc<FullClient>,
@@ -1319,7 +1291,7 @@ pub fn new_chain_ops(
 > {
     config.keystore = sc_service::config::KeystoreConfig::InMemory;
 
-    chain_ops!(config, eth_config, jaeger_agent, None)
+    chain_ops!(config, eth_config, None)
 }
 
 /// Build a full node.
