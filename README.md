@@ -129,6 +129,9 @@ cargo test --features testnet-native --workspace
 cargo test -p pallet-energy-broker
 ```
 
+The [e2e tests](e2e-tests/README.md) check the runtime on a fork of mainnet's live state.
+In `e2e-tests`, run `npm ci` once, then `npm test`.
+
 ## Security Considerations
 
 1. **Access Control**
@@ -186,6 +189,8 @@ size, blake2-256 and setCode call hashes, and the command that rebuilds it. The 
 the same notes and hashes before the merge.
 
 - Upgrade a network only with the wasm from a release, never with a local build.
+- Before upgrading mainnet, run the [e2e tests](e2e-tests/README.md) on a fork of it with the
+  release's mainnet wasm: `WASM=<wasm> npm test` in `e2e-tests`.
 - To verify a release, check out its tag and run the command from its notes: the hashes must
   match.
 - If a release run fails, re-run it, or run Release on `main` by hand. Merging other PRs

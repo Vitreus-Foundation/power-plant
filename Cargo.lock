@@ -14801,7 +14801,6 @@ dependencies = [
  "polkadot-node-core-dispute-coordinator",
  "polkadot-node-core-parachains-inherent",
  "polkadot-node-network-protocol",
- "polkadot-node-subsystem",
  "polkadot-node-subsystem-types",
  "polkadot-node-subsystem-util",
  "polkadot-overseer",
