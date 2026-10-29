@@ -2372,6 +2372,7 @@ mod benches {
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
         [polkadot_runtime_parachains::assigner_on_demand, OnDemandAssignmentProvider]
+        // `request_revenue_at` fails while `SendXcm` is `()`: benchmark the other calls only.
         [polkadot_runtime_parachains::coretime, Coretime]
     );
 }
@@ -2383,6 +2384,7 @@ mod benches {
         [pallet_evm, EVM]
         [pallet_treasury_extension, TreasuryExtension]
         [polkadot_runtime_parachains::assigner_on_demand, OnDemandAssignmentProvider]
+        // `request_revenue_at` fails while `SendXcm` is `()`: benchmark the other calls only.
         [polkadot_runtime_parachains::coretime, Coretime]
         [pallet_vitreus_dex, VitreusDex]
         [pallet_launchpad, Launchpad]
