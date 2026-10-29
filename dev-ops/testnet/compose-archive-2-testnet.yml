@@ -1,9 +1,11 @@
 version: "3.3"
 
+name: dev-ops
+
 services:
-  fifth_node:
+  archive_node:
     image: vitreusfoundation/power-plant:testnet-latest
-    container_name: power-plant-fifth-node
+    container_name: power-plant-archive-node
     restart: always
     volumes:
       - node_data:/tmp/node
@@ -11,26 +13,26 @@ services:
       ./target/release/vitreus-power-plant-node
       --base-path /tmp/node
       --chain ./target/release/vitreus-power-plant-testnet.json
-      --name testnet-val5
+      --name testnet-archive-2
       --port 30333
       --rpc-port 9944
-      --rpc-methods=unsafe
-      --validator
+      --rpc-external
+      --rpc-max-connections 5000
       --prometheus-external
       --rpc-cors all
-      --sync warp
+      --state-pruning archive
 
     ports:
       - "0.0.0.0:30333:30333/tcp"
-      - "127.0.0.1:9944:9944/tcp"
-      - "127.0.0.1:9615:9615/tcp"
+      - "0.0.0.0:9944:9944/tcp"
+      - "0.0.0.0:9615:9615/tcp"
     networks:
-      - vitreus_power_plant_network
+      - vitreus_power_plant-network
 
 volumes:
   node_data:
     driver: local
 
 networks:
-  vitreus_power_plant_network:
+  vitreus_power_plant-network:
     name: vitreus_power_plant

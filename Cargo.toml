@@ -165,7 +165,6 @@ polkadot-node-core-pvf-prepare-worker = { git = "https://github.com/paritytech/p
 polkadot-node-metrics = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-network-protocol = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-primitives = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
-polkadot-node-subsystem = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-subsystem-types = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-node-subsystem-util = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }
 polkadot-overseer = { git = "https://github.com/paritytech/polkadot-sdk", branch = "stable2407", default-features = false }

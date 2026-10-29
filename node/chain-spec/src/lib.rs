@@ -196,7 +196,8 @@ pub fn testnet_config() -> ChainSpec {
                 // Initial Validators
                 vec![validator_1_keys(), validator_2_keys(), validator_3_keys()],
                 vec![],
-                SS58Prefix::get() as u64,
+                // Ethereum chain ID
+                19431,
             ))
             .unwrap(),
         )
@@ -226,6 +227,8 @@ pub fn stagenet_config() -> ChainSpec {
                 validators,
                 // Invulnerables
                 invulnerables,
+                // Ethereum chain ID
+                19432,
             ))
             .expect("Invalid genesis config"),
         )
@@ -258,6 +261,8 @@ pub fn mainnet_config() -> ChainSpec {
                 ],
                 // Invulnerables
                 vec![],
+                // Ethereum chain ID
+                SS58Prefix::get() as u64,
             ))
             .unwrap(),
         )
@@ -461,6 +466,7 @@ fn mainnet_genesis(
         BeefyId,
     )>,
     invulnerables: Vec<AccountId>,
+    chain_id: u64,
 ) -> RuntimeGenesisConfig {
     const ENDOWMENT: Balance = 1_000 * vtrs::UNITS;
     const STASH: Balance = 1 * vtrs::UNITS;
@@ -512,7 +518,7 @@ fn mainnet_genesis(
         transaction_payment: Default::default(),
 
         // EVM compatibility
-        evm_chain_id: EVMChainIdConfig { chain_id: SS58Prefix::get() as u64, ..Default::default() },
+        evm_chain_id: EVMChainIdConfig { chain_id, ..Default::default() },
         evm: Default::default(),
         ethereum: Default::default(),
         energy_broker: EnergyBrokerConfig { energy_capacity: Some(1_000_000_000_000) },
