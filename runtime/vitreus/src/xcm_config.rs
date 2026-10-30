@@ -29,6 +29,7 @@ use frame_support::{
     weights::{ConstantMultiplier, Weight},
 };
 use frame_system::EnsureRoot;
+pub use origin_conversion::AliasesIntoAccountKey20;
 use origin_conversion::SignedToAccountKey20;
 use polkadot_runtime_common::{
     paras_registrar, prod_or_fast,
@@ -566,6 +567,17 @@ mod origin_conversion {
                 Ok(other) => Err(other.into()),
                 Err(other) => Err(other),
             })
+        }
+    }
+
+    /// Converts a local account into an `AccountKey20` location, the reverse of
+    /// `AccountKey20Aliases`.
+    pub struct AliasesIntoAccountKey20<Network, AccountId>(PhantomData<(Network, AccountId)>);
+    impl<Network: Get<Option<NetworkId>>, AccountId: Clone + Into<[u8; 20]>>
+        TryConvert<&AccountId, Location> for AliasesIntoAccountKey20<Network, AccountId>
+    {
+        fn try_convert(who: &AccountId) -> Result<Location, &AccountId> {
+            Ok(Junction::AccountKey20 { network: Network::get(), key: who.clone().into() }.into())
         }
     }
 }
