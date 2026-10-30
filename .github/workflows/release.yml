@@ -10,8 +10,10 @@ on:
   workflow_dispatch:
   # A release PR gets a dry run: the runtimes are built and the notes rendered, nothing is
   # published. The prepare job tells release PRs apart: they cut a version that has no tag yet.
+  # Every PR into main runs this workflow: under a path filter, PRs that don't change
+  # CHANGELOG.md would never get the required Release check.
   pull_request:
-    paths: [CHANGELOG.md]
+    branches: [main]
 
 permissions:
   contents: read
@@ -146,3 +148,20 @@ jobs:
         run: |
           gh release create "$TAG" out/*.wasm out/*.srtool.json --repo "$GITHUB_REPOSITORY" \
             --target "$COMMIT" --title "Runtime version $VERSION" --notes-file out/notes.md
+
+  # The check to require for PRs into main instead of the builds' own: a skipped build matrix
+  # reports under its unexpanded name. A skip counts as passed, so this job skips itself only
+  # when there is nothing to release; `always()` keeps a failure or a cancellation before it
+  # from skipping it too.
+  check:
+    name: Release check
+    needs: [prepare, build, notes, publish]
+    if: always() && (needs.prepare.result != 'success' || needs.build.result != 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      # Outside main, publish is skipped.
+      - name: Fail if a job before this one failed or was cancelled
+        if: contains(needs.*.result, 'failure') || contains(needs.*.result, 'cancelled')
+        run: exit 1
