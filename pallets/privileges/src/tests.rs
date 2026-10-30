@@ -5,6 +5,8 @@ use frame_support::traits::fungible::Inspect;
 use frame_support::{assert_err, assert_noop, assert_ok};
 use substrate_test_utils::assert_eq_uvec;
 
+mod vipp_cache_migration;
+
 #[test]
 fn test_data_building() {
     // Valid date creation.
@@ -809,4 +811,263 @@ fn cannot_claim_rewards_with_invalid_total() {
             );
         });
     }
+}
+
+fn claim_for_validator(amount: Balance) {
+    claim_for_account(10, amount);
+}
+
+fn claim_for_account(account: AccountId, amount: Balance) {
+    assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), amount));
+    assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), amount, None, None));
+    assert_ok!(Claiming::claim(
+        RuntimeOrigin::none(),
+        account,
+        sig::<Test>(&bob(), &account.encode(), &[][..])
+    ));
+}
+
+fn owned_vipp_ids(account: AccountId) -> Vec<u32> {
+    <Nfts as frame_support::traits::tokens::nonfungibles_v2::InspectEnumerable<AccountId>>::owned_in_collection(&1, &account).collect()
+}
+
+fn join_vip_and_vipp(account: AccountId) {
+    claim_for_account(account, 1000);
+    assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(account), PenaltyType::Flat));
+    assert!(Privileges::vipp_members(account).is_some());
+}
+
+#[test]
+fn vipp_cache_migration_keeps_existing_cap_on_additional_claim() {
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        let nft = owned_vipp_ids(10)[0];
+        let (_, nac) = NacManaging::get_nac_level(&10).unwrap();
+        assert_ne!(nft, nac);
+        VippMembers::<Test>::insert(
+            10,
+            VippMemberInfo::<Test> { points: 123, active_vipp_threshold: vec![(nac, 950)] },
+        );
+        VipPoints::<Test>::insert(2019, 10, 456);
+        VippPoints::<Test>::insert(2019, 10, 789);
+        StorageVersion::new(1).put::<Privileges>();
+
+        crate::migration::RepairVippCache::<Test>::on_runtime_upgrade();
+
+        let repaired = Privileges::vipp_members(10).unwrap();
+        assert_eq!(repaired.active_vipp_threshold, vec![(nft, 950)]);
+        assert_eq!(repaired.points, 123);
+        System::set_block_number(2);
+        claim_for_validator(100);
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.active_vipp_threshold.iter().map(|(_, cap)| cap).sum::<u64>(), 1045);
+        assert_eq!(member.points, 123);
+        assert_eq!(VipPoints::<Test>::get(2019, 10), Some(456));
+        assert_eq!(VippPoints::<Test>::get(2019, 10), Some(789));
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(2));
+    });
+}
+
+#[test]
+fn test_claims_before_becoming_vip() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        System::set_block_number(2);
+        claim_for_validator(100);
+        assert!(owned_vipp_ids(10).is_empty());
+        assert!(Privileges::vipp_members(10).is_none());
+
+        System::set_block_number(3);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        let ids = owned_vipp_ids(10);
+        assert_eq!(ids.len(), 1);
+        assert_eq!(
+            Privileges::vipp_members(10).unwrap().active_vipp_threshold,
+            vec![(ids[0], 285)]
+        );
+    });
+}
+
+#[test]
+fn test_existing_vipp_nft_on_vip_entry() {
+    use frame_support::traits::tokens::nonfungibles_v2::Mutate;
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        // Reproduce the legacy state: a real NFT minted before VIP membership.
+        assert_ok!(<Nfts as Mutate<AccountId, pallet_nfts::ItemConfig>>::mint_into(
+            &1,
+            &777,
+            &10,
+            &pallet_nfts::ItemConfig { settings: pallet_nfts::ItemSettings::all_enabled() },
+            true,
+        ));
+        assert_ok!(<Nfts as Mutate<AccountId, pallet_nfts::ItemConfig>>::set_attribute(
+            &1,
+            &777,
+            &[0, 0, 2],
+            &200u64.encode(),
+        ));
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        assert_eq!(owned_vipp_ids(10), vec![777]);
+        assert!(Privileges::vipp_members(10).is_none());
+    });
+}
+
+#[test]
+fn vip_entry_resets_cached_points_after_mint() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        VippMembers::<Test>::insert(
+            10,
+            VippMemberInfo::<Test> { points: 123, active_vipp_threshold: vec![] },
+        );
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.points, 0);
+        assert_eq!(member.active_vipp_threshold, vec![(owned_vipp_ids(10)[0], 190)]);
+    });
+}
+
+#[test]
+fn vip_entry_refreshes_registered_caps_without_mint() {
+    use frame_support::traits::{OnRuntimeUpgrade, StorageVersion};
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        let (_, id) = NacManaging::mint_vipp_nft(&10).unwrap().unwrap();
+        VippMembers::<Test>::insert(
+            10,
+            VippMemberInfo::<Test> { points: 123, active_vipp_threshold: vec![(id, 1)] },
+        );
+        StorageVersion::new(1).put::<Privileges>();
+        crate::migration::RepairVippCache::<Test>::on_runtime_upgrade();
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        assert_eq!(owned_vipp_ids(10), vec![id]);
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.points, 0);
+        assert_eq!(member.active_vipp_threshold, vec![(id, 190)]);
+    });
+}
+
+#[test]
+fn test_additional_claim_failure() {
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 100));
+        assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&bob()), 100, None, None));
+        // Minting twice in the same block collides with the existing item ID.
+        assert_noop!(
+            Claiming::claim(
+                RuntimeOrigin::none(),
+                10,
+                sig::<Test>(&bob(), &10u64.encode(), &[][..])
+            ),
+            pallet_nfts::Error::<Test>::AlreadyExists
+        );
+        assert_eq!(Claiming::claims(eth(&bob())), Some(100));
+        System::set_block_number(2);
+        assert_ok!(Claiming::claim(
+            RuntimeOrigin::none(),
+            10,
+            sig::<Test>(&bob(), &10u64.encode(), &[][..])
+        ));
+        assert_eq!(
+            Privileges::vipp_members(10)
+                .unwrap()
+                .active_vipp_threshold
+                .iter()
+                .map(|(_, cap)| cap)
+                .sum::<u64>(),
+            285
+        );
+    });
+}
+
+#[test]
+fn test_vip_entry_failure() {
+    use frame_support::traits::tokens::nonfungibles_v2::Mutate;
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        let id = NacManaging::create_unique_item_id(&10);
+        // An ID collision with an item owned by another account must not affect it.
+        assert_ok!(<Nfts as Mutate<AccountId, pallet_nfts::ItemConfig>>::mint_into(
+            &1,
+            &id,
+            &20,
+            &pallet_nfts::ItemConfig { settings: pallet_nfts::ItemSettings::all_enabled() },
+            true,
+        ));
+        assert_noop!(
+            Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat),
+            pallet_nfts::Error::<Test>::AlreadyExists
+        );
+        assert!(Privileges::vip_members(10).is_none());
+        assert!(Privileges::vipp_members(10).is_none());
+        assert_eq!(Nfts::owner(1, id), Some(20));
+    });
+}
+
+#[test]
+fn test_vip_entry_with_inactive_nac() {
+    use frame_support::traits::tokens::nonfungibles_v2::Mutate;
+    ExtBuilder::default().build_and_execute(|| {
+        claim_for_validator(200);
+        NacManaging::mint_vipp_nft(&10).unwrap().unwrap();
+        let (_, nac_id) = NacManaging::get_nac_level(&10).unwrap();
+        assert_ok!(<Nfts as Mutate<AccountId, pallet_nfts::ItemConfig>>::set_attribute(
+            &0,
+            &nac_id,
+            &[0, 0, 3],
+            &[1]
+        ));
+        assert_ok!(Privileges::become_vip_status(RuntimeOrigin::signed(10), PenaltyType::Flat));
+        assert!(Privileges::vipp_members(10).is_none());
+        assert_eq!(owned_vipp_ids(10).len(), 1);
+    });
+}
+
+#[test]
+fn test_additional_claim_with_unregistered_nft() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        let unregistered = owned_vipp_ids(10)[0];
+        VippMembers::<Test>::mutate(10, |m| {
+            let m = m.as_mut().unwrap();
+            m.active_vipp_threshold = vec![(0, 0)];
+            m.points = 123;
+        });
+        System::set_block_number(2);
+        claim_for_validator(100);
+        let member = Privileges::vipp_members(10).unwrap();
+        assert_eq!(member.points, 123);
+        assert_eq!(member.active_vipp_threshold.len(), 1);
+        assert_eq!(member.active_vipp_threshold[0].1, 95);
+        assert_ne!(member.active_vipp_threshold[0].0, unregistered);
+        assert_eq!(owned_vipp_ids(10).len(), 2);
+    });
+}
+
+#[test]
+fn test_unaccounted_vipp_transfer_does_not_activate_recipients() {
+    ExtBuilder::default().build_and_execute(|| {
+        join_vip_and_vipp(10);
+        assert_ok!(NacManaging::mint(RuntimeOrigin::root(), 2, 20));
+        let item = owned_vipp_ids(10)[0];
+
+        for (sender, recipient) in [(10, 20), (20, 100)] {
+            assert_ok!(Nfts::transfer(RuntimeOrigin::signed(sender), 1, item, recipient));
+            assert_ok!(Privileges::become_vip_status(
+                RuntimeOrigin::signed(recipient),
+                PenaltyType::Flat
+            ));
+            assert!(NacManaging::get_claim_balance(&recipient).is_none());
+            assert!(Privileges::vipp_members(recipient).is_none());
+        }
+
+        // Moving an NFT without updating its backing must not create additional
+        // recipients of points. Ownership repair requires separate reconciliation.
+        Privileges::update_vipp_points_for_time(1);
+        assert_eq!(VippMembers::<Test>::iter_values().map(|m| m.points).sum::<u64>(), 950);
+    });
 }

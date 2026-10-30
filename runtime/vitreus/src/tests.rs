@@ -41,6 +41,40 @@ fn new_test_ext() -> sp_io::TestExternalities {
     )
 }
 
+#[test]
+fn unreleased_migration_repairs_vipp_cache() {
+    use frame_support::traits::{
+        tokens::nonfungibles_v2::Mutate, OnRuntimeUpgrade, StorageVersion,
+    };
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        let who = alith();
+        let (_, nac) = NacManaging::get_nac_level(&who).unwrap();
+        <Nfts as Mutate<AccountId, pallet_nfts::ItemConfig>>::set_attribute(
+            &NftCollectionId::get(),
+            &nac,
+            &[0, 0, 2],
+            &1_000u128.encode(),
+        )
+        .unwrap();
+        let (cap, item) = NacManaging::mint_vipp_nft(&who).unwrap().unwrap();
+        assert_ne!(item, nac);
+        pallet_privileges::VippMembers::<Runtime>::insert(
+            who,
+            pallet_privileges::VippMemberInfo::<Runtime> {
+                points: 123,
+                active_vipp_threshold: vec![(nac, cap)],
+            },
+        );
+        StorageVersion::new(1).put::<Privileges>();
+        <migrations::Unreleased as OnRuntimeUpgrade>::on_runtime_upgrade();
+        let member = Privileges::vipp_members(who).unwrap();
+        assert_eq!(member.points, 123);
+        assert_eq!(member.active_vipp_threshold, vec![(item, 950)]);
+        assert_eq!(StorageVersion::get::<Privileges>(), StorageVersion::new(2));
+    });
+}
+
 fn mock_signature() -> TransactionSignature {
     let r = H256([
         0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,

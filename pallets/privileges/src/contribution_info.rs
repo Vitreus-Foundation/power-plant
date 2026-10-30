@@ -152,8 +152,12 @@ pub struct RewardsInfo<T: Config> {
 }
 
 impl<T: Config> OnVippStatusHandler<T::AccountId, T::StakeBalance, T::ItemId> for Pallet<T> {
-    fn mint_vipp(who: &T::AccountId, amount: T::StakeBalance, item_id: T::ItemId) {
-        Self::mint_new_vipp_nft(who, amount, item_id);
+    fn mint_vipp(
+        who: &T::AccountId,
+        amount: T::StakeBalance,
+        item_id: T::ItemId,
+    ) -> DispatchResult {
+        Self::register_vipp_nft(who, amount, item_id, false)
     }
 
     fn burn_vipp_nft(who: &T::AccountId, item_id: T::ItemId) {

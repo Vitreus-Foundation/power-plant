@@ -31,6 +31,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
 - Charge `pallet-sudo` calls by weight
 
+- Fix `pallet-nac-managing` VIPP mint IDs and zero-value issuance, and migrate `pallet-privileges` reward caps to owned VIPP IDs without changing accumulated points
+
 ## [215] - 2026-10-19
 
 ### Added

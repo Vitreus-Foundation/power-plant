@@ -967,6 +967,7 @@ impl pallet_nac_managing::Config for Runtime {
     type OnVIPPChanged = Privileges;
     type NftCollectionId = NftCollectionId;
     type VIPPCollectionId = VIPPCollectionId;
+    type MaxVippNftsPerAccount = ConstU32<64>;
 }
 
 parameter_types! {

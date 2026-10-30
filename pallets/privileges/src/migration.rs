@@ -7,6 +7,9 @@ use frame_support::{
     weights::Weight,
 };
 
+mod vipp_cache;
+pub use vipp_cache::RepairVippCache;
+
 mod v0 {
     use super::*;
     use frame_support::{storage_alias, Twox64Concat};
