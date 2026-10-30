@@ -195,6 +195,10 @@ the same notes and hashes before the merge.
   match.
 - If a release run fails, re-run it, or run Release on `main` by hand. Merging other PRs
   doesn't publish it.
+- The release build fails if a runtime imports a host function missing from
+  `.github/supported-host-functions.txt`: a node that lacks it can't load the runtime and stops at
+  the upgrade. Add one there only once every node on mainnet, testnet and stagenet has it, the
+  relay nodes embedded in collators included, in a PR that says which node versions provide it.
 - An urgent fix goes into `main` like any other change, and a release PR follows right away.
   The release takes everything merged since the last one, so keep `main` ready to release.
 
