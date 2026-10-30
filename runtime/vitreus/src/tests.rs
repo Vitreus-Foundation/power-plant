@@ -301,14 +301,16 @@ fn custom_fee_picks_fee_by_call() {
         );
         assert_eq!(fee_of(&batch(vec![])), CallFee::Regular(flat));
 
-        // A wrapped call pays what the call inside it pays.
-        assert_eq!(
-            fee_of(&RuntimeCall::Utility(pallet_utility::Call::as_derivative {
+        // A wrapped call pays what the call inside it pays. For a call charged by weight, that is
+        // the fee passed in, which covers the wrapper as well.
+        let as_derivative = |call| {
+            RuntimeCall::Utility(pallet_utility::Call::as_derivative {
                 index: 0,
-                call: Box::new(remark),
-            })),
-            CallFee::Regular(weight_fee)
-        );
+                call: Box::new(call),
+            })
+        };
+        assert_eq!(fee_of(&as_derivative(transfer)), CallFee::Regular(flat));
+        assert_eq!(fee_of(&as_derivative(remark)), CallFee::Regular(weight_fee));
     })
 }
 
