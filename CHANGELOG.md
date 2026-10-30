@@ -10,6 +10,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 ### Added
 
 - Add the `EnergyExchangeFailed` event to `pallet-treasury-extension`
+- Add the `NftMintFailed` event to `pallet-nac-managing`
 
 ### Changed
 
@@ -30,6 +31,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Stop re-creating the treasury's energy accounts every session in `pallet-treasury-extension`
 - Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
 - Charge `pallet-sudo` calls by weight
+- Pick a free item id when `pallet-nac-managing` mints NAC and VIPP NFTs
 
 ## [215] - 2026-10-19
 
