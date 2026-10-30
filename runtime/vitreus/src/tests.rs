@@ -258,12 +258,19 @@ fn sudo_call_pays_weight_fee() {
 
 #[test]
 fn custom_fee_picks_fee_by_call() {
+    // The `CustomFee` as the config wires it, so the test checks what energy-fee actually uses.
+    type EnergyFeeCustomFee = <Runtime as pallet_energy_fee::Config>::CustomFee;
+
     new_test_ext().execute_with(|| {
         let flat = GetConstantEnergyFee::get();
         // Stands for the weight-based fee that `ChargeTransactionPayment` computes.
         let weight_fee = 1_234;
         let fee_of = |call: &RuntimeCall| {
-            EnergyFee::dispatch_info_to_fee(call, Some(&call.get_dispatch_info()), Some(weight_fee))
+            EnergyFeeCustomFee::dispatch_info_to_fee(
+                call,
+                Some(&call.get_dispatch_info()),
+                Some(weight_fee),
+            )
         };
         let transfer =
             RuntimeCall::Balances(BalancesCall::transfer_keep_alive { dest: alith(), value: 1 });
@@ -276,14 +283,21 @@ fn custom_fee_picks_fee_by_call() {
                 address: H160::zero(),
                 value: 1
             })),
-            CallFee::EVM(EnergyFee::ethereum_fee())
+            CallFee::EVM(EnergyFeeCustomFee::ethereum_fee())
         );
 
-        // A batch pays for each of its calls, and at least the flat fee.
+        // A batch pays for each of its calls, and at least the flat fee. Its calls have different
+        // fees, so paying the flat fee per call would not pass.
         let batch = |calls| RuntimeCall::Utility(pallet_utility::Call::batch { calls });
+        let remark_fee = TransactionPayment::compute_fee(
+            remark.encode().len() as u32,
+            &remark.get_dispatch_info(),
+            0,
+        );
+        assert_ne!(remark_fee, flat);
         assert_eq!(
-            fee_of(&batch(vec![transfer.clone(), transfer.clone()])),
-            CallFee::Regular(2 * flat)
+            fee_of(&batch(vec![transfer.clone(), remark.clone()])),
+            CallFee::Regular(flat + remark_fee)
         );
         assert_eq!(fee_of(&batch(vec![])), CallFee::Regular(flat));
 
@@ -303,7 +317,10 @@ fn signer_without_energy_buys_fee_from_broker() {
     use frame_support::dispatch::PostDispatchInfo;
     use pallet_transaction_payment::OnChargeTransaction;
     use vitreus_runtime_common::QuotePriceIntoEnergy;
-    // The exchange as the config wires it, so the test checks what energy-fee actually uses.
+    // The fee handler and the exchange as the config wires them, so the test checks what the
+    // runtime actually uses.
+    type TransactionFeeHandler =
+        <Runtime as pallet_transaction_payment::Config>::OnChargeTransaction;
     type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
 
     new_test_ext().execute_with(|| {
@@ -321,7 +338,7 @@ fn signer_without_energy_buys_fee_from_broker() {
         let price = EnergyFeeExchange::quote_price_tokens_for_exact_tokens(fee, true)
             .expect("Expected the broker to price the fee");
 
-        let liquidity = <EnergyFee as OnChargeTransaction<Runtime>>::withdraw_fee(
+        let liquidity = <TransactionFeeHandler as OnChargeTransaction<Runtime>>::withdraw_fee(
             &bob,
             &call,
             &info,
@@ -329,7 +346,7 @@ fn signer_without_energy_buys_fee_from_broker() {
             0,
         )
         .expect("Expected to withdraw fee");
-        <EnergyFee as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
+        <TransactionFeeHandler as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
             &bob,
             &info,
             &PostDispatchInfo::default(),
@@ -351,6 +368,9 @@ fn signer_without_energy_buys_fee_from_broker() {
 #[test]
 fn evm_fee_goes_to_treasury_and_burn_counters() {
     use pallet_evm::OnChargeEVMTransaction;
+    // The fee handler as `pallet_evm`'s config wires it, so the test checks what the runtime
+    // actually uses.
+    type EvmFeeHandler = <Runtime as pallet_evm::Config>::OnChargeTransaction;
 
     new_test_ext().execute_with(|| {
         System::set_block_number(1);
@@ -364,12 +384,12 @@ fn evm_fee_goes_to_treasury_and_burn_counters() {
         let alith_h160 = H160::from(alith().0);
 
         // The runner passes the gas cost, which the energy fee doesn't depend on.
-        let liquidity = <EnergyFee as OnChargeEVMTransaction<Runtime>>::withdraw_fee(
+        let liquidity = <EvmFeeHandler as OnChargeEVMTransaction<Runtime>>::withdraw_fee(
             &alith_h160,
             U256::from(1_234_567_890u64),
         )
         .expect("Expected to withdraw fee");
-        assert!(<EnergyFee as OnChargeEVMTransaction<Runtime>>::correct_and_deposit_fee(
+        assert!(<EvmFeeHandler as OnChargeEVMTransaction<Runtime>>::correct_and_deposit_fee(
             &alith_h160,
             U256::zero(),
             U256::zero(),
