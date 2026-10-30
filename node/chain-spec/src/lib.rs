@@ -389,7 +389,7 @@ pub fn testnet_genesis(
         },
         nac_managing: NacManagingConfig {
             accounts: endowed_accounts.iter().map(|x| (*x, 2)).collect(),
-            owners: vec![root_key],
+            owners: vec![treasury()],
         },
         privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
@@ -555,7 +555,7 @@ fn mainnet_genesis(
                 .chain(genesis::vnode_accounts())
                 .map(|account| (account, 2))
                 .collect(),
-            owners: vec![root_key],
+            owners: vec![treasury()],
         },
         privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
