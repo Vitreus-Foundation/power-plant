@@ -76,6 +76,11 @@ jobs:
           profile: ${{ needs.prepare.outputs.profile }}
           tag: ${{ needs.prepare.outputs.srtool-tag }}
 
+      - name: Check the host functions
+        env:
+          WASM: ${{ steps.srtool.outputs.wasm }}
+        run: node .github/scripts/host-functions.mjs check "$WASM"
+
       - name: Check the build and name its files for the release
         env:
           WASM: ${{ steps.srtool.outputs.wasm_compressed }}
