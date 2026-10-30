@@ -186,7 +186,8 @@ Merging a release PR publishes the GitHub release `runtime-vN`. It holds the tes
 wasm built with [srtool](https://github.com/paritytech/srtool), their srtool reports, and notes:
 the `[N]` section of CHANGELOG.md, each wasm's `spec_name`, `spec_version`, `transaction_version`,
 size, blake2-256 and setCode call hashes, and the command that rebuilds it. The release PR shows
-the same notes and hashes before the merge.
+the same notes and hashes before the merge, from a dry run that has to pass: merging into `main`
+requires `Release check`.
 
 - Upgrade a network only with the wasm from a release, never with a local build.
 - Before upgrading mainnet, run the [e2e tests](e2e-tests/README.md) on a fork of it with the
