@@ -118,7 +118,7 @@ use sp_arithmetic::Perbill;
 use sp_runtime::traits::{Convert, Zero};
 use sp_runtime::{
     traits::{BlakeTwo256, Hash, MaybeSerializeDeserialize},
-    SaturatedConversion,
+    DispatchError, SaturatedConversion,
 };
 use sp_std::prelude::*;
 pub use weights::WeightInfo;
@@ -148,8 +148,8 @@ const VIPP_STATUS_EXIST: [u8; 3] = [0, 0, 3];
 /// Default NAC level for account.
 const DEFAULT_NAC_LEVEL: u8 = 1;
 
-/// Extrinsic index.
-const EXTRINSIC_INDEX: u32 = 135;
+/// How many item ids `create_unique_item_id` tries before it gives up.
+const MAX_ITEM_ID_ATTEMPTS: u32 = 8;
 
 #[frame_support::pallet]
 pub mod pallet {
@@ -258,6 +258,14 @@ pub mod pallet {
             /// The VIPP NFT unique ID.
             item_id: T::ItemId,
         },
+
+        /// Minting a NAC for a new account failed.
+        NftMintFailed {
+            /// The new account.
+            owner: T::AccountId,
+            /// Why minting failed.
+            error: DispatchError,
+        },
     }
 
     #[pallet::error]
@@ -268,6 +276,8 @@ pub mod pallet {
         NftAlreadyExist,
         /// NAC level is not correct.
         NacLevelIsIncorrect,
+        /// No free item id was found in the collection.
+        NoFreeItemId,
     }
 
     #[pallet::call]
@@ -289,7 +299,7 @@ pub mod pallet {
                     Self::update_nft_info(&collection, &item_id, nac_level, owner)
                 },
                 _ => {
-                    let item_id = Self::create_unique_item_id(&owner);
+                    let item_id = Self::create_unique_item_id(&collection, &owner)?;
                     Self::do_mint(item_id, owner.clone())?;
                     Self::update_nft_info(&collection, &item_id, nac_level, owner)
                 },
@@ -408,23 +418,37 @@ impl<T: Config> Pallet<T> {
         Ok(())
     }
 
-    /// Generate uniq ItemId using block_number, token_owner and extrinsic_index
-    pub fn create_unique_item_id(owner: &T::AccountId) -> T::ItemId {
+    /// Generate an item id that is free in `collection`. Each attempt hashes the block number,
+    /// the extrinsic index, the owner and the attempt number.
+    pub fn create_unique_item_id(
+        collection: &T::CollectionId,
+        owner: &T::AccountId,
+    ) -> Result<T::ItemId, DispatchError> {
         let block_number = frame_system::Pallet::<T>::block_number();
-        let mut unique_number = Vec::new();
+        // `None` outside an extrinsic, such as in a hook.
+        let extrinsic_index = frame_system::Pallet::<T>::extrinsic_index();
 
-        unique_number.extend_from_slice(&block_number.encode());
-        unique_number.extend_from_slice(&EXTRINSIC_INDEX.to_le_bytes());
-        unique_number.extend_from_slice(owner.encode().as_ref());
+        for attempt in 0..MAX_ITEM_ID_ATTEMPTS {
+            let mut unique_number = Vec::new();
+            unique_number.extend_from_slice(&block_number.encode());
+            unique_number.extend_from_slice(&extrinsic_index.encode());
+            unique_number.extend_from_slice(owner.encode().as_ref());
+            unique_number.extend_from_slice(&attempt.to_le_bytes());
 
-        // Combine the bytes of the hash into an u32 by bitwise OR (|) and left shifts (<<).
-        let hash = BlakeTwo256::hash(&unique_number);
-        let mut item_id: u32 = 0;
-        for i in 0..4 {
-            item_id |= (hash[i] as u32) << (i * 8);
+            // Combine the bytes of the hash into an u32 by bitwise OR (|) and left shifts (<<).
+            let hash = BlakeTwo256::hash(&unique_number);
+            let mut item_id: u32 = 0;
+            for i in 0..4 {
+                item_id |= (hash[i] as u32) << (i * 8);
+            }
+
+            let item_id = T::ItemId::from(item_id);
+            if T::Nfts::owner(collection, &item_id).is_none() {
+                return Ok(item_id);
+            }
         }
 
-        T::ItemId::from(item_id)
+        Err(Error::<T>::NoFreeItemId.into())
     }
 
     /// Create a new collection.
@@ -474,9 +498,9 @@ impl<T: Config> Pallet<T> {
             if Self::threshold_meets_vipp_requirements(account, claim_balance.0)
                 && active_vipp_amount <= claim_balance.0
             {
-                let item_id = Self::create_unique_item_id(account);
-                let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
                 let collection = T::VIPPCollectionId::get();
+                let item_id = Self::create_unique_item_id(&collection, account).ok()?;
+                let item_config = ItemConfig { settings: ItemSettings::all_enabled() };
                 let perbill = Perbill::from_rational(95_u32, 100_u32);
 
                 let result = T::Nfts::mint_into(&collection, &item_id, account, &item_config, true);
@@ -706,10 +730,14 @@ impl<T: Config> OnNewAccount<T::AccountId> for Pallet<T> {
         AccountReputation::<T>::insert(who, new_rep);
 
         // Add default NAC NFT to account.
-        let item_id = Self::create_unique_item_id(who);
-        let nac_minting_result = Self::do_mint(item_id, who.clone());
-        if nac_minting_result.is_ok() {
-            UsersNft::<T>::insert(who, (&item_id, &DEFAULT_NAC_LEVEL));
+        let collection = T::NftCollectionId::get();
+        let minted = Self::create_unique_item_id(&collection, who).and_then(|item_id| {
+            Self::do_mint(item_id, who.clone())?;
+            Ok(item_id)
+        });
+        match minted {
+            Ok(item_id) => UsersNft::<T>::insert(who, (&item_id, &DEFAULT_NAC_LEVEL)),
+            Err(error) => Self::deposit_event(Event::NftMintFailed { owner: who.clone(), error }),
         }
     }
 }
