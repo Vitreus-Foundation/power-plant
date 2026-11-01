@@ -88,13 +88,9 @@ fn energy_payout() -> Balance {
     pallet_dynamic_energy::SessionEnergyPayout::<Runtime>::get()
 }
 
-/// Sets the payout quota of the session to `factor` payout budgets of `budget` VTRS.
-fn set_payout_quota(budget: Balance, factor: u32) {
-    pallet_dynamic_energy::SessionPayoutBudget::<Runtime>::put(budget);
-    frame_support::assert_ok!(DynamicEnergy::set_payout_quota_factor(
-        RuntimeOrigin::root(),
-        Some(factor)
-    ));
+/// Sets the payout quota of the session to `quota` VTRS, as a session change does with a factor.
+fn set_payout_quota(quota: Balance) {
+    pallet_dynamic_energy::SessionPayoutQuota::<Runtime>::put(quota);
 }
 
 #[test]
@@ -406,8 +402,8 @@ mod energy_broker {
             fund_broker();
             assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), broker_vtrs());
 
-            // A quota without a payout budget closes the LNRG → VTRS path, but not the conversion.
-            assert_ok!(DynamicEnergy::set_payout_quota_factor(RuntimeOrigin::root(), Some(2)));
+            // A zero quota closes the LNRG → VTRS path, but not the conversion.
+            set_payout_quota(0);
             assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 0);
 
             assert_conversion_burns_and_mints(LNRG::get());
@@ -422,9 +418,9 @@ mod energy_broker {
             let path = (lnrg.clone(), NativeOrAssetId::Native);
             let broker = EnergyBroker::account_id();
 
-            // A quota of two budgets of 10 VTRS, far below the broker's VTRS.
+            // A quota of 20 VTRS, far below the broker's VTRS.
             fund_broker();
-            set_payout_quota(10 * vtrs::UNITS, 2);
+            set_payout_quota(20 * vtrs::UNITS);
             assert_eq!(EnergyBroker::max_amount_out(&path), 20 * vtrs::UNITS);
 
             // At one energy per VTRS and the 1% swap fee, 25 LNRG would be paid 24.75 VTRS.
@@ -487,18 +483,6 @@ mod energy_broker {
     }
 
     #[test]
-    fn lnrg_sale_has_no_payout_quota_without_factor() {
-        new_test_ext().execute_with(|| {
-            let path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
-
-            // Without a factor only the broker's VTRS limit the sale, whatever the payout budget.
-            fund_broker();
-            pallet_dynamic_energy::SessionPayoutBudget::<Runtime>::put(10 * vtrs::UNITS);
-            assert_eq!(EnergyBroker::max_amount_out(&path), broker_vtrs());
-        })
-    }
-
-    #[test]
     fn snrg_buyback_is_not_limited_by_payout_quota() {
         new_test_ext().execute_with(|| {
             let snrg_path = (NativeOrAssetId::WithId(SNRG::get()), NativeOrAssetId::Native);
@@ -506,7 +490,7 @@ mod energy_broker {
 
             fund_broker();
             Balances::set_balance(&EnergyBroker::account_id(), 50 * vtrs::UNITS);
-            set_payout_quota(10 * vtrs::UNITS, 2);
+            set_payout_quota(20 * vtrs::UNITS);
 
             // The legacy SNRG buyback is not an energy sale: only the broker's VTRS limit it.
             assert_eq!(EnergyBroker::max_amount_out(&snrg_path), broker_vtrs());
@@ -835,8 +819,8 @@ mod treasury {
 
             System::set_block_number(1);
             fund_broker();
-            // A quota of two budgets of 10 VTRS, of which a user's sale takes 9.9 VTRS.
-            set_payout_quota(10 * vtrs::UNITS, 2);
+            // A quota of 20 VTRS, of which a user's sale takes 9.9 VTRS.
+            set_payout_quota(20 * vtrs::UNITS);
             assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
                 RuntimeOrigin::signed(alith()),
                 alith(),

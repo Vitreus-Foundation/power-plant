@@ -326,34 +326,43 @@ fn calculating_zero_exchange_rate_works() {
 }
 
 #[test]
-fn calculating_payout_budget_works() {
+fn payout_quota_is_factor_times_payout_budget() {
     new_test_ext().execute_with(|| {
         TotalStakeOverride::<Test>::put(BUDGET_STAKE);
+        PayoutQuotaFactor::<Test>::put(2);
 
         start_session(1);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), PAYOUT_BUDGET);
+        assert_eq!(SessionPayoutQuota::<Test>::get(), Some(2 * PAYOUT_BUDGET));
 
-        // 0.02*x + 1, which is 2 at the mock warehouse fill of 50%
+        // 0.02*x + 1, which is 2 at the mock warehouse fill of 50%, doubles the budget
         let zero = FixedI128::zero();
         let c = FixedI128::from_rational(2, 100);
         MultiplierCoefficients::<Test>::put([zero, zero, c, FixedI128::one()]);
 
         start_session(2);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), 2 * PAYOUT_BUDGET);
+        assert_eq!(SessionPayoutQuota::<Test>::get(), Some(4 * PAYOUT_BUDGET));
+
+        // a session that lasted twice as long, as session 3 is skipped, doesn't: the budget is
+        // for the session that starts, which is expected to last as usual
+        start_session(4);
+        assert_eq!(SessionPayoutQuota::<Test>::get(), Some(4 * PAYOUT_BUDGET));
     });
 }
 
 #[test]
-fn calculating_zero_payout_budget_works() {
+fn payout_quota_without_payout_budget_is_zero() {
     new_test_ext().execute_with(|| {
         TotalStakeOverride::<Test>::put(BUDGET_STAKE);
+        PayoutQuotaFactor::<Test>::put(2);
         start_session(1);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), PAYOUT_BUDGET);
+        assert_eq!(SessionPayoutQuota::<Test>::get(), Some(2 * PAYOUT_BUDGET));
 
-        // with no stake the payout budget is zero, and the old one is not kept
+        // with no stake the payout budget is zero, and so is the quota, not the old one: nothing
+        // can be paid out, where no quota would lift the limit
         TotalStakeOverride::<Test>::put(0);
         start_session(2);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), 0);
+        assert_eq!(SessionPayoutQuota::<Test>::get(), Some(0));
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(0));
     });
 }
 
@@ -399,37 +408,49 @@ fn calculating_remaining_payout_quota_works() {
 
         // two budgets, less what the energy sold during the session was paid
         PayoutQuotaFactor::<Test>::put(2);
+        start_session(2);
         assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2 * PAYOUT_BUDGET));
 
         let paid = PAYOUT_BUDGET / 2;
         Pallet::<Test>::on_energy_sell(500, paid);
         assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2 * PAYOUT_BUDGET - paid));
 
-        // a new factor applies at once
-        PayoutQuotaFactor::<Test>::put(3);
-        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(3 * PAYOUT_BUDGET - paid));
-
         // a payout above the quota leaves nothing
-        Pallet::<Test>::on_energy_sell(500, 3 * PAYOUT_BUDGET);
+        Pallet::<Test>::on_energy_sell(500, 2 * PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(0));
 
         // a new session opens a new quota
-        start_session(2);
-        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(3 * PAYOUT_BUDGET));
+        start_session(3);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2 * PAYOUT_BUDGET));
     });
 }
 
 #[test]
-fn calculating_remaining_payout_quota_without_budget_works() {
+fn payout_quota_factor_applies_from_next_session() {
     new_test_ext().execute_with(|| {
-        PayoutQuotaFactor::<Test>::put(2);
-
-        // with no stake the payout budget is zero, so nothing can be paid out
-        TotalStakeOverride::<Test>::put(0);
+        TotalStakeOverride::<Test>::put(BUDGET_STAKE);
         start_session(1);
 
-        assert_eq!(SessionPayoutBudget::<Test>::get(), 0);
-        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(0));
+        // a factor set during a session waits for the next one
+        assert_ok!(Pallet::<Test>::set_payout_quota_factor(RuntimeOrigin::root(), Some(2)));
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), None);
+
+        start_session(2);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2 * PAYOUT_BUDGET));
+
+        // so does a new factor ...
+        assert_ok!(Pallet::<Test>::set_payout_quota_factor(RuntimeOrigin::root(), Some(3)));
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(2 * PAYOUT_BUDGET));
+
+        start_session(3);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(3 * PAYOUT_BUDGET));
+
+        // ... and its removal
+        assert_ok!(Pallet::<Test>::set_payout_quota_factor(RuntimeOrigin::root(), None));
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(3 * PAYOUT_BUDGET));
+
+        start_session(4);
+        assert_eq!(Pallet::<Test>::remaining_payout_quota(), None);
     });
 }
 
