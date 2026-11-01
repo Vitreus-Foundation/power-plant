@@ -47,11 +47,28 @@ def parse(text):
     """Return the version sections, top first, and the format errors as (line, message)."""
     versions, errors, subsections = [], [], set()
     last_release = None
+    # Blank lines between two non-blank lines: exactly one after a heading, as in the rest of the
+    # file, and none between two lines of a subsection's entries. A blank line there makes the list
+    # loose: GitHub renders every entry as a paragraph, in CHANGELOG.md and in the release notes,
+    # which copy the lines as they are. `last` is the latest non-blank line, `gap` the blank lines
+    # after it, and `current` the subsection they are in.
+    last, last_number, gap, current = "", 0, [], None
     for number, line in enumerate(text.splitlines(), 1):
+        if not line.strip():
+            gap.append(number)
+            continue
+        if last.startswith("#"):
+            if len(gap) != 1:
+                errors.append((last_number, f"'{last}' must be followed by exactly one blank line"))
+        elif gap and current and not line.startswith("#"):
+            where = f"'### {current}' of [{versions[-1]}]"
+            errors.append((gap[0], f"blank line among the entries of {where}; keep a subsection's entries together"))
+        last, last_number, gap = line, number, []
         if line.startswith("####"):
             continue
         if line.startswith("### "):
             name = line[4:].strip()
+            current = name if versions else None
             if not versions:
                 errors.append((number, f"'{line}' comes before any version section"))
             elif name not in SUBSECTIONS:
@@ -61,7 +78,7 @@ def parse(text):
                 errors.append((number, f"subsection '{name}' repeats within [{versions[-1]}]"))
             subsections.add(name)
         elif line.startswith("## "):
-            subsections = set()
+            current, subsections = None, set()
             if not versions and line != UNRELEASED:
                 errors.append((number, f"the first section must be '{UNRELEASED}'; keep it on top even when empty"))
             if line == UNRELEASED:

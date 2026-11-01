@@ -19,6 +19,7 @@ use fc_db::kv::frontier_database_dir;
 use futures::future::TryFutureExt;
 use sc_cli::SubstrateCli;
 use sc_service::DatabaseSource;
+#[cfg(feature = "pyroscope")]
 use std::net::ToSocketAddrs;
 use vitreus_service::{self, eth::db_config_dir, ChainSpec};
 
@@ -114,18 +115,6 @@ where
     // By default, enable BEEFY on all networks, unless explicitly disabled through CLI.
     let enable_beefy = !cli.run.no_beefy;
 
-    let jaeger_agent = if let Some(ref jaeger_agent) = cli.run.jaeger_agent {
-        Some(
-            jaeger_agent
-                .to_socket_addrs()
-                .map_err(Error::AddressResolutionFailure)?
-                .next()
-                .ok_or_else(|| Error::AddressResolutionMissing)?,
-        )
-    } else {
-        None
-    };
-
     let node_version =
         if cli.run.disable_worker_version_check { None } else { Some(NODE_VERSION.to_string()) };
 
@@ -147,7 +136,7 @@ where
                 is_parachain_node: vitreus_service::IsParachainNode::No,
                 enable_beefy,
                 force_authoring_backoff: cli.run.force_authoring_backoff,
-                jaeger_agent,
+                jaeger_agent: None,
                 telemetry_worker_handle: None,
                 node_version,
                 secure_validator_mode,
@@ -221,7 +210,7 @@ pub fn run() -> Result<()> {
 
             runner.async_run(|mut config| {
                 let (client, _, import_queue, task_manager, _) =
-                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                 Ok((cmd.run(client, import_queue).map_err(Error::SubstrateCli), task_manager))
             })
         },
@@ -230,7 +219,7 @@ pub fn run() -> Result<()> {
 
             Ok(runner.async_run(|mut config| {
                 let (client, _, _, task_manager, _) =
-                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth)
                         .map_err(Error::PolkadotService)?;
                 Ok((cmd.run(client, config.database).map_err(Error::SubstrateCli), task_manager))
             })?)
@@ -240,7 +229,7 @@ pub fn run() -> Result<()> {
 
             Ok(runner.async_run(|mut config| {
                 let (client, _, _, task_manager, _) =
-                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                 Ok((cmd.run(client, config.chain_spec).map_err(Error::SubstrateCli), task_manager))
             })?)
         },
@@ -249,7 +238,7 @@ pub fn run() -> Result<()> {
 
             Ok(runner.async_run(|mut config| {
                 let (client, _, import_queue, task_manager, _) =
-                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                 Ok((cmd.run(client, import_queue).map_err(Error::SubstrateCli), task_manager))
             })?)
         },
@@ -305,7 +294,7 @@ pub fn run() -> Result<()> {
 
             Ok(runner.async_run(|mut config| {
                 let (client, backend, _, task_manager, _) =
-                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                 let aux_revert = Box::new(|client, backend, blocks| {
                     vitreus_service::revert_backend(client, backend, blocks, config).map_err(
                         |err| {
@@ -345,19 +334,19 @@ pub fn run() -> Result<()> {
                 }),
                 BenchmarkCmd::Block(cmd) => runner.sync_run(|mut config| {
                     let (client, _, _, _, _) =
-                        vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
+                        vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                     cmd.run(client).map_err(Error::SubstrateCli)
                 }),
                 BenchmarkCmd::Storage(cmd) => runner.sync_run(|mut config| {
                     let (client, backend, _, _, _) =
-                        vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
+                        vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                     let db = backend.expose_db();
                     let storage = backend.expose_storage();
                     cmd.run(config, client, db, storage).map_err(Error::SubstrateCli)
                 }),
                 BenchmarkCmd::Overhead(cmd) => runner.sync_run(|mut config| {
                     let (client, _, _, _, _) =
-                        vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
+                        vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                     let ext_builder = RemarkBuilder::new(client.clone());
                     let header = client.header(client.info().genesis_hash).unwrap().unwrap();
                     let inherent_data = inherent_benchmark_data(header)
@@ -367,7 +356,7 @@ pub fn run() -> Result<()> {
                 }),
                 BenchmarkCmd::Extrinsic(cmd) => runner.sync_run(|mut config| {
                     let (client, _, _, _, _) =
-                        vitreus_service::new_chain_ops(&mut config, &cli.eth, None)?;
+                        vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                     // Register the *Remark* and *TKA* builders.
                     let ext_factory = ExtrinsicFactory(vec![
                         Box::new(RemarkBuilder::new(client.clone())),
@@ -405,7 +394,7 @@ pub fn run() -> Result<()> {
             let runner = cli.create_runner(cmd)?;
             Ok(runner.sync_run(|mut config| {
                 let (client, _, _, _, frontier_backend) =
-                    vitreus_service::new_chain_ops(&mut config, &cli.eth, None)
+                    vitreus_service::new_chain_ops(&mut config, &cli.eth)
                         .map_err(Error::PolkadotService)?;
                 let frontier_backend = match frontier_backend {
                     fc_db::Backend::KeyValue(kv) => kv,
