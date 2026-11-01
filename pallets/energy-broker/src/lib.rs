@@ -205,7 +205,7 @@ pub mod pallet {
         ZeroAmount,
         /// The broker could not take the swap input.
         DepositFailed,
-        /// Insufficient liquidity in the energy broker.
+        /// The path cannot currently supply the amount out.
         InsufficientLiquidity,
         /// Calculated amount out is less than provided minimum amount.
         ProvidedMinimumNotSufficientForSwap,

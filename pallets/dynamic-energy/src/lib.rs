@@ -151,7 +151,7 @@ pub mod pallet {
     pub type GenerationRateParams<T: Config> =
         StorageValue<_, GenerationRateParameters<T::Balance>, ValueQuery>;
 
-    /// Parameters used to calculate the exchange rate.
+    /// Parameters used to calculate the exchange rate and the payout budget.
     #[pallet::storage]
     #[pallet::getter(fn exchange_rate_parameters)]
     pub type ExchangeRateParams<T: Config> =
