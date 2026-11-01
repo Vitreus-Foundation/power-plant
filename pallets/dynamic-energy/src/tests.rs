@@ -331,7 +331,7 @@ fn calculating_payout_budget_works() {
         TotalStakeOverride::<Test>::put(BUDGET_STAKE);
 
         start_session(1);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(PAYOUT_BUDGET));
+        assert_eq!(SessionPayoutBudget::<Test>::get(), PAYOUT_BUDGET);
 
         // 0.02*x + 1, which is 2 at the mock warehouse fill of 50%
         let zero = FixedI128::zero();
@@ -339,7 +339,7 @@ fn calculating_payout_budget_works() {
         MultiplierCoefficients::<Test>::put([zero, zero, c, FixedI128::one()]);
 
         start_session(2);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(2 * PAYOUT_BUDGET));
+        assert_eq!(SessionPayoutBudget::<Test>::get(), 2 * PAYOUT_BUDGET);
     });
 }
 
@@ -348,12 +348,12 @@ fn calculating_zero_payout_budget_works() {
     new_test_ext().execute_with(|| {
         TotalStakeOverride::<Test>::put(BUDGET_STAKE);
         start_session(1);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), Some(PAYOUT_BUDGET));
+        assert_eq!(SessionPayoutBudget::<Test>::get(), PAYOUT_BUDGET);
 
-        // with no stake there is no payout budget, and the old one is not kept
+        // with no stake the payout budget is zero, and the old one is not kept
         TotalStakeOverride::<Test>::put(0);
         start_session(2);
-        assert_eq!(SessionPayoutBudget::<Test>::get(), None);
+        assert_eq!(SessionPayoutBudget::<Test>::get(), 0);
     });
 }
 
@@ -424,11 +424,11 @@ fn calculating_remaining_payout_quota_without_budget_works() {
     new_test_ext().execute_with(|| {
         PayoutQuotaFactor::<Test>::put(2);
 
-        // with no stake there is no payout budget, so nothing can be paid out
+        // with no stake the payout budget is zero, so nothing can be paid out
         TotalStakeOverride::<Test>::put(0);
         start_session(1);
 
-        assert_eq!(SessionPayoutBudget::<Test>::get(), None);
+        assert_eq!(SessionPayoutBudget::<Test>::get(), 0);
         assert_eq!(Pallet::<Test>::remaining_payout_quota(), Some(0));
     });
 }

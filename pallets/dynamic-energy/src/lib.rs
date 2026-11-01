@@ -179,12 +179,11 @@ pub mod pallet {
     #[pallet::storage]
     pub type SessionEnergyPayout<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
 
-    /// The payout budget of the session in the native currency, the payout its energy sales are
-    /// priced at: what the total stake earns at the annual percentage rate over
-    /// `ExpectedSessionDuration`, scaled by the warehouse capacity multiplier. `None` if it could
-    /// not be calculated or is zero, e.g. with no stake.
+    /// The payout budget of the session in the native currency: what the total stake earns at the
+    /// annual percentage rate over `ExpectedSessionDuration`, scaled by the warehouse capacity
+    /// multiplier. Zero if it could not be calculated.
     #[pallet::storage]
-    pub type SessionPayoutBudget<T: Config> = StorageValue<_, StakeOf<T>>;
+    pub type SessionPayoutBudget<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
 
     /// The payout quota in payout budgets: the energy sales of a session are paid out at most
     /// this many budgets. `None` for no quota.
@@ -423,12 +422,7 @@ impl<T: Config> Pallet<T> {
     pub fn remaining_payout_quota() -> Option<StakeOf<T>> {
         let factor = PayoutQuotaFactor::<T>::get()?;
 
-        // Without a payout budget nothing is paid out; `update_payout_budget` logs it.
-        let Some(budget) = SessionPayoutBudget::<T>::get() else {
-            return Some(Zero::zero());
-        };
-
-        let quota = budget.saturating_mul(factor.into());
+        let quota = SessionPayoutBudget::<T>::get().saturating_mul(factor.into());
         Some(quota.saturating_sub(SessionEnergyPayout::<T>::get()))
     }
 
@@ -588,16 +582,13 @@ impl<T: Config> Pallet<T> {
     fn update_payout_budget() {
         let ExchangeRateParameters { total_stake, apr, multiplier, .. } =
             ExchangeRateParams::<T>::get();
+        let duration = T::ExpectedSessionDuration::get();
 
-        let budget = Self::calculate_payout_budget(
-            total_stake,
-            T::ExpectedSessionDuration::get(),
-            apr,
-            multiplier,
-        )
-        .filter(|budget| !budget.is_zero());
+        let budget = Self::calculate_payout_budget(total_stake, duration, apr, multiplier)
+            .unwrap_or_default();
 
-        if budget.is_none() {
+        if budget.is_zero() {
+            // With no payout budget the payout quota is zero: nothing is paid out.
             log::warn!(
                 target: LOG_TARGET,
                 "Payout budget is unavailable: total_stake: {:?}, apr: {:?}, multiplier: {:?}",
@@ -605,7 +596,7 @@ impl<T: Config> Pallet<T> {
             );
         }
 
-        SessionPayoutBudget::<T>::set(budget);
+        SessionPayoutBudget::<T>::put(budget);
     }
 
     fn calculate_generation_rate(energy_burn: EnergyOf<T>) -> Option<EnergyOf<T>> {
