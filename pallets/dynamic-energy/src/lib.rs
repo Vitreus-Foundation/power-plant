@@ -229,9 +229,6 @@ pub mod pallet {
         MultiplierCoefficientsUpdated { coefficients: [FixedI128; 4] },
         /// The VNRG/VTRS exchange rate was updated.
         ExchangeRateUpdated { rate: FixedU128 },
-        /// The payout budget of the new session could not be calculated or is zero, e.g. with no
-        /// stake. With a payout quota, the energy sales of the session are paid nothing.
-        SessionPayoutBudgetUnavailable,
         /// The payout quota factor was set, or removed with `None`.
         PayoutQuotaFactorSet { value: Option<u32> },
     }
@@ -426,7 +423,7 @@ impl<T: Config> Pallet<T> {
     pub fn remaining_payout_quota() -> Option<StakeOf<T>> {
         let factor = PayoutQuotaFactor::<T>::get()?;
 
-        // Without a payout budget nothing is paid out; `update_payout_budget` reports it.
+        // Without a payout budget nothing is paid out; `update_payout_budget` logs it.
         let Some(budget) = SessionPayoutBudget::<T>::get() else {
             return Some(Zero::zero());
         };
@@ -606,7 +603,6 @@ impl<T: Config> Pallet<T> {
                 "Payout budget is unavailable: total_stake: {:?}, apr: {:?}, multiplier: {:?}",
                 total_stake, apr, multiplier
             );
-            Self::deposit_event(Event::SessionPayoutBudgetUnavailable);
         }
 
         SessionPayoutBudget::<T>::set(budget);

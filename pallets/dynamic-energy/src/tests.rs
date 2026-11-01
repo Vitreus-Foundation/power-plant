@@ -328,8 +328,6 @@ fn calculating_zero_exchange_rate_works() {
 #[test]
 fn calculating_payout_budget_works() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-
         TotalStakeOverride::<Test>::put(BUDGET_STAKE);
 
         start_session(1);
@@ -342,26 +340,20 @@ fn calculating_payout_budget_works() {
 
         start_session(2);
         assert_eq!(SessionPayoutBudget::<Test>::get(), Some(2 * PAYOUT_BUDGET));
-
-        let unavailable: RuntimeEvent = Event::<Test>::SessionPayoutBudgetUnavailable.into();
-        assert!(System::events().iter().all(|record| record.event != unavailable));
     });
 }
 
 #[test]
 fn calculating_zero_payout_budget_works() {
     new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-
         TotalStakeOverride::<Test>::put(BUDGET_STAKE);
         start_session(1);
         assert_eq!(SessionPayoutBudget::<Test>::get(), Some(PAYOUT_BUDGET));
 
-        // with no stake there is no payout budget: it is reported, and the old one is not kept
+        // with no stake there is no payout budget, and the old one is not kept
         TotalStakeOverride::<Test>::put(0);
         start_session(2);
         assert_eq!(SessionPayoutBudget::<Test>::get(), None);
-        System::assert_last_event(Event::<Test>::SessionPayoutBudgetUnavailable.into());
     });
 }
 
