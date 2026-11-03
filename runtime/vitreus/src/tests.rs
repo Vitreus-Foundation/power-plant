@@ -328,6 +328,8 @@ fn signer_without_energy_buys_fee_from_broker() {
         let broker = EnergyBroker::account_id();
         let fee = GetConstantEnergyFee::get();
         fund_broker_with_vnrg(10 * fee);
+        // A rate other than one, so a handler that ignores it charges the wrong price.
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_rational(3, 2));
         let bob = AccountId::from([7u8; 20]);
         Balances::set_balance(&bob, 1_000 * vtrs::UNITS);
 
