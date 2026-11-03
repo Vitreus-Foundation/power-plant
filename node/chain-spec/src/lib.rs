@@ -92,7 +92,7 @@ pub fn development_config() -> ChainSpec {
                 vec![authority_keys_from_seed("Alice")],
                 vec![],
                 // Ethereum chain ID
-                SS58Prefix::get() as u64,
+                19434,
             ))
             .expect("Invalid genesis config"),
         )
@@ -130,7 +130,8 @@ pub fn devnet_config() -> ChainSpec {
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
-                SS58Prefix::get() as u64,
+                // Ethereum chain ID
+                19433,
             ))
             .unwrap(),
         )
@@ -168,7 +169,8 @@ pub fn localnet_config() -> ChainSpec {
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
-                SS58Prefix::get() as u64,
+                // Ethereum chain ID
+                19434,
             ))
             .unwrap(),
         )
@@ -389,7 +391,7 @@ pub fn testnet_genesis(
         },
         nac_managing: NacManagingConfig {
             accounts: endowed_accounts.iter().map(|x| (*x, 2)).collect(),
-            owners: vec![root_key],
+            owners: vec![treasury()],
         },
         privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
@@ -555,7 +557,7 @@ fn mainnet_genesis(
                 .chain(genesis::vnode_accounts())
                 .map(|account| (account, 2))
                 .collect(),
-            owners: vec![root_key],
+            owners: vec![treasury()],
         },
         privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
