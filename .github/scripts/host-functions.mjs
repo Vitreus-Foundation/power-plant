@@ -9,9 +9,7 @@
 // `subwasm get` and unpacked with `subwasm decompress`.
 import { readFileSync } from 'node:fs';
 
-// The host functions a runtime may import: every node on mainnet, testnet and stagenet provides
-// them. A node that lacks one of the imported host functions can't load the runtime at all, so
-// after the upgrade it stops importing blocks.
+// The host functions every node provides; the file's header says when to add one.
 const SUPPORTED = '.github/supported-host-functions.txt';
 
 function fail(message) {
