@@ -258,7 +258,6 @@ fn sudo_call_pays_weight_fee() {
 
 #[test]
 fn custom_fee_picks_fee_by_call() {
-    // The `CustomFee` as the config wires it, so the test checks what energy-fee actually uses.
     type EnergyFeeCustomFee = <Runtime as pallet_energy_fee::Config>::CustomFee;
 
     new_test_ext().execute_with(|| {
@@ -319,8 +318,6 @@ fn signer_without_energy_buys_fee_from_broker() {
     use frame_support::dispatch::PostDispatchInfo;
     use pallet_transaction_payment::OnChargeTransaction;
     use vitreus_runtime_common::QuotePriceIntoEnergy;
-    // The fee handler and the exchange as the config wires them, so the test checks what the
-    // runtime actually uses.
     type TransactionFeeHandler =
         <Runtime as pallet_transaction_payment::Config>::OnChargeTransaction;
     type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
@@ -370,8 +367,6 @@ fn signer_without_energy_buys_fee_from_broker() {
 #[test]
 fn evm_fee_goes_to_treasury_and_burn_counters() {
     use pallet_evm::OnChargeEVMTransaction;
-    // The fee handler as `pallet_evm`'s config wires it, so the test checks what the runtime
-    // actually uses.
     type EvmFeeHandler = <Runtime as pallet_evm::Config>::OnChargeTransaction;
 
     new_test_ext().execute_with(|| {
