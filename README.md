@@ -105,7 +105,7 @@ The development chain comes with pre-funded accounts for testing:
 ### Network Configuration
 
 For connecting to the network:
-- Chain ID: 1943
+- Chain ID: 19434
 - Network Name: vitreus-power-plant
 - Currency Symbol: VTRS
 - RPC URL: http://localhost:9944/
