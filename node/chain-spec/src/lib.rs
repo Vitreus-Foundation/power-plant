@@ -92,7 +92,7 @@ pub fn development_config() -> ChainSpec {
                 vec![authority_keys_from_seed("Alice")],
                 vec![],
                 // Ethereum chain ID
-                SS58Prefix::get() as u64,
+                19434,
             ))
             .expect("Invalid genesis config"),
         )
@@ -130,7 +130,8 @@ pub fn devnet_config() -> ChainSpec {
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
-                SS58Prefix::get() as u64,
+                // Ethereum chain ID
+                19433,
             ))
             .unwrap(),
         )
@@ -168,7 +169,8 @@ pub fn localnet_config() -> ChainSpec {
                 // Initial Validators
                 vec![authority_keys_from_seed("Alice"), authority_keys_from_seed("Bob")],
                 vec![],
-                SS58Prefix::get() as u64,
+                // Ethereum chain ID
+                19434,
             ))
             .unwrap(),
         )
@@ -389,7 +391,7 @@ pub fn testnet_genesis(
         },
         nac_managing: NacManagingConfig {
             accounts: endowed_accounts.iter().map(|x| (*x, 2)).collect(),
-            owners: vec![root_key],
+            owners: vec![treasury()],
         },
         privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
@@ -555,7 +557,7 @@ fn mainnet_genesis(
                 .chain(genesis::vnode_accounts())
                 .map(|account| (account, 2))
                 .collect(),
-            owners: vec![root_key],
+            owners: vec![treasury()],
         },
         privileges: PrivilegesConfig { date: Some((2024, 5, 15)), ..Default::default() },
         session: SessionConfig {
@@ -1278,7 +1280,7 @@ fn properties() -> Properties {
 fn default_parachains_host_configuration(
 ) -> polkadot_runtime_parachains::configuration::HostConfiguration<polkadot_primitives::BlockNumber>
 {
-    use polkadot_primitives::{MAX_CODE_SIZE, MAX_POV_SIZE};
+    use polkadot_primitives::{vstaging::SchedulerParams, MAX_CODE_SIZE, MAX_POV_SIZE};
 
     polkadot_runtime_parachains::configuration::HostConfiguration {
         validation_upgrade_cooldown: 2u32,
@@ -1307,6 +1309,8 @@ fn default_parachains_host_configuration(
         relay_vrf_modulo_samples: 2,
         zeroth_delay_tranche_width: 0,
         minimum_validation_upgrade_delay: 5,
+        // No core serves the on-demand pool, so orders would be paid for and never served.
+        scheduler_params: SchedulerParams { on_demand_queue_max_size: 0, ..Default::default() },
         ..Default::default()
     }
 }

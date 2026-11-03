@@ -35,8 +35,8 @@ use jsonrpsee::{
     proc_macros::rpc,
     types::{ErrorCode, ErrorObject},
 };
-use parity_scale_codec::{Codec, Decode};
-use sp_api::ProvideRuntimeApi;
+use parity_scale_codec::{Codec, DecodeLimit};
+use sp_api::{ProvideRuntimeApi, MAX_EXTRINSIC_DEPTH};
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_runtime::traits::Block as BlockT;
@@ -112,13 +112,15 @@ where
             self.client.info().best_hash,
         );
 
-        let call = Decode::decode(&mut &*encoded_call).map_err(|e| {
-            ErrorObject::owned(
-                ErrorCode::InternalError.code(),
-                "Unable to decode call.",
-                Some(e.to_string()),
-            )
-        })?;
+        // Same depth limit as the runtime API applies to its arguments.
+        let call = Call::decode_all_with_depth_limit(MAX_EXTRINSIC_DEPTH, &mut &*encoded_call)
+            .map_err(|e| {
+                ErrorObject::owned(
+                    ErrorCode::InternalError.code(),
+                    "Unable to decode call.",
+                    Some(e.to_string()),
+                )
+            })?;
 
         api.estimate_call_fee(at, account, call).map_err(|e| {
             ErrorObject::owned(
