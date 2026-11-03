@@ -1954,8 +1954,7 @@ parameter_types! {
     pub MaxXcmTransactWeight: Weight = Weight::from_parts(200_000_000, 20_000);
 }
 
-/// Account of the broker pallet on the coretime chain. Nothing is sent there while
-/// `coretime::Config::SendXcm` is `()`.
+/// Account of the broker pallet on the coretime chain.
 pub struct BrokerPot;
 impl Get<InteriorLocation> for BrokerPot {
     fn get() -> InteriorLocation {

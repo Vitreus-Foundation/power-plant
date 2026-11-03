@@ -77,12 +77,11 @@ mod coretime_migration {
     type MigrateToCoretime =
         coretime::migration::MigrateToCoretime<Runtime, (), GetLegacyLeaseImpl>;
 
-    /// `MigrateToCoretime` for a relay chain without a coretime chain: every parachain gets a
-    /// core of its own, with no end, and its messages to the broker are not sent. It also stops
-    /// on-demand orders, as no core serves the on-demand pool.
+    /// `MigrateToCoretime` for a relay chain without a coretime chain.
     ///
-    /// Runs once, so later upgrades keep the on-demand queue size set on chain. The upstream
-    /// `post_upgrade` expects a message to the broker, so the try-runtime checks are our own.
+    /// Every parachain gets a core of its own, with no end, and its messages to the broker are not
+    /// sent. It also stops on-demand orders, as no core serves the on-demand pool. Runs once, so
+    /// later upgrades keep the on-demand queue size set on chain.
     pub struct MigrateToCoretimeWithoutBroker;
     impl OnRuntimeUpgrade for MigrateToCoretimeWithoutBroker {
         fn on_runtime_upgrade() -> Weight {
@@ -112,6 +111,8 @@ mod coretime_migration {
             Ok(state)
         }
 
+        // The upstream `post_upgrade` expects a message to the broker, which is never sent, so
+        // this one checks the cores and the on-demand queue itself.
         #[cfg(feature = "try-runtime")]
         fn post_upgrade(state: Vec<u8>) -> Result<(), sp_runtime::TryRuntimeError> {
             if state.is_empty() {
