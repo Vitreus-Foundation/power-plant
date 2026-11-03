@@ -105,7 +105,7 @@ The development chain comes with pre-funded accounts for testing:
 ### Network Configuration
 
 For connecting to the network:
-- Chain ID: 1943
+- Chain ID: 19434
 - Network Name: vitreus-power-plant
 - Currency Symbol: VTRS
 - RPC URL: http://localhost:9944/
@@ -186,7 +186,8 @@ Merging a release PR publishes the GitHub release `runtime-vN`. It holds the tes
 wasm built with [srtool](https://github.com/paritytech/srtool), their srtool reports, and notes:
 the `[N]` section of CHANGELOG.md, each wasm's `spec_name`, `spec_version`, `transaction_version`,
 size, blake2-256 and setCode call hashes, and the command that rebuilds it. The release PR shows
-the same notes and hashes before the merge.
+the same notes and hashes before the merge, from a dry run that has to pass: merging into `main`
+requires `Release check`.
 
 - Upgrade a network only with the wasm from a release, never with a local build.
 - Before upgrading mainnet, run the [e2e tests](e2e-tests/README.md) on a fork of it with the
@@ -195,12 +196,19 @@ the same notes and hashes before the merge.
   match.
 - If a release run fails, re-run it, or run Release on `main` by hand. Merging other PRs
   doesn't publish it.
+- The release build fails if a runtime imports a host function missing from
+  `.github/supported-host-functions.txt`: a node that lacks it can't load the runtime and stops at
+  the upgrade. Add one there only once every node on mainnet, testnet and stagenet has it, the
+  relay nodes embedded in collators included, in a PR that says which node versions provide it.
 - An urgent fix goes into `main` like any other change, and a release PR follows right away.
   The release takes everything merged since the last one, so keep `main` ready to release.
 
 ## Documentation
 
-- [Pallet Documentation](./pallets/ExtrinsicLib.md)
+Browse the pallets and docs of the live runtimes in subxt-explorer:
+
+- [Mainnet](https://paritytech.github.io/subxt-explorer/#/?config=url_wss%3A%2F%2Frpc-mainnet.vtrs.io)
+- [Testnet](https://paritytech.github.io/subxt-explorer/#/?config=url_wss%3A%2F%2Frpc.testnet.compliq.io%3A9945)
 
 ## License
 

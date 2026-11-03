@@ -229,6 +229,33 @@ fn energy_fee_exchange_is_limited_by_broker_vnrg() {
     })
 }
 
+#[test]
+fn sudo_call_pays_weight_fee() {
+    new_test_ext().execute_with(|| {
+        let call = RuntimeCall::Sudo(pallet_sudo::Call::sudo {
+            call: Box::new(RuntimeCall::System(frame_system::Call::remark { remark: vec![] })),
+        });
+        let info = call.get_dispatch_info();
+        let fee = TransactionPayment::compute_fee(0, &info, 0);
+        assert!(fee > 0);
+        assert_eq!(
+            EnergyFee::dispatch_info_to_fee(&call, Some(&info), Some(fee)),
+            CallFee::Regular(fee)
+        );
+
+        let wrapped = RuntimeCall::Utility(pallet_utility::Call::as_derivative {
+            index: 0,
+            call: Box::new(call),
+        });
+        let wrapped_info = wrapped.get_dispatch_info();
+        let wrapped_fee = TransactionPayment::compute_fee(0, &wrapped_info, 0);
+        assert_eq!(
+            EnergyFee::dispatch_info_to_fee(&wrapped, Some(&wrapped_info), Some(wrapped_fee)),
+            CallFee::Regular(wrapped_fee)
+        );
+    })
+}
+
 mod energy_broker {
     use super::*;
     use frame_support::assert_ok;
