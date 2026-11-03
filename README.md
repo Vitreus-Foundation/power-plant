@@ -105,7 +105,7 @@ The development chain comes with pre-funded accounts for testing:
 ### Network Configuration
 
 For connecting to the network:
-- Chain ID: 1943
+- Chain ID: 19434
 - Network Name: vitreus-power-plant
 - Currency Symbol: VTRS
 - RPC URL: http://localhost:9944/
@@ -201,7 +201,10 @@ requires `Release check`.
 
 ## Documentation
 
-- [Pallet Documentation](./pallets/ExtrinsicLib.md)
+Browse the pallets and docs of the live runtimes in subxt-explorer:
+
+- [Mainnet](https://paritytech.github.io/subxt-explorer/#/?config=url_wss%3A%2F%2Frpc-mainnet.vtrs.io)
+- [Testnet](https://paritytech.github.io/subxt-explorer/#/?config=url_wss%3A%2F%2Frpc.testnet.compliq.io%3A9945)
 
 ## License
 
