@@ -200,7 +200,10 @@ the same notes and hashes before the merge.
 
 ## Documentation
 
-- [Pallet Documentation](./pallets/ExtrinsicLib.md)
+Browse the pallets and docs of the live runtimes in subxt-explorer:
+
+- [Mainnet](https://paritytech.github.io/subxt-explorer/#/?config=url_wss%3A%2F%2Frpc-mainnet.vtrs.io)
+- [Testnet](https://paritytech.github.io/subxt-explorer/#/?config=url_wss%3A%2F%2Frpc.testnet.compliq.io%3A9945)
 
 ## License
 
