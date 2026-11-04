@@ -210,12 +210,17 @@ mod energy_fee {
     #[test]
     fn sudo_call_pays_weight_fee() {
         new_test_ext().execute_with(|| {
+            // The call inside pays the flat fee, so a `sudo` charged like its inner call would too.
             let call = RuntimeCall::Sudo(pallet_sudo::Call::sudo {
-                call: Box::new(RuntimeCall::System(frame_system::Call::remark { remark: vec![] })),
+                call: Box::new(RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                    dest: alith(),
+                    value: 1,
+                })),
             });
             let info = call.get_dispatch_info();
             let fee = TransactionPayment::compute_fee(0, &info, 0);
             assert!(fee > 0);
+            assert_ne!(fee, GetConstantEnergyFee::get());
             assert_eq!(
                 EnergyFeeCustomFee::dispatch_info_to_fee(&call, Some(&info), Some(fee)),
                 CallFee::Regular(fee)
