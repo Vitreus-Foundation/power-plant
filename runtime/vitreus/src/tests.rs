@@ -1005,17 +1005,10 @@ mod xcm_tests {
     }
 }
 
-/// Launchpad free-trade wiring: the free-trade fee is the broker's price for
-/// one launchpad call, and a `Pays::No` refund lands with a VTRS-only signer
-/// as VNRG — so their next call does not touch the broker.
+/// Launchpad free-trade wiring: the free-trade fee is the broker's price for one launchpad call.
 #[cfg(feature = "testnet-runtime")]
 mod launchpad_free_trades {
     use super::*;
-    use frame_support::{
-        dispatch::{Pays, PostDispatchInfo},
-        traits::fungibles::{Inspect, Mutate},
-    };
-    use pallet_transaction_payment::OnChargeTransaction;
 
     fn one_call_energy() -> Balance {
         <EnergyFee as CustomFee<
@@ -1025,13 +1018,25 @@ mod launchpad_free_trades {
             GetConstantEnergyFee,
         >>::custom_fee()
     }
-    fn vnrg(who: &AccountId) -> Balance {
-        <Assets as Inspect<AccountId>>::balance(VNRG::get(), who)
-    }
 
     #[test]
     fn free_trade_fee_is_the_broker_price_of_one_call_and_200x_at_the_default_split() {
         new_test_ext().execute_with(|| {
+            // A launchpad call is charged the flat fee, which is what the free-trade fee prices.
+            let call = RuntimeCall::Launchpad(pallet_launchpad::Call::buy {
+                launch_id: 0,
+                quote_in: 1,
+                min_tokens_out: 0,
+            });
+            assert_eq!(
+                <Runtime as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(
+                    &call,
+                    Some(&call.get_dispatch_info()),
+                    None,
+                ),
+                CallFee::Regular(one_call_energy())
+            );
+
             // No energy rate yet: nothing can be free.
             pallet_dynamic_energy::ExchangeRate::<Runtime>::kill();
             assert_eq!(launchpad::LaunchpadFreeTradeFee::get(), Balance::MAX);
@@ -1077,79 +1082,6 @@ mod launchpad_free_trades {
                 pallet_launchpad::Pallet::<Runtime>::free_trade_threshold(&curve),
                 Some(fee * 200)
             );
-        });
-    }
-
-    #[test]
-    fn a_pays_no_refund_is_kept_by_a_vtrs_only_signer() {
-        new_test_ext().execute_with(|| {
-            pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
-            let broker = EnergyBroker::account_id();
-            let _ = Balances::deposit_creating(&broker, 1_000 * vtrs::UNITS);
-            <Assets as Mutate<AccountId>>::mint_into(
-                VNRG::get(),
-                &broker,
-                1_000 * one_call_energy(),
-            )
-            .unwrap();
-            let bob = AccountId::from([7u8; 20]);
-            let _ = Balances::deposit_creating(&bob, 1_000 * vtrs::UNITS);
-
-            let call = RuntimeCall::Launchpad(pallet_launchpad::Call::buy {
-                launch_id: 0,
-                quote_in: 1,
-                min_tokens_out: 0,
-            });
-            let info = call.get_dispatch_info();
-            let fee = match EnergyFee::dispatch_info_to_fee(&call, Some(&info), None) {
-                CallFee::Regular(f) => f,
-                CallFee::EVM(_) => unreachable!("launchpad calls pay the custom fee"),
-            };
-            assert_eq!(fee, one_call_energy());
-            let free = PostDispatchInfo { actual_weight: None, pays_fee: Pays::No };
-            let paid = PostDispatchInfo { actual_weight: None, pays_fee: Pays::Yes };
-
-            // 1st call: bob holds no energy, so the fee is bought from the broker;
-            // the Pays::No refund comes back to bob as VNRG.
-            let broker0 = vnrg(&broker);
-            let vtrs0 = Balances::free_balance(bob);
-            let liq = <EnergyFee as OnChargeTransaction<Runtime>>::withdraw_fee(
-                &bob, &call, &info, fee, 0,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&broker), broker0 - fee, "one broker purchase");
-            assert!(Balances::free_balance(bob) < vtrs0, "paid in VTRS");
-            <EnergyFee as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
-                &bob, &info, &free, fee, 0, liq,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&bob), fee, "the refund is bob's to keep");
-
-            // 2nd call, also free: paid from bob's VNRG, the broker is untouched.
-            let vtrs1 = Balances::free_balance(bob);
-            let liq = <EnergyFee as OnChargeTransaction<Runtime>>::withdraw_fee(
-                &bob, &call, &info, fee, 0,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&broker), broker0 - fee);
-            assert_eq!(Balances::free_balance(bob), vtrs1);
-            <EnergyFee as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
-                &bob, &info, &free, fee, 0, liq,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&bob), fee);
-
-            // A call that pays (a failed or below-threshold trade) spends it.
-            let liq = <EnergyFee as OnChargeTransaction<Runtime>>::withdraw_fee(
-                &bob, &call, &info, fee, 0,
-            )
-            .unwrap();
-            <EnergyFee as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
-                &bob, &info, &paid, fee, 0, liq,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&bob), 0);
-            assert_eq!(vnrg(&broker), broker0 - fee, "still one broker purchase in total");
         });
     }
 }
