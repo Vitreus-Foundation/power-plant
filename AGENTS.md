@@ -48,9 +48,16 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 ## Code comments
 
 - Comment what the code can't say: invariants, non-obvious reasons, units of values (base units or whole tokens, basis points, blocks or milliseconds), edge cases. Arguments for a design go in the PR description.
+- Say a thing once, in the doc of the item it is about; elsewhere, link to that item instead of restating it. Docs that go into the runtime metadata, of calls, events, errors, storage, constants and runtime APIs, may repeat facts from other docs: wallets and explorers show each on its own. A comment doesn't explain what a line or an argument does when the code already says it, such as `Preserve` keeping an account alive.
 - Don't reference spec, design, review or audit documents (their sections such as `§x.y`, their decision or finding IDs, or the files themselves), files outside the repository, or this repo's PRs and issues, in comments or test names. History lives in git. A link to an issue in a dependency, such as the Polkadot SDK or Frontier, that a workaround depends on is fine.
-- No market values, dates or snapshots, whether of a live network (rates, balances, prices) or of a local measurement (machine, run date). State the relation the code relies on; numbers for scale go in the PR description. Generated files, such as benchmarked weights, are exempt.
+- No market values, dates or snapshots, whether of a live network (rates, balances, prices) or of a local measurement (machine, run date). State the relation the code relies on; numbers for scale go in the PR description.
+- A `///` doc covers what the item's users need; how the item works inside, such as why a hasher was chosen, goes into a `//` comment.
+- A doc starts with one short sentence and puts the rest after a blank line: rustdoc shows the first paragraph in item lists.
+- A crate's `//!` doc says what the crate does, with links to the items that do it. It doesn't list the crate's modules or `Config` items, which rustdoc shows, or its dependencies.
 - Docs on shared traits in `runtime/common` describe the contract, not one implementation's assumptions.
+- An error's doc says when the error happens, and what the caller can do about it when the condition doesn't make that clear: wallets show it to the user.
+- A storage item with no size bound in its type, allowed by `#[pallet::unbounded]` or `#[pallet::without_storage_info]`, says in a `//` comment what keeps its size in check.
+- Generated files, such as benchmarked weights, are exempt from these rules.
 
 ## CHANGELOG and versions
 
