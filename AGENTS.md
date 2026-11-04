@@ -61,7 +61,7 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 
 ## CHANGELOG and versions
 
-The flow is in README.md. These are the parts agents get wrong:
+The flow is in CONTRIBUTING.md and RELEASE.md. These are the parts agents get wrong:
 
 - A PR that changes the runtime or a pallet adds entries under `## [Unreleased]` in `CHANGELOG.md`, runtime refactors included. Each entry starts with a verb and names the pallet or API it changes. Related small changes can share an entry. A PR that changes neither, such as a CI or docs change, ticks "Does not require a CHANGELOG entry" in its description, or the CHANGELOG check fails.
 - Add new entries at the end of their subsection. Don't reorder or rewrite entries added by other PRs; on a conflict, keep both sides' entries, yours last. Only a release PR may reorder, merge and reword them, keeping every change covered.
