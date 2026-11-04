@@ -1,16 +1,12 @@
 use super::*;
-use ethereum::{LegacyTransaction, TransactionAction, TransactionSignature, TransactionV2};
-use fp_self_contained::SelfContainedCall;
 use frame_support::{
     dispatch::{DispatchClass, GetDispatchInfo},
     traits::{
         fungible::Mutate as _,
         fungibles::{Inspect as _, Mutate as _},
-        Hooks,
     },
 };
-use pallet_energy_fee::DefaultFeeMultiplier;
-use sp_runtime::{BuildStorage, FixedU128, Perquintill};
+use sp_runtime::{BuildStorage, FixedU128};
 
 fn alith() -> AccountId {
     AccountId::from(hex_literal::hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"))
@@ -60,6 +56,21 @@ fn configured_base_extrinsic_weight_is_evm_compatible() {
 
 mod energy_fee {
     use super::*;
+    use ethereum::{LegacyTransaction, TransactionAction, TransactionSignature, TransactionV2};
+    use fp_self_contained::SelfContainedCall;
+    use frame_support::{dispatch::PostDispatchInfo, traits::Hooks};
+    use pallet_energy_fee::DefaultFeeMultiplier;
+    use pallet_evm::OnChargeEVMTransaction;
+    use pallet_transaction_payment::OnChargeTransaction;
+    use sp_runtime::Perquintill;
+    use vitreus_runtime_common::QuotePriceIntoEnergy;
+
+    // The fee types as the config wires them, so the tests check what the runtime actually uses.
+    type EnergyFeeCustomFee = <Runtime as pallet_energy_fee::Config>::CustomFee;
+    type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
+    type TransactionFeeHandler =
+        <Runtime as pallet_transaction_payment::Config>::OnChargeTransaction;
+    type EvmFeeHandler = <Runtime as pallet_evm::Config>::OnChargeTransaction;
 
     fn mock_signature() -> TransactionSignature {
         let r = H256([
@@ -215,10 +226,6 @@ mod energy_fee {
 
     #[test]
     fn energy_fee_exchange_is_limited_by_broker_vnrg() {
-        use vitreus_runtime_common::QuotePriceIntoEnergy;
-        // The exchange as the config wires it, so the test checks what energy-fee actually uses.
-        type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
-
         new_test_ext().execute_with(|| {
             let energy = NativeOrAssetId::WithId(VNRG::get());
             let path = (NativeOrAssetId::Native, energy.clone());
@@ -263,8 +270,6 @@ mod energy_fee {
 
     #[test]
     fn custom_fee_picks_fee_by_call() {
-        type EnergyFeeCustomFee = <Runtime as pallet_energy_fee::Config>::CustomFee;
-
         new_test_ext().execute_with(|| {
             let flat = GetConstantEnergyFee::get();
             // Stands for the weight-based fee that `ChargeTransactionPayment` computes.
@@ -322,13 +327,6 @@ mod energy_fee {
 
     #[test]
     fn signer_without_energy_buys_fee_from_broker() {
-        use frame_support::dispatch::PostDispatchInfo;
-        use pallet_transaction_payment::OnChargeTransaction;
-        use vitreus_runtime_common::QuotePriceIntoEnergy;
-        type TransactionFeeHandler =
-            <Runtime as pallet_transaction_payment::Config>::OnChargeTransaction;
-        type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
-
         new_test_ext().execute_with(|| {
             System::set_block_number(1);
             let energy = NativeOrAssetId::WithId(VNRG::get());
@@ -377,9 +375,6 @@ mod energy_fee {
 
     #[test]
     fn evm_fee_goes_to_treasury_and_burn_counters() {
-        use pallet_evm::OnChargeEVMTransaction;
-        type EvmFeeHandler = <Runtime as pallet_evm::Config>::OnChargeTransaction;
-
         new_test_ext().execute_with(|| {
             System::set_block_number(1);
             let energy = NativeOrAssetId::WithId(VNRG::get());
