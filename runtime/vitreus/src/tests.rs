@@ -91,7 +91,7 @@ mod energy_fee {
     }
 
     #[test]
-    fn fee_multiplier_update_works() {
+    fn block_at_fullness_threshold_raises_flat_fee() {
         new_test_ext().execute_with(|| {
             let upper_fee_multiplier = FixedU128::from_u32(2);
             EnergyFee::update_upper_fee_multiplier(RuntimeOrigin::root(), upper_fee_multiplier)
@@ -122,7 +122,7 @@ mod energy_fee {
     }
 
     #[test]
-    fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
+    fn ethereum_transaction_is_invalid_if_sender_cannot_pay() {
         new_test_ext().execute_with(|| {
             // A sender without energy buys it with VTRS. Without a rate, or without VNRG for the
             // broker to sell, the fee can't be quoted, and `InvalidTransaction::Payment` would come
