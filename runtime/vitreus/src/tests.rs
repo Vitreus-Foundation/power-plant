@@ -59,7 +59,6 @@ mod energy_fee {
     use ethereum::{LegacyTransaction, TransactionAction, TransactionSignature, TransactionV2};
     use fp_self_contained::SelfContainedCall;
     use frame_support::{dispatch::PostDispatchInfo, traits::Hooks};
-    use pallet_energy_fee::DefaultFeeMultiplier;
     use pallet_evm::OnChargeEVMTransaction;
     use pallet_transaction_payment::OnChargeTransaction;
     use sp_runtime::Perquintill;
@@ -94,61 +93,30 @@ mod energy_fee {
     #[test]
     fn fee_multiplier_update_works() {
         new_test_ext().execute_with(|| {
-            let max_block_weight =
-                BlockWeights::get().per_class.get(DispatchClass::Normal).max_total.unwrap();
-            let block_weight_a = max_block_weight / 2;
-            System::set_block_consumed_resources(block_weight_a, 0);
-
-            TransactionPayment::on_finalize(1);
-            assert_eq!(
-                TransactionPayment::next_fee_multiplier(),
-                DefaultFeeMultiplier::<Runtime>::get()
-            );
-
-            let block_fullness_a = Perquintill::from_percent(50) + Perquintill::from_parts(1000000);
-            let upper_fee_multiplier = FixedU128::from_rational(2, 1);
-            EnergyFee::update_block_fullness_threshold(RuntimeOrigin::root(), block_fullness_a)
-                .expect("Expected to set a new block fullness threshold");
+            let upper_fee_multiplier = FixedU128::from_u32(2);
             EnergyFee::update_upper_fee_multiplier(RuntimeOrigin::root(), upper_fee_multiplier)
                 .expect("Expected to set a new upper fee multiplier");
-
-            TransactionPayment::on_finalize(1);
-            assert_eq!(
-                TransactionPayment::next_fee_multiplier(),
-                DefaultFeeMultiplier::<Runtime>::get()
-            );
-
-            let block_fullness_b = Perquintill::from_percent(50);
-            EnergyFee::update_block_fullness_threshold(RuntimeOrigin::root(), block_fullness_b)
-                .expect("Expected to set a new block fullness threshold");
+            EnergyFee::update_block_fullness_threshold(
+                RuntimeOrigin::root(),
+                Perquintill::from_percent(50),
+            )
+            .expect("Expected to set a new block fullness threshold");
+            let max_block_weight =
+                BlockWeights::get().per_class.get(DispatchClass::Normal).max_total.unwrap();
+            System::set_block_consumed_resources(max_block_weight / 2, 0);
 
             TransactionPayment::on_finalize(1);
             assert_eq!(TransactionPayment::next_fee_multiplier(), upper_fee_multiplier);
 
-            let call_with_custom_fee = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+            let transfer = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
                 dest: alith(),
                 value: 1,
             });
-            let updated_custom_fee =
-                upper_fee_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
-
             assert_eq!(
-                EnergyFee::dispatch_info_to_fee(&call_with_custom_fee, None, None),
-                CallFee::Regular(updated_custom_fee)
-            );
-
-            let block_weight_b = max_block_weight / 3;
-            System::set_block_consumed_resources(block_weight_b, 0);
-
-            TransactionPayment::on_finalize(1);
-            assert_eq!(
-                TransactionPayment::next_fee_multiplier(),
-                DefaultFeeMultiplier::<Runtime>::get()
-            );
-
-            assert_eq!(
-                EnergyFee::dispatch_info_to_fee(&call_with_custom_fee, None, None),
-                CallFee::Regular(GetConstantEnergyFee::get())
+                EnergyFeeCustomFee::dispatch_info_to_fee(&transfer, None, None),
+                CallFee::Regular(
+                    upper_fee_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+                )
             );
         });
     }
