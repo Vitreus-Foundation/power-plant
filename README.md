@@ -1,168 +1,91 @@
 # Vitreus - Layer 0 Blockchain Ecosystem🌿⚡
 
-Vitreus is a  next-generation Layer 0 blockchain platform focused on decentralized energy trading and management, built using Substrate and featuring comprehensive EVM compatibility.
-
-[![Substrate version](https://img.shields.io/badge/Substrate-stable2407-brightgreen?logo=Parity%20Substrate)](https://substrate.io)
+[![CI](https://github.com/Vitreus-Foundation/power-plant/actions/workflows/ci.yml/badge.svg?branch=main&event=push)](https://github.com/Vitreus-Foundation/power-plant/actions/workflows/ci.yml?query=branch%3Amain)
+[![Release](https://img.shields.io/github/v/release/Vitreus-Foundation/power-plant)](https://github.com/Vitreus-Foundation/power-plant/releases/latest)
+[![Polkadot SDK version](https://img.shields.io/badge/dynamic/toml?url=https%3A%2F%2Fraw.githubusercontent.com%2FVitreus-Foundation%2Fpower-plant%2Fmain%2FCargo.toml&query=%24.workspace.dependencies%5B%27frame-support%27%5D.branch&label=Polkadot%20SDK&logo=Parity%20Substrate&color=brightgreen)](https://github.com/paritytech/polkadot-sdk)
 [![License](https://img.shields.io/badge/License-GPL%203.0-blue.svg)](LICENSE)
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/vitreus-dao-official-1050540395559403590)
 
-## Overview
+Vitreus is a relay chain built on the [Polkadot SDK](https://github.com/paritytech/polkadot-sdk),
+with EVM from [Frontier](https://github.com/polkadot-evm/frontier). This repository holds its
+node and runtime. One runtime crate builds two networks, testnet and mainnet.
 
-Vitreus is a sophisticated blockchain ecosystem designed to revolutionize energy trading and management. Built on Substrate with full EVM compatibility, it combines traditional blockchain capabilities with specialized energy-focused features.
+VTRS is the native token. [Transaction fees](pallets/energy-fee) are paid in the energy token
+VNRG, which the [energy broker](pallets/energy-broker) sells for VTRS. VNRG is also the native
+currency of the EVM, used for balances, transfers and gas.
 
-### Core Features
-
-- **Dual-Token System**
-    - VTRS (Native Token): Platform governance and staking
-    - VNRG (Energy Token): Energy trading and fee payments
-
-- **Energy Trading Infrastructure**
-    - Automated Market for energy assets
-    - Dynamic exchange rates based on network metrics
-    - Warehouse mechanism for supply stability
-    - Multi-asset support and path-based routing
-
-- **Advanced Security & Access Control**
-    - NFT-based access control system (NAC)
-    - Reputation-based validation
-    - Tiered VIP system with dynamic privileges
-    - Comprehensive slashing mechanisms
-
-- **Economic Features**
-    - Dynamic fee calculation system
-    - Automated treasury management
-    - Flexible vesting schedules
-    - Reputation-based rewards
-
-## Architecture
-
-Vitreus consists of several specialized pallets working in harmony:
-
-### Core Pallets
-
-1. **Energy Broker**
-    - Decentralized energy trading through AMM
-    - Automated price discovery
-    - Liquidity provision management
-
-2. **Energy Fee**
-    - Dual-token transaction fee mechanism
-    - Dynamic fee adjustments
-    - Automated token exchanges
-
-3. **Energy Generation**
-    - Staking and validation mechanisms
-    - Energy-per-stake rate calculation
-    - Reputation integration
-
-4. **NAC Managing**
-    - NFT-based access control
-    - VIPP status management
-    - Dynamic level updates
-
-### Supporting Pallets
-
-- **Claiming**: Token distribution and vesting
-- **Reputation**: Dynamic scoring system
-- **Privileges**: VIP membership management
-- **Simple Vesting**: Token lock mechanisms
-- **Treasury Extension**: Fund recycling and management
-- **Faucet**: Token distribution (it's only supported in testnet)
-
-## Getting Started
+## Getting started
 
 ### Prerequisites
 
-- Rust 1.84.1 or later
-- `wasm32-unknown-unknown` target
-- Node.js (for testing)
+- The Rust toolchain pinned in [rust-toolchain.toml](rust-toolchain.toml), with its
+  `wasm32-unknown-unknown` target
+- The system packages from the
+  [Polkadot SDK install guide](https://docs.polkadot.com/parachains/install-polkadot-sdk/); on
+  Debian or Ubuntu:
+  ```bash
+  sudo apt install git clang curl libssl-dev llvm libclang-dev libudev-dev make protobuf-compiler
+  ```
+- Node.js, for the [e2e tests](e2e-tests/README.md)
 
-### Installation
+### Build and run
 
-1. Clone the repository:
 ```bash
 git clone https://github.com/Vitreus-Foundation/power-plant
 cd power-plant
-```
-
-2. Build the node:
-```bash
-cargo build --release --features testnet-native
-```
-
-3. Run the node:
-```bash
+cargo build --release --features testnet-native --locked
 ./target/release/vitreus-power-plant-node --dev
 ```
 
-### Development Chain Configuration
+`--dev` starts a single-node development chain with the testnet runtime. For the mainnet runtime,
+build with `--features mainnet-native` instead.
+
+### Development accounts
 
 The development chain comes with pre-funded accounts for testing:
 
-- **Alith (Sudo)**: `0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac`
+- **Alith (sudo)**: `0xf24FF3a9CF04c71Dbc94D0b566f7A27B94566cac`
 - **Baltathar**: `0x3Cd0A705a2DC65e5b1E1205896BaA2be8A07c6e0`
-- Additional test accounts available in development mode
+- **Charleth**: `0x798d4Ba9baf0064Ec19eB4F0a1a45785ae9D6DFc`
+- **Dorothy**: `0x773539d4Ac0e786233D90A233654ccEE26a613D9`
+- **Ethan**: `0xFf64d3F6efE2317EE2807d223a0Bdc4c0c49dfDB`
+- **Faith**: `0xC0F0f4ab324C46e55D02D0033343B4Be8A55532d`
+- **Goliath**: `0x7BF369283338E12C90514468aa3868A551AB2929`
 
-### Network Configuration
+These are Moonbeam's development accounts, and their private keys are public: use them only on
+development chains. To use Alith in MetaMask, import its key
+`0x5fb92d6e98884f76de468fa3f6278f8807c48bebc13595d45af5bdc4da702133`.
 
-For connecting to the network:
+### Connecting apps and wallets
+
+[Polkadot.js Apps](https://polkadot.js.org/apps/?rpc=ws%3A%2F%2Flocalhost%3A9944) and other
+Substrate apps connect to `ws://localhost:9944`.
+
+To add the development chain to MetaMask:
+
 - Chain ID: 19434
 - Network Name: vitreus-power-plant
-- Currency Symbol: VTRS
+- Currency Symbol: VNRG
 - RPC URL: http://localhost:9944/
 
-## Development
+For mainnet, turn on Vitreus in [Talisman](https://talisman.xyz)'s network settings, or add it to
+MetaMask from [chainlist.org](https://chainlist.org/chain/1943).
 
-### Building for Production
-
-```bash
-# Build with mainnet runtime
-cargo build --release --features mainnet-native
-```
-
-### Running Tests
+## Tests
 
 ```bash
-# Run all tests
-cargo test --features testnet-native --workspace
+# All tests, once per network
+cargo test --features testnet-native --workspace --locked
+cargo test --features mainnet-native --workspace --locked
 
-# Run specific pallet tests
-cargo test -p pallet-energy-broker
+# One pallet's tests
+cargo test -p pallet-energy-broker --locked
 ```
 
 The [e2e tests](e2e-tests/README.md) check the runtime on a fork of mainnet's live state.
 In `e2e-tests`, run `npm ci` once, then `npm test`.
 
-## Security Considerations
-
-1. **Access Control**
-    - Multiple validation layers through NAC system
-    - Reputation-based restrictions
-    - Tiered privilege system
-
-2. **Economic Security**
-    - Dynamic fee mechanisms
-    - Slashing for malicious behavior
-    - Stake-based validation
-
-3. **Network Stability**
-    - Warehouse mechanism for price stability
-    - Automated treasury management
-    - Progressive rate adjustments
-
 ## Contributing
-
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-### Code Style
-
-- Follow Rust standard practices
-- Use the provided clippy configuration
-- Ensure comprehensive test coverage
-- Include benchmarks for new features
 
 ### Changelog and runtime releases
 
@@ -212,16 +135,11 @@ Browse the pallets and docs of the live runtimes in subxt-explorer:
 
 ## License
 
-This project is licensed under the GPL-3.0 License - see the [LICENSE](LICENSE) file for details.
+Licensed under [GPL-3.0](LICENSE).
 
 ## Support
 
-- Open an issue for bug reports
-- Join our [community](https://discord.gg/vitreus)
-- Check technical documentation
-
-## Acknowledgments
-
-Built using:
-- [Substrate](https://substrate.io/)
-- [Frontier](https://github.com/paritytech/frontier)
+- Bugs: [GitHub issues](https://github.com/Vitreus-Foundation/power-plant/issues)
+- Vulnerabilities: [report privately](https://github.com/Vitreus-Foundation/power-plant/security/advisories/new),
+  never in public issues
+- Questions: [Discord](https://discord.gg/vitreus-dao-official-1050540395559403590)
