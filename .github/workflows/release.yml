@@ -1,7 +1,7 @@
 name: Release
 
 # Builds both runtimes with srtool and publishes release runtime-vN once CHANGELOG.md gets a
-# version N without a tag. See "Releases" in README.md.
+# version N without a tag. See RELEASE.md.
 on:
   push:
     branches: [main]
