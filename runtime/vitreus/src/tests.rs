@@ -131,10 +131,8 @@ mod energy_fee {
             fund_broker_with_vnrg(1_000_000_000_000_000);
 
             assert!(
-                <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
-                    NativeOrAssetId::Native,
-                    NativeOrAssetId::WithId(VNRG::get()),
-                    EnergyFee::ethereum_fee(),
+                EnergyFeeExchange::quote_price_tokens_for_exact_tokens(
+                    EnergyFeeCustomFee::ethereum_fee(),
                     true,
                 )
                 .is_some(),
@@ -177,7 +175,7 @@ mod energy_fee {
             NativeAndAssets::set_balance(
                 NativeOrAssetId::WithId(VNRG::get()),
                 &alith(),
-                EnergyFee::ethereum_fee() / 2,
+                EnergyFeeCustomFee::ethereum_fee() / 2,
             );
             assert!(matches!(
                 runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
@@ -219,7 +217,7 @@ mod energy_fee {
             let fee = TransactionPayment::compute_fee(0, &info, 0);
             assert!(fee > 0);
             assert_eq!(
-                EnergyFee::dispatch_info_to_fee(&call, Some(&info), Some(fee)),
+                EnergyFeeCustomFee::dispatch_info_to_fee(&call, Some(&info), Some(fee)),
                 CallFee::Regular(fee)
             );
 
@@ -230,7 +228,11 @@ mod energy_fee {
             let wrapped_info = wrapped.get_dispatch_info();
             let wrapped_fee = TransactionPayment::compute_fee(0, &wrapped_info, 0);
             assert_eq!(
-                EnergyFee::dispatch_info_to_fee(&wrapped, Some(&wrapped_info), Some(wrapped_fee)),
+                EnergyFeeCustomFee::dispatch_info_to_fee(
+                    &wrapped,
+                    Some(&wrapped_info),
+                    Some(wrapped_fee)
+                ),
                 CallFee::Regular(wrapped_fee)
             );
         })
@@ -350,7 +352,7 @@ mod energy_fee {
             // VNRG is not sufficient, so the treasury's account must exist before it can hold any.
             Balances::set_balance(&treasury, ExistentialDeposit::get());
             pallet_treasury_extension::FeeRecyclingRate::<Runtime>::put(Permill::from_percent(20));
-            let fee = EnergyFee::ethereum_fee();
+            let fee = EnergyFeeCustomFee::ethereum_fee();
             let initial_energy = asset_balance(&energy, &alith());
             let alith_h160 = H160::from(alith().0);
 
