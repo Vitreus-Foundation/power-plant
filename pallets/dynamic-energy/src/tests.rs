@@ -89,7 +89,6 @@ fn setting_payout_quota_factor_works() {
 #[test]
 fn setting_zero_payout_quota_factor_fails() {
     new_test_ext().execute_with(|| {
-        // a quota of zero budgets would stop all energy sales
         assert_noop!(
             Pallet::<Test>::set_payout_quota_factor(RuntimeOrigin::root(), Some(0)),
             Error::<Test>::InvalidPayoutQuotaFactor
@@ -261,7 +260,7 @@ fn calculating_smoothed_exchange_rate_works() {
         let old_rate = FixedU128::from_rational(ENERGY_SALE, PAYOUT_BUDGET);
         assert_eq!(Pallet::<Test>::exchange_rate(), Some(old_rate));
 
-        // a smooth factor of 3 gives the new value a weight of 2/(3+1), a half; twice the sale
+        // a smooth factor of 3 gives the new value a weight of 2/(3+1), a half, and twice the sale
         // gives a new value of twice the old rate
         ExchangeRateSmoothFactor::<Test>::put(3);
         EnergySaleOverride::<Test>::put(2 * ENERGY_SALE);

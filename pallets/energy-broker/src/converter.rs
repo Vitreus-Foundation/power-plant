@@ -25,8 +25,8 @@ pub trait FixedPathAssetConverter<T: Config> {
     /// `Balance::max_value()` if the output is minted and therefore unbounded.
     ///
     /// This is what the pallet checks before it debits anyone, so it must never exceed what
-    /// [`Self::withdraw`] can take from the broker. It can be less, when the path has a limit of
-    /// its own; override it together with [`Self::withdraw`] otherwise.
+    /// [`Self::withdraw`] can take from the broker. It can be less when the path has a limit of
+    /// its own. Otherwise override it together with [`Self::withdraw`].
     fn reducible_balance(broker: &T::AccountId) -> T::Balance {
         T::Assets::reducible_balance(Self::TARGET, broker, Preserve, Polite)
     }

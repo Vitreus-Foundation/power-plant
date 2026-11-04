@@ -21,7 +21,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Raise the launchpad's default graduation target on testnet from 3,000 to 4,600,000 VTRS
 - Switch parachains from `ParaAssignmentProvider` to coretime without a broker chain
 - Limit LNRG sales in `pallet-energy-broker` to the payout quota
-- Make the treasury sell its energy at the end of a session, not at the start of the next one
+- Make `pallet-treasury-extension` sell the treasury's energy before the exchange rate update
 
 ### Removed
 

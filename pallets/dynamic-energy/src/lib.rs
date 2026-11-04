@@ -179,14 +179,16 @@ pub mod pallet {
     #[pallet::storage]
     pub type SessionEnergyPayout<T: Config> = StorageValue<_, StakeOf<T>, ValueQuery>;
 
-    /// The payout quota of the session in the native currency, set when it starts:
-    /// `PayoutQuotaFactor` payout budgets, zero if the budget could not be calculated, `None` for
-    /// no quota.
+    /// The payout quota for this session's energy sales, in the native currency.
+    ///
+    /// Set to `PayoutQuotaFactor` payout budgets when the session starts. Zero if the budget
+    /// could not be calculated, `None` for no quota.
     #[pallet::storage]
     pub type SessionPayoutQuota<T: Config> = StorageValue<_, StakeOf<T>>;
 
-    /// The payout quota in payout budgets: a session's energy sales are paid out at most this many
-    /// budgets. A budget is what the total stake earns at the annual percentage rate over
+    /// The payout quota for a session's energy sales, in payout budgets.
+    ///
+    /// A budget is what the total stake earns at the annual percentage rate over
     /// `ExpectedSessionDuration`, scaled by the warehouse capacity multiplier. `None` for no quota.
     /// A new factor applies from the next session.
     #[pallet::storage]
@@ -242,7 +244,7 @@ pub mod pallet {
         InvalidMultiplierCoefficients,
         /// Invalid annual percentage rate value.
         InvalidAnnualPercentageRate,
-        /// A payout quota of zero budgets, which would stop all energy sales.
+        /// A zero payout quota factor would stop all energy sales. Pass `None` to remove the quota.
         InvalidPayoutQuotaFactor,
     }
 
@@ -400,9 +402,9 @@ pub mod pallet {
             Ok(())
         }
 
-        /// Set the payout quota factor: the energy sales of a session are paid out at most this
-        /// many payout budgets. `None` removes the quota. A new factor, or its removal, applies
-        /// from the next session.
+        /// Set the payout quota for a session's energy sales, in payout budgets.
+        ///
+        /// `None` removes the quota. A new factor, or its removal, applies from the next session.
         #[pallet::call_index(8)]
         #[pallet::weight(T::DbWeight::get().writes(1))]
         pub fn set_payout_quota_factor(origin: OriginFor<T>, value: Option<u32>) -> DispatchResult {
@@ -418,8 +420,8 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
-    /// What the energy sales of the current session can still be paid out, in the native
-    /// currency: the payout quota of the session less the payout so far. `None` without a quota.
+    /// What is left of the session's payout quota, in the native currency: [`SessionPayoutQuota`]
+    /// minus [`SessionEnergyPayout`]. `None` without a quota.
     pub fn remaining_payout_quota() -> Option<StakeOf<T>> {
         let quota = SessionPayoutQuota::<T>::get()?;
 
@@ -576,10 +578,9 @@ impl<T: Config> Pallet<T> {
         }
     }
 
-    /// Sets the payout quota of the session that starts now: `PayoutQuotaFactor` payout budgets,
-    /// or none without a factor. Must run after `update_exchange_rate`: the budget uses the total
-    /// stake, APR and multiplier the rate was calculated with, over the expected session duration,
-    /// as the real one is not known yet.
+    /// Sets [`SessionPayoutQuota`] for the session that starts now. Must run after
+    /// `update_exchange_rate`: the budget uses the total stake, APR and multiplier the rate was
+    /// calculated with.
     fn update_payout_quota() {
         let quota = PayoutQuotaFactor::<T>::get()
             .map(|factor| Self::session_payout_budget().saturating_mul(factor.into()));
@@ -591,6 +592,7 @@ impl<T: Config> Pallet<T> {
     fn session_payout_budget() -> StakeOf<T> {
         let ExchangeRateParameters { total_stake, apr, multiplier, .. } =
             ExchangeRateParams::<T>::get();
+        // The session that starts now has no real duration yet.
         let duration = T::ExpectedSessionDuration::get();
 
         let budget = Self::calculate_payout_budget(total_stake, duration, apr, multiplier)
