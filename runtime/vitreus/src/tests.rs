@@ -846,6 +846,9 @@ mod offences {
     use sp_runtime::{traits::Convert, Perbill};
     use sp_staking::offence::{Offence, OffenceError, ReportOffence};
 
+    /// A validator as offences identify it: its stash and its exposure.
+    type Offender = pallet_session::historical::IdentificationTuple<Runtime>;
+
     /// Number of validators that the genesis starts with.
     const VALIDATOR_COUNT: u8 = 4;
     /// Stake that each validator bonds at genesis.
@@ -877,13 +880,13 @@ mod offences {
         }
     }
 
-    /// Runtime genesis with `VALIDATOR_COUNT` validators bonded and validating.
+    /// Runtime genesis with `VALIDATOR_COUNT` validators bonded and validating, at block 1.
     ///
     /// pallet-session builds its genesis before energy-generation, so era 0 starts before anyone
     /// has bonded and has no exposures. Offences in era 0 disable validators but slash nothing.
     fn new_test_ext_with_validators() -> sp_io::TestExternalities {
         let validators = 1..=VALIDATOR_COUNT;
-        sp_io::TestExternalities::new(
+        let mut ext = sp_io::TestExternalities::new(
             RuntimeGenesisConfig {
                 balances: BalancesConfig {
                     balances: validators.clone().map(|v| (stash(v), STAKE)).collect(),
@@ -910,17 +913,33 @@ mod offences {
             }
             .build_storage()
             .unwrap(),
-        )
+        );
+        // frame-system records no events at block 0.
+        ext.execute_with(|| System::set_block_number(1));
+        ext
     }
 
-    /// The validator as offences identify it: its stash and its exposure in the active era.
-    fn offender(validator: u8) -> pallet_session::historical::IdentificationTuple<Runtime> {
+    /// `validator` with its exposure in the active era.
+    fn offender(validator: u8) -> Offender {
         let exposure =
             <Runtime as pallet_session::historical::Config>::FullIdentificationOf::convert(stash(
                 validator,
             ))
             .unwrap();
         (stash(validator), exposure)
+    }
+
+    /// A GRANDPA equivocation by `validator` in `round` of session 0.
+    fn grandpa_equivocation(
+        validator: u8,
+        round: u64,
+    ) -> pallet_grandpa::EquivocationOffence<Offender> {
+        pallet_grandpa::EquivocationOffence {
+            time_slot: pallet_grandpa::TimeSlot { set_id: 0, round },
+            session_index: 0,
+            validator_set_count: VALIDATOR_COUNT.into(),
+            offender: offender(validator),
+        }
     }
 
     /// Stashes of the validators that pallet-session has disabled.
@@ -936,7 +955,7 @@ mod offences {
     /// it once the proofs check out.
     fn report_equivocation<O>(offence: O) -> Result<(), OffenceError>
     where
-        O: Offence<pallet_session::historical::IdentificationTuple<Runtime>>,
+        O: Offence<Offender>,
     {
         <Offences as ReportOffence<_, _, _>>::report_offence(vec![], offence)
     }
@@ -953,12 +972,22 @@ mod offences {
 
     /// Reports unresponsive validators through the reporter that the runtime's config wires in.
     fn report_unresponsiveness(
-        offence: pallet_im_online::UnresponsivenessOffence<
-            pallet_session::historical::IdentificationTuple<Runtime>,
-        >,
+        offence: pallet_im_online::UnresponsivenessOffence<Offender>,
     ) -> Result<(), OffenceError> {
         type Reporter = <Runtime as pallet_im_online::Config>::ReportUnresponsiveness;
         <Reporter as ReportOffence<_, _, _>>::report_offence(vec![], offence)
+    }
+
+    /// Checks that energy-generation got an offence by `validator` in era 0 at `fraction`.
+    fn assert_slash_reported(validator: AccountId, fraction: Perbill) {
+        System::assert_has_event(
+            pallet_energy_generation::Event::<Runtime>::SlashReported {
+                validator,
+                fraction,
+                slash_era: 0,
+            }
+            .into(),
+        );
     }
 
     /// Reports `offence` through `report` and checks that energy-generation got it at `fraction`
@@ -968,22 +997,14 @@ mod offences {
         offence: O,
         fraction: Perbill,
     ) where
-        O: Offence<pallet_session::historical::IdentificationTuple<Runtime>>,
+        O: Offence<Offender>,
     {
-        System::set_block_number(1);
         let (offender, _) = offence.offenders()[0].clone();
         let timeslot = offence.time_slot().encode();
 
         assert_ok!(report(offence));
 
-        System::assert_has_event(
-            pallet_energy_generation::Event::<Runtime>::SlashReported {
-                validator: offender,
-                fraction,
-                slash_era: 0,
-            }
-            .into(),
-        );
+        assert_slash_reported(offender, fraction);
         System::assert_has_event(pallet_offences::Event::Offence { kind: O::ID, timeslot }.into());
         assert_eq!(disabled_stashes(), vec![offender]);
     }
@@ -1009,12 +1030,7 @@ mod offences {
         new_test_ext_with_validators().execute_with(|| {
             assert_offence_disables_offender(
                 report_equivocation,
-                pallet_grandpa::EquivocationOffence {
-                    time_slot: pallet_grandpa::TimeSlot { set_id: 0, round: 1 },
-                    session_index: 0,
-                    validator_set_count: VALIDATOR_COUNT.into(),
-                    offender: offender(1),
-                },
+                grandpa_equivocation(1, 1),
                 EQUIVOCATION_FRACTION,
             )
         });
@@ -1080,26 +1096,11 @@ mod offences {
     #[test]
     fn offender_beyond_disabling_limit_stays_enabled() {
         new_test_ext_with_validators().execute_with(|| {
-            System::set_block_number(1);
-
             // Energy-generation disables at most (n - 1) / 3 of n validators: one out of four.
-            for (round, validator) in [(1, 1), (2, 2)] {
-                assert_ok!(report_equivocation(pallet_grandpa::EquivocationOffence {
-                    time_slot: pallet_grandpa::TimeSlot { set_id: 0, round },
-                    session_index: 0,
-                    validator_set_count: VALIDATOR_COUNT.into(),
-                    offender: offender(validator),
-                }));
-            }
+            assert_ok!(report_equivocation(grandpa_equivocation(1, 1)));
+            assert_ok!(report_equivocation(grandpa_equivocation(2, 2)));
 
-            System::assert_has_event(
-                pallet_energy_generation::Event::<Runtime>::SlashReported {
-                    validator: stash(2),
-                    fraction: EQUIVOCATION_FRACTION,
-                    slash_era: 0,
-                }
-                .into(),
-            );
+            assert_slash_reported(stash(2), EQUIVOCATION_FRACTION);
             assert_eq!(disabled_stashes(), vec![stash(1)]);
         });
     }
