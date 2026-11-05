@@ -950,6 +950,16 @@ mod offences {
         <Handler as HandleReports<Runtime>>::report_offence(offence)
     }
 
+    /// Reports unresponsive validators through the reporter that the runtime's config wires in.
+    fn report_unresponsiveness(
+        offence: pallet_im_online::UnresponsivenessOffence<
+            pallet_session::historical::IdentificationTuple<Runtime>,
+        >,
+    ) -> Result<(), OffenceError> {
+        type Reporter = <Runtime as pallet_im_online::Config>::ReportUnresponsiveness;
+        <Reporter as ReportOffence<_, _, _>>::report_offence(vec![], offence)
+    }
+
     /// Reports `offence` through `report` and checks that energy-generation got it at `fraction`
     /// and that pallet-session disabled the offender.
     fn assert_offence_disables_offender<O>(
@@ -1040,6 +1050,29 @@ mod offences {
                 },
                 Perbill::one(),
             )
+        });
+    }
+
+    #[test]
+    fn unresponsiveness_chills_and_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert!(pallet_energy_generation::Validators::<Runtime>::contains_key(stash(1)));
+
+            assert_offence_disables_offender(
+                report_unresponsiveness,
+                pallet_im_online::UnresponsivenessOffence {
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offenders: vec![offender(1)],
+                },
+                // im-online slashes nothing while at most n / 10 + 1 of n validators are offline.
+                Perbill::zero(),
+            );
+
+            System::assert_has_event(
+                pallet_energy_generation::Event::<Runtime>::Chilled { stash: stash(1) }.into(),
+            );
+            assert!(!pallet_energy_generation::Validators::<Runtime>::contains_key(stash(1)));
         });
     }
 }
