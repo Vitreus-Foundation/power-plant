@@ -10,6 +10,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 ### Added
 
 - Add the `EnergyExchangeFailed` event to `pallet-treasury-extension`
+- Add a per-session payout quota on energy sales to `pallet-dynamic-energy`, off by default
 
 ### Changed
 
@@ -19,6 +20,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Set `SpendPeriod` of the treasury to 1 day and `SpendThreshold` of `pallet-treasury-extension` to 1%, on testnet
 - Raise the launchpad's default graduation target on testnet from 3,000 to 4,600,000 VTRS
 - Switch parachains from `ParaAssignmentProvider` to coretime without a broker chain
+- Limit LNRG sales in `pallet-energy-broker` to the payout quota
+- Make `pallet-treasury-extension` sell the treasury's energy before the exchange rate update
 
 ### Removed
 

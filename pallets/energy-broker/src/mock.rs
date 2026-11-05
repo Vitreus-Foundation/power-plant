@@ -157,17 +157,25 @@ parameter_types! {
     /// Accumulates what `do_swap` reports as an energy sale. Lives in the test externalities, so
     /// every `new_test_ext` starts from zero.
     pub storage RecordedEnergySale: u128 = 0;
+    /// Accumulates what `do_swap` reports as the payout for the energy sold, like
+    /// `RecordedEnergySale`.
+    pub storage RecordedEnergyPayout: u128 = 0;
 }
 
 pub struct RecordEnergySell;
 impl OnEnergySell<u128> for RecordEnergySell {
-    fn on_energy_sell(amount: u128) {
-        RecordedEnergySale::set(&RecordedEnergySale::get().saturating_add(amount));
+    fn on_energy_sell(energy: u128, payout: u128) {
+        RecordedEnergySale::set(&RecordedEnergySale::get().saturating_add(energy));
+        RecordedEnergyPayout::set(&RecordedEnergyPayout::get().saturating_add(payout));
     }
 }
 
 pub(crate) fn energy_sold() -> u128 {
     RecordedEnergySale::get()
+}
+
+pub(crate) fn energy_payout() -> u128 {
+    RecordedEnergyPayout::get()
 }
 
 impl Config for Test {

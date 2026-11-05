@@ -633,18 +633,32 @@ fn can_not_swap_zero_amount() {
 #[test]
 fn energy_sale_is_recorded_for_a_real_trade() {
     new_test_ext().execute_with(|| {
+        let broker_account = EnergyBroker::account_id();
+
+        let alice_balance = balance(ALICE);
+        let broker_energy = energy_balance(broker_account);
+
+        let exchange_in = 980;
+        let expect_out = 98;
+        let expect_fee = 20;
+
         assert_eq!(energy_sold(), 0);
+        assert_eq!(energy_payout(), 0);
 
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
             RuntimeOrigin::signed(ALICE),
             ALICE,
             (ENERGY_TOKEN, NATIVE_TOKEN),
-            1000,
+            exchange_in + expect_fee,
             None,
             true,
         ));
 
-        assert!(energy_sold() > 0);
+        // The sale is the energy that reached the broker, the payout is what the seller received.
+        assert_eq!(energy_sold(), exchange_in);
+        assert_eq!(energy_balance(broker_account), broker_energy + exchange_in);
+        assert_eq!(energy_payout(), expect_out);
+        assert_eq!(balance(ALICE), alice_balance + expect_out);
     });
 }
 
@@ -670,6 +684,7 @@ fn energy_sale_is_not_recorded_when_recipient_is_the_broker() {
         assert_eq!(energy_balance(broker), broker_energy_before + amount);
         // ... and it was still not counted as a sale.
         assert_eq!(energy_sold(), 0);
+        assert_eq!(energy_payout(), 0);
 
         // Same swap to an ordinary recipient: also not a sale.
         assert_ok!(EnergyBroker::swap_exact_tokens_for_tokens(
@@ -682,6 +697,7 @@ fn energy_sale_is_not_recorded_when_recipient_is_the_broker() {
         ));
 
         assert_eq!(energy_sold(), 0);
+        assert_eq!(energy_payout(), 0);
     });
 }
 

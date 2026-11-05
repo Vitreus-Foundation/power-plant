@@ -311,8 +311,8 @@ impl TreasuryStaking<AccountId, Balance> for EnergyGenerationStaking {
 }
 
 /// Sells the vault's LNRG through the energy broker's `Swap`: an
-/// LNRG → VTRS quote and sale at the protocol rate, sized under the
-/// broker's own VTRS. The broker sells with `keep_alive`.
+/// LNRG → VTRS quote and sale at the protocol rate, sized under what the
+/// broker can pay out. The broker sells with `keep_alive`.
 pub struct EnergyBrokerExchange;
 impl TreasuryExchange<AccountId, Balance> for EnergyBrokerExchange {
     fn quote(lnrg: Balance) -> Option<Balance> {
