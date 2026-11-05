@@ -932,8 +932,9 @@ mod offences {
             .collect()
     }
 
-    /// Reports `offence` straight to pallet-offences, where every source sends its offences.
-    fn report_to_offences<O>(offence: O) -> Result<(), OffenceError>
+    /// Reports an equivocation straight to pallet-offences, where the source's report system sends
+    /// it once the proofs check out.
+    fn report_equivocation<O>(offence: O) -> Result<(), OffenceError>
     where
         O: Offence<pallet_session::historical::IdentificationTuple<Runtime>>,
     {
@@ -991,7 +992,7 @@ mod offences {
     fn babe_equivocation_disables_offender() {
         new_test_ext_with_validators().execute_with(|| {
             assert_offence_disables_offender(
-                report_to_offences,
+                report_equivocation,
                 pallet_babe::EquivocationOffence {
                     slot: 1.into(),
                     session_index: 0,
@@ -1007,7 +1008,7 @@ mod offences {
     fn grandpa_equivocation_disables_offender() {
         new_test_ext_with_validators().execute_with(|| {
             assert_offence_disables_offender(
-                report_to_offences,
+                report_equivocation,
                 pallet_grandpa::EquivocationOffence {
                     time_slot: pallet_grandpa::TimeSlot { set_id: 0, round: 1 },
                     session_index: 0,
@@ -1023,7 +1024,7 @@ mod offences {
     fn beefy_equivocation_disables_offender() {
         new_test_ext_with_validators().execute_with(|| {
             assert_offence_disables_offender(
-                report_to_offences,
+                report_equivocation,
                 pallet_beefy::EquivocationOffence {
                     time_slot: pallet_beefy::TimeSlot::<BlockNumber> { set_id: 0, round: 1 },
                     session_index: 0,
@@ -1036,7 +1037,7 @@ mod offences {
     }
 
     #[test]
-    fn dispute_for_invalid_candidate_disables_offender() {
+    fn lost_dispute_disables_offender() {
         new_test_ext_with_validators().execute_with(|| {
             assert_offence_disables_offender(
                 report_lost_dispute,
@@ -1083,7 +1084,7 @@ mod offences {
 
             // Energy-generation disables at most (n - 1) / 3 of n validators: one out of four.
             for (round, validator) in [(1, 1), (2, 2)] {
-                assert_ok!(report_to_offences(pallet_grandpa::EquivocationOffence {
+                assert_ok!(report_equivocation(pallet_grandpa::EquivocationOffence {
                     time_slot: pallet_grandpa::TimeSlot { set_id: 0, round },
                     session_index: 0,
                     validator_set_count: VALIDATOR_COUNT.into(),
