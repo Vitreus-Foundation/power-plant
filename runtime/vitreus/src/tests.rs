@@ -842,12 +842,16 @@ mod offences {
     use frame_support::assert_ok;
     use sp_core::{ecdsa, ed25519, sr25519, Pair};
     use sp_runtime::{traits::Convert, Perbill};
-    use sp_staking::offence::ReportOffence;
+    use sp_staking::offence::{Offence, ReportOffence};
 
     /// Number of validators that the genesis starts with.
     const VALIDATOR_COUNT: u8 = 4;
     /// Stake that each validator bonds at genesis.
     const STAKE: Balance = 1_000 * vtrs::UNITS;
+    /// Share that BABE, GRANDPA and BEEFY slash for one equivocator out of `VALIDATOR_COUNT`.
+    ///
+    /// They slash (3k / n)² for k equivocators out of n, here (3 · 1 / 4)² = 9/16.
+    const EQUIVOCATION_FRACTION: Perbill = Perbill::from_parts(562_500_000);
 
     fn stash(validator: u8) -> AccountId {
         AccountId::from([validator; 20])
@@ -926,39 +930,57 @@ mod offences {
             .collect()
     }
 
-    #[test]
-    fn grandpa_equivocation_disables_offender() {
-        new_test_ext_with_validators().execute_with(|| {
-            System::set_block_number(1);
-            let time_slot = pallet_grandpa::TimeSlot { set_id: 0, round: 1 };
+    /// Reports `offence` and checks that energy-generation got it at `fraction` and that
+    /// pallet-session disabled the offender.
+    fn assert_offence_disables_offender<O>(offence: O, fraction: Perbill)
+    where
+        O: Offence<pallet_session::historical::IdentificationTuple<Runtime>>,
+    {
+        System::set_block_number(1);
+        let (offender, _) = offence.offenders()[0].clone();
+        let timeslot = offence.time_slot().encode();
 
-            assert_ok!(<Offences as ReportOffence<_, _, _>>::report_offence(
-                vec![],
-                pallet_grandpa::EquivocationOffence {
-                    time_slot,
+        assert_ok!(<Offences as ReportOffence<_, _, _>>::report_offence(vec![], offence));
+
+        System::assert_has_event(
+            pallet_energy_generation::Event::<Runtime>::SlashReported {
+                validator: offender,
+                fraction,
+                slash_era: 0,
+            }
+            .into(),
+        );
+        System::assert_has_event(pallet_offences::Event::Offence { kind: O::ID, timeslot }.into());
+        assert_eq!(disabled_stashes(), vec![offender]);
+    }
+
+    #[test]
+    fn babe_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                pallet_babe::EquivocationOffence {
+                    slot: 1.into(),
                     session_index: 0,
                     validator_set_count: VALIDATOR_COUNT.into(),
                     offender: offender(1),
                 },
-            ));
+                EQUIVOCATION_FRACTION,
+            )
+        });
+    }
 
-            System::assert_has_event(
-                pallet_energy_generation::Event::<Runtime>::SlashReported {
-                    validator: stash(1),
-                    // (3 · 1 / 4)²: one offender out of four.
-                    fraction: Perbill::from_rational(9u32, 16),
-                    slash_era: 0,
-                }
-                .into(),
-            );
-            System::assert_has_event(
-                pallet_offences::Event::Offence {
-                    kind: *b"grandpa:equivoca",
-                    timeslot: time_slot.encode(),
-                }
-                .into(),
-            );
-            assert_eq!(disabled_stashes(), vec![stash(1)]);
+    #[test]
+    fn grandpa_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                pallet_grandpa::EquivocationOffence {
+                    time_slot: pallet_grandpa::TimeSlot { set_id: 0, round: 1 },
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offender: offender(1),
+                },
+                EQUIVOCATION_FRACTION,
+            )
         });
     }
 }
