@@ -840,9 +840,11 @@ mod treasury {
 mod offences {
     use super::*;
     use frame_support::assert_ok;
+    use parachains_slashing::HandleReports;
+    use polkadot_primitives::slashing::{DisputesTimeSlot, SlashingOffenceKind};
     use sp_core::{ecdsa, ed25519, sr25519, Pair};
     use sp_runtime::{traits::Convert, Perbill};
-    use sp_staking::offence::{Offence, ReportOffence};
+    use sp_staking::offence::{Offence, OffenceError, ReportOffence};
 
     /// Number of validators that the genesis starts with.
     const VALIDATOR_COUNT: u8 = 4;
@@ -930,17 +932,38 @@ mod offences {
             .collect()
     }
 
-    /// Reports `offence` and checks that energy-generation got it at `fraction` and that
-    /// pallet-session disabled the offender.
-    fn assert_offence_disables_offender<O>(offence: O, fraction: Perbill)
+    /// Reports `offence` straight to pallet-offences, where every source sends its offences.
+    fn report_to_offences<O>(offence: O) -> Result<(), OffenceError>
     where
+        O: Offence<pallet_session::historical::IdentificationTuple<Runtime>>,
+    {
+        <Offences as ReportOffence<_, _, _>>::report_offence(vec![], offence)
+    }
+
+    /// Reports a lost dispute through the handler that the runtime's config wires in.
+    fn report_lost_dispute(
+        offence: parachains_slashing::SlashingOffence<
+            <Runtime as parachains_slashing::Config>::KeyOwnerIdentification,
+        >,
+    ) -> Result<(), OffenceError> {
+        type Handler = <Runtime as parachains_slashing::Config>::HandleReports;
+        <Handler as HandleReports<Runtime>>::report_offence(offence)
+    }
+
+    /// Reports `offence` through `report` and checks that energy-generation got it at `fraction`
+    /// and that pallet-session disabled the offender.
+    fn assert_offence_disables_offender<O>(
+        report: impl FnOnce(O) -> Result<(), OffenceError>,
+        offence: O,
+        fraction: Perbill,
+    ) where
         O: Offence<pallet_session::historical::IdentificationTuple<Runtime>>,
     {
         System::set_block_number(1);
         let (offender, _) = offence.offenders()[0].clone();
         let timeslot = offence.time_slot().encode();
 
-        assert_ok!(<Offences as ReportOffence<_, _, _>>::report_offence(vec![], offence));
+        assert_ok!(report(offence));
 
         System::assert_has_event(
             pallet_energy_generation::Event::<Runtime>::SlashReported {
@@ -958,6 +981,7 @@ mod offences {
     fn babe_equivocation_disables_offender() {
         new_test_ext_with_validators().execute_with(|| {
             assert_offence_disables_offender(
+                report_to_offences,
                 pallet_babe::EquivocationOffence {
                     slot: 1.into(),
                     session_index: 0,
@@ -973,6 +997,7 @@ mod offences {
     fn grandpa_equivocation_disables_offender() {
         new_test_ext_with_validators().execute_with(|| {
             assert_offence_disables_offender(
+                report_to_offences,
                 pallet_grandpa::EquivocationOffence {
                     time_slot: pallet_grandpa::TimeSlot { set_id: 0, round: 1 },
                     session_index: 0,
@@ -988,6 +1013,7 @@ mod offences {
     fn beefy_equivocation_disables_offender() {
         new_test_ext_with_validators().execute_with(|| {
             assert_offence_disables_offender(
+                report_to_offences,
                 pallet_beefy::EquivocationOffence {
                     time_slot: pallet_beefy::TimeSlot::<BlockNumber> { set_id: 0, round: 1 },
                     session_index: 0,
@@ -995,6 +1021,24 @@ mod offences {
                     offender: offender(1),
                 },
                 EQUIVOCATION_FRACTION,
+            )
+        });
+    }
+
+    #[test]
+    fn dispute_for_invalid_candidate_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_lost_dispute,
+                parachains_slashing::SlashingOffence {
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    time_slot: DisputesTimeSlot::new(0, CandidateHash(H256::repeat_byte(1))),
+                    offenders: vec![offender(1)],
+                    // What the private `SlashingOffence::new` sets for `ForInvalid`.
+                    slash_fraction: Perbill::one(),
+                    kind: SlashingOffenceKind::ForInvalid,
+                },
+                Perbill::one(),
             )
         });
     }
