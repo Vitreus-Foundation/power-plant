@@ -983,6 +983,21 @@ mod offences {
             )
         });
     }
+
+    #[test]
+    fn beefy_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                pallet_beefy::EquivocationOffence {
+                    time_slot: pallet_beefy::TimeSlot::<BlockNumber> { set_id: 0, round: 1 },
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offender: offender(1),
+                },
+                EQUIVOCATION_FRACTION,
+            )
+        });
+    }
 }
 
 mod xcm_tests {
