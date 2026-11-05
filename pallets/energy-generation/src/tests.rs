@@ -1102,6 +1102,30 @@ fn forcing_new_era_works() {
 }
 
 #[test]
+fn listeners_see_next_era_after_previous_one_is_calculated() {
+    use EraCall::{Calculate, NewSession};
+
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(2);
+
+        assert_eq!(
+            EraCalls::take(),
+            vec![
+                NewSession { session: 0, active_era: Some(0), era_start: Some(0) },
+                NewSession { session: 1, active_era: Some(0), era_start: Some(0) },
+                NewSession { session: 2, active_era: Some(0), era_start: Some(0) },
+                Calculate { era: 0 },
+                NewSession { session: 3, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 4, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 5, active_era: Some(1), era_start: Some(3) },
+                Calculate { era: 1 },
+                NewSession { session: 6, active_era: Some(2), era_start: Some(6) },
+            ]
+        );
+    });
+}
+
+#[test]
 fn cannot_transfer_staked_balance() {
     // Tests that a stash account cannot transfer funds
     ExtBuilder::default().no_cooperate().build_and_execute(|| {
