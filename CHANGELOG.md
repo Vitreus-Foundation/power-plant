@@ -31,6 +31,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Stop re-creating the treasury's energy accounts every session in `pallet-treasury-extension`
 - Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
 - Charge `pallet-sudo` calls by weight
+- Make signed EVM calls prepay their fee in `pallet-energy-fee` and refund it once the call has run
 
 ## [215] - 2026-10-19
 
