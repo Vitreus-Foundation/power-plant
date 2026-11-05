@@ -1075,6 +1075,33 @@ mod offences {
             assert!(!pallet_energy_generation::Validators::<Runtime>::contains_key(stash(1)));
         });
     }
+
+    #[test]
+    fn offender_beyond_disabling_limit_stays_enabled() {
+        new_test_ext_with_validators().execute_with(|| {
+            System::set_block_number(1);
+
+            // Energy-generation disables at most (n - 1) / 3 of n validators: one out of four.
+            for (round, validator) in [(1, 1), (2, 2)] {
+                assert_ok!(report_to_offences(pallet_grandpa::EquivocationOffence {
+                    time_slot: pallet_grandpa::TimeSlot { set_id: 0, round },
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offender: offender(validator),
+                }));
+            }
+
+            System::assert_has_event(
+                pallet_energy_generation::Event::<Runtime>::SlashReported {
+                    validator: stash(2),
+                    fraction: EQUIVOCATION_FRACTION,
+                    slash_era: 0,
+                }
+                .into(),
+            );
+            assert_eq!(disabled_stashes(), vec![stash(1)]);
+        });
+    }
 }
 
 mod xcm_tests {
