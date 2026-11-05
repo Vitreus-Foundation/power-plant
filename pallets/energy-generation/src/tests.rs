@@ -1126,6 +1126,34 @@ fn listeners_see_next_era_after_previous_one_is_calculated() {
 }
 
 #[test]
+fn listeners_see_same_era_while_force_none_is_set() {
+    use EraCall::{Calculate, NewSession};
+
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+        EraCalls::take();
+
+        PowerPlant::set_force_era(Forcing::ForceNone);
+        start_session(7);
+        PowerPlant::set_force_era(Forcing::NotForcing);
+        start_session(9);
+
+        assert_eq!(
+            EraCalls::take(),
+            vec![
+                NewSession { session: 4, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 5, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 6, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 7, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 8, active_era: Some(1), era_start: Some(3) },
+                Calculate { era: 1 },
+                NewSession { session: 9, active_era: Some(2), era_start: Some(9) },
+            ]
+        );
+    });
+}
+
+#[test]
 fn cannot_transfer_staked_balance() {
     // Tests that a stash account cannot transfer funds
     ExtBuilder::default().no_cooperate().build_and_execute(|| {
