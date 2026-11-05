@@ -837,6 +837,132 @@ mod treasury {
     }
 }
 
+mod offences {
+    use super::*;
+    use frame_support::assert_ok;
+    use sp_core::{ecdsa, ed25519, sr25519, Pair};
+    use sp_runtime::{traits::Convert, Perbill};
+    use sp_staking::offence::ReportOffence;
+
+    /// Number of validators that the genesis starts with.
+    const VALIDATOR_COUNT: u8 = 4;
+    /// Stake that each validator bonds at genesis.
+    const STAKE: Balance = 1_000 * vtrs::UNITS;
+
+    fn stash(validator: u8) -> AccountId {
+        AccountId::from([validator; 20])
+    }
+
+    fn controller(validator: u8) -> AccountId {
+        AccountId::from([validator + 100; 20])
+    }
+
+    fn session_keys(validator: u8) -> opaque::SessionKeys {
+        let seed = format!("//{validator}");
+        let sr25519_key = sr25519::Pair::from_string(&seed, None).unwrap().public();
+        opaque::SessionKeys {
+            grandpa: ed25519::Pair::from_string(&seed, None).unwrap().public().into(),
+            babe: sr25519_key.into(),
+            im_online: sr25519_key.into(),
+            para_validator: sr25519_key.into(),
+            para_assignment: sr25519_key.into(),
+            authority_discovery: sr25519_key.into(),
+            beefy: ecdsa::Pair::from_string(&seed, None).unwrap().public().into(),
+        }
+    }
+
+    /// Runtime genesis with `VALIDATOR_COUNT` validators bonded and validating.
+    ///
+    /// pallet-session builds its genesis before energy-generation, so era 0 starts before anyone
+    /// has bonded and has no exposures. Offences in era 0 disable validators but slash nothing.
+    fn new_test_ext_with_validators() -> sp_io::TestExternalities {
+        let validators = 1..=VALIDATOR_COUNT;
+        sp_io::TestExternalities::new(
+            RuntimeGenesisConfig {
+                balances: BalancesConfig {
+                    balances: validators.clone().map(|v| (stash(v), STAKE)).collect(),
+                },
+                reputation: ReputationConfig {
+                    accounts: validators
+                        .clone()
+                        .map(|v| (stash(v), VALIDATOR_REPUTATION_THRESHOLD.into()))
+                        .collect(),
+                },
+                session: SessionConfig {
+                    keys: validators
+                        .clone()
+                        .map(|v| (controller(v), stash(v), session_keys(v)))
+                        .collect(),
+                },
+                energy_generation: EnergyGenerationConfig {
+                    stakers: validators
+                        .map(|v| (stash(v), controller(v), STAKE, StakerStatus::Validator))
+                        .collect(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+            .build_storage()
+            .unwrap(),
+        )
+    }
+
+    /// The validator as offences identify it: its stash and its exposure in the active era.
+    fn offender(validator: u8) -> pallet_session::historical::IdentificationTuple<Runtime> {
+        let exposure =
+            <Runtime as pallet_session::historical::Config>::FullIdentificationOf::convert(stash(
+                validator,
+            ))
+            .unwrap();
+        (stash(validator), exposure)
+    }
+
+    /// Stashes of the validators that pallet-session has disabled.
+    fn disabled_stashes() -> Vec<AccountId> {
+        let validators = Session::validators();
+        Session::disabled_validators()
+            .into_iter()
+            .map(|index| validators[index as usize])
+            .collect()
+    }
+
+    #[test]
+    fn grandpa_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            System::set_block_number(1);
+            let time_slot = pallet_grandpa::TimeSlot { set_id: 0, round: 1 };
+
+            assert_ok!(<Offences as ReportOffence<_, _, _>>::report_offence(
+                vec![],
+                pallet_grandpa::EquivocationOffence {
+                    time_slot,
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offender: offender(1),
+                },
+            ));
+
+            System::assert_has_event(
+                pallet_energy_generation::Event::<Runtime>::SlashReported {
+                    validator: stash(1),
+                    // (3 · 1 / 4)²: one offender out of four.
+                    fraction: Perbill::from_rational(9u32, 16),
+                    slash_era: 0,
+                }
+                .into(),
+            );
+            System::assert_has_event(
+                pallet_offences::Event::Offence {
+                    kind: *b"grandpa:equivoca",
+                    timeslot: time_slot.encode(),
+                }
+                .into(),
+            );
+            assert_eq!(disabled_stashes(), vec![stash(1)]);
+        });
+    }
+}
+
 mod xcm_tests {
     use super::*;
     use frame_support::{assert_err_ignore_postinfo, assert_noop};
