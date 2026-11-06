@@ -203,6 +203,41 @@ mod energy_fee {
     }
 
     #[test]
+    fn fee_check_buys_nothing_from_broker() {
+        new_test_ext().execute_with(|| {
+            System::set_block_number(1);
+            let energy = NativeOrAssetId::WithId(VNRG::get());
+            let broker = EnergyBroker::account_id();
+            let fee = GetConstantEnergyFee::get();
+            // BOB holds VTRS only, so the broker has to sell him the fee.
+            let bob = AccountId::from([7u8; 20]);
+            Balances::set_balance(&bob, 1_000 * vtrs::UNITS);
+
+            let call = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                dest: alith(),
+                value: 1,
+            });
+            let info = call.get_dispatch_info();
+            let computed_fee = TransactionPayment::compute_fee(0, &info, 0);
+            let check =
+                || TransactionFeeHandler::can_withdraw_fee(&bob, &call, &info, computed_fee, 0);
+
+            // Without VNRG to sell, the check fails, so it does go to the broker.
+            fund_broker_with_vnrg(0);
+            assert_eq!(check(), Err(InvalidTransaction::Payment.into()));
+
+            NativeAndAssets::set_balance(energy.clone(), &broker, 10 * fee);
+            System::reset_events();
+            assert_eq!(check(), Ok(()));
+
+            assert_eq!(Balances::free_balance(bob), 1_000 * vtrs::UNITS);
+            assert_eq!(asset_balance(&energy, &bob), 0);
+            assert_eq!(asset_balance(&energy, &broker), 10 * fee);
+            assert!(System::events().is_empty());
+        })
+    }
+
+    #[test]
     fn sudo_call_pays_weight_fee() {
         new_test_ext().execute_with(|| {
             // The call inside pays the flat fee, so a `sudo` charged like its inner call would too.

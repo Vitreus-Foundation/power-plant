@@ -323,6 +323,43 @@ fn zero_fee_withdraws_nothing() {
     });
 }
 
+#[test]
+fn zero_fee_check_needs_no_funds() {
+    new_test_ext(0).execute_with(|| {
+        // The call would be charged the flat fee, so only its zero computed fee lets the check pass.
+        let assets_transfer_call: RuntimeCall =
+            RuntimeCall::Assets(pallet_assets::Call::transfer {
+                id: VNRG.into(),
+                target: BOB,
+                amount: 1,
+            });
+
+        let dispatch_info: DispatchInfo = DispatchInfo {
+            weight: AssetsWeight::<Test>::transfer(),
+            pays_fee: Pays::No,
+            ..Default::default()
+        };
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+        assert_eq!(computed_fee, 0);
+
+        // CHARLIE holds nothing at all.
+        assert_eq!(
+            EnergyFee::can_withdraw_fee(
+                &CHARLIE,
+                &assets_transfer_call,
+                &dispatch_info,
+                computed_fee,
+                0
+            ),
+            Ok(())
+        );
+    });
+}
+
 /// EVM call from ALICE to BOB that transfers nothing.
 fn alice_evm_call(max_fee_per_gas: U256) -> RuntimeCall {
     RuntimeCall::EVM(pallet_evm::Call::call {
@@ -486,6 +523,34 @@ fn evm_call_without_funds_for_both_fees_is_rejected() {
         assert_eq!(ReportedEnergyBurn::get(), 0);
         assert!(FeeWithdrawals::get().is_empty());
         assert!(System::events().is_empty());
+    });
+}
+
+#[test]
+fn fee_check_asks_evm_call_for_two_fees() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(2 * fee - 1).execute_with(|| {
+        // ALICE has no VTRS to buy energy with, so only her VNRG counts.
+        BalancesVTRS::set_balance(&ALICE, BalancesVTRS::minimum_balance());
+
+        let evm_call = alice_evm_call(DefaultBaseFeePerGas::get());
+        let dispatch_info = evm_call.get_dispatch_info();
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        assert_eq!(
+            EnergyFee::can_withdraw_fee(&ALICE, &evm_call, &dispatch_info, computed_fee, 0),
+            Err(TransactionValidityError::Invalid(InvalidTransaction::Payment))
+        );
+
+        BalancesVNRG::mint_into(&ALICE, 1).expect("Expected to mint VNRG");
+        assert_eq!(
+            EnergyFee::can_withdraw_fee(&ALICE, &evm_call, &dispatch_info, computed_fee, 0),
+            Ok(())
+        );
     });
 }
 
@@ -919,6 +984,96 @@ fn fee_parts_quote_vtrs_only_for_energy_shortfall() {
         assert_eq!(StaticEnergyAsset::balance(&ALICE), fee / 4);
         assert_eq!(LiquidEnergyAsset::balance(&ALICE), fee / 2);
         assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance);
+    });
+}
+
+/// A call charged the flat fee, its dispatch info and the weight fee the flat fee replaces.
+fn flat_fee_call() -> (RuntimeCall, DispatchInfo, Balance) {
+    let assets_transfer_call: RuntimeCall = RuntimeCall::Assets(pallet_assets::Call::transfer {
+        id: VNRG.into(),
+        target: BOB,
+        amount: 1,
+    });
+
+    let dispatch_info: DispatchInfo =
+        DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+
+    // arbitrary number, since it does not influence resulting fee in this case
+    let extrinsic_len: u32 = 1000;
+
+    let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+    (assets_transfer_call, dispatch_info, computed_fee)
+}
+
+#[test]
+fn fee_check_counts_snrg_and_lnrg() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(0).execute_with(|| {
+        let (call, dispatch_info, computed_fee) = flat_fee_call();
+
+        // CHARLIE has no VTRS to buy energy with, only the existential deposit.
+        BalancesVTRS::mint_into(&CHARLIE, BalancesVTRS::minimum_balance())
+            .expect("Expected to mint VTRS");
+        BalancesVNRG::mint_into(&CHARLIE, fee / 2).expect("Expected to mint VNRG");
+        StaticEnergyAsset::mint_into(&CHARLIE, fee / 4).expect("Expected to mint SNRG");
+        assert_eq!(
+            EnergyFee::can_withdraw_fee(&CHARLIE, &call, &dispatch_info, computed_fee, 0),
+            Err(TransactionValidityError::Invalid(InvalidTransaction::Payment))
+        );
+
+        LiquidEnergyAsset::mint_into(&CHARLIE, fee / 4).expect("Expected to mint LNRG");
+        assert_eq!(
+            EnergyFee::can_withdraw_fee(&CHARLIE, &call, &dispatch_info, computed_fee, 0),
+            Ok(())
+        );
+
+        // The check exchanges nothing.
+        assert_eq!(BalancesVNRG::balance(&CHARLIE), fee / 2);
+        assert_eq!(StaticEnergyAsset::balance(&CHARLIE), fee / 4);
+        assert_eq!(LiquidEnergyAsset::balance(&CHARLIE), fee / 4);
+    });
+}
+
+#[test]
+fn fee_check_leaves_existential_deposit() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(0).execute_with(|| {
+        let (call, dispatch_info, computed_fee) = flat_fee_call();
+        let existential_deposit = BalancesVTRS::minimum_balance();
+        let fee_in_vtrs = VNRG_TO_VTRS_RATE
+            .checked_mul_int(fee)
+            .expect("Expected to calculate fee in VTRS");
+
+        // Buying the fee would take one unit of CHARLIE's existential deposit.
+        BalancesVTRS::mint_into(&CHARLIE, fee_in_vtrs + existential_deposit - 1)
+            .expect("Expected to mint VTRS");
+        assert_eq!(
+            EnergyFee::can_withdraw_fee(&CHARLIE, &call, &dispatch_info, computed_fee, 0),
+            Err(TransactionValidityError::Invalid(InvalidTransaction::Payment))
+        );
+
+        BalancesVTRS::mint_into(&CHARLIE, 1).expect("Expected to mint VTRS");
+        assert_eq!(
+            EnergyFee::can_withdraw_fee(&CHARLIE, &call, &dispatch_info, computed_fee, 0),
+            Ok(())
+        );
+
+        // The check buys nothing.
+        assert_eq!(BalancesVNRG::balance(&CHARLIE), 0);
+        assert_eq!(BalancesVTRS::balance(&CHARLIE), fee_in_vtrs + existential_deposit);
+
+        // The withdrawal it lets through leaves the existential deposit.
+        <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &CHARLIE,
+            &call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+        assert_eq!(BalancesVNRG::balance(&CHARLIE), 0);
+        assert_eq!(BalancesVTRS::balance(&CHARLIE), existential_deposit);
     });
 }
 
