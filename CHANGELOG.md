@@ -24,6 +24,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Remove `pallet-uniques` and other unused dependencies from the runtime
 - Remove the unused `NacRunner` and other dead EVM code from the runtime
+- Remove the `Sha3FIPS256` EVM precompile at 0x400
 
 ### Fixed
 
