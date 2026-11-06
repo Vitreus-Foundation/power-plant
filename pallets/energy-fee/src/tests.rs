@@ -453,6 +453,43 @@ fn successful_evm_call_refunds_prepaid_fee() {
 }
 
 #[test]
+fn evm_call_without_funds_for_both_fees_is_rejected() {
+    let fee = GetConstantEnergyFee::get();
+    new_test_ext(fee).execute_with(|| {
+        // ALICE holds energy for the prepaid fee only, and no VTRS to buy the fee the EVM charges.
+        BalancesVTRS::set_balance(&ALICE, BalancesVTRS::minimum_balance());
+        System::set_block_number(1);
+
+        let evm_call = alice_evm_call(DefaultBaseFeePerGas::get());
+        let dispatch_info = evm_call.get_dispatch_info();
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        assert_eq!(
+            <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+                &ALICE,
+                &evm_call,
+                &dispatch_info,
+                computed_fee,
+                0,
+            )
+            .err(),
+            Some(TransactionValidityError::Invalid(InvalidTransaction::Payment))
+        );
+
+        assert_eq!(BalancesVNRG::balance(&ALICE), fee);
+        assert_eq!(BalancesVTRS::balance(&ALICE), BalancesVTRS::minimum_balance());
+        assert_eq!(BurnedEnergy::<Test>::get(), 0);
+        assert_eq!(ReportedEnergyBurn::get(), 0);
+        assert!(FeeWithdrawals::get().is_empty());
+        assert!(System::events().is_empty());
+    });
+}
+
+#[test]
 fn evm_withdraw_fee_works() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
         System::set_block_number(1);
