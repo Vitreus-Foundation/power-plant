@@ -140,6 +140,5 @@ Licensed under [GPL-3.0](LICENSE).
 ## Support
 
 - Bugs: [GitHub issues](https://github.com/Vitreus-Foundation/power-plant/issues)
-- Vulnerabilities: [report privately](https://github.com/Vitreus-Foundation/power-plant/security/advisories/new),
-  never in public issues
+- Vulnerabilities: [SECURITY.md](SECURITY.md), not public issues
 - Questions: [Discord](https://discord.gg/vitreus-dao-official-1050540395559403590)
