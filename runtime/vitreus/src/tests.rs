@@ -209,7 +209,7 @@ mod energy_fee {
             let energy = NativeOrAssetId::WithId(VNRG::get());
             let broker = EnergyBroker::account_id();
             let fee = GetConstantEnergyFee::get();
-            // BOB holds VTRS only, so the broker has to sell him the fee.
+            // BOB holds VTRS only, so the broker has to sell the fee to BOB.
             let bob = AccountId::from([7u8; 20]);
             Balances::set_balance(&bob, 1_000 * vtrs::UNITS);
 
@@ -306,7 +306,6 @@ mod energy_fee {
             assert_eq!(fee_of(&transfer), CallFee::Regular(flat));
             assert_eq!(fee_of(&remark), CallFee::Regular(weight_fee));
             assert_eq!(fee_of(&evm_call), CallFee::EVM(EnergyFeeCustomFee::ethereum_fee()));
-            // `evm.withdraw` runs no EVM code, so it is charged as a regular call.
             assert_eq!(
                 fee_of(&RuntimeCall::EVM(pallet_evm::Call::withdraw {
                     address: H160::zero(),
@@ -331,8 +330,7 @@ mod energy_fee {
             assert_eq!(fee_of(&batch(vec![])), CallFee::Regular(flat));
 
             // A wrapped call pays what the call inside it pays. For a call charged by weight, that
-            // is the fee passed in, which covers the wrapper as well. An EVM call inside is charged
-            // as a regular call: its EVM fee falls on the account it runs as.
+            // is the fee passed in, which covers the wrapper as well.
             let as_derivative = |call| {
                 RuntimeCall::Utility(pallet_utility::Call::as_derivative {
                     index: 0,

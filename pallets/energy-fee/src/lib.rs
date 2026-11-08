@@ -454,8 +454,7 @@ pub mod pallet {
 impl<T: Config> Pallet<T> {
     /// Checks that `who` can pay the fee of `call`, without charging it.
     ///
-    /// An EVM call needs funds for two fees: its prepaid fee comes back only after the EVM runner
-    /// has charged its own, see [`CallFee::EVM`].
+    /// An EVM call needs funds for two fees, see [`CallFee::EVM`].
     // Takes the arguments of `OnChargeTransaction::can_withdraw_fee` in later SDK releases, where
     // this function becomes that method.
     pub fn can_withdraw_fee(
