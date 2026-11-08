@@ -291,15 +291,28 @@ mod energy_fee {
                 value: 1,
             });
             let remark = RuntimeCall::System(frame_system::Call::remark { remark: vec![] });
+            let evm_call = RuntimeCall::EVM(pallet_evm::Call::call {
+                source: H160::zero(),
+                target: H160::zero(),
+                input: vec![],
+                value: U256::zero(),
+                gas_limit: 21_000,
+                max_fee_per_gas: U256::one(),
+                max_priority_fee_per_gas: None,
+                nonce: None,
+                access_list: vec![],
+            });
 
             assert_eq!(fee_of(&transfer), CallFee::Regular(flat));
             assert_eq!(fee_of(&remark), CallFee::Regular(weight_fee));
+            assert_eq!(fee_of(&evm_call), CallFee::EVM(EnergyFeeCustomFee::ethereum_fee()));
+            // `evm.withdraw` runs no EVM code, so it is charged as a regular call.
             assert_eq!(
                 fee_of(&RuntimeCall::EVM(pallet_evm::Call::withdraw {
                     address: H160::zero(),
                     value: 1
                 })),
-                CallFee::EVM(EnergyFeeCustomFee::ethereum_fee())
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
             );
 
             // A batch pays for each of its calls, and at least the flat fee. Its calls have
@@ -318,7 +331,8 @@ mod energy_fee {
             assert_eq!(fee_of(&batch(vec![])), CallFee::Regular(flat));
 
             // A wrapped call pays what the call inside it pays. For a call charged by weight, that
-            // is the fee passed in, which covers the wrapper as well.
+            // is the fee passed in, which covers the wrapper as well. An EVM call inside is charged
+            // as a regular call: its EVM fee falls on the account it runs as.
             let as_derivative = |call| {
                 RuntimeCall::Utility(pallet_utility::Call::as_derivative {
                     index: 0,
@@ -327,6 +341,10 @@ mod energy_fee {
             };
             assert_eq!(fee_of(&as_derivative(transfer)), CallFee::Regular(flat));
             assert_eq!(fee_of(&as_derivative(remark)), CallFee::Regular(weight_fee));
+            assert_eq!(
+                fee_of(&as_derivative(evm_call)),
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
+            );
         })
     }
 
