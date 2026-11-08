@@ -35,7 +35,9 @@ def sdk_pin():
         tag = tomllib.load(f)["workspace"]["metadata"]["polkadot-sdk"]["tag"]
     with open(LOCK, "rb") as f:
         packages = tomllib.load(f)["package"]
-    sources = {p["source"] for p in packages if p.get("source", "").startswith(f"git+{SDK}")}
+    # The URL ends at `?` or `#`, so repositories named polkadot-sdk-<name> don't match.
+    prefixes = (f"git+{SDK}?", f"git+{SDK}#")
+    sources = {p["source"] for p in packages if p.get("source", "").startswith(prefixes)}
     commits = sorted({source.rpartition("#")[2] for source in sources})
     if len(commits) != 1:
         fail(f"expected one polkadot-sdk commit in {LOCK}, found {', '.join(commits) or 'none'}")
