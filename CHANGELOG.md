@@ -32,6 +32,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
 - Charge `pallet-sudo` calls by weight
 - Make signed EVM calls prepay their fee in `pallet-energy-fee` and refund it once the call has run
+- Reject signed EVM calls in `pallet-energy-fee` that can't pay both the prepaid fee and the EVM fee
 
 ## [215] - 2026-10-19
 
