@@ -35,6 +35,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Charge `pallet-sudo` calls by weight
 - Make signed EVM calls prepay their fee in `pallet-energy-fee` and refund it once the call has run
 - Pick a free item id when `pallet-nac-managing` mints NAC and VIPP NFTs
+- Reject signed EVM calls in `pallet-energy-fee` that can't pay both the prepaid fee and the EVM fee
 
 ## [215] - 2026-10-19
 

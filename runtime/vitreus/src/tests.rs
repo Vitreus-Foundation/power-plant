@@ -203,6 +203,41 @@ mod energy_fee {
     }
 
     #[test]
+    fn fee_check_buys_nothing_from_broker() {
+        new_test_ext().execute_with(|| {
+            System::set_block_number(1);
+            let energy = NativeOrAssetId::WithId(VNRG::get());
+            let broker = EnergyBroker::account_id();
+            let fee = GetConstantEnergyFee::get();
+            // BOB holds VTRS only, so the broker has to sell the fee to BOB.
+            let bob = AccountId::from([7u8; 20]);
+            Balances::set_balance(&bob, 1_000 * vtrs::UNITS);
+
+            let call = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                dest: alith(),
+                value: 1,
+            });
+            let info = call.get_dispatch_info();
+            let computed_fee = TransactionPayment::compute_fee(0, &info, 0);
+            let check =
+                || TransactionFeeHandler::can_withdraw_fee(&bob, &call, &info, computed_fee, 0);
+
+            // Without VNRG to sell, the check fails, so it does go to the broker.
+            fund_broker_with_vnrg(0);
+            assert_eq!(check(), Err(InvalidTransaction::Payment.into()));
+
+            NativeAndAssets::set_balance(energy.clone(), &broker, 10 * fee);
+            System::reset_events();
+            assert_eq!(check(), Ok(()));
+
+            assert_eq!(Balances::free_balance(bob), 1_000 * vtrs::UNITS);
+            assert_eq!(asset_balance(&energy, &bob), 0);
+            assert_eq!(asset_balance(&energy, &broker), 10 * fee);
+            assert!(System::events().is_empty());
+        })
+    }
+
+    #[test]
     fn sudo_call_pays_weight_fee() {
         new_test_ext().execute_with(|| {
             // The call inside pays the flat fee, so a `sudo` charged like its inner call would too.
@@ -256,15 +291,27 @@ mod energy_fee {
                 value: 1,
             });
             let remark = RuntimeCall::System(frame_system::Call::remark { remark: vec![] });
+            let evm_call = RuntimeCall::EVM(pallet_evm::Call::call {
+                source: H160::zero(),
+                target: H160::zero(),
+                input: vec![],
+                value: U256::zero(),
+                gas_limit: 21_000,
+                max_fee_per_gas: U256::one(),
+                max_priority_fee_per_gas: None,
+                nonce: None,
+                access_list: vec![],
+            });
 
             assert_eq!(fee_of(&transfer), CallFee::Regular(flat));
             assert_eq!(fee_of(&remark), CallFee::Regular(weight_fee));
+            assert_eq!(fee_of(&evm_call), CallFee::EVM(EnergyFeeCustomFee::ethereum_fee()));
             assert_eq!(
                 fee_of(&RuntimeCall::EVM(pallet_evm::Call::withdraw {
                     address: H160::zero(),
                     value: 1
                 })),
-                CallFee::EVM(EnergyFeeCustomFee::ethereum_fee())
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
             );
 
             // A batch pays for each of its calls, and at least the flat fee. Its calls have
@@ -292,6 +339,10 @@ mod energy_fee {
             };
             assert_eq!(fee_of(&as_derivative(transfer)), CallFee::Regular(flat));
             assert_eq!(fee_of(&as_derivative(remark)), CallFee::Regular(weight_fee));
+            assert_eq!(
+                fee_of(&as_derivative(evm_call)),
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
+            );
         })
     }
 
