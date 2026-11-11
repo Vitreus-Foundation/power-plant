@@ -14,12 +14,13 @@ use frame_system::{
     RawOrigin,
 };
 use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
-use pallet_evm::{Config as EVMConfig, GasWeightMapping, OnChargeEVMTransaction};
+use pallet_evm::OnChargeEVMTransaction;
 use pallet_transaction_payment::{Multiplier, OnChargeTransaction};
 use parity_scale_codec::Encode;
 use sp_arithmetic::Perbill;
+use sp_core::U256;
 use sp_runtime::{
-    traits::{One, SignedExtension},
+    traits::{Dispatchable, One, SignedExtension},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
     DispatchError, FixedPointNumber, Perquintill,
 };
@@ -322,46 +323,132 @@ fn zero_fee_withdraws_nothing() {
     });
 }
 
+/// EVM call from ALICE to BOB that transfers nothing.
+fn alice_evm_call(max_fee_per_gas: U256) -> RuntimeCall {
+    RuntimeCall::EVM(pallet_evm::Call::call {
+        source: ALICE.into(),
+        target: BOB.into(),
+        input: vec![],
+        value: U256::zero(),
+        gas_limit: 1_000_000,
+        max_fee_per_gas,
+        max_priority_fee_per_gas: None,
+        nonce: None,
+        access_list: vec![],
+    })
+}
+
 #[test]
-fn withdraw_zero_fee_during_evm_extrinsic_call_works() {
+fn failed_evm_call_keeps_prepaid_fee() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
         System::set_block_number(1);
         let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
-        let transfer_amount: Balance = 1_000_000_000;
-        let gas_limit: u64 = 1_000_000;
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+        let fee = GetConstantEnergyFee::get();
 
-        let evm_transfer_call: RuntimeCall = RuntimeCall::EVM(pallet_evm::Call::call {
-            source: ALICE.into(),
-            target: BOB.into(),
-            input: vec![],
-            value: transfer_amount.into(),
-            gas_limit: 1_000_000,
-            max_fee_per_gas: 1_000_000u128.into(),
-            max_priority_fee_per_gas: None,
-            nonce: None,
-            access_list: vec![],
-        });
-
-        let dispatch_info: DispatchInfo = DispatchInfo {
-            weight: <Test as EVMConfig>::GasWeightMapping::gas_to_weight(gas_limit, true),
-            ..Default::default()
-        };
+        // A gas price below the base fee makes the call fail.
+        let evm_call = alice_evm_call(DefaultBaseFeePerGas::get() - U256::one());
+        let dispatch_info = evm_call.get_dispatch_info();
 
         // arbitrary number, since it does not influence resulting fee in this case
         let extrinsic_len: u32 = 1000;
 
         let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
 
-        assert!(<EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+        let withdraw_result = <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
             &ALICE,
-            &evm_transfer_call,
+            &evm_call,
             &dispatch_info,
             computed_fee,
             0,
         )
+        .expect("Expected to withdraw fee");
+
+        let dispatch_error = evm_call
+            .dispatch(RuntimeOrigin::signed(ALICE))
+            .expect_err("Expected the EVM call to fail");
+        assert_eq!(dispatch_error.error, pallet_evm::Error::<Test>::GasPriceTooLow.into());
+
+        assert!(<EnergyFee as OnChargeTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE,
+            &dispatch_info,
+            &dispatch_error.post_info,
+            computed_fee,
+            0,
+            withdraw_result
+        )
         .is_ok());
 
-        assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance);
+        assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance - fee);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance);
+        assert_eq!(
+            BalancesVNRG::balance(&FEE_DEST),
+            Perbill::from_rational(2u32, 10u32).mul_floor(fee)
+        );
+        assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(ReportedEnergyBurn::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(FeeWithdrawals::get(), vec![ALICE]);
+
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
+    });
+}
+
+#[test]
+fn successful_evm_call_refunds_prepaid_fee() {
+    new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
+        System::set_block_number(1);
+        let initial_energy_balance: Balance = BalancesVNRG::balance(&ALICE);
+        let initial_vtrs_balance: Balance = BalancesVTRS::balance(&ALICE);
+        let fee = GetConstantEnergyFee::get();
+
+        let evm_call = alice_evm_call(DefaultBaseFeePerGas::get());
+        let dispatch_info = evm_call.get_dispatch_info();
+
+        // arbitrary number, since it does not influence resulting fee in this case
+        let extrinsic_len: u32 = 1000;
+
+        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
+
+        let withdraw_result = <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
+            &ALICE,
+            &evm_call,
+            &dispatch_info,
+            computed_fee,
+            0,
+        )
+        .expect("Expected to withdraw fee");
+
+        let post_dispatch_info = evm_call
+            .dispatch(RuntimeOrigin::signed(ALICE))
+            .expect("Expected the EVM call to succeed");
+        assert_eq!(post_dispatch_info.pays_fee, Pays::No);
+
+        assert!(<EnergyFee as OnChargeTransaction<Test>>::correct_and_deposit_fee(
+            &ALICE,
+            &dispatch_info,
+            &post_dispatch_info,
+            computed_fee,
+            0,
+            withdraw_result
+        )
+        .is_ok());
+
+        // The EVM charges the fee once, and the prepaid fee comes back.
+        assert_eq!(BalancesVNRG::balance(&ALICE), initial_energy_balance - fee);
+        assert_eq!(BalancesVTRS::balance(&ALICE), initial_vtrs_balance);
+        assert_eq!(
+            BalancesVNRG::balance(&FEE_DEST),
+            Perbill::from_rational(2u32, 10u32).mul_floor(fee)
+        );
+        assert_eq!(BurnedEnergy::<Test>::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(ReportedEnergyBurn::get(), Perbill::from_rational(8u32, 10u32).mul_floor(fee));
+        assert_eq!(FeeWithdrawals::get(), vec![ALICE, ALICE]);
+
+        System::assert_has_event(
+            pallet_evm::Event::<Test>::Executed { address: BOB.into() }.into(),
+        );
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: fee }.into());
+        System::assert_has_event(Event::<Test>::EnergyFeePaid { who: ALICE, amount: 0 }.into());
     });
 }
 
