@@ -12,7 +12,7 @@ use frame_support::{
     traits::{
         fungible::{Balanced, ItemOf, Mutate},
         tokens::{Fortitude, Precision, Preservation},
-        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything, OnUnbalanced,
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, OnUnbalanced,
     },
     weights::{ConstantMultiplier, IdentityFee},
 };
@@ -22,10 +22,10 @@ use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::{Compact, Encode};
 
 use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Perquintill};
-use sp_core::{Get, H256, U256};
+use sp_core::{Get, U256};
 
 use sp_runtime::{
-    traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup, Zero},
+    traits::{DispatchInfoOf, IdentityLookup, Zero},
     BuildStorage, DispatchError, Permill,
 };
 use vitreus_runtime_common::{OnEnergyBurn, QuotePriceIntoEnergy, SwapIntoEnergy};
@@ -92,29 +92,13 @@ parameter_types! {
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
-    type BaseCallFilter = Everything;
     type BlockWeights = BlockWeights;
-    type BlockLength = ();
-    type DbWeight = ();
-    type RuntimeOrigin = RuntimeOrigin;
-    type RuntimeCall = RuntimeCall;
     type Nonce = Nonce;
     type Block = Block;
-    type Hash = H256;
-    type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
-    type RuntimeEvent = RuntimeEvent;
     type BlockHashCount = ConstU64<250>;
-    type Version = ();
-    type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = ();
-    type OnKilledAccount = ();
-    type SystemWeightInfo = ();
-    type SS58Prefix = ();
-    type OnSetCode = ();
-    type MaxConsumers = ConstU32<16>;
 }
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
@@ -123,11 +107,8 @@ impl pallet_balances::Config for Test {
     type MaxReserves = ConstU32<1>;
     type ReserveIdentifier = [u8; 8];
     type Balance = Balance;
-    type RuntimeEvent = RuntimeEvent;
-    type DustRemoval = ();
     type ExistentialDeposit = ConstU128<1>;
     type AccountStore = System;
-    type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ConstU32<1>;
     type RuntimeHoldReason = ();
@@ -257,11 +238,9 @@ impl pallet_energy_fee::Config for Test {
     type FeeRecyclingDestination = FeeBurnDestination<FeeBurnAccount>;
 }
 
+#[derive_impl(pallet_timestamp::config_preludes::TestDefaultConfig)]
 impl pallet_timestamp::Config for Test {
     type MinimumPeriod = ConstU64<1000>;
-    type Moment = u64;
-    type OnTimestampSet = ();
-    type WeightInfo = ();
 }
 
 impl pallet_ethereum::Config for Test {
@@ -364,8 +343,8 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
     }
 }
 
+#[derive_impl(pallet_assets::config_preludes::TestDefaultConfig)]
 impl pallet_assets::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
     type AssetId = AssetId;
     type Currency = BalancesVTRS;
@@ -377,24 +356,18 @@ impl pallet_assets::Config for Test {
     type ApprovalDeposit = ApprovalDeposit;
     type StringLimit = AssetsStringLimit;
     type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
     type RemoveItemsLimit = ConstU32<1000>;
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type CallbackHandle = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
 }
 
 parameter_types! {
     pub const TransactionByteFee: Balance = 1;
 }
 
+#[derive_impl(pallet_transaction_payment::config_preludes::TestDefaultConfig)]
 impl pallet_transaction_payment::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type OnChargeTransaction = EnergyFee;
-    type OperationalFeeMultiplier = ();
     type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = EnergyFee;
