@@ -59,7 +59,7 @@ function check(wasm) {
   }
   fail(
     `add a host function to ${SUPPORTED} only once every node on mainnet, testnet and stagenet ` +
-      `has it, see "Releases" in README.md`,
+      `has it, see RELEASE.md`,
   );
 }
 

@@ -13,6 +13,7 @@ Vitreus power-plant: a Substrate-based relay chain with EVM (Frontier). VTRS is 
 
 - Runtime features `testnet-runtime` and `mainnet-runtime`; node features `testnet-native` and `mainnet-native`. Each network has its own `spec_name`.
 - Network-specific code goes behind its own network's feature, `#[cfg(feature = "testnet-runtime")]` or `#[cfg(feature = "mainnet-runtime")]`, never behind `not(...)` of the other. A value that differs by network can also come from `prod_or_fast!(mainnet, testnet)`: our builds turn on `fast-runtime` only through `testnet-runtime`. Everything else must build and pass tests on both networks.
+- Stagenet runs the mainnet runtime, so mainnet upgrades are tested there first, not on testnet.
 
 ## Commands
 
@@ -35,15 +36,23 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 
 - Runtime and pallet code must not panic. Avoid `unwrap` and `expect`: restructure the code or use `Defensive` (below). Tests, benchmarks, try-runtime checks and genesis builds are exempt.
 - Don't turn a failure into "nothing to do": an `Option` or `Result` that means "can't" doesn't silently become a default (`unwrap_or_default`, `unwrap_or(0)`). A call returns the failure as an error. In a hook that can't return an error, a failure is reported in an event if it can happen in normal operation, such as a failed treasury energy sale, and logged if it can only come from invalid parameters in storage. A case that can only come from a bug in the code goes through `Defensive` (`defensive!`, `defensive_proof`, `defensive_unwrap_or_default`), which logs it and fails the tests that reach it.
+- A migration that can't do its work logs it instead of emitting an event, and fails its `post_upgrade`, so try-runtime against live state catches it before the upgrade.
 - Runtime and pallet crates are `no_std`. Add dependencies with `default-features = false` and propagate the `std`, `runtime-benchmarks` and `try-runtime` features to them.
 - Work in hooks (`on_initialize`, `on_finalize`, `on_idle`) is bounded per block, and its weight is accounted for.
-- Don't mint VTRS in new code, migrations included: that changes issuance on mainnet. A migration that funds an account transfers from an existing one, such as the Treasury.
+- Don't mint VTRS in new code, migrations included: that changes issuance on mainnet. A genesis build may, since it sets a new chain's issuance. A migration that funds an account transfers from an existing one, such as the Treasury.
 - Calls are charged by the `CustomFee` impl for `EnergyFee` in `runtime/vitreus`: pallets listed in its flat-fee arm pay the flat fee, and anything not listed falls through to the weight-based fee. When adding a pallet or changing how calls are charged, choose on purpose.
 - A new pallet with benchmarks goes into `define_benchmarks!` for each network it runs on: there is one list per network.
 - Pallet and call indices are never reused once a runtime with them ran on a network (mainnet, testnet or stagenet): a removed pallet or call leaves its index empty, and a removed pallet stays as a comment in `construct_runtime!`. The release PRs (`Runtime version N`) mark the runtimes that shipped. An existing call keeps its purpose: a call that does something else is a new call at a new index. Otherwise calls stored on chain or signed earlier decode as the new ones. A call that keeps its purpose can still change how its arguments encode, and a call or a pallet can move to another index: then the next release needs a `transaction_version` bump, and the PR says so.
 - A bug fix in runtime or pallet code comes with a test that fails without it; changing only a configuration value, such as a constant, needs none. Write that test first and see it fail, then make the fix without changing the test. Put new tests next to the related ones. Name new tests as a short statement of what they check, subject first and without articles (`failing_swap_is_reported`); rename existing tests only in a PR of their own.
 - If a bug has left wrong data in storage, its fix repairs that data with a migration in the same PR, not with code in regular calls or hooks that skips, prunes or rebuilds it.
 - Test a pallet's own logic in the pallet's tests, against its mock. Runtime tests are for what depends on the runtime: config wiring, the real types behind config items (exchanges, fee handlers) and pallets working together. Reach those types through the runtime's config (`<Runtime as pallet_transaction_payment::Config>::OnChargeTransaction`), not by naming the implementation, or the test still passes when the wiring changes.
+- A new test asserts the storage, balances and events that the code changes, and no likely wrong implementation passes the test. A test of one arm of branching code uses an input whose expected result no other arm would give.
+
+## Intended behavior
+
+Agents have taken these for bugs. They are intended:
+
+- SNRG and LNRG are exchanged for VNRG 1:1, in the energy broker and when pallet-energy-fee takes a fee from them. If the call then refunds that fee, the refund comes in VNRG. The broker makes the same exchange for anyone, so this is no loophole.
 
 ## Code comments
 
@@ -52,7 +61,7 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 - Don't reference spec, design, review or audit documents (their sections such as `§x.y`, their decision or finding IDs, or the files themselves), files outside the repository, or this repo's PRs and issues, in comments or test names. History lives in git. A link to an issue in a dependency, such as the Polkadot SDK or Frontier, that a workaround depends on is fine.
 - No market values, dates or snapshots, whether of a live network (rates, balances, prices) or of a local measurement (machine, run date). State the relation the code relies on; numbers for scale go in the PR description.
 - A `///` doc covers what the item's users need; how the item works inside, such as why a hasher was chosen, goes into a `//` comment.
-- A doc starts with one short sentence and puts the rest after a blank line: rustdoc shows the first paragraph in item lists.
+- A doc that goes into the runtime metadata starts with a short sentence that fits on its first line and makes sense on its own, then a blank line before the rest. Polkadot.js Apps shows only that line in its lists and cuts summaries at the first period or parenthesis, so the sentence has none before its end. An error's doc has no blank line and stays on one line when it fits: Apps joins the lines of error docs with commas. Docs outside the metadata may stay one paragraph.
 - A crate's `//!` doc says what the crate does, with links to the items that do it. It doesn't list the crate's modules or `Config` items, which rustdoc shows, or its dependencies.
 - Docs on shared traits in `runtime/common` describe the contract, not one implementation's assumptions.
 - An error's doc says when the error happens, and what the caller can do about it when the condition doesn't make that clear: wallets show it to the user.
@@ -61,10 +70,10 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 
 ## CHANGELOG and versions
 
-The flow is in README.md. These are the parts agents get wrong:
+A regular PR follows CONTRIBUTING.md. Releases and network upgrades follow RELEASE.md. These are the parts agents get wrong:
 
 - A PR that changes the runtime or a pallet adds entries under `## [Unreleased]` in `CHANGELOG.md`, runtime refactors included. Each entry starts with a verb and names the pallet or API it changes. Related small changes can share an entry. A PR that changes neither, such as a CI or docs change, ticks "Does not require a CHANGELOG entry" in its description, or the CHANGELOG check fails.
-- Add new entries at the end of their subsection. Don't reorder or rewrite entries added by other PRs; on a conflict, keep both sides' entries, yours last. Only a release PR may reorder, merge and reword them, keeping every change covered.
+- Add new entries at the end of their subsection. Don't reorder or rewrite entries added by other PRs; on a conflict, keep both sides' entries, yours last. Only a release PR may reorder, merge and reword them, keeping every change covered. It adds no details the entries don't already have. An API change under Changed and the bug behind it under Fixed are not duplicates.
 - By merge time, a PR's entries describe its final diff: when the PR changes, update its entries instead of adding lines for follow-up commits.
 - Entries can be added after approval: the CHANGELOG check is required, so a PR can't merge without them. In a review, a missing entry or a failing CHANGELOG check alone is no reason to request changes.
 - Don't change `spec_version` or `transaction_version`; only a release PR does. Storage migrations go to `Unreleased` in `runtime/vitreus/src/migrations.rs`; a migration for one network goes behind its feature.
@@ -75,9 +84,10 @@ The flow is in README.md. These are the parts agents get wrong:
 - Everything else goes to its own PR: unrelated fixes, refactors, renames, reformatting, dependency bumps and cleanups. Report what you noticed instead of fixing it, so it can become an issue; mention it in the PR description only if reviewers need it to understand this PR. Changes to several pallets and the runtime for different reasons are several PRs. Split a large topic into a series of PRs, each of which builds, passes tests and leaves `main` ready to release: no PR relies on a later one to close a gap or undo a regression it introduces. Plan the series before writing the code. If the code already exists as one change, rebuild the series topic by topic on top of `main` instead of slicing the diff: a slice follows files and commits, not topics.
 - When new code needs logic that already exists, even inside another function or another test module, reuse it: extract or move it to a place both can reach in the same PR instead of copying it. That move is part of what the PR forces to change, not a separate refactor.
 - Renames and other behavior-neutral cleanups in one pallet can share a PR of their own, one commit each, but never a PR with a fix or a feature.
+- A new name or doc term reuses the word its pallet and the code connected to that pallet already use for the same thing. A word that an unrelated pallet uses for something else is no reason to pick a different one.
 - Runtime-wide changes and changes to the token economics need the reviewers' agreement before the work starts, so the PR isn't rejected for its approach. Propose them in an issue, or use a discussion where they were already agreed, and link it from the PR. An option that stays off until governance turns it on needs agreement only on how it works: the vote that turns it on decides the rest.
 - `Cargo.lock` changes only for the dependencies the PR changes.
 - Don't add entries for your own tools or local files (IDE, agents, notes) to `.gitignore`; use `.git/info/exclude`.
 - If the PR changes what users or integrators see (RPC, call arguments, EVM semantics, fees, XCM, events), describe the impact in the PR description.
-- The repository is public. A fix for a vulnerability says what changes and what users see, not how to exploit it: in the branch name, title, description, commit messages, code comments and CHANGELOG entry.
+- The repository is public. A fix for a vulnerability says what changes and what users see, not how to exploit it: in the branch name, title, description, commit messages, code comments and CHANGELOG entry. A vulnerability you notice in code that SECURITY.md covers doesn't become a public issue: report it only to the requester, who sends it through private vulnerability reporting.
 - The title becomes the squash commit subject: imperative ("Fix …", "Add …", "Make …") without a `type(scope):` prefix, without spec references, and specific about what the whole PR changes. If it can't be, the PR is too wide.
