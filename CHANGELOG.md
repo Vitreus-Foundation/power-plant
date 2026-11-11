@@ -19,6 +19,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Report the energy sold per asset in the `EnergyExchanged` event of `pallet-treasury-extension`
 - Set `SpendPeriod` of the treasury to 1 day and `SpendThreshold` of `pallet-treasury-extension` to 1%, on testnet
 - Raise the launchpad's default graduation target on testnet from 3,000 to 4,600,000 VTRS
+- Switch parachains from `ParaAssignmentProvider` to coretime without a broker chain
 
 ### Removed
 
@@ -31,6 +32,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Stop re-creating the treasury's energy accounts every session in `pallet-treasury-extension`
 - Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
 - Charge `pallet-sudo` calls by weight
+- Make signed EVM calls prepay their fee in `pallet-energy-fee` and refund it once the call has run
 - Pick a free item id when `pallet-nac-managing` mints NAC and VIPP NFTs
 
 ## [215] - 2026-10-19

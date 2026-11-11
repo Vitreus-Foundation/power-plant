@@ -33,23 +33,31 @@ A full build is slow. Prefix `check` and `clippy` with `SKIP_WASM_BUILD=1` to sk
 
 ## Runtime code
 
-- Runtime and pallet code must not panic. Avoid `unwrap`; restructure the code, or use `expect` with a proof that it cannot fail, ending in `; qed`. Tests are exempt.
+- Runtime and pallet code must not panic. Avoid `unwrap` and `expect`: restructure the code or use `Defensive` (below). Tests, benchmarks, try-runtime checks and genesis builds are exempt.
+- Don't turn a failure into "nothing to do": an `Option` or `Result` that means "can't" doesn't silently become a default (`unwrap_or_default`, `unwrap_or(0)`). A call returns the failure as an error. In a hook that can't return an error, a failure is reported in an event if it can happen in normal operation, such as a failed treasury energy sale, and logged if it can only come from invalid parameters in storage. A case that can only come from a bug in the code goes through `Defensive` (`defensive!`, `defensive_proof`, `defensive_unwrap_or_default`), which logs it and fails the tests that reach it.
 - Runtime and pallet crates are `no_std`. Add dependencies with `default-features = false` and propagate the `std`, `runtime-benchmarks` and `try-runtime` features to them.
 - Work in hooks (`on_initialize`, `on_finalize`, `on_idle`) is bounded per block, and its weight is accounted for.
-- Don't turn a failure into "nothing to do": an `Option` or `Result` that means "can't" doesn't become a default (`unwrap_or_default`, `unwrap_or(0)`). A hook that can't return an error reports it in an event.
 - Don't mint VTRS in new code, migrations included: that changes issuance on mainnet. A migration that funds an account transfers from an existing one, such as the Treasury.
 - Calls are charged by the `CustomFee` impl for `EnergyFee` in `runtime/vitreus`: pallets listed in its flat-fee arm pay the flat fee, and anything not listed falls through to the weight-based fee. When adding a pallet or changing how calls are charged, choose on purpose.
 - A new pallet with benchmarks goes into `define_benchmarks!` for each network it runs on: there is one list per network.
-- Pallet and call indices are never reused once a runtime with them ran on a network (mainnet, testnet or stagenet): a removed pallet or call leaves its index empty, and a removed pallet stays as a comment in `construct_runtime!`. The release PRs (`Runtime version N`) mark the runtimes that shipped. An existing call keeps its purpose: a call that does something else is a new call at a new index. Otherwise calls stored on chain or signed earlier decode as the new ones.
+- Pallet and call indices are never reused once a runtime with them ran on a network (mainnet, testnet or stagenet): a removed pallet or call leaves its index empty, and a removed pallet stays as a comment in `construct_runtime!`. The release PRs (`Runtime version N`) mark the runtimes that shipped. An existing call keeps its purpose: a call that does something else is a new call at a new index. Otherwise calls stored on chain or signed earlier decode as the new ones. A call that keeps its purpose can still change how its arguments encode, and a call or a pallet can move to another index: then the next release needs a `transaction_version` bump, and the PR says so.
 - A bug fix in runtime or pallet code comes with a test that fails without it; changing only a configuration value, such as a constant, needs none. Write that test first and see it fail, then make the fix without changing the test. Put new tests next to the related ones. Name new tests as a short statement of what they check, subject first and without articles (`failing_swap_is_reported`); rename existing tests only in a PR of their own.
-- Test a pallet's own logic in the pallet's tests, against its mock. Runtime tests are for what depends on the runtime: config wiring, the real types behind config items (exchanges, fee handlers) and pallets working together.
+- If a bug has left wrong data in storage, its fix repairs that data with a migration in the same PR, not with code in regular calls or hooks that skips, prunes or rebuilds it.
+- Test a pallet's own logic in the pallet's tests, against its mock. Runtime tests are for what depends on the runtime: config wiring, the real types behind config items (exchanges, fee handlers) and pallets working together. Reach those types through the runtime's config (`<Runtime as pallet_transaction_payment::Config>::OnChargeTransaction`), not by naming the implementation, or the test still passes when the wiring changes.
 
 ## Code comments
 
 - Comment what the code can't say: invariants, non-obvious reasons, units of values (base units or whole tokens, basis points, blocks or milliseconds), edge cases. Arguments for a design go in the PR description.
+- Say a thing once, in the doc of the item it is about; elsewhere, link to that item instead of restating it. Docs that go into the runtime metadata, of calls, events, errors, storage, constants and runtime APIs, may repeat facts from other docs: wallets and explorers show each on its own. A comment doesn't explain what a line or an argument does when the code already says it, such as `Preserve` keeping an account alive.
 - Don't reference spec, design, review or audit documents (their sections such as `§x.y`, their decision or finding IDs, or the files themselves), files outside the repository, or this repo's PRs and issues, in comments or test names. History lives in git. A link to an issue in a dependency, such as the Polkadot SDK or Frontier, that a workaround depends on is fine.
-- No market values, dates or snapshots, whether of a live network (rates, balances, prices) or of a local measurement (machine, run date). State the relation the code relies on; numbers for scale go in the PR description. Generated files, such as benchmarked weights, are exempt.
+- No market values, dates or snapshots, whether of a live network (rates, balances, prices) or of a local measurement (machine, run date). State the relation the code relies on; numbers for scale go in the PR description.
+- A `///` doc covers what the item's users need; how the item works inside, such as why a hasher was chosen, goes into a `//` comment.
+- A doc starts with one short sentence and puts the rest after a blank line: rustdoc shows the first paragraph in item lists.
+- A crate's `//!` doc says what the crate does, with links to the items that do it. It doesn't list the crate's modules or `Config` items, which rustdoc shows, or its dependencies.
 - Docs on shared traits in `runtime/common` describe the contract, not one implementation's assumptions.
+- An error's doc says when the error happens, and what the caller can do about it when the condition doesn't make that clear: wallets show it to the user.
+- A storage item with no size bound in its type, allowed by `#[pallet::unbounded]` or `#[pallet::without_storage_info]`, says in a `//` comment what keeps its size in check.
+- Generated files, such as benchmarked weights, are exempt from these rules.
 
 ## CHANGELOG and versions
 
@@ -64,9 +72,12 @@ The flow is in README.md. These are the parts agents get wrong:
 ## Pull requests
 
 - A PR covers one topic: a fix or a set of related fixes in one place, one feature, or one refactor, together with what it forces to change, such as callers, runtime wiring, runtime APIs and the docs it makes wrong, doc comments included.
-- Everything else goes to its own PR: unrelated fixes, refactors, renames, reformatting, dependency bumps and cleanups. Report what you noticed instead of fixing it, so it can become an issue; mention it in the PR description only if reviewers need it to understand this PR. Changes to several pallets and the runtime for different reasons are several PRs. Split a large topic into a series of PRs that each build and pass tests.
-- Propose runtime-wide changes and changes to the token economics in an issue before the PR.
+- Everything else goes to its own PR: unrelated fixes, refactors, renames, reformatting, dependency bumps and cleanups. Report what you noticed instead of fixing it, so it can become an issue; mention it in the PR description only if reviewers need it to understand this PR. Changes to several pallets and the runtime for different reasons are several PRs. Split a large topic into a series of PRs, each of which builds, passes tests and leaves `main` ready to release: no PR relies on a later one to close a gap or undo a regression it introduces. Plan the series before writing the code. If the code already exists as one change, rebuild the series topic by topic on top of `main` instead of slicing the diff: a slice follows files and commits, not topics.
+- When new code needs logic that already exists, even inside another function or another test module, reuse it: extract or move it to a place both can reach in the same PR instead of copying it. That move is part of what the PR forces to change, not a separate refactor.
+- Renames and other behavior-neutral cleanups in one pallet can share a PR of their own, one commit each, but never a PR with a fix or a feature.
+- Runtime-wide changes and changes to the token economics need the reviewers' agreement before the work starts, so the PR isn't rejected for its approach. Propose them in an issue, or use a discussion where they were already agreed, and link it from the PR. An option that stays off until governance turns it on needs agreement only on how it works: the vote that turns it on decides the rest.
 - `Cargo.lock` changes only for the dependencies the PR changes.
 - Don't add entries for your own tools or local files (IDE, agents, notes) to `.gitignore`; use `.git/info/exclude`.
 - If the PR changes what users or integrators see (RPC, call arguments, EVM semantics, fees, XCM, events), describe the impact in the PR description.
+- The repository is public. A fix for a vulnerability says what changes and what users see, not how to exploit it: in the branch name, title, description, commit messages, code comments and CHANGELOG entry.
 - The title becomes the squash commit subject: imperative ("Fix …", "Add …", "Make …") without a `type(scope):` prefix, without spec references, and specific about what the whole PR changes. If it can't be, the PR is too wide.
