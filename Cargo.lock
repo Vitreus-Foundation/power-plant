@@ -6948,15 +6948,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "pallet-evm-precompile-sha3fips"
-version = "2.0.0-dev"
-source = "git+https://github.com/polkadot-evm/frontier?branch=stable2407#2e219e17a526125da003e64ef22ec037917083fa"
-dependencies = [
- "fp-evm",
- "tiny-keccak",
-]
-
-[[package]]
 name = "pallet-evm-precompile-simple"
 version = "2.0.0-dev"
 source = "git+https://github.com/polkadot-evm/frontier?branch=stable2407#2e219e17a526125da003e64ef22ec037917083fa"
@@ -14636,7 +14627,6 @@ dependencies = [
  "pallet-evm-chain-id",
  "pallet-evm-precompile-balances-erc20",
  "pallet-evm-precompile-modexp",
- "pallet-evm-precompile-sha3fips",
  "pallet-evm-precompile-simple",
  "pallet-faucet",
  "pallet-grandpa",

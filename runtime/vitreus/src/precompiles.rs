@@ -1,6 +1,5 @@
 use pallet_evm_precompile_balances_erc20::{Erc20BalancesPrecompile, Erc20Metadata};
 use pallet_evm_precompile_modexp::Modexp;
-use pallet_evm_precompile_sha3fips::Sha3FIPS256;
 use pallet_evm_precompile_simple::{ECRecover, ECRecoverPublicKey, Identity, Ripemd160, Sha256};
 
 use precompile_utils::precompile_set::*;
@@ -34,6 +33,9 @@ impl Erc20Metadata for NativeErc20Metadata {
 
 type EthereumPrecompilesChecks = (AcceptDelegateCall, CallableByContract, CallableByPrecompile);
 
+// Contracts call precompiles by address, so once a runtime on a network has used an address, no
+// other precompile may take it. A removed precompile stays here as `RemovedPrecompileAt` with its
+// name in a comment, and only that precompile may come back to its address.
 #[precompile_utils::precompile_name_from_address]
 type VitreusPrecompilesAt<R> = (
     // Ethereum precompiles:
@@ -44,7 +46,7 @@ type VitreusPrecompilesAt<R> = (
     PrecompileAt<AddressU64<4>, Identity, EthereumPrecompilesChecks>,
     PrecompileAt<AddressU64<5>, Modexp, EthereumPrecompilesChecks>,
     // Non-Vitreus specific nor Ethereum precompiles :
-    PrecompileAt<AddressU64<1024>, Sha3FIPS256, (CallableByContract, CallableByPrecompile)>,
+    RemovedPrecompileAt<AddressU64<1024>>, // Sha3FIPS256
     PrecompileAt<AddressU64<1025>, ECRecoverPublicKey, (CallableByContract, CallableByPrecompile)>,
     // Vitreus specific precompiles:
     PrecompileAt<
