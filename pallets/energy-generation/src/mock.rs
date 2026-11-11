@@ -28,7 +28,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
-use vitreus_runtime_common::ExposureMultiplier;
+use vitreus_runtime_common::{EraSessionLookup, ExposureMultiplier, OnSessionChange};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -315,9 +315,45 @@ impl ExposureMultiplier<u64> for MockCooperatorExposureMultiplier {
 
 pub(crate) const DISABLING_LIMIT_FACTOR: usize = 3;
 
+// The session listener and the era energy calculator log their calls here, in call order, so
+// tests can check the order.
+parameter_types! {
+    pub static EraCalls: Vec<EraCall> = Vec::new();
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EraCall {
+    /// `session` started while the active era was `active_era`, whose first session is
+    /// `era_start`.
+    NewSession {
+        session: SessionIndex,
+        active_era: Option<EraIndex>,
+        era_start: Option<SessionIndex>,
+    },
+    /// The energy generated in `era` was calculated.
+    Calculate { era: EraIndex },
+}
+
+/// Reads the active era through [`EraSessionLookup`], as dynamic-energy does to find the first
+/// session of an era.
+pub struct MockSessionChangeListener;
+impl OnSessionChange for MockSessionChangeListener {
+    fn on_new_session(session: SessionIndex) {
+        let active_era = <PowerPlant as EraSessionLookup>::active_era();
+        let era_start = active_era
+            .and_then(<PowerPlant as EraSessionLookup>::session_range_for_era)
+            .map(|(start, _)| start);
+
+        EraCalls::mutate(|calls| {
+            calls.push(EraCall::NewSession { session, active_era, era_start })
+        });
+    }
+}
+
 pub struct MockEraEnergyRateCalculator;
 impl vitreus_runtime_common::EraEnergyRateCalculator<u128> for MockEraEnergyRateCalculator {
-    fn calculate(_era: EraIndex) -> Option<u128> {
+    fn calculate(era: EraIndex) -> Option<u128> {
+        EraCalls::mutate(|calls| calls.push(EraCall::Calculate { era }));
         Some(2000000)
     }
 }
@@ -336,7 +372,7 @@ impl pallet_energy_generation::Config for Test {
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = EventListenerMock;
-    type SessionChangeListeners = ();
+    type SessionChangeListeners = MockSessionChangeListener;
     type DisablingStrategy =
         pallet_energy_generation::UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR>;
     type ValidatorExposureMultiplier = MockValidatorExposureMultiplier;
