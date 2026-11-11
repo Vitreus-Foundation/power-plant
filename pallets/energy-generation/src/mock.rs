@@ -28,7 +28,7 @@ use sp_runtime::{
 };
 use sp_staking::offence::{OffenceDetails, OnOffenceHandler};
 use sp_std::vec;
-use vitreus_runtime_common::ExposureMultiplier;
+use vitreus_runtime_common::{EraSessionLookup, ExposureMultiplier, OnSessionChange};
 
 pub const INIT_TIMESTAMP: u64 = 30_000;
 pub const BLOCK_TIME: u64 = 1000;
@@ -112,29 +112,15 @@ parameter_types! {
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
-    type BaseCallFilter = frame_support::traits::Everything;
-    type BlockWeights = ();
-    type BlockLength = ();
     type DbWeight = RocksDbWeight;
-    type RuntimeOrigin = RuntimeOrigin;
-    type RuntimeCall = RuntimeCall;
     type Nonce = Nonce;
     type Block = Block;
-    type Hash = H256;
-    type Hashing = ::sp_runtime::traits::BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
-    type RuntimeEvent = RuntimeEvent;
     type BlockHashCount = frame_support::traits::ConstU64<250>;
-    type Version = ();
-    type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
     type OnNewAccount = ReputationPallet;
     type OnKilledAccount = ReputationPallet;
-    type SystemWeightInfo = ();
-    type SS58Prefix = ();
-    type OnSetCode = ();
-    type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
@@ -143,11 +129,8 @@ impl pallet_balances::Config for Test {
     type MaxReserves = ();
     type ReserveIdentifier = [u8; 8];
     type Balance = Balance;
-    type RuntimeEvent = RuntimeEvent;
-    type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
-    type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ();
     type RuntimeHoldReason = ();
@@ -169,8 +152,8 @@ parameter_types! {
 
 pub type AssetId = u32;
 
+#[derive_impl(pallet_assets::config_preludes::TestDefaultConfig)]
 impl pallet_assets::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
     type AssetId = AssetId;
     type Currency = Balances;
@@ -182,14 +165,9 @@ impl pallet_assets::Config for Test {
     type ApprovalDeposit = ApprovalDeposit;
     type StringLimit = AssetsStringLimit;
     type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
     type RemoveItemsLimit = ConstU32<1000>;
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type CallbackHandle = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
 }
 
 sp_runtime::impl_opaque_keys! {
@@ -220,11 +198,9 @@ impl pallet_authorship::Config for Test {
     type EventHandler = Pallet<Test>;
 }
 
+#[derive_impl(pallet_timestamp::config_preludes::TestDefaultConfig)]
 impl pallet_timestamp::Config for Test {
-    type Moment = u64;
-    type OnTimestampSet = ();
     type MinimumPeriod = ConstU64<5>;
-    type WeightInfo = ();
 }
 
 pallet_staking_reward_curve::build! {
@@ -315,9 +291,45 @@ impl ExposureMultiplier<u64> for MockCooperatorExposureMultiplier {
 
 pub(crate) const DISABLING_LIMIT_FACTOR: usize = 3;
 
+// The session listener and the era energy calculator log their calls here, in call order, so
+// tests can check the order.
+parameter_types! {
+    pub static EraCalls: Vec<EraCall> = Vec::new();
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum EraCall {
+    /// `session` started while the active era was `active_era`, whose first session is
+    /// `era_start`.
+    NewSession {
+        session: SessionIndex,
+        active_era: Option<EraIndex>,
+        era_start: Option<SessionIndex>,
+    },
+    /// The energy generated in `era` was calculated.
+    Calculate { era: EraIndex },
+}
+
+/// Reads the active era through [`EraSessionLookup`], as dynamic-energy does to find the first
+/// session of an era.
+pub struct MockSessionChangeListener;
+impl OnSessionChange for MockSessionChangeListener {
+    fn on_new_session(session: SessionIndex) {
+        let active_era = <PowerPlant as EraSessionLookup>::active_era();
+        let era_start = active_era
+            .and_then(<PowerPlant as EraSessionLookup>::session_range_for_era)
+            .map(|(start, _)| start);
+
+        EraCalls::mutate(|calls| {
+            calls.push(EraCall::NewSession { session, active_era, era_start })
+        });
+    }
+}
+
 pub struct MockEraEnergyRateCalculator;
 impl vitreus_runtime_common::EraEnergyRateCalculator<u128> for MockEraEnergyRateCalculator {
-    fn calculate(_era: EraIndex) -> Option<u128> {
+    fn calculate(era: EraIndex) -> Option<u128> {
+        EraCalls::mutate(|calls| calls.push(EraCall::Calculate { era }));
         Some(2000000)
     }
 }
@@ -336,7 +348,7 @@ impl pallet_energy_generation::Config for Test {
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = EventListenerMock;
-    type SessionChangeListeners = ();
+    type SessionChangeListeners = MockSessionChangeListener;
     type DisablingStrategy =
         pallet_energy_generation::UpToLimitDisablingStrategy<DISABLING_LIMIT_FACTOR>;
     type ValidatorExposureMultiplier = MockValidatorExposureMultiplier;

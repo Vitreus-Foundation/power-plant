@@ -203,6 +203,41 @@ mod energy_fee {
     }
 
     #[test]
+    fn fee_check_buys_nothing_from_broker() {
+        new_test_ext().execute_with(|| {
+            System::set_block_number(1);
+            let energy = NativeOrAssetId::WithId(VNRG::get());
+            let broker = EnergyBroker::account_id();
+            let fee = GetConstantEnergyFee::get();
+            // BOB holds VTRS only, so the broker has to sell the fee to BOB.
+            let bob = AccountId::from([7u8; 20]);
+            Balances::set_balance(&bob, 1_000 * vtrs::UNITS);
+
+            let call = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                dest: alith(),
+                value: 1,
+            });
+            let info = call.get_dispatch_info();
+            let computed_fee = TransactionPayment::compute_fee(0, &info, 0);
+            let check =
+                || TransactionFeeHandler::can_withdraw_fee(&bob, &call, &info, computed_fee, 0);
+
+            // Without VNRG to sell, the check fails, so it does go to the broker.
+            fund_broker_with_vnrg(0);
+            assert_eq!(check(), Err(InvalidTransaction::Payment.into()));
+
+            NativeAndAssets::set_balance(energy.clone(), &broker, 10 * fee);
+            System::reset_events();
+            assert_eq!(check(), Ok(()));
+
+            assert_eq!(Balances::free_balance(bob), 1_000 * vtrs::UNITS);
+            assert_eq!(asset_balance(&energy, &bob), 0);
+            assert_eq!(asset_balance(&energy, &broker), 10 * fee);
+            assert!(System::events().is_empty());
+        })
+    }
+
+    #[test]
     fn sudo_call_pays_weight_fee() {
         new_test_ext().execute_with(|| {
             // The call inside pays the flat fee, so a `sudo` charged like its inner call would too.
@@ -256,15 +291,27 @@ mod energy_fee {
                 value: 1,
             });
             let remark = RuntimeCall::System(frame_system::Call::remark { remark: vec![] });
+            let evm_call = RuntimeCall::EVM(pallet_evm::Call::call {
+                source: H160::zero(),
+                target: H160::zero(),
+                input: vec![],
+                value: U256::zero(),
+                gas_limit: 21_000,
+                max_fee_per_gas: U256::one(),
+                max_priority_fee_per_gas: None,
+                nonce: None,
+                access_list: vec![],
+            });
 
             assert_eq!(fee_of(&transfer), CallFee::Regular(flat));
             assert_eq!(fee_of(&remark), CallFee::Regular(weight_fee));
+            assert_eq!(fee_of(&evm_call), CallFee::EVM(EnergyFeeCustomFee::ethereum_fee()));
             assert_eq!(
                 fee_of(&RuntimeCall::EVM(pallet_evm::Call::withdraw {
                     address: H160::zero(),
                     value: 1
                 })),
-                CallFee::EVM(EnergyFeeCustomFee::ethereum_fee())
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
             );
 
             // A batch pays for each of its calls, and at least the flat fee. Its calls have
@@ -292,6 +339,10 @@ mod energy_fee {
             };
             assert_eq!(fee_of(&as_derivative(transfer)), CallFee::Regular(flat));
             assert_eq!(fee_of(&as_derivative(remark)), CallFee::Regular(weight_fee));
+            assert_eq!(
+                fee_of(&as_derivative(evm_call)),
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
+            );
         })
     }
 
@@ -810,6 +861,275 @@ mod treasury {
     fn lnrg_exchange_fails_without_broker_vtrs() {
         new_test_ext()
             .execute_with(assert_fails_without_broker_vtrs::<TreasuryLiquidEnergyExchange>)
+    }
+}
+
+mod offences {
+    use super::*;
+    use frame_support::assert_ok;
+    use parachains_slashing::HandleReports;
+    use polkadot_primitives::slashing::{DisputesTimeSlot, SlashingOffenceKind};
+    use sp_core::{ecdsa, ed25519, sr25519, Pair};
+    use sp_runtime::{traits::Convert, Perbill};
+    use sp_staking::offence::{Offence, OffenceError, ReportOffence};
+
+    /// A validator as offences identify it: its stash and its exposure.
+    type Offender = pallet_session::historical::IdentificationTuple<Runtime>;
+
+    /// Number of validators that the genesis starts with.
+    const VALIDATOR_COUNT: u8 = 4;
+    /// Stake that each validator bonds at genesis.
+    const STAKE: Balance = 1_000 * vtrs::UNITS;
+    /// Share that BABE, GRANDPA and BEEFY slash for one equivocator out of `VALIDATOR_COUNT`.
+    ///
+    /// They slash (3k / n)² for k equivocators out of n, here (3 · 1 / 4)² = 9/16.
+    const EQUIVOCATION_FRACTION: Perbill = Perbill::from_parts(562_500_000);
+
+    fn stash(validator: u8) -> AccountId {
+        AccountId::from([validator; 20])
+    }
+
+    fn controller(validator: u8) -> AccountId {
+        AccountId::from([validator + 100; 20])
+    }
+
+    fn session_keys(validator: u8) -> opaque::SessionKeys {
+        let seed = format!("//{validator}");
+        let sr25519_key = sr25519::Pair::from_string(&seed, None).unwrap().public();
+        opaque::SessionKeys {
+            grandpa: ed25519::Pair::from_string(&seed, None).unwrap().public().into(),
+            babe: sr25519_key.into(),
+            im_online: sr25519_key.into(),
+            para_validator: sr25519_key.into(),
+            para_assignment: sr25519_key.into(),
+            authority_discovery: sr25519_key.into(),
+            beefy: ecdsa::Pair::from_string(&seed, None).unwrap().public().into(),
+        }
+    }
+
+    /// Runtime genesis with `VALIDATOR_COUNT` validators bonded and validating, at block 1.
+    ///
+    /// pallet-session builds its genesis before energy-generation, so era 0 starts before anyone
+    /// has bonded and has no exposures. Offences in era 0 disable validators but slash nothing.
+    fn new_test_ext_with_validators() -> sp_io::TestExternalities {
+        let validators = 1..=VALIDATOR_COUNT;
+        let mut ext = sp_io::TestExternalities::new(
+            RuntimeGenesisConfig {
+                balances: BalancesConfig {
+                    balances: validators.clone().map(|v| (stash(v), STAKE)).collect(),
+                },
+                reputation: ReputationConfig {
+                    accounts: validators
+                        .clone()
+                        .map(|v| (stash(v), VALIDATOR_REPUTATION_THRESHOLD.into()))
+                        .collect(),
+                },
+                session: SessionConfig {
+                    keys: validators
+                        .clone()
+                        .map(|v| (controller(v), stash(v), session_keys(v)))
+                        .collect(),
+                },
+                energy_generation: EnergyGenerationConfig {
+                    stakers: validators
+                        .map(|v| (stash(v), controller(v), STAKE, StakerStatus::Validator))
+                        .collect(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+            .build_storage()
+            .unwrap(),
+        );
+        // frame-system records no events at block 0.
+        ext.execute_with(|| System::set_block_number(1));
+        ext
+    }
+
+    /// `validator` with its exposure in the active era.
+    fn offender(validator: u8) -> Offender {
+        let exposure =
+            <Runtime as pallet_session::historical::Config>::FullIdentificationOf::convert(stash(
+                validator,
+            ))
+            .unwrap();
+        (stash(validator), exposure)
+    }
+
+    /// A GRANDPA equivocation by `validator` in `round` of session 0.
+    fn grandpa_equivocation(
+        validator: u8,
+        round: u64,
+    ) -> pallet_grandpa::EquivocationOffence<Offender> {
+        pallet_grandpa::EquivocationOffence {
+            time_slot: pallet_grandpa::TimeSlot { set_id: 0, round },
+            session_index: 0,
+            validator_set_count: VALIDATOR_COUNT.into(),
+            offender: offender(validator),
+        }
+    }
+
+    /// Stashes of the validators that pallet-session has disabled.
+    fn disabled_stashes() -> Vec<AccountId> {
+        let validators = Session::validators();
+        Session::disabled_validators()
+            .into_iter()
+            .map(|index| validators[index as usize])
+            .collect()
+    }
+
+    /// Reports an equivocation straight to pallet-offences, where the source's report system sends
+    /// it once the proofs check out.
+    fn report_equivocation<O>(offence: O) -> Result<(), OffenceError>
+    where
+        O: Offence<Offender>,
+    {
+        <Offences as ReportOffence<_, _, _>>::report_offence(vec![], offence)
+    }
+
+    /// Reports a lost dispute through the handler that the runtime's config wires in.
+    fn report_lost_dispute(
+        offence: parachains_slashing::SlashingOffence<
+            <Runtime as parachains_slashing::Config>::KeyOwnerIdentification,
+        >,
+    ) -> Result<(), OffenceError> {
+        type Handler = <Runtime as parachains_slashing::Config>::HandleReports;
+        <Handler as HandleReports<Runtime>>::report_offence(offence)
+    }
+
+    /// Reports unresponsive validators through the reporter that the runtime's config wires in.
+    fn report_unresponsiveness(
+        offence: pallet_im_online::UnresponsivenessOffence<Offender>,
+    ) -> Result<(), OffenceError> {
+        type Reporter = <Runtime as pallet_im_online::Config>::ReportUnresponsiveness;
+        <Reporter as ReportOffence<_, _, _>>::report_offence(vec![], offence)
+    }
+
+    /// Checks that energy-generation got an offence by `validator` in era 0 at `fraction`.
+    fn assert_slash_reported(validator: AccountId, fraction: Perbill) {
+        System::assert_has_event(
+            pallet_energy_generation::Event::<Runtime>::SlashReported {
+                validator,
+                fraction,
+                slash_era: 0,
+            }
+            .into(),
+        );
+    }
+
+    /// Reports `offence` through `report` and checks that energy-generation got it at `fraction`
+    /// and that pallet-session disabled the offender.
+    fn assert_offence_disables_offender<O>(
+        report: impl FnOnce(O) -> Result<(), OffenceError>,
+        offence: O,
+        fraction: Perbill,
+    ) where
+        O: Offence<Offender>,
+    {
+        let (offender, _) = offence.offenders()[0].clone();
+        let timeslot = offence.time_slot().encode();
+
+        assert_ok!(report(offence));
+
+        assert_slash_reported(offender, fraction);
+        System::assert_has_event(pallet_offences::Event::Offence { kind: O::ID, timeslot }.into());
+        assert_eq!(disabled_stashes(), vec![offender]);
+    }
+
+    #[test]
+    fn babe_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_equivocation,
+                pallet_babe::EquivocationOffence {
+                    slot: 1.into(),
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offender: offender(1),
+                },
+                EQUIVOCATION_FRACTION,
+            )
+        });
+    }
+
+    #[test]
+    fn grandpa_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_equivocation,
+                grandpa_equivocation(1, 1),
+                EQUIVOCATION_FRACTION,
+            )
+        });
+    }
+
+    #[test]
+    fn beefy_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_equivocation,
+                pallet_beefy::EquivocationOffence {
+                    time_slot: pallet_beefy::TimeSlot::<BlockNumber> { set_id: 0, round: 1 },
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offender: offender(1),
+                },
+                EQUIVOCATION_FRACTION,
+            )
+        });
+    }
+
+    #[test]
+    fn lost_dispute_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_lost_dispute,
+                parachains_slashing::SlashingOffence {
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    time_slot: DisputesTimeSlot::new(0, CandidateHash(H256::repeat_byte(1))),
+                    offenders: vec![offender(1)],
+                    // What the private `SlashingOffence::new` sets for `ForInvalid`.
+                    slash_fraction: Perbill::one(),
+                    kind: SlashingOffenceKind::ForInvalid,
+                },
+                Perbill::one(),
+            )
+        });
+    }
+
+    #[test]
+    fn unresponsiveness_chills_and_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert!(pallet_energy_generation::Validators::<Runtime>::contains_key(stash(1)));
+
+            assert_offence_disables_offender(
+                report_unresponsiveness,
+                pallet_im_online::UnresponsivenessOffence {
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offenders: vec![offender(1)],
+                },
+                // im-online slashes nothing while at most n / 10 + 1 of n validators are offline.
+                Perbill::zero(),
+            );
+
+            System::assert_has_event(
+                pallet_energy_generation::Event::<Runtime>::Chilled { stash: stash(1) }.into(),
+            );
+            assert!(!pallet_energy_generation::Validators::<Runtime>::contains_key(stash(1)));
+        });
+    }
+
+    #[test]
+    fn offender_beyond_disabling_limit_stays_enabled() {
+        new_test_ext_with_validators().execute_with(|| {
+            // Energy-generation disables at most (n - 1) / 3 of n validators: one out of four.
+            assert_ok!(report_equivocation(grandpa_equivocation(1, 1)));
+            assert_ok!(report_equivocation(grandpa_equivocation(2, 2)));
+
+            assert_slash_reported(stash(2), EQUIVOCATION_FRACTION);
+            assert_eq!(disabled_stashes(), vec![stash(1)]);
+        });
     }
 }
 

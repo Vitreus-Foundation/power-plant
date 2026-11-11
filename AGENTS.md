@@ -70,7 +70,7 @@ Agents have taken these for bugs. They are intended:
 
 ## CHANGELOG and versions
 
-The flow is in README.md. These are the parts agents get wrong:
+A regular PR follows CONTRIBUTING.md. Releases and network upgrades follow RELEASE.md. These are the parts agents get wrong:
 
 - A PR that changes the runtime or a pallet adds entries under `## [Unreleased]` in `CHANGELOG.md`, runtime refactors included. Each entry starts with a verb and names the pallet or API it changes. Related small changes can share an entry. A PR that changes neither, such as a CI or docs change, ticks "Does not require a CHANGELOG entry" in its description, or the CHANGELOG check fails.
 - Add new entries at the end of their subsection. Don't reorder or rewrite entries added by other PRs; on a conflict, keep both sides' entries, yours last. Only a release PR may reorder, merge and reword them, keeping every change covered. It adds no details the entries don't already have. An API change under Changed and the bug behind it under Fixed are not duplicates.
@@ -89,5 +89,5 @@ The flow is in README.md. These are the parts agents get wrong:
 - `Cargo.lock` changes only for the dependencies the PR changes.
 - Don't add entries for your own tools or local files (IDE, agents, notes) to `.gitignore`; use `.git/info/exclude`.
 - If the PR changes what users or integrators see (RPC, call arguments, EVM semantics, fees, XCM, events), describe the impact in the PR description.
-- The repository is public. A fix for a vulnerability says what changes and what users see, not how to exploit it: in the branch name, title, description, commit messages, code comments and CHANGELOG entry.
+- The repository is public. A fix for a vulnerability says what changes and what users see, not how to exploit it: in the branch name, title, description, commit messages, code comments and CHANGELOG entry. A vulnerability you notice in code that SECURITY.md covers doesn't become a public issue: report it only to the requester, who sends it through private vulnerability reporting.
 - The title becomes the squash commit subject: imperative ("Fix …", "Add …", "Make …") without a `type(scope):` prefix, without spec references, and specific about what the whole PR changes. If it can't be, the PR is too wide.
