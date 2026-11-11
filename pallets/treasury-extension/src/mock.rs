@@ -10,18 +10,14 @@ use frame_support::{
     traits::{
         fungible::{ItemOf, Mutate as _},
         fungibles::Mutate as _,
-        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything,
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64,
     },
 };
 use frame_system::{EnsureRoot, EnsureRootWithSuccess, EnsureSigned};
 use pallet_treasury::TreasuryAccountId;
 use parity_scale_codec::{Decode, Encode};
-use sp_core::H256;
 
-use sp_runtime::{
-    traits::{BlakeTwo256, IdentityLookup},
-    BuildStorage, DispatchError, Permill, TokenError,
-};
+use sp_runtime::{traits::IdentityLookup, BuildStorage, DispatchError, Permill, TokenError};
 use vitreus_runtime_common::{QuotePriceFromEnergy, SwapFromEnergy};
 
 // 2 gVTRS
@@ -54,29 +50,12 @@ frame_support::construct_runtime!(
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
-    type BaseCallFilter = Everything;
-    type BlockWeights = ();
-    type BlockLength = ();
-    type DbWeight = ();
-    type RuntimeOrigin = RuntimeOrigin;
-    type RuntimeCall = RuntimeCall;
     type Nonce = Nonce;
     type Block = Block;
-    type Hash = H256;
-    type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
-    type RuntimeEvent = RuntimeEvent;
     type BlockHashCount = ConstU64<250>;
-    type Version = ();
-    type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = ();
-    type OnKilledAccount = ();
-    type SystemWeightInfo = ();
-    type SS58Prefix = ();
-    type OnSetCode = ();
-    type MaxConsumers = ConstU32<16>;
 }
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
@@ -85,11 +64,8 @@ impl pallet_balances::Config for Test {
     type MaxReserves = ();
     type ReserveIdentifier = [u8; 8];
     type Balance = Balance;
-    type RuntimeEvent = RuntimeEvent;
-    type DustRemoval = ();
     type ExistentialDeposit = ConstU128<1>;
     type AccountStore = System;
-    type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ();
     type RuntimeHoldReason = ();

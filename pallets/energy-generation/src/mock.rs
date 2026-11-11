@@ -112,29 +112,15 @@ parameter_types! {
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
-    type BaseCallFilter = frame_support::traits::Everything;
-    type BlockWeights = ();
-    type BlockLength = ();
     type DbWeight = RocksDbWeight;
-    type RuntimeOrigin = RuntimeOrigin;
-    type RuntimeCall = RuntimeCall;
     type Nonce = Nonce;
     type Block = Block;
-    type Hash = H256;
-    type Hashing = ::sp_runtime::traits::BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
-    type RuntimeEvent = RuntimeEvent;
     type BlockHashCount = frame_support::traits::ConstU64<250>;
-    type Version = ();
-    type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
     type OnNewAccount = ReputationPallet;
     type OnKilledAccount = ReputationPallet;
-    type SystemWeightInfo = ();
-    type SS58Prefix = ();
-    type OnSetCode = ();
-    type MaxConsumers = frame_support::traits::ConstU32<16>;
 }
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
@@ -143,11 +129,8 @@ impl pallet_balances::Config for Test {
     type MaxReserves = ();
     type ReserveIdentifier = [u8; 8];
     type Balance = Balance;
-    type RuntimeEvent = RuntimeEvent;
-    type DustRemoval = ();
     type ExistentialDeposit = ExistentialDeposit;
     type AccountStore = System;
-    type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ();
     type RuntimeHoldReason = ();
@@ -169,8 +152,8 @@ parameter_types! {
 
 pub type AssetId = u32;
 
+#[derive_impl(pallet_assets::config_preludes::TestDefaultConfig)]
 impl pallet_assets::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
     type AssetId = AssetId;
     type Currency = Balances;
@@ -182,14 +165,9 @@ impl pallet_assets::Config for Test {
     type ApprovalDeposit = ApprovalDeposit;
     type StringLimit = AssetsStringLimit;
     type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
     type RemoveItemsLimit = ConstU32<1000>;
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type CallbackHandle = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
 }
 
 sp_runtime::impl_opaque_keys! {
@@ -220,11 +198,9 @@ impl pallet_authorship::Config for Test {
     type EventHandler = Pallet<Test>;
 }
 
+#[derive_impl(pallet_timestamp::config_preludes::TestDefaultConfig)]
 impl pallet_timestamp::Config for Test {
-    type Moment = u64;
-    type OnTimestampSet = ();
     type MinimumPeriod = ConstU64<5>;
-    type WeightInfo = ();
 }
 
 pallet_staking_reward_curve::build! {
