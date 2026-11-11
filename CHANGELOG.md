@@ -10,6 +10,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 ### Added
 
 - Add the `EnergyExchangeFailed` event to `pallet-treasury-extension`
+- Add the `NftMintFailed` event to `pallet-nac-managing`
 - Add a per-session payout quota on energy sales to `pallet-dynamic-energy`, off by default
 
 ### Changed
@@ -27,6 +28,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 - Remove `pallet-uniques` and other unused dependencies from the runtime
 - Remove the unused `NacRunner` and other dead EVM code from the runtime
+- Remove the `Sha3FIPS256` EVM precompile at 0x400
 
 ### Fixed
 
@@ -34,6 +36,9 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Stop re-creating the treasury's energy accounts every session in `pallet-treasury-extension`
 - Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
 - Charge `pallet-sudo` calls by weight
+- Make signed EVM calls prepay their fee in `pallet-energy-fee` and refund it once the call has run
+- Pick a free item id when `pallet-nac-managing` mints NAC and VIPP NFTs
+- Reject signed EVM calls in `pallet-energy-fee` that can't pay both the prepaid fee and the EVM fee
 
 ## [215] - 2026-10-19
 

@@ -54,6 +54,7 @@
 pub use crate::extension::CheckEnergyFee;
 pub use crate::traits::CustomFee;
 use frame_support::dispatch::{DispatchClass, DispatchInfo, PostDispatchInfo};
+use frame_support::storage::{with_transaction, TransactionOutcome};
 use frame_support::traits::{
     fungible::{Balanced, Credit, Inspect, Mutate},
     tokens::{Fortitude, Imbalance, Precision, Preservation},
@@ -96,7 +97,9 @@ pub type FeeCreditOf<T> =
 #[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CallFee<Balance> {
     Regular(Balance),
-    // The EVM fee is charged separately
+    /// The fee of an EVM call. A signed EVM call prepays it like a regular fee and gets it back
+    /// once it has run: the EVM runner charges for the execution, and `pallet_evm` then returns
+    /// `Pays::No`.
     EVM(Balance),
 }
 
@@ -304,22 +307,19 @@ pub mod pallet {
             call: &T::RuntimeCall,
             dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
             fee: Self::Balance,
-            _tip: Self::Balance,
+            tip: Self::Balance,
         ) -> Result<Self::LiquidityInfo, TransactionValidityError> {
             if fee.is_zero() {
                 return Ok(None);
             }
 
-            let fee = match T::CustomFee::dispatch_info_to_fee(call, Some(dispatch_info), Some(fee))
-            {
-                CallFee::Regular(fee) => fee,
-                CallFee::EVM(fee) => {
-                    Self::ensure_sufficient_energy(who, fee).map_err(|_| {
-                        TransactionValidityError::Invalid(InvalidTransaction::Payment)
-                    })?;
-                    Zero::zero()
-                },
-            };
+            // The pool validates a transaction by running this function. For an EVM call the check
+            // also covers the fee the EVM runner charges, for other calls it repeats the withdrawal
+            // below.
+            Self::can_withdraw_fee(who, call, dispatch_info, fee, tip)?;
+
+            let fee = T::CustomFee::dispatch_info_to_fee(call, Some(dispatch_info), Some(fee))
+                .into_inner();
 
             if fee.is_zero() {
                 return Ok(None);
@@ -452,6 +452,41 @@ pub mod pallet {
 }
 
 impl<T: Config> Pallet<T> {
+    /// Checks that `who` can pay the fee of `call`, without charging it.
+    ///
+    /// An EVM call needs funds for two fees, see [`CallFee::EVM`].
+    // Takes the arguments of `OnChargeTransaction::can_withdraw_fee` in later SDK releases, where
+    // this function becomes that method.
+    pub fn can_withdraw_fee(
+        who: &T::AccountId,
+        call: &T::RuntimeCall,
+        dispatch_info: &DispatchInfoOf<T::RuntimeCall>,
+        fee: BalanceOf<T>,
+        _tip: BalanceOf<T>,
+    ) -> Result<(), TransactionValidityError> {
+        if fee.is_zero() {
+            return Ok(());
+        }
+
+        let required =
+            match T::CustomFee::dispatch_info_to_fee(call, Some(dispatch_info), Some(fee)) {
+                CallFee::Regular(fee) => fee,
+                CallFee::EVM(fee) => fee.saturating_add(T::CustomFee::ethereum_fee()),
+            };
+
+        Self::can_pay_fee(who, required)
+            .map_err(|_| TransactionValidityError::Invalid(InvalidTransaction::Payment))
+    }
+
+    /// Checks that `who` can pay a fee of `amount`, exchanging the energy it lacks as a fee
+    /// withdrawal does.
+    pub fn can_pay_fee(who: &T::AccountId, amount: BalanceOf<T>) -> Result<(), DispatchError> {
+        // Runs the exchange and rolls it back, so the check follows every rule the exchange has.
+        with_transaction(|| {
+            TransactionOutcome::Rollback(Self::ensure_sufficient_energy(who, amount))
+        })
+    }
+
     /// Check if user `who` owns reducible balance of token used for charging fees
     /// of at least `amount`, and if no, then exchange missing funds for user `who` using
     /// `T::EnergyExchange`

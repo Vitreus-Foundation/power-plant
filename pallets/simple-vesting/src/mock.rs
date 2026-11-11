@@ -1,19 +1,14 @@
 use crate as pallet_simple_vesting;
 use frame_support::{
     derive_impl,
-    traits::{ConstU16, ConstU32, ConstU64, Everything},
+    traits::{ConstU16, ConstU32, ConstU64},
 };
-use sp_core::H256;
 use sp_runtime::traits::Identity;
-use sp_runtime::{
-    traits::{BlakeTwo256, IdentityLookup},
-    BuildStorage,
-};
+use sp_runtime::{traits::IdentityLookup, BuildStorage};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 type AccountId = u32;
 type Balance = u64;
-type Nonce = u32;
 
 pub(crate) const ED: Balance = 100;
 pub(crate) const ALICE: AccountId = 1;
@@ -31,37 +26,17 @@ frame_support::construct_runtime!(
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type BaseCallFilter = Everything;
-    type BlockWeights = ();
-    type BlockLength = ();
-    type RuntimeOrigin = RuntimeOrigin;
-    type RuntimeCall = RuntimeCall;
-    type Nonce = Nonce;
-    type Hash = H256;
-    type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Block = Block;
     type BlockHashCount = ConstU64<250>;
-    type DbWeight = ();
-    type Version = ();
-    type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = ();
-    type OnKilledAccount = ();
-    type SystemWeightInfo = ();
     type SS58Prefix = ConstU16<42>;
-    type OnSetCode = ();
-    type MaxConsumers = ConstU32<16>;
 }
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type WeightInfo = ();
     type Balance = Balance;
-    type DustRemoval = ();
     type ExistentialDeposit = ConstU64<ED>;
     type AccountStore = System;
     type ReserveIdentifier = [u8; 8];

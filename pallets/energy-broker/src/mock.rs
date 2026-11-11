@@ -45,12 +45,10 @@ impl pallet_balances::Config for Test {
     type AccountStore = System;
 }
 
+#[derive_impl(pallet_assets::config_preludes::TestDefaultConfig)]
 impl pallet_assets::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type Balance = u128;
     type RemoveItemsLimit = ConstU32<1000>;
-    type AssetId = u32;
-    type AssetIdParameter = u32;
     type Currency = Balances;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<Self::AccountId>>;
     type ForceOrigin = frame_system::EnsureRoot<Self::AccountId>;
@@ -59,14 +57,7 @@ impl pallet_assets::Config for Test {
     type MetadataDepositBase = ConstU128<1>;
     type MetadataDepositPerByte = ConstU128<1>;
     type ApprovalDeposit = ConstU128<1>;
-    type StringLimit = ConstU32<50>;
     type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
-    type CallbackHandle = ();
-    pallet_assets::runtime_benchmarks_enabled! {
-        type BenchmarkHelper = ();
-    }
 }
 
 pub type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<u32>;

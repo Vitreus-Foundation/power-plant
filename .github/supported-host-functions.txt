@@ -1,6 +1,6 @@
 # Host functions that every node on mainnet, testnet and stagenet provides: validators, RPC,
 # archive and boot nodes, and the relay nodes embedded in collators. The release dry run fails
-# when a runtime imports a function missing here; see "Releases" in README.md before adding one.
+# when a runtime imports a function missing here; see RELEASE.md before adding one.
 
 ext_allocator_free_version_1
 ext_allocator_malloc_version_1

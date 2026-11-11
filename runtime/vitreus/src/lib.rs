@@ -1418,6 +1418,10 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Launchpad(..)
             | RuntimeCall::LaunchTreasury(..) => CallFee::Regular(Self::custom_fee()),
 
+            // Runs no EVM code, so it pays no EVM fee on top, see `CallFee::EVM`.
+            RuntimeCall::EVM(pallet_evm::Call::withdraw { .. }) => {
+                CallFee::Regular(Self::ethereum_fee())
+            },
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
             | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
@@ -1432,9 +1436,13 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
                     .max(Self::custom_fee());
                 CallFee::Regular(resulting_fee)
             },
+            // The call inside runs from another origin, so the EVM fee of an EVM call inside is
+            // charged to that origin's account, not to the signer.
             RuntimeCall::Utility(pallet_utility::Call::dispatch_as { call, .. })
             | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
-                Self::dispatch_info_to_fee(call, None, calculated_fee)
+                CallFee::Regular(
+                    Self::dispatch_info_to_fee(call, None, calculated_fee).into_inner(),
+                )
             },
             _ => CallFee::Regular(Self::weight_fee(runtime_call, dispatch_info, calculated_fee)),
         }

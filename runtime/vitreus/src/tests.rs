@@ -1,16 +1,12 @@
 use super::*;
-use ethereum::{LegacyTransaction, TransactionAction, TransactionSignature, TransactionV2};
-use fp_self_contained::SelfContainedCall;
 use frame_support::{
     dispatch::{DispatchClass, GetDispatchInfo},
     traits::{
         fungible::Mutate as _,
         fungibles::{Inspect as _, Mutate as _},
-        Hooks,
     },
 };
-use pallet_energy_fee::DefaultFeeMultiplier;
-use sp_runtime::{BuildStorage, FixedU128, Perquintill};
+use sp_runtime::{BuildStorage, FixedU128};
 
 fn alith() -> AccountId {
     AccountId::from(hex_literal::hex!("f24FF3a9CF04c71Dbc94D0b566f7A27B94566cac"))
@@ -41,16 +37,6 @@ fn new_test_ext() -> sp_io::TestExternalities {
     )
 }
 
-fn mock_signature() -> TransactionSignature {
-    let r = H256([
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
-        0x00, 0x02,
-    ]);
-
-    TransactionSignature::new(27, r, r).unwrap()
-}
-
 const AMOUNT: Balance = 1_000_000_000;
 
 fn asset_balance(asset: &NativeOrAssetId, who: &AccountId) -> Balance {
@@ -69,15 +55,6 @@ fn fund_broker() {
         SNRG::get(),
         FixedU128::from_u32(1),
     );
-}
-
-/// Lets the broker sell `vnrg` base units of VNRG for VTRS at a rate of one.
-fn fund_broker_with_vnrg(vnrg: Balance) {
-    let broker = EnergyBroker::account_id();
-    // VNRG is not sufficient, so the broker's account must exist before it can hold any.
-    Balances::set_balance(&broker, ExistentialDeposit::get());
-    NativeAndAssets::set_balance(NativeOrAssetId::WithId(VNRG::get()), &broker, vnrg);
-    pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
 }
 
 /// The VTRS the broker can pay out.
@@ -109,335 +86,385 @@ fn configured_base_extrinsic_weight_is_evm_compatible() {
     assert!(base_extrinsic.ref_time() <= min_ethereum_transaction_weight.ref_time());
 }
 
-#[test]
-fn fee_multiplier_update_works() {
-    new_test_ext().execute_with(|| {
-        let max_block_weight =
-            BlockWeights::get().per_class.get(DispatchClass::Normal).max_total.unwrap();
-        let block_weight_a = max_block_weight / 2;
-        System::set_block_consumed_resources(block_weight_a, 0);
-
-        TransactionPayment::on_finalize(1);
-        assert_eq!(
-            TransactionPayment::next_fee_multiplier(),
-            DefaultFeeMultiplier::<Runtime>::get()
-        );
-
-        let block_fullness_a = Perquintill::from_percent(50) + Perquintill::from_parts(1000000);
-        let upper_fee_multiplier = FixedU128::from_rational(2, 1);
-        EnergyFee::update_block_fullness_threshold(RuntimeOrigin::root(), block_fullness_a)
-            .expect("Expected to set a new block fullness threshold");
-        EnergyFee::update_upper_fee_multiplier(RuntimeOrigin::root(), upper_fee_multiplier)
-            .expect("Expected to set a new upper fee multiplier");
-
-        TransactionPayment::on_finalize(1);
-        assert_eq!(
-            TransactionPayment::next_fee_multiplier(),
-            DefaultFeeMultiplier::<Runtime>::get()
-        );
-
-        let block_fullness_b = Perquintill::from_percent(50);
-        EnergyFee::update_block_fullness_threshold(RuntimeOrigin::root(), block_fullness_b)
-            .expect("Expected to set a new block fullness threshold");
-
-        TransactionPayment::on_finalize(1);
-        assert_eq!(TransactionPayment::next_fee_multiplier(), upper_fee_multiplier);
-
-        let call_with_custom_fee =
-            RuntimeCall::Balances(BalancesCall::transfer_keep_alive { dest: alith(), value: 1 });
-        let updated_custom_fee =
-            upper_fee_multiplier.saturating_mul_int(GetConstantEnergyFee::get());
-
-        assert_eq!(
-            EnergyFee::dispatch_info_to_fee(&call_with_custom_fee, None, None),
-            CallFee::Regular(updated_custom_fee)
-        );
-
-        let block_weight_b = max_block_weight / 3;
-        System::set_block_consumed_resources(block_weight_b, 0);
-
-        TransactionPayment::on_finalize(1);
-        assert_eq!(
-            TransactionPayment::next_fee_multiplier(),
-            DefaultFeeMultiplier::<Runtime>::get()
-        );
-
-        assert_eq!(
-            EnergyFee::dispatch_info_to_fee(&call_with_custom_fee, None, None),
-            CallFee::Regular(GetConstantEnergyFee::get())
-        );
-    });
-}
-
-#[test]
-fn validate_self_contained_should_disallow_calls_if_sender_cant_pay_fees() {
-    new_test_ext().execute_with(|| {
-        // A sender without energy buys it with VTRS. Without a rate, or without VNRG for the broker
-        // to sell, the fee can't be quoted, and `InvalidTransaction::Payment` would come from that
-        // instead of the VTRS balance check.
-        let broker = EnergyBroker::account_id();
-        fund_broker_with_vnrg(1_000_000_000_000_000);
-
-        assert!(
-            <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
-                NativeOrAssetId::Native,
-                NativeOrAssetId::WithId(VNRG::get()),
-                EnergyFee::ethereum_fee(),
-                true,
-            )
-            .is_some(),
-            "the EVM fee must be quotable in VTRS",
-        );
-
-        let sample_tx = TransactionV2::Legacy(LegacyTransaction {
-            nonce: Default::default(),
-            gas_price: 1.into(),
-            gas_limit: 100_000.into(),
-            action: TransactionAction::Call(Default::default()),
-            value: Default::default(),
-            input: Default::default(),
-            signature: mock_signature(),
-        });
-
-        let ethereum_call = pallet_ethereum::Call::new_call_variant_transact(sample_tx);
-        let runtime_call = RuntimeCall::Ethereum(ethereum_call);
-        let dispatch_info = runtime_call.get_dispatch_info();
-        let len = 0_usize;
-
-        let alith_h160 = H160::from(alith().0);
-        let noname_h160 = Default::default();
-
-        assert!(matches!(
-            runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
-            Some(Ok(..))
-        ));
-
-        assert_eq!(
-            runtime_call.validate_self_contained(&noname_h160, &dispatch_info, len),
-            Some(Err(InvalidTransaction::Payment.into()))
-        );
-
-        // Short of energy, alith buys the rest of the fee with VTRS, which needs VNRG for the
-        // broker to sell. EVM balances are VNRG, so alith keeps half the fee for Frontier's own
-        // balance check.
-        NativeAndAssets::set_balance(NativeOrAssetId::WithId(SNRG::get()), &alith(), 0);
-        NativeAndAssets::set_balance(NativeOrAssetId::WithId(LNRG::get()), &alith(), 0);
-        NativeAndAssets::set_balance(
-            NativeOrAssetId::WithId(VNRG::get()),
-            &alith(),
-            EnergyFee::ethereum_fee() / 2,
-        );
-        assert!(matches!(
-            runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
-            Some(Ok(..))
-        ));
-
-        NativeAndAssets::set_balance(NativeOrAssetId::WithId(VNRG::get()), &broker, 0);
-        assert_eq!(
-            runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
-            Some(Err(InvalidTransaction::Payment.into()))
-        );
-    })
-}
-
-#[test]
-fn energy_fee_exchange_is_limited_by_broker_vnrg() {
-    use vitreus_runtime_common::QuotePriceIntoEnergy;
-    // The exchange as the config wires it, so the test checks what energy-fee actually uses.
-    type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
-
-    new_test_ext().execute_with(|| {
-        let energy = NativeOrAssetId::WithId(VNRG::get());
-        let path = (NativeOrAssetId::Native, energy.clone());
-        let broker = EnergyBroker::account_id();
-
-        fund_broker_with_vnrg(vnrg::UNITS);
-        assert!(EnergyFeeExchange::max_amount_out() > 0);
-        assert_eq!(EnergyFeeExchange::max_amount_out(), EnergyBroker::max_amount_out(&path));
-
-        // Without VNRG of its own, the broker has none to sell.
-        NativeAndAssets::set_balance(energy, &broker, 0);
-        assert_eq!(EnergyFeeExchange::max_amount_out(), 0);
-    })
-}
-
-#[test]
-fn sudo_call_pays_weight_fee() {
-    new_test_ext().execute_with(|| {
-        let call = RuntimeCall::Sudo(pallet_sudo::Call::sudo {
-            call: Box::new(RuntimeCall::System(frame_system::Call::remark { remark: vec![] })),
-        });
-        let info = call.get_dispatch_info();
-        let fee = TransactionPayment::compute_fee(0, &info, 0);
-        assert!(fee > 0);
-        assert_eq!(
-            EnergyFee::dispatch_info_to_fee(&call, Some(&info), Some(fee)),
-            CallFee::Regular(fee)
-        );
-
-        let wrapped = RuntimeCall::Utility(pallet_utility::Call::as_derivative {
-            index: 0,
-            call: Box::new(call),
-        });
-        let wrapped_info = wrapped.get_dispatch_info();
-        let wrapped_fee = TransactionPayment::compute_fee(0, &wrapped_info, 0);
-        assert_eq!(
-            EnergyFee::dispatch_info_to_fee(&wrapped, Some(&wrapped_info), Some(wrapped_fee)),
-            CallFee::Regular(wrapped_fee)
-        );
-    })
-}
-
-#[test]
-fn custom_fee_picks_fee_by_call() {
-    type EnergyFeeCustomFee = <Runtime as pallet_energy_fee::Config>::CustomFee;
-
-    new_test_ext().execute_with(|| {
-        let flat = GetConstantEnergyFee::get();
-        // Stands for the weight-based fee that `ChargeTransactionPayment` computes.
-        let weight_fee = 1_234;
-        let fee_of = |call: &RuntimeCall| {
-            EnergyFeeCustomFee::dispatch_info_to_fee(
-                call,
-                Some(&call.get_dispatch_info()),
-                Some(weight_fee),
-            )
-        };
-        let transfer =
-            RuntimeCall::Balances(BalancesCall::transfer_keep_alive { dest: alith(), value: 1 });
-        let remark = RuntimeCall::System(frame_system::Call::remark { remark: vec![] });
-
-        assert_eq!(fee_of(&transfer), CallFee::Regular(flat));
-        assert_eq!(fee_of(&remark), CallFee::Regular(weight_fee));
-        assert_eq!(
-            fee_of(&RuntimeCall::EVM(pallet_evm::Call::withdraw {
-                address: H160::zero(),
-                value: 1
-            })),
-            CallFee::EVM(EnergyFeeCustomFee::ethereum_fee())
-        );
-
-        // A batch pays for each of its calls, and at least the flat fee. Its calls have different
-        // fees, so paying the flat fee per call would not pass.
-        let batch = |calls| RuntimeCall::Utility(pallet_utility::Call::batch { calls });
-        let remark_fee = TransactionPayment::compute_fee(
-            remark.encode().len() as u32,
-            &remark.get_dispatch_info(),
-            0,
-        );
-        assert_ne!(remark_fee, flat);
-        assert_eq!(
-            fee_of(&batch(vec![transfer.clone(), remark.clone()])),
-            CallFee::Regular(flat + remark_fee)
-        );
-        assert_eq!(fee_of(&batch(vec![])), CallFee::Regular(flat));
-
-        // A wrapped call pays what the call inside it pays. For a call charged by weight, that is
-        // the fee passed in, which covers the wrapper as well.
-        let as_derivative = |call| {
-            RuntimeCall::Utility(pallet_utility::Call::as_derivative {
-                index: 0,
-                call: Box::new(call),
-            })
-        };
-        assert_eq!(fee_of(&as_derivative(transfer)), CallFee::Regular(flat));
-        assert_eq!(fee_of(&as_derivative(remark)), CallFee::Regular(weight_fee));
-    })
-}
-
-#[test]
-fn signer_without_energy_buys_fee_from_broker() {
-    use frame_support::dispatch::PostDispatchInfo;
+mod energy_fee {
+    use super::*;
+    use ethereum::{LegacyTransaction, TransactionAction, TransactionSignature, TransactionV2};
+    use fp_self_contained::SelfContainedCall;
+    use frame_support::{dispatch::PostDispatchInfo, traits::Hooks};
+    use pallet_evm::OnChargeEVMTransaction;
     use pallet_transaction_payment::OnChargeTransaction;
+    use sp_runtime::Perquintill;
     use vitreus_runtime_common::QuotePriceIntoEnergy;
+
+    // The fee types as the config wires them, so the tests check what the runtime actually uses.
+    type EnergyFeeCustomFee = <Runtime as pallet_energy_fee::Config>::CustomFee;
+    type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
     type TransactionFeeHandler =
         <Runtime as pallet_transaction_payment::Config>::OnChargeTransaction;
-    type EnergyFeeExchange = <Runtime as pallet_energy_fee::Config>::EnergyExchange;
-
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        let energy = NativeOrAssetId::WithId(VNRG::get());
-        let broker = EnergyBroker::account_id();
-        let fee = GetConstantEnergyFee::get();
-        fund_broker_with_vnrg(10 * fee);
-        // A rate other than one, so a handler that ignores it charges the wrong price.
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_rational(3, 2));
-        let bob = AccountId::from([7u8; 20]);
-        Balances::set_balance(&bob, 1_000 * vtrs::UNITS);
-
-        let call =
-            RuntimeCall::Balances(BalancesCall::transfer_keep_alive { dest: alith(), value: 1 });
-        let info = call.get_dispatch_info();
-        let price = EnergyFeeExchange::quote_price_tokens_for_exact_tokens(fee, true)
-            .expect("Expected the broker to price the fee");
-
-        let liquidity = <TransactionFeeHandler as OnChargeTransaction<Runtime>>::withdraw_fee(
-            &bob,
-            &call,
-            &info,
-            TransactionPayment::compute_fee(0, &info, 0),
-            0,
-        )
-        .expect("Expected to withdraw fee");
-        <TransactionFeeHandler as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
-            &bob,
-            &info,
-            &PostDispatchInfo::default(),
-            fee,
-            0,
-            liquidity,
-        )
-        .expect("Expected to settle fee");
-
-        assert_eq!(Balances::free_balance(bob), 1_000 * vtrs::UNITS - price);
-        assert_eq!(asset_balance(&energy, &bob), 0);
-        assert_eq!(asset_balance(&energy, &broker), 9 * fee);
-        System::assert_has_event(
-            pallet_energy_fee::Event::<Runtime>::EnergyFeePaid { who: bob, amount: fee }.into(),
-        );
-    })
-}
-
-#[test]
-fn evm_fee_goes_to_treasury_and_burn_counters() {
-    use pallet_evm::OnChargeEVMTransaction;
     type EvmFeeHandler = <Runtime as pallet_evm::Config>::OnChargeTransaction;
 
-    new_test_ext().execute_with(|| {
-        System::set_block_number(1);
-        let energy = NativeOrAssetId::WithId(VNRG::get());
-        let treasury = Treasury::account_id();
-        // VNRG is not sufficient, so the treasury's account must exist before it can hold any.
-        Balances::set_balance(&treasury, ExistentialDeposit::get());
-        pallet_treasury_extension::FeeRecyclingRate::<Runtime>::put(Permill::from_percent(20));
-        let fee = EnergyFee::ethereum_fee();
-        let initial_energy = asset_balance(&energy, &alith());
-        let alith_h160 = H160::from(alith().0);
+    fn mock_signature() -> TransactionSignature {
+        let r = H256::from_low_u64_be(2);
+        TransactionSignature::new(27, r, r).unwrap()
+    }
 
-        // The runner passes the gas cost, which the energy fee doesn't depend on.
-        let liquidity = <EvmFeeHandler as OnChargeEVMTransaction<Runtime>>::withdraw_fee(
-            &alith_h160,
-            U256::from(1_234_567_890u64),
-        )
-        .expect("Expected to withdraw fee");
-        assert!(<EvmFeeHandler as OnChargeEVMTransaction<Runtime>>::correct_and_deposit_fee(
-            &alith_h160,
-            U256::zero(),
-            U256::zero(),
-            liquidity,
-        )
-        .is_none());
+    /// Lets the broker sell `vnrg` base units of VNRG for VTRS at a rate of one.
+    fn fund_broker_with_vnrg(vnrg: Balance) {
+        let broker = EnergyBroker::account_id();
+        // VNRG is not sufficient, so the broker's account must exist before it can hold any.
+        Balances::set_balance(&broker, ExistentialDeposit::get());
+        NativeAndAssets::set_balance(NativeOrAssetId::WithId(VNRG::get()), &broker, vnrg);
+        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
+    }
 
-        // The treasury gets the recycled share, and the rest reaches the burn counters.
-        let recycled = Permill::from_percent(20) * fee;
-        assert_eq!(asset_balance(&energy, &alith()), initial_energy - fee);
-        assert_eq!(asset_balance(&energy, &treasury), recycled);
-        assert_eq!(pallet_energy_broker::SessionEnergyBurn::<Runtime>::get(), fee - recycled);
-        assert_eq!(pallet_dynamic_energy::SessionEnergyBurn::<Runtime>::get(), fee - recycled);
-        System::assert_has_event(
-            pallet_energy_fee::Event::<Runtime>::EnergyFeePaid { who: alith(), amount: fee }.into(),
-        );
-    })
+    #[test]
+    fn block_at_fullness_threshold_raises_flat_fee() {
+        new_test_ext().execute_with(|| {
+            let upper_fee_multiplier = FixedU128::from_u32(2);
+            EnergyFee::update_upper_fee_multiplier(RuntimeOrigin::root(), upper_fee_multiplier)
+                .expect("Expected to set a new upper fee multiplier");
+            EnergyFee::update_block_fullness_threshold(
+                RuntimeOrigin::root(),
+                Perquintill::from_percent(50),
+            )
+            .expect("Expected to set a new block fullness threshold");
+            let max_block_weight =
+                BlockWeights::get().per_class.get(DispatchClass::Normal).max_total.unwrap();
+            System::set_block_consumed_resources(max_block_weight / 2, 0);
+
+            TransactionPayment::on_finalize(1);
+            assert_eq!(TransactionPayment::next_fee_multiplier(), upper_fee_multiplier);
+
+            let transfer = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                dest: alith(),
+                value: 1,
+            });
+            assert_eq!(
+                EnergyFeeCustomFee::dispatch_info_to_fee(&transfer, None, None),
+                CallFee::Regular(
+                    upper_fee_multiplier.saturating_mul_int(GetConstantEnergyFee::get())
+                )
+            );
+        });
+    }
+
+    #[test]
+    fn ethereum_transaction_is_invalid_if_sender_cannot_pay() {
+        new_test_ext().execute_with(|| {
+            // A sender without energy buys it with VTRS. Without a rate, or without VNRG for the
+            // broker to sell, the fee can't be quoted, and `InvalidTransaction::Payment` would come
+            // from that instead of the VTRS balance check.
+            let broker = EnergyBroker::account_id();
+            fund_broker_with_vnrg(1_000_000_000_000_000);
+
+            assert!(
+                EnergyFeeExchange::quote_price_tokens_for_exact_tokens(
+                    EnergyFeeCustomFee::ethereum_fee(),
+                    true,
+                )
+                .is_some(),
+                "the EVM fee must be quotable in VTRS",
+            );
+
+            let sample_tx = TransactionV2::Legacy(LegacyTransaction {
+                nonce: Default::default(),
+                gas_price: 1.into(),
+                gas_limit: 100_000.into(),
+                action: TransactionAction::Call(Default::default()),
+                value: Default::default(),
+                input: Default::default(),
+                signature: mock_signature(),
+            });
+
+            let ethereum_call = pallet_ethereum::Call::new_call_variant_transact(sample_tx);
+            let runtime_call = RuntimeCall::Ethereum(ethereum_call);
+            let dispatch_info = runtime_call.get_dispatch_info();
+            let len = 0_usize;
+
+            let alith_h160 = H160::from(alith().0);
+            let noname_h160 = Default::default();
+
+            assert!(matches!(
+                runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
+                Some(Ok(..))
+            ));
+
+            assert_eq!(
+                runtime_call.validate_self_contained(&noname_h160, &dispatch_info, len),
+                Some(Err(InvalidTransaction::Payment.into()))
+            );
+
+            // Short of energy, alith buys the rest of the fee with VTRS, which needs VNRG for the
+            // broker to sell. EVM balances are VNRG, so alith keeps half the fee for Frontier's own
+            // balance check.
+            NativeAndAssets::set_balance(NativeOrAssetId::WithId(SNRG::get()), &alith(), 0);
+            NativeAndAssets::set_balance(NativeOrAssetId::WithId(LNRG::get()), &alith(), 0);
+            NativeAndAssets::set_balance(
+                NativeOrAssetId::WithId(VNRG::get()),
+                &alith(),
+                EnergyFeeCustomFee::ethereum_fee() / 2,
+            );
+            assert!(matches!(
+                runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
+                Some(Ok(..))
+            ));
+
+            NativeAndAssets::set_balance(NativeOrAssetId::WithId(VNRG::get()), &broker, 0);
+            assert_eq!(
+                runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
+                Some(Err(InvalidTransaction::Payment.into()))
+            );
+        })
+    }
+
+    #[test]
+    fn energy_fee_exchange_is_limited_by_broker_vnrg() {
+        new_test_ext().execute_with(|| {
+            let energy = NativeOrAssetId::WithId(VNRG::get());
+            let path = (NativeOrAssetId::Native, energy.clone());
+            let broker = EnergyBroker::account_id();
+
+            fund_broker_with_vnrg(vnrg::UNITS);
+            assert!(EnergyFeeExchange::max_amount_out() > 0);
+            assert_eq!(EnergyFeeExchange::max_amount_out(), EnergyBroker::max_amount_out(&path));
+
+            // Without VNRG of its own, the broker has none to sell.
+            NativeAndAssets::set_balance(energy, &broker, 0);
+            assert_eq!(EnergyFeeExchange::max_amount_out(), 0);
+        })
+    }
+
+    #[test]
+    fn fee_check_buys_nothing_from_broker() {
+        new_test_ext().execute_with(|| {
+            System::set_block_number(1);
+            let energy = NativeOrAssetId::WithId(VNRG::get());
+            let broker = EnergyBroker::account_id();
+            let fee = GetConstantEnergyFee::get();
+            // BOB holds VTRS only, so the broker has to sell the fee to BOB.
+            let bob = AccountId::from([7u8; 20]);
+            Balances::set_balance(&bob, 1_000 * vtrs::UNITS);
+
+            let call = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                dest: alith(),
+                value: 1,
+            });
+            let info = call.get_dispatch_info();
+            let computed_fee = TransactionPayment::compute_fee(0, &info, 0);
+            let check =
+                || TransactionFeeHandler::can_withdraw_fee(&bob, &call, &info, computed_fee, 0);
+
+            // Without VNRG to sell, the check fails, so it does go to the broker.
+            fund_broker_with_vnrg(0);
+            assert_eq!(check(), Err(InvalidTransaction::Payment.into()));
+
+            NativeAndAssets::set_balance(energy.clone(), &broker, 10 * fee);
+            System::reset_events();
+            assert_eq!(check(), Ok(()));
+
+            assert_eq!(Balances::free_balance(bob), 1_000 * vtrs::UNITS);
+            assert_eq!(asset_balance(&energy, &bob), 0);
+            assert_eq!(asset_balance(&energy, &broker), 10 * fee);
+            assert!(System::events().is_empty());
+        })
+    }
+
+    #[test]
+    fn sudo_call_pays_weight_fee() {
+        new_test_ext().execute_with(|| {
+            // The call inside pays the flat fee, so a `sudo` charged like its inner call would too.
+            let call = RuntimeCall::Sudo(pallet_sudo::Call::sudo {
+                call: Box::new(RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                    dest: alith(),
+                    value: 1,
+                })),
+            });
+            let info = call.get_dispatch_info();
+            let fee = TransactionPayment::compute_fee(0, &info, 0);
+            assert!(fee > 0);
+            assert_ne!(fee, GetConstantEnergyFee::get());
+            assert_eq!(
+                EnergyFeeCustomFee::dispatch_info_to_fee(&call, Some(&info), Some(fee)),
+                CallFee::Regular(fee)
+            );
+
+            let wrapped = RuntimeCall::Utility(pallet_utility::Call::as_derivative {
+                index: 0,
+                call: Box::new(call),
+            });
+            let wrapped_info = wrapped.get_dispatch_info();
+            let wrapped_fee = TransactionPayment::compute_fee(0, &wrapped_info, 0);
+            assert_eq!(
+                EnergyFeeCustomFee::dispatch_info_to_fee(
+                    &wrapped,
+                    Some(&wrapped_info),
+                    Some(wrapped_fee)
+                ),
+                CallFee::Regular(wrapped_fee)
+            );
+        })
+    }
+
+    #[test]
+    fn custom_fee_picks_fee_by_call() {
+        new_test_ext().execute_with(|| {
+            let flat = GetConstantEnergyFee::get();
+            // Stands for the weight-based fee that `ChargeTransactionPayment` computes.
+            let weight_fee = 1_234;
+            let fee_of = |call: &RuntimeCall| {
+                EnergyFeeCustomFee::dispatch_info_to_fee(
+                    call,
+                    Some(&call.get_dispatch_info()),
+                    Some(weight_fee),
+                )
+            };
+            let transfer = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                dest: alith(),
+                value: 1,
+            });
+            let remark = RuntimeCall::System(frame_system::Call::remark { remark: vec![] });
+            let evm_call = RuntimeCall::EVM(pallet_evm::Call::call {
+                source: H160::zero(),
+                target: H160::zero(),
+                input: vec![],
+                value: U256::zero(),
+                gas_limit: 21_000,
+                max_fee_per_gas: U256::one(),
+                max_priority_fee_per_gas: None,
+                nonce: None,
+                access_list: vec![],
+            });
+
+            assert_eq!(fee_of(&transfer), CallFee::Regular(flat));
+            assert_eq!(fee_of(&remark), CallFee::Regular(weight_fee));
+            assert_eq!(fee_of(&evm_call), CallFee::EVM(EnergyFeeCustomFee::ethereum_fee()));
+            assert_eq!(
+                fee_of(&RuntimeCall::EVM(pallet_evm::Call::withdraw {
+                    address: H160::zero(),
+                    value: 1
+                })),
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
+            );
+
+            // A batch pays for each of its calls, and at least the flat fee. Its calls have
+            // different fees, so paying the flat fee per call would not pass.
+            let batch = |calls| RuntimeCall::Utility(pallet_utility::Call::batch { calls });
+            let remark_fee = TransactionPayment::compute_fee(
+                remark.encode().len() as u32,
+                &remark.get_dispatch_info(),
+                0,
+            );
+            assert_ne!(remark_fee, flat);
+            assert_eq!(
+                fee_of(&batch(vec![transfer.clone(), remark.clone()])),
+                CallFee::Regular(flat + remark_fee)
+            );
+            assert_eq!(fee_of(&batch(vec![])), CallFee::Regular(flat));
+
+            // A wrapped call pays what the call inside it pays. For a call charged by weight, that
+            // is the fee passed in, which covers the wrapper as well.
+            let as_derivative = |call| {
+                RuntimeCall::Utility(pallet_utility::Call::as_derivative {
+                    index: 0,
+                    call: Box::new(call),
+                })
+            };
+            assert_eq!(fee_of(&as_derivative(transfer)), CallFee::Regular(flat));
+            assert_eq!(fee_of(&as_derivative(remark)), CallFee::Regular(weight_fee));
+            assert_eq!(
+                fee_of(&as_derivative(evm_call)),
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
+            );
+        })
+    }
+
+    #[test]
+    fn signer_without_energy_buys_fee_from_broker() {
+        new_test_ext().execute_with(|| {
+            System::set_block_number(1);
+            let energy = NativeOrAssetId::WithId(VNRG::get());
+            let broker = EnergyBroker::account_id();
+            let fee = GetConstantEnergyFee::get();
+            fund_broker_with_vnrg(10 * fee);
+            // A rate other than one, so a handler that ignores it charges the wrong price.
+            pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_rational(3, 2));
+            let bob = AccountId::from([7u8; 20]);
+            Balances::set_balance(&bob, 1_000 * vtrs::UNITS);
+
+            let call = RuntimeCall::Balances(BalancesCall::transfer_keep_alive {
+                dest: alith(),
+                value: 1,
+            });
+            let info = call.get_dispatch_info();
+            let price = EnergyFeeExchange::quote_price_tokens_for_exact_tokens(fee, true)
+                .expect("Expected the broker to price the fee");
+
+            let liquidity = <TransactionFeeHandler as OnChargeTransaction<Runtime>>::withdraw_fee(
+                &bob,
+                &call,
+                &info,
+                TransactionPayment::compute_fee(0, &info, 0),
+                0,
+            )
+            .expect("Expected to withdraw fee");
+            <TransactionFeeHandler as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
+                &bob,
+                &info,
+                &PostDispatchInfo::default(),
+                fee,
+                0,
+                liquidity,
+            )
+            .expect("Expected to settle fee");
+
+            assert_eq!(Balances::free_balance(bob), 1_000 * vtrs::UNITS - price);
+            assert_eq!(asset_balance(&energy, &bob), 0);
+            assert_eq!(asset_balance(&energy, &broker), 9 * fee);
+            System::assert_has_event(
+                pallet_energy_fee::Event::<Runtime>::EnergyFeePaid { who: bob, amount: fee }.into(),
+            );
+        })
+    }
+
+    #[test]
+    fn evm_fee_goes_to_treasury_and_burn_counters() {
+        new_test_ext().execute_with(|| {
+            System::set_block_number(1);
+            let energy = NativeOrAssetId::WithId(VNRG::get());
+            let treasury = Treasury::account_id();
+            // VNRG is not sufficient, so the treasury's account must exist before it can hold any.
+            Balances::set_balance(&treasury, ExistentialDeposit::get());
+            pallet_treasury_extension::FeeRecyclingRate::<Runtime>::put(Permill::from_percent(20));
+            let fee = EnergyFeeCustomFee::ethereum_fee();
+            let initial_energy = asset_balance(&energy, &alith());
+            let alith_h160 = H160::from(alith().0);
+
+            // The runner passes the gas cost, which the energy fee doesn't depend on.
+            let liquidity = <EvmFeeHandler as OnChargeEVMTransaction<Runtime>>::withdraw_fee(
+                &alith_h160,
+                U256::from(1_234_567_890u64),
+            )
+            .expect("Expected to withdraw fee");
+            assert!(<EvmFeeHandler as OnChargeEVMTransaction<Runtime>>::correct_and_deposit_fee(
+                &alith_h160,
+                U256::zero(),
+                U256::zero(),
+                liquidity,
+            )
+            .is_none());
+
+            // The treasury gets the recycled share, and the rest reaches the burn counters.
+            let recycled = Permill::from_percent(20) * fee;
+            assert_eq!(asset_balance(&energy, &alith()), initial_energy - fee);
+            assert_eq!(asset_balance(&energy, &treasury), recycled);
+            assert_eq!(pallet_energy_broker::SessionEnergyBurn::<Runtime>::get(), fee - recycled);
+            assert_eq!(pallet_dynamic_energy::SessionEnergyBurn::<Runtime>::get(), fee - recycled);
+            System::assert_has_event(
+                pallet_energy_fee::Event::<Runtime>::EnergyFeePaid { who: alith(), amount: fee }
+                    .into(),
+            );
+        })
+    }
 }
 
 mod energy_broker {
@@ -1092,6 +1119,275 @@ mod treasury {
     }
 }
 
+mod offences {
+    use super::*;
+    use frame_support::assert_ok;
+    use parachains_slashing::HandleReports;
+    use polkadot_primitives::slashing::{DisputesTimeSlot, SlashingOffenceKind};
+    use sp_core::{ecdsa, ed25519, sr25519, Pair};
+    use sp_runtime::{traits::Convert, Perbill};
+    use sp_staking::offence::{Offence, OffenceError, ReportOffence};
+
+    /// A validator as offences identify it: its stash and its exposure.
+    type Offender = pallet_session::historical::IdentificationTuple<Runtime>;
+
+    /// Number of validators that the genesis starts with.
+    const VALIDATOR_COUNT: u8 = 4;
+    /// Stake that each validator bonds at genesis.
+    const STAKE: Balance = 1_000 * vtrs::UNITS;
+    /// Share that BABE, GRANDPA and BEEFY slash for one equivocator out of `VALIDATOR_COUNT`.
+    ///
+    /// They slash (3k / n)² for k equivocators out of n, here (3 · 1 / 4)² = 9/16.
+    const EQUIVOCATION_FRACTION: Perbill = Perbill::from_parts(562_500_000);
+
+    fn stash(validator: u8) -> AccountId {
+        AccountId::from([validator; 20])
+    }
+
+    fn controller(validator: u8) -> AccountId {
+        AccountId::from([validator + 100; 20])
+    }
+
+    fn session_keys(validator: u8) -> opaque::SessionKeys {
+        let seed = format!("//{validator}");
+        let sr25519_key = sr25519::Pair::from_string(&seed, None).unwrap().public();
+        opaque::SessionKeys {
+            grandpa: ed25519::Pair::from_string(&seed, None).unwrap().public().into(),
+            babe: sr25519_key.into(),
+            im_online: sr25519_key.into(),
+            para_validator: sr25519_key.into(),
+            para_assignment: sr25519_key.into(),
+            authority_discovery: sr25519_key.into(),
+            beefy: ecdsa::Pair::from_string(&seed, None).unwrap().public().into(),
+        }
+    }
+
+    /// Runtime genesis with `VALIDATOR_COUNT` validators bonded and validating, at block 1.
+    ///
+    /// pallet-session builds its genesis before energy-generation, so era 0 starts before anyone
+    /// has bonded and has no exposures. Offences in era 0 disable validators but slash nothing.
+    fn new_test_ext_with_validators() -> sp_io::TestExternalities {
+        let validators = 1..=VALIDATOR_COUNT;
+        let mut ext = sp_io::TestExternalities::new(
+            RuntimeGenesisConfig {
+                balances: BalancesConfig {
+                    balances: validators.clone().map(|v| (stash(v), STAKE)).collect(),
+                },
+                reputation: ReputationConfig {
+                    accounts: validators
+                        .clone()
+                        .map(|v| (stash(v), VALIDATOR_REPUTATION_THRESHOLD.into()))
+                        .collect(),
+                },
+                session: SessionConfig {
+                    keys: validators
+                        .clone()
+                        .map(|v| (controller(v), stash(v), session_keys(v)))
+                        .collect(),
+                },
+                energy_generation: EnergyGenerationConfig {
+                    stakers: validators
+                        .map(|v| (stash(v), controller(v), STAKE, StakerStatus::Validator))
+                        .collect(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            }
+            .build_storage()
+            .unwrap(),
+        );
+        // frame-system records no events at block 0.
+        ext.execute_with(|| System::set_block_number(1));
+        ext
+    }
+
+    /// `validator` with its exposure in the active era.
+    fn offender(validator: u8) -> Offender {
+        let exposure =
+            <Runtime as pallet_session::historical::Config>::FullIdentificationOf::convert(stash(
+                validator,
+            ))
+            .unwrap();
+        (stash(validator), exposure)
+    }
+
+    /// A GRANDPA equivocation by `validator` in `round` of session 0.
+    fn grandpa_equivocation(
+        validator: u8,
+        round: u64,
+    ) -> pallet_grandpa::EquivocationOffence<Offender> {
+        pallet_grandpa::EquivocationOffence {
+            time_slot: pallet_grandpa::TimeSlot { set_id: 0, round },
+            session_index: 0,
+            validator_set_count: VALIDATOR_COUNT.into(),
+            offender: offender(validator),
+        }
+    }
+
+    /// Stashes of the validators that pallet-session has disabled.
+    fn disabled_stashes() -> Vec<AccountId> {
+        let validators = Session::validators();
+        Session::disabled_validators()
+            .into_iter()
+            .map(|index| validators[index as usize])
+            .collect()
+    }
+
+    /// Reports an equivocation straight to pallet-offences, where the source's report system sends
+    /// it once the proofs check out.
+    fn report_equivocation<O>(offence: O) -> Result<(), OffenceError>
+    where
+        O: Offence<Offender>,
+    {
+        <Offences as ReportOffence<_, _, _>>::report_offence(vec![], offence)
+    }
+
+    /// Reports a lost dispute through the handler that the runtime's config wires in.
+    fn report_lost_dispute(
+        offence: parachains_slashing::SlashingOffence<
+            <Runtime as parachains_slashing::Config>::KeyOwnerIdentification,
+        >,
+    ) -> Result<(), OffenceError> {
+        type Handler = <Runtime as parachains_slashing::Config>::HandleReports;
+        <Handler as HandleReports<Runtime>>::report_offence(offence)
+    }
+
+    /// Reports unresponsive validators through the reporter that the runtime's config wires in.
+    fn report_unresponsiveness(
+        offence: pallet_im_online::UnresponsivenessOffence<Offender>,
+    ) -> Result<(), OffenceError> {
+        type Reporter = <Runtime as pallet_im_online::Config>::ReportUnresponsiveness;
+        <Reporter as ReportOffence<_, _, _>>::report_offence(vec![], offence)
+    }
+
+    /// Checks that energy-generation got an offence by `validator` in era 0 at `fraction`.
+    fn assert_slash_reported(validator: AccountId, fraction: Perbill) {
+        System::assert_has_event(
+            pallet_energy_generation::Event::<Runtime>::SlashReported {
+                validator,
+                fraction,
+                slash_era: 0,
+            }
+            .into(),
+        );
+    }
+
+    /// Reports `offence` through `report` and checks that energy-generation got it at `fraction`
+    /// and that pallet-session disabled the offender.
+    fn assert_offence_disables_offender<O>(
+        report: impl FnOnce(O) -> Result<(), OffenceError>,
+        offence: O,
+        fraction: Perbill,
+    ) where
+        O: Offence<Offender>,
+    {
+        let (offender, _) = offence.offenders()[0].clone();
+        let timeslot = offence.time_slot().encode();
+
+        assert_ok!(report(offence));
+
+        assert_slash_reported(offender, fraction);
+        System::assert_has_event(pallet_offences::Event::Offence { kind: O::ID, timeslot }.into());
+        assert_eq!(disabled_stashes(), vec![offender]);
+    }
+
+    #[test]
+    fn babe_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_equivocation,
+                pallet_babe::EquivocationOffence {
+                    slot: 1.into(),
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offender: offender(1),
+                },
+                EQUIVOCATION_FRACTION,
+            )
+        });
+    }
+
+    #[test]
+    fn grandpa_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_equivocation,
+                grandpa_equivocation(1, 1),
+                EQUIVOCATION_FRACTION,
+            )
+        });
+    }
+
+    #[test]
+    fn beefy_equivocation_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_equivocation,
+                pallet_beefy::EquivocationOffence {
+                    time_slot: pallet_beefy::TimeSlot::<BlockNumber> { set_id: 0, round: 1 },
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offender: offender(1),
+                },
+                EQUIVOCATION_FRACTION,
+            )
+        });
+    }
+
+    #[test]
+    fn lost_dispute_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert_offence_disables_offender(
+                report_lost_dispute,
+                parachains_slashing::SlashingOffence {
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    time_slot: DisputesTimeSlot::new(0, CandidateHash(H256::repeat_byte(1))),
+                    offenders: vec![offender(1)],
+                    // What the private `SlashingOffence::new` sets for `ForInvalid`.
+                    slash_fraction: Perbill::one(),
+                    kind: SlashingOffenceKind::ForInvalid,
+                },
+                Perbill::one(),
+            )
+        });
+    }
+
+    #[test]
+    fn unresponsiveness_chills_and_disables_offender() {
+        new_test_ext_with_validators().execute_with(|| {
+            assert!(pallet_energy_generation::Validators::<Runtime>::contains_key(stash(1)));
+
+            assert_offence_disables_offender(
+                report_unresponsiveness,
+                pallet_im_online::UnresponsivenessOffence {
+                    session_index: 0,
+                    validator_set_count: VALIDATOR_COUNT.into(),
+                    offenders: vec![offender(1)],
+                },
+                // im-online slashes nothing while at most n / 10 + 1 of n validators are offline.
+                Perbill::zero(),
+            );
+
+            System::assert_has_event(
+                pallet_energy_generation::Event::<Runtime>::Chilled { stash: stash(1) }.into(),
+            );
+            assert!(!pallet_energy_generation::Validators::<Runtime>::contains_key(stash(1)));
+        });
+    }
+
+    #[test]
+    fn offender_beyond_disabling_limit_stays_enabled() {
+        new_test_ext_with_validators().execute_with(|| {
+            // Energy-generation disables at most (n - 1) / 3 of n validators: one out of four.
+            assert_ok!(report_equivocation(grandpa_equivocation(1, 1)));
+            assert_ok!(report_equivocation(grandpa_equivocation(2, 2)));
+
+            assert_slash_reported(stash(2), EQUIVOCATION_FRACTION);
+            assert_eq!(disabled_stashes(), vec![stash(1)]);
+        });
+    }
+}
+
 mod xcm_tests {
     use super::*;
     use frame_support::{assert_err_ignore_postinfo, assert_noop};
@@ -1254,17 +1550,10 @@ mod xcm_tests {
     }
 }
 
-/// Launchpad free-trade wiring: the free-trade fee is the broker's price for
-/// one launchpad call, and a `Pays::No` refund lands with a VTRS-only signer
-/// as VNRG — so their next call does not touch the broker.
+/// Launchpad free-trade wiring: the free-trade fee is the broker's price for one launchpad call.
 #[cfg(feature = "testnet-runtime")]
 mod launchpad_free_trades {
     use super::*;
-    use frame_support::{
-        dispatch::{Pays, PostDispatchInfo},
-        traits::fungibles::{Inspect, Mutate},
-    };
-    use pallet_transaction_payment::OnChargeTransaction;
 
     fn one_call_energy() -> Balance {
         <EnergyFee as CustomFee<
@@ -1274,13 +1563,25 @@ mod launchpad_free_trades {
             GetConstantEnergyFee,
         >>::custom_fee()
     }
-    fn vnrg(who: &AccountId) -> Balance {
-        <Assets as Inspect<AccountId>>::balance(VNRG::get(), who)
-    }
 
     #[test]
     fn free_trade_fee_is_the_broker_price_of_one_call_and_200x_at_the_default_split() {
         new_test_ext().execute_with(|| {
+            // A launchpad call is charged the flat fee, which is what the free-trade fee prices.
+            let call = RuntimeCall::Launchpad(pallet_launchpad::Call::buy {
+                launch_id: 0,
+                quote_in: 1,
+                min_tokens_out: 0,
+            });
+            assert_eq!(
+                <Runtime as pallet_energy_fee::Config>::CustomFee::dispatch_info_to_fee(
+                    &call,
+                    Some(&call.get_dispatch_info()),
+                    None,
+                ),
+                CallFee::Regular(one_call_energy())
+            );
+
             // No energy rate yet: nothing can be free.
             pallet_dynamic_energy::ExchangeRate::<Runtime>::kill();
             assert_eq!(launchpad::LaunchpadFreeTradeFee::get(), Balance::MAX);
@@ -1326,79 +1627,6 @@ mod launchpad_free_trades {
                 pallet_launchpad::Pallet::<Runtime>::free_trade_threshold(&curve),
                 Some(fee * 200)
             );
-        });
-    }
-
-    #[test]
-    fn a_pays_no_refund_is_kept_by_a_vtrs_only_signer() {
-        new_test_ext().execute_with(|| {
-            pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
-            let broker = EnergyBroker::account_id();
-            let _ = Balances::deposit_creating(&broker, 1_000 * vtrs::UNITS);
-            <Assets as Mutate<AccountId>>::mint_into(
-                VNRG::get(),
-                &broker,
-                1_000 * one_call_energy(),
-            )
-            .unwrap();
-            let bob = AccountId::from([7u8; 20]);
-            let _ = Balances::deposit_creating(&bob, 1_000 * vtrs::UNITS);
-
-            let call = RuntimeCall::Launchpad(pallet_launchpad::Call::buy {
-                launch_id: 0,
-                quote_in: 1,
-                min_tokens_out: 0,
-            });
-            let info = call.get_dispatch_info();
-            let fee = match EnergyFee::dispatch_info_to_fee(&call, Some(&info), None) {
-                CallFee::Regular(f) => f,
-                CallFee::EVM(_) => unreachable!("launchpad calls pay the custom fee"),
-            };
-            assert_eq!(fee, one_call_energy());
-            let free = PostDispatchInfo { actual_weight: None, pays_fee: Pays::No };
-            let paid = PostDispatchInfo { actual_weight: None, pays_fee: Pays::Yes };
-
-            // 1st call: bob holds no energy, so the fee is bought from the broker;
-            // the Pays::No refund comes back to bob as VNRG.
-            let broker0 = vnrg(&broker);
-            let vtrs0 = Balances::free_balance(bob);
-            let liq = <EnergyFee as OnChargeTransaction<Runtime>>::withdraw_fee(
-                &bob, &call, &info, fee, 0,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&broker), broker0 - fee, "one broker purchase");
-            assert!(Balances::free_balance(bob) < vtrs0, "paid in VTRS");
-            <EnergyFee as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
-                &bob, &info, &free, fee, 0, liq,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&bob), fee, "the refund is bob's to keep");
-
-            // 2nd call, also free: paid from bob's VNRG, the broker is untouched.
-            let vtrs1 = Balances::free_balance(bob);
-            let liq = <EnergyFee as OnChargeTransaction<Runtime>>::withdraw_fee(
-                &bob, &call, &info, fee, 0,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&broker), broker0 - fee);
-            assert_eq!(Balances::free_balance(bob), vtrs1);
-            <EnergyFee as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
-                &bob, &info, &free, fee, 0, liq,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&bob), fee);
-
-            // A call that pays (a failed or below-threshold trade) spends it.
-            let liq = <EnergyFee as OnChargeTransaction<Runtime>>::withdraw_fee(
-                &bob, &call, &info, fee, 0,
-            )
-            .unwrap();
-            <EnergyFee as OnChargeTransaction<Runtime>>::correct_and_deposit_fee(
-                &bob, &info, &paid, fee, 0, liq,
-            )
-            .unwrap();
-            assert_eq!(vnrg(&bob), 0);
-            assert_eq!(vnrg(&broker), broker0 - fee, "still one broker purchase in total");
         });
     }
 }
