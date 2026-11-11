@@ -5,12 +5,21 @@
 """
 import argparse
 import tomllib
+from urllib.parse import urlsplit
 
 from changelog import fail, git
 
 MANIFEST = "Cargo.toml"
 LOCK = "Cargo.lock"
 SDK = "https://github.com/paritytech/polkadot-sdk"
+
+
+def repository(url):
+    """Return the host and path that identify the repository of a git URL."""
+    # Cargo.lock spells a source the way the manifest that brought it in does, so one repository
+    # can come with or without `.git` or a trailing slash, in another case, or over SSH.
+    parts = urlsplit(url)
+    return parts.hostname, parts.path.rstrip("/").removesuffix(".git").lower()
 
 
 def sdk_tag_commit(tag):
@@ -35,9 +44,11 @@ def sdk_pin():
         tag = tomllib.load(f)["workspace"]["metadata"]["polkadot-sdk"]["tag"]
     with open(LOCK, "rb") as f:
         packages = tomllib.load(f)["package"]
-    # The URL ends at `?` or `#`, so repositories named polkadot-sdk-<name> don't match.
-    prefixes = (f"git+{SDK}?", f"git+{SDK}#")
-    sources = {p["source"] for p in packages if p.get("source", "").startswith(prefixes)}
+    sdk = repository(SDK)
+    # A Cargo.lock source is `<kind>+<url>`.
+    sources = {
+        p["source"] for p in packages if repository(p.get("source", "").partition("+")[2]) == sdk
+    }
     commits = sorted({source.rpartition("#")[2] for source in sources})
     if len(commits) != 1:
         fail(f"expected one polkadot-sdk commit in {LOCK}, found {', '.join(commits) or 'none'}")
