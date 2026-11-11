@@ -172,12 +172,13 @@ def collect(runtime, version, wasm, report):
 def runtime_info(version, reports, commit):
     """Return the "Runtime info" block of the release notes, built from srtool's reports."""
     image = f"{SRTOOL_IMAGE}:{srtool_tag()}"
-    sections, rustc = [], ""
+    sections, rustc, networks = [], "", set()
     for path in sorted(reports):
         m = REPORT.fullmatch(os.path.basename(path))
         if not m:
             fail(f"unexpected srtool report name: {path}")
         stem, network = m.groups()
+        networks.add(network)
         with open(path) as f:
             data = json.load(f)
         wasm = data["runtimes"]["compressed"]["subwasm"]
@@ -206,6 +207,8 @@ def runtime_info(version, reports, commit):
             f"      -e RUNTIME_DIR={RUNTIME_DIR} -e PROFILE={PROFILE} \\",
             f'      -e BUILD_OPTS="--features {network}-runtime" {image} build',
         ]
+    if missing := sorted(HEADINGS.keys() - networks):
+        fail(f"no srtool report for {', '.join(missing)}: a release ships both runtimes")
     return "\n".join(
         [
             "## Runtime info",
