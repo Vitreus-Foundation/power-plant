@@ -96,7 +96,9 @@ pub type FeeCreditOf<T> =
 #[derive(PartialEq, Eq, RuntimeDebug)]
 pub enum CallFee<Balance> {
     Regular(Balance),
-    // The EVM fee is charged separately
+    /// The fee of an EVM call. A signed EVM call prepays it like a regular fee and gets it back
+    /// once it has run: the EVM runner charges for the execution, and `pallet_evm` then returns
+    /// `Pays::No`.
     EVM(Balance),
 }
 
@@ -310,16 +312,8 @@ pub mod pallet {
                 return Ok(None);
             }
 
-            let fee = match T::CustomFee::dispatch_info_to_fee(call, Some(dispatch_info), Some(fee))
-            {
-                CallFee::Regular(fee) => fee,
-                CallFee::EVM(fee) => {
-                    Self::ensure_sufficient_energy(who, fee).map_err(|_| {
-                        TransactionValidityError::Invalid(InvalidTransaction::Payment)
-                    })?;
-                    Zero::zero()
-                },
-            };
+            let fee = T::CustomFee::dispatch_info_to_fee(call, Some(dispatch_info), Some(fee))
+                .into_inner();
 
             if fee.is_zero() {
                 return Ok(None);
