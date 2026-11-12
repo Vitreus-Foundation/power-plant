@@ -92,7 +92,8 @@ fn can_swap_native_for_exact_energy() {
 
         let exchange_out = 1000;
         let expect_in = 100;
-        let expect_fee = 2;
+        // An input of 102 leaves less than 100 after the 2% fee, so the fee comes to 3.
+        let expect_fee = 3;
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
@@ -158,7 +159,8 @@ fn can_swap_energy_for_exact_native() {
 
         let exchange_out = 100;
         let expect_in = 1000;
-        let expect_fee = 20;
+        // An input of 1020 leaves less than 1000 after the 2% fee, so the fee comes to 21.
+        let expect_fee = 21;
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
@@ -877,7 +879,8 @@ fn swap_tokens_for_exact_tokens_works_for_low_amount_out() {
         let alice_balance_before = balance(ALICE);
         let alice_energy_before = energy_balance(ALICE);
 
-        // amount_in = 1, even though 5 / 10 = 0
+        // 5 energy need a whole native at the exchange, and 1 native leaves nothing after the
+        // 2% fee, so the input is 2.
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
             ALICE,
@@ -887,7 +890,7 @@ fn swap_tokens_for_exact_tokens_works_for_low_amount_out() {
             true
         ));
 
-        assert_eq!(balance(ALICE), alice_balance_before - 1);
+        assert_eq!(balance(ALICE), alice_balance_before - 2);
         assert_eq!(energy_balance(ALICE), alice_energy_before + 5);
     });
 }

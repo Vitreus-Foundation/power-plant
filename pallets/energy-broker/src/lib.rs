@@ -33,7 +33,8 @@ use frame_support::{
 };
 use sp_runtime::{
     traits::{
-        AccountIdConversion, Bounded, CheckedDiv, CheckedMul, Ensure, Get, StaticLookup, Zero,
+        AccountIdConversion, Bounded, CheckedAdd, CheckedDiv, CheckedMul, Ensure, Get,
+        StaticLookup, Zero,
     },
     DispatchError, Saturating, TokenError, Vec,
 };
@@ -580,8 +581,12 @@ pub mod pallet {
         ) -> Result<T::Balance, Error<T>> {
             let exchange_share = FEE_DENOMINATOR.checked_sub(fee).ok_or(Error::<T>::Overflow)?;
 
+            // Rounds up to the smallest input from which `to_amount_with_fee_deducted` leaves at
+            // least `amount`.
             T::HigherPrecisionBalance::from(amount)
                 .checked_mul(&T::HigherPrecisionBalance::from(FEE_DENOMINATOR))
+                .ok_or(Error::<T>::Overflow)?
+                .checked_add(&T::HigherPrecisionBalance::from(exchange_share.saturating_sub(1)))
                 .ok_or(Error::<T>::Overflow)?
                 .checked_div(&T::HigherPrecisionBalance::from(exchange_share))
                 .ok_or(Error::<T>::Overflow)?
