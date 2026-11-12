@@ -32,8 +32,9 @@ pub trait OnEnergyBurn<Balance> {
 /// A trait for handling events when energy is sold.
 #[impl_trait_for_tuples::impl_for_tuples(8)]
 pub trait OnEnergySell<Balance> {
-    /// Called whenever energy is sold.
-    fn on_energy_sell(amount: Balance);
+    /// Called whenever energy is sold: `energy` is the energy sold, and `payout` is what the
+    /// seller received for it, in the currency it was sold for.
+    fn on_energy_sell(energy: Balance, payout: Balance);
 }
 
 /// A trait that determines how much energy should be generated for a given era.

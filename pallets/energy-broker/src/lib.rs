@@ -205,7 +205,7 @@ pub mod pallet {
         ZeroAmount,
         /// The broker could not take the swap input.
         DepositFailed,
-        /// Insufficient liquidity in the energy broker.
+        /// The path cannot currently supply the amount out.
         InsufficientLiquidity,
         /// Calculated amount out is less than provided minimum amount.
         ProvidedMinimumNotSufficientForSwap,
@@ -553,7 +553,7 @@ pub mod pallet {
             if !energy_deposited.is_zero() {
                 Self::burn_surplus_energy(&broker_account);
 
-                T::OnEnergySell::on_energy_sell(energy_deposited);
+                T::OnEnergySell::on_energy_sell(energy_deposited, amount_out);
             }
 
             Ok(())
