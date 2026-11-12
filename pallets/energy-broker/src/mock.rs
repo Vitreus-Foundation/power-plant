@@ -77,19 +77,19 @@ parameter_types! {
     pub const FeelessAccount: u128 = BOB;
 }
 
-const RATE: FixedU128 = FixedU128::from_rational(1, 10);
+parameter_types! {
+    /// Native currency per unit of energy. Lives in the test externalities, so every
+    /// `new_test_ext` starts at one tenth.
+    pub storage Rate: FixedU128 = FixedU128::from_rational(1, 10);
+}
 
 pub struct MockNativeToEnergyConverter;
 impl FixedPathAssetConverter<Test> for MockNativeToEnergyConverter {
     const SOURCE: NativeOrAssetId = NativeOrAssetId::Native;
     const TARGET: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
 
-    fn get_amount_out(amount_in: u128) -> Option<u128> {
-        RATE.reciprocal().map(|x| x.saturating_mul_int(amount_in))
-    }
-
-    fn get_amount_in(amount_out: u128) -> Option<u128> {
-        Some(RATE.saturating_mul_int(amount_out))
+    fn conversion_rate() -> Option<FixedU128> {
+        Rate::get().reciprocal()
     }
 }
 
@@ -98,12 +98,8 @@ impl FixedPathAssetConverter<Test> for MockEnergyToNativeConverter {
     const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
     const TARGET: NativeOrAssetId = NativeOrAssetId::Native;
 
-    fn get_amount_out(amount_in: u128) -> Option<u128> {
-        Some(RATE.saturating_mul_int(amount_in))
-    }
-
-    fn get_amount_in(amount_out: u128) -> Option<u128> {
-        RATE.reciprocal().map(|x| x.saturating_mul_int(amount_out))
+    fn conversion_rate() -> Option<FixedU128> {
+        Some(Rate::get())
     }
 }
 
@@ -116,12 +112,8 @@ impl FixedPathAssetConverter<Test> for MockStaticEnergyToEnergyConverter {
         Some(0)
     }
 
-    fn get_amount_out(amount_in: u128) -> Option<u128> {
-        Some(amount_in)
-    }
-
-    fn get_amount_in(amount_out: u128) -> Option<u128> {
-        Some(amount_out)
+    fn conversion_rate() -> Option<FixedU128> {
+        Some(FixedU128::from_u32(1))
     }
 
     fn reducible_balance(_broker: &u128) -> u128 {

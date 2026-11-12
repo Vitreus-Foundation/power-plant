@@ -32,10 +32,12 @@ use frame_support::{
     PalletId,
 };
 use sp_runtime::{
+    helpers_128bit::multiply_by_rational_with_rounding,
     traits::{
-        AccountIdConversion, Bounded, CheckedDiv, CheckedMul, Ensure, Get, StaticLookup, Zero,
+        AccountIdConversion, Bounded, CheckedAdd, CheckedDiv, CheckedMul, Ensure, Get,
+        StaticLookup, UniqueSaturatedInto, Zero,
     },
-    DispatchError, Saturating, TokenError, Vec,
+    DispatchError, FixedPointNumber, FixedU128, Rounding, Saturating, TokenError, Vec,
 };
 use vitreus_runtime_common::{
     MaxAmountOut, OnEnergyBurn, OnEnergySell, OnSessionChange, QuotePrice, SessionIndex, Swap,
@@ -351,7 +353,7 @@ pub mod pallet {
             T::AssetConverter::reducible_balance(path, &Self::account_id())
         }
 
-        /// The output amount for `amount_in` along `path`.
+        /// The output amount for `amount_in` along `path`, rounded down.
         ///
         /// If `include_fee` is `true`, the path's swap fee is deducted from `amount_in` first.
         /// Liquidity is not checked: the output may exceed [`Self::max_amount_out`].
@@ -364,7 +366,8 @@ pub mod pallet {
                 .map(|(amount_out, _)| amount_out)
         }
 
-        /// The input amount required to obtain `amount_out` along `path`.
+        /// The smallest input for which [`Self::get_amount_out`] gives at least `amount_out` along
+        /// `path`.
         ///
         /// If `include_fee` is `true`, the path's swap fee is added on top. Liquidity is not
         /// checked: `amount_out` may exceed [`Self::max_amount_out`].
@@ -395,8 +398,8 @@ pub mod pallet {
             };
             let fee = amount_in.saturating_sub(exchange_in);
 
-            let amount_out =
-                T::AssetConverter::get_amount_out(path, exchange_in).ok_or(Error::InvalidPath)?;
+            let rate = T::AssetConverter::conversion_rate(path).ok_or(Error::<T>::InvalidPath)?;
+            let amount_out = rate.checked_mul_int(exchange_in).ok_or(Error::<T>::Overflow)?;
 
             ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
 
@@ -414,12 +417,19 @@ pub mod pallet {
         ) -> Result<(T::Balance, T::Balance), Error<T>> {
             ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
 
-            let exchange_in =
-                T::AssetConverter::get_amount_in(path, amount_out).ok_or(Error::InvalidPath)?;
+            let rate = T::AssetConverter::conversion_rate(path).ok_or(Error::<T>::InvalidPath)?;
+            // At a zero rate no input buys anything.
+            ensure!(!rate.is_zero(), Error::<T>::InvalidPath);
 
-            // Correct the input amount if it calculates to zero
-            // to prevent swap failure when buying energy.
-            let exchange_in = exchange_in.max(1u8.into());
+            // Rounds up to the smallest input that `rate` converts to at least `amount_out`.
+            let exchange_in = multiply_by_rational_with_rounding(
+                amount_out.unique_saturated_into(),
+                FixedU128::DIV,
+                rate.into_inner(),
+                Rounding::Up,
+            )
+            .and_then(|amount| T::Balance::try_from(amount).ok())
+            .ok_or(Error::<T>::Overflow)?;
 
             let amount_in = if include_fee {
                 Self::to_amount_with_fee_included(exchange_in, Self::swap_fee(path))?
@@ -580,8 +590,12 @@ pub mod pallet {
         ) -> Result<T::Balance, Error<T>> {
             let exchange_share = FEE_DENOMINATOR.checked_sub(fee).ok_or(Error::<T>::Overflow)?;
 
+            // Rounds up to the smallest input from which `to_amount_with_fee_deducted` leaves at
+            // least `amount`.
             T::HigherPrecisionBalance::from(amount)
                 .checked_mul(&T::HigherPrecisionBalance::from(FEE_DENOMINATOR))
+                .ok_or(Error::<T>::Overflow)?
+                .checked_add(&T::HigherPrecisionBalance::from(exchange_share.saturating_sub(1)))
                 .ok_or(Error::<T>::Overflow)?
                 .checked_div(&T::HigherPrecisionBalance::from(exchange_share))
                 .ok_or(Error::<T>::Overflow)?
