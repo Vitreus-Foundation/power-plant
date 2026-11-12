@@ -3,7 +3,7 @@ use frame_support::{
     assert_noop, assert_ok,
     traits::fungibles::{Inspect, Mutate},
 };
-use sp_runtime::{DispatchError, TokenError};
+use sp_runtime::{DispatchError, FixedU128, TokenError};
 use vitreus_runtime_common::{OnEnergyBurn, OnSessionChange, QuotePrice, Swap};
 
 const NATIVE_TOKEN: NativeOrAssetId = NativeOrAssetId::Native;
@@ -45,6 +45,29 @@ fn set_output_liquidity(asset_out: NativeOrAssetId, liquidity: u128) {
     <<Test as Config>::Assets>::set_balance(asset_out, &broker, liquidity + ed);
 }
 
+/// Checks that the input `get_amount_in` quotes for `amount_out` along `path` buys it, and that
+/// one unit less doesn't.
+fn assert_smallest_input(
+    path: &(NativeOrAssetId, NativeOrAssetId),
+    amount_out: u128,
+    include_fee: bool,
+) {
+    // An input too small to buy anything is rejected with `ZeroAmount`.
+    let bought = |amount_in| match EnergyBroker::get_amount_out(amount_in, path, include_fee) {
+        Ok(amount_out) => amount_out,
+        Err(Error::<Test>::ZeroAmount) => 0,
+        Err(error) => panic!("{path:?} can't price {amount_in}: {error:?}"),
+    };
+
+    let amount_in =
+        EnergyBroker::get_amount_in(amount_out, path, include_fee).expect("path is priced");
+    assert!(bought(amount_in) >= amount_out, "{path:?}: {amount_in} buys less than {amount_out}");
+    assert!(
+        bought(amount_in - 1) < amount_out,
+        "{path:?}: {amount_in} is not the smallest input for {amount_out}"
+    );
+}
+
 #[test]
 fn get_amount_works() {
     new_test_ext().execute_with(|| {
@@ -76,6 +99,22 @@ fn get_amount_in_rounds_swap_fee_up() {
         // A fee that divides evenly adds nothing on top.
         assert_eq!(EnergyBroker::get_amount_in(980, &path, true).ok(), Some(100));
         assert_eq!(EnergyBroker::get_amount_out(100, &path, true).ok(), Some(980));
+    });
+}
+
+#[test]
+fn get_amount_in_is_smallest_input_on_every_path() {
+    new_test_ext().execute_with(|| {
+        // A rate whose reciprocal `FixedU128` can't hold exactly, so rounding shows on both paths
+        // with a rate.
+        Rate::set(&FixedU128::from_rational(1, 3));
+
+        for path in <Test as Config>::AssetConverter::paths() {
+            for include_fee in [false, true] {
+                assert_smallest_input(&path, 10, include_fee);
+                assert_smallest_input(&path, 10u128.pow(24) + 7, include_fee);
+            }
+        }
     });
 }
 
