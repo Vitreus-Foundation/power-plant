@@ -59,11 +59,15 @@ check() {
         sleep 10
     done
 
+    # --no-weight-warnings: the weight check fails the run near a parachain's PoV limit, which a
+    # relay chain doesn't have.
+    # --print-storage-diff: if the migrations aren't idempotent, logs what their second run changed.
     # --disable-mbm-checks: the runtime has no pallet-migrations, so no multi-block migrations.
     # --blocktime: MILLISECS_PER_BLOCK of the runtime.
     try-runtime \
         --runtime "target/release/wbuild/vitreus-power-plant-runtime/vitreus_power_plant_${network}_runtime.compact.compressed.wasm" \
-        on-runtime-upgrade "${version_check[@]}" --checks=all --disable-mbm-checks --blocktime 6000 \
+        on-runtime-upgrade "${version_check[@]}" --checks=all --no-weight-warnings \
+        --print-storage-diff --disable-mbm-checks --blocktime 6000 \
         snap --path "$snap"
 }
 
