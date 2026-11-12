@@ -599,10 +599,9 @@ impl<T: Config> Pallet<T> {
             .unwrap_or_default();
 
         if budget.is_zero() {
-            // With no payout budget the payout quota is zero: nothing is paid out.
             log::warn!(
                 target: LOG_TARGET,
-                "Payout budget is unavailable: total_stake: {:?}, apr: {:?}, multiplier: {:?}",
+                "Payout budget is zero: total_stake: {:?}, apr: {:?}, multiplier: {:?}",
                 total_stake, apr, multiplier
             );
         }
