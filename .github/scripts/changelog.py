@@ -6,7 +6,7 @@
 
 In CI, --base is HEAD^1: the first parent of GitHub's merge commit for the PR, which is the
 base branch. Locally, pass the fork point instead: --base "$(git merge-base origin/main HEAD)".
-release.py builds on this module.
+release.py and dependencies.py build on this module.
 """
 import argparse
 import re

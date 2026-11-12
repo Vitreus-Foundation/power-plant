@@ -53,6 +53,17 @@ jobs:
 
       - run: zepter run check
 
+  dependencies:
+    name: "dependencies"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the SDK is on a release tag
+        run: python3 .github/scripts/dependencies.py sdk-pin
+
   rust:
     name: "cargo clippy, build, test"
     runs-on: ubuntu-24.04
