@@ -30,6 +30,13 @@ fn new_test_ext() -> sp_io::TestExternalities {
                 ..Default::default()
             },
             nac_managing: NacManagingConfig { accounts: vec![(alith(), 2)], owners: vec![alith()] },
+            // The default configuration lets no downward message through.
+            configuration: ConfigurationConfig {
+                config: parachains_configuration::HostConfiguration {
+                    max_downward_message_size: 51200,
+                    ..Default::default()
+                },
+            },
             ..Default::default()
         }
         .build_storage()
@@ -1390,11 +1397,12 @@ mod offences {
 
 mod xcm_tests {
     use super::*;
-    use frame_support::{assert_err_ignore_postinfo, assert_noop};
+    use frame_support::{assert_err_ignore_postinfo, assert_noop, assert_ok};
     use sp_runtime::{traits::Dispatchable, DispatchError};
     use xcm::latest::prelude::{
-        Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, Here, Location, OriginKind, Parachain,
-        ReceiveTeleportedAsset, Transact, Weight, WeightLimit, Xcm, XcmError,
+        AccountId32, AccountKey20, Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, GeneralIndex,
+        Here, Location, OriginKind, PalletInstance, Parachain, ReceiveTeleportedAsset, Transact,
+        Weight, WeightLimit, Xcm, XcmError,
     };
     use xcm::{VersionedAssets, VersionedLocation, VersionedXcm};
     use xcm_executor::{traits::TransferType, XcmExecutor};
@@ -1406,6 +1414,103 @@ mod xcm_tests {
 
     fn energy_asset(amount: u128) -> Asset {
         Asset { id: AssetId(crate::xcm_config::EnergyTokenLocation::get()), fun: Fungible(amount) }
+    }
+
+    /// Makes `para` reachable for downward messages, which later SDK releases queue only for a
+    /// para with a head. A copy of `dmp::Pallet::make_parachain_reachable` from those releases.
+    fn make_parachain_reachable(para: impl Into<ParaId>) {
+        use sp_runtime::codec::Encode;
+        let para = para.into();
+        parachains_paras::Heads::<Runtime>::insert(
+            para,
+            polkadot_primitives::HeadData(para.encode()),
+        );
+    }
+
+    /// A teleport of `asset` to a parachain burns it here, counts it as burned energy and queues
+    /// the parachain a v3 message that deposits it to the beneficiary. Regression guard for what
+    /// parachains receive.
+    fn assert_teleport_burns_and_queues_v3_message(asset: crate::AssetId) {
+        use sp_runtime::codec::Decode;
+        System::set_block_number(1);
+        // Parachains whose XCM version the relay doesn't know get messages in this version,
+        // the oldest one ours understand.
+        assert_ok!(XcmPallet::force_default_xcm_version(RuntimeOrigin::root(), Some(3)));
+        make_parachain_reachable(2000);
+        let energy = NativeOrAssetId::WithId(asset);
+        let balance = asset_balance(&energy, &alith());
+        let issuance = asset_issuance(&energy);
+        // Alice's sr25519 key, an account on a parachain with 32-byte accounts.
+        let account =
+            hex_literal::hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
+
+        assert_ok!(RuntimeCall::XcmPallet(pallet_xcm::Call::limited_teleport_assets {
+            dest: Box::new(VersionedLocation::from(parachain())),
+            beneficiary: Box::new(VersionedLocation::from(Location::new(
+                0,
+                [AccountId32 { network: None, id: account }],
+            ))),
+            assets: Box::new(VersionedAssets::from(vec![Asset {
+                id: AssetId(Location::new(
+                    0,
+                    [PalletInstance(crate::xcm_config::ASSETS_PALLET_ID), GeneralIndex(asset)],
+                )),
+                fun: Fungible(AMOUNT),
+            }])),
+            fee_asset_item: 0,
+            weight_limit: WeightLimit::Unlimited,
+        })
+        .dispatch(RuntimeOrigin::signed(alith())));
+
+        assert_eq!(asset_balance(&energy, &alith()), balance - AMOUNT);
+        assert_eq!(asset_issuance(&energy), issuance - AMOUNT);
+        assert_eq!(pallet_energy_broker::SessionEnergyBurn::<Runtime>::get(), AMOUNT);
+        assert_eq!(pallet_dynamic_energy::SessionEnergyBurn::<Runtime>::get(), AMOUNT);
+        let (origin, destination, message_id) = System::events()
+            .into_iter()
+            .find_map(|record| match record.event {
+                RuntimeEvent::XcmPallet(pallet_xcm::Event::Sent {
+                    origin,
+                    destination,
+                    message_id,
+                    ..
+                }) => Some((origin, destination, message_id)),
+                _ => None,
+            })
+            .expect("the teleport is sent");
+        let sender = Location::new(
+            0,
+            [AccountKey20 {
+                network: Some(crate::xcm_config::ThisNetwork::get()),
+                key: alith().into(),
+            }],
+        );
+        assert_eq!((origin, destination), (sender, parachain()));
+
+        // The message as the parachain gets it.
+        let expected = {
+            use xcm::v3::prelude::*;
+            // The asset as the parachain sees it: in the assets pallet of its parent.
+            let teleported: MultiAsset = (
+                (Parent, PalletInstance(crate::xcm_config::ASSETS_PALLET_ID), GeneralIndex(asset)),
+                AMOUNT,
+            )
+                .into();
+            VersionedXcm::<()>::V3(Xcm(vec![
+                ReceiveTeleportedAsset(teleported.clone().into()),
+                ClearOrigin,
+                BuyExecution { fees: teleported, weight_limit: Unlimited },
+                DepositAsset {
+                    assets: Wild(AllCounted(1)),
+                    beneficiary: [AccountId32 { network: None, id: account }].into(),
+                },
+                SetTopic(message_id),
+            ]))
+        };
+        let queue = parachains_dmp::DownwardMessageQueues::<Runtime>::get(ParaId::from(2000));
+        assert_eq!(queue.len(), 1);
+        let queued = VersionedXcm::<()>::decode(&mut &queue[0].msg[..]).expect("a valid XCM");
+        assert_eq!(queued, expected);
     }
 
     /// Inbound energy teleports must be rejected explicitly with `UntrustedTeleportLocation`,
@@ -1428,6 +1533,21 @@ mod xcm_tests {
 
             assert_eq!(outcome.ensure_complete(), Err(XcmError::UntrustedTeleportLocation));
         });
+    }
+
+    #[test]
+    fn teleport_burns_vnrg_and_queues_v3_message() {
+        new_test_ext().execute_with(|| assert_teleport_burns_and_queues_v3_message(VNRG::get()))
+    }
+
+    #[test]
+    fn teleport_burns_snrg_and_queues_v3_message() {
+        new_test_ext().execute_with(|| assert_teleport_burns_and_queues_v3_message(SNRG::get()))
+    }
+
+    #[test]
+    fn teleport_burns_lnrg_and_queues_v3_message() {
+        new_test_ext().execute_with(|| assert_teleport_burns_and_queues_v3_message(LNRG::get()))
     }
 
     /// Only governance may `send` arbitrary XCM. Regression guard for `SendXcmOrigin`.
