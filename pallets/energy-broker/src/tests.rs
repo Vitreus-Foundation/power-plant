@@ -63,6 +63,23 @@ fn get_amount_works() {
 }
 
 #[test]
+fn get_amount_in_rounds_swap_fee_up() {
+    new_test_ext().execute_with(|| {
+        let path = (NATIVE_TOKEN, ENERGY_TOKEN);
+
+        // 1000 energy cost 100 native before the 2% swap fee. With the fee, the smallest input
+        // that buys them is 103: 102 buys only 990.
+        assert_eq!(EnergyBroker::get_amount_in(1000, &path, true).ok(), Some(103));
+        assert_eq!(EnergyBroker::get_amount_out(103, &path, true).ok(), Some(1000));
+        assert_eq!(EnergyBroker::get_amount_out(102, &path, true).ok(), Some(990));
+
+        // A fee that divides evenly adds nothing on top.
+        assert_eq!(EnergyBroker::get_amount_in(980, &path, true).ok(), Some(100));
+        assert_eq!(EnergyBroker::get_amount_out(100, &path, true).ok(), Some(980));
+    });
+}
+
+#[test]
 fn can_swap_native_for_exact_energy() {
     new_test_ext().execute_with(|| {
         let broker_account = EnergyBroker::account_id();
