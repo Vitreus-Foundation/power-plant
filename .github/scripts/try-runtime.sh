@@ -3,17 +3,18 @@
 #
 #     .github/scripts/try-runtime.sh install DIR
 #     .github/scripts/try-runtime.sh build NETWORK
-#     .github/scripts/try-runtime.sh check NETWORK
+#     .github/scripts/try-runtime.sh check NETWORK [--strict]
 #
 # `install` puts the try-runtime-cli release these checks are written for into DIR. `build` builds
 # the runtime of NETWORK, mainnet or testnet, with the try-runtime feature. `check` runs the
 # migrations of that build on the current state of NETWORK, with the try-runtime found on PATH.
+# --strict also requires spec_version to be above the one on chain, as in a release PR.
 set -euo pipefail
 
 CLI_VERSION=v0.10.1
 
 usage() {
-    echo "usage: $0 install DIR | build NETWORK | check NETWORK" >&2
+    echo "usage: $0 install DIR | build NETWORK | check NETWORK [--strict]" >&2
     exit 2
 }
 
@@ -41,6 +42,9 @@ check() {
         mainnet) uri=wss://rpc-mainnet.vtrs.io:443 ;;
         testnet) uri=wss://rpc.testnet.compliq.io:9945 ;;
     esac
+    # try-runtime wants spec_version above the one on chain, and only a release PR raises it.
+    local version_check=(--disable-spec-version-check)
+    if [ "${2:-}" = --strict ]; then version_check=(); fi
 
     export RUST_LOG=try-runtime::cli=info,remote-ext=info,runtime=debug
     local snap=target/try-runtime/$network.snap
@@ -55,12 +59,11 @@ check() {
         sleep 10
     done
 
-    # --disable-spec-version-check: only a release PR raises spec_version above the one on chain.
     # --disable-mbm-checks: the runtime has no pallet-migrations, so no multi-block migrations.
     # --blocktime: MILLISECS_PER_BLOCK of the runtime.
     try-runtime \
         --runtime "target/release/wbuild/vitreus-power-plant-runtime/vitreus_power_plant_${network}_runtime.compact.compressed.wasm" \
-        on-runtime-upgrade --disable-spec-version-check --checks=all --disable-mbm-checks --blocktime 6000 \
+        on-runtime-upgrade "${version_check[@]}" --checks=all --disable-mbm-checks --blocktime 6000 \
         snap --path "$snap"
 }
 
@@ -76,9 +79,9 @@ case ${1:-} in
         build "$2"
         ;;
     check)
-        [ $# -eq 2 ] || usage
+        [ $# -eq 2 ] || { [ $# -eq 3 ] && [ "$3" = --strict ]; } || usage
         known_network "$2"
-        check "$2"
+        check "$2" "${3:-}"
         ;;
     *) usage ;;
 esac
