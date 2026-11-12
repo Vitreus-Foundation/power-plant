@@ -761,9 +761,9 @@ mod treasury {
     const EXACT_RATE: FixedU128 = FixedU128::from_u32(1);
     /// A rate at which the broker's conversions round down.
     const ROUNDING_RATE: FixedU128 = FixedU128::from_rational(3, 2);
-    /// A rate at which a base unit of VTRS at the broker pays for no energy on either path: LNRG
-    /// rounds the output down to zero, SNRG would pay out more than the unit. At `ROUNDING_RATE`
-    /// the SNRG path still swaps one for one.
+    /// VTRS per base unit of energy at which a base unit of VTRS at the broker pays for no energy:
+    /// the smallest sale would pay out more than the unit. At `ROUNDING_RATE` the SNRG path still
+    /// swaps one for one.
     const DUST_RATE: FixedU128 = FixedU128::from_rational(7, 3);
 
     /// Changes the session through the listeners as the runtime wires them, in their order.
@@ -861,7 +861,9 @@ mod treasury {
         let treasury = Treasury::account_id();
 
         System::set_block_number(1);
-        set_broker_rates(DUST_RATE, DUST_RATE);
+        // Energy is worth seven thirds of VTRS on both paths: the LNRG rate counts energy per VTRS,
+        // the SNRG rate VTRS per energy.
+        set_broker_rates(FixedU128::from_rational(3, 7), DUST_RATE);
         Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get() + 1);
 
         Balances::set_balance(&treasury, ExistentialDeposit::get());
