@@ -50,11 +50,13 @@ fn asset_issuance(asset: &NativeOrAssetId) -> Balance {
 /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
 fn fund_broker() {
     Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
-    pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
-    pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
-        SNRG::get(),
-        FixedU128::from_u32(1),
-    );
+    set_broker_rates(FixedU128::from_u32(1));
+}
+
+/// Sets the energy exchange rate and the SNRG rate to `rate`.
+fn set_broker_rates(rate: FixedU128) {
+    pallet_dynamic_energy::ExchangeRate::<Runtime>::put(rate);
+    pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), rate);
 }
 
 /// The VTRS the broker can pay out.
@@ -778,8 +780,7 @@ mod treasury {
 
         System::set_block_number(1);
         fund_broker();
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(rate);
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), rate);
+        set_broker_rates(rate);
         let broker_vtrs_before = broker_vtrs();
 
         // More energy than the broker can pay for.
@@ -832,8 +833,7 @@ mod treasury {
         let treasury = Treasury::account_id();
 
         System::set_block_number(1);
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(DUST_RATE);
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), DUST_RATE);
+        set_broker_rates(DUST_RATE);
         Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get() + 1);
 
         Balances::set_balance(&treasury, ExistentialDeposit::get());
