@@ -1,10 +1,11 @@
 use crate::{
+    energy::{EnergyToNativeExchange, LiquidEnergyToNativeExchange, StaticEnergyToNativeExchange},
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
-    EnergyAsset, EnergyBroker, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAndAssets,
-    NativeAsset, NativeEnergyExchange, NativeOrAssetId, OriginCaller, Preimage, Runtime,
-    RuntimeCall, RuntimeEvent, RuntimeHoldReason, RuntimeOrigin, Scheduler, StaticEnergyAsset,
-    TechnicalCommittee, Treasury, TreasuryExtension, DAYS, HOURS, LNRG, MICRO_VTRS, MILLI_VTRS,
-    MINUTES, MONTHS, NANO_VTRS, PICO_VTRS, SNRG, UNITS, VNRG,
+    EnergyAsset, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAndAssets, NativeAsset,
+    NativeOrAssetId, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeHoldReason,
+    RuntimeOrigin, Scheduler, StaticEnergyAsset, TechnicalCommittee, Treasury, TreasuryExtension,
+    CENTS, DAYS, HOURS, MICRO_VTRS, MILLICENTS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS, PICO_VTRS,
+    UNITS, VNRG,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
@@ -25,7 +26,7 @@ use sp_runtime::{Perbill, Permill};
 use static_assertions::const_assert;
 
 pub const fn deposit(items: u32, bytes: u32) -> Balance {
-    items as Balance * 200 * NANO_VTRS + (bytes as Balance) * PICO_VTRS
+    items as Balance * 20 * CENTS + (bytes as Balance) * MILLICENTS
 }
 
 pub struct TreasuryAccountId<R, I: 'static = ()>(sp_std::marker::PhantomData<(R, I)>);
@@ -81,10 +82,10 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
 }
 
 parameter_types! {
-    // One storage item; key size is 32; value is size 4+4+16+32 bytes = 56 bytes.
-    pub const DepositBase: Balance = deposit(1, 88);
-    // Additional storage item size of 32 bytes.
-    pub const DepositFactor: Balance = deposit(0, 32);
+    // One storage item; key size is 20+32; value is size 4+4+16+20 bytes = 44 bytes.
+    pub const DepositBase: Balance = deposit(1, 96);
+    // Additional storage item size of 20 bytes.
+    pub const DepositFactor: Balance = deposit(0, 20);
     pub const MaxSignatories: u32 = 100;
 }
 
@@ -100,10 +101,10 @@ impl pallet_multisig::Config for Runtime {
 
 parameter_types! {
     pub const CandidacyBond: Balance = 1 * UNITS;
-    // 1 storage item created, key size is 32 bytes, value size is 16+16.
-    pub const VotingBondBase: Balance = deposit(1, 64);
-    // additional data per vote is 32 bytes (account id).
-    pub const VotingBondFactor: Balance = deposit(0, 32);
+    // 1 storage item created, key size is 20 bytes, value size is 16+16.
+    pub const VotingBondBase: Balance = deposit(1, 52);
+    // additional data per vote is 20 bytes (account id).
+    pub const VotingBondFactor: Balance = deposit(0, 20);
     pub const DesiredMembers: u32 = 7;
     pub const DesiredRunnersUp: u32 = 7;
     // TODO: remove `storage` after April of 2025
@@ -175,7 +176,7 @@ parameter_types! {
     pub const ProposalBond: Permill = Permill::from_percent(5);
     pub const ProposalBondMinimum: Balance = 10 * MILLI_VTRS;
     pub const ProposalBondMaximum: Balance = 10 * UNITS;
-    pub SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 40, "VITREUS_SPEND_PERIOD");
+    pub SpendPeriod: BlockNumber = prod_or_fast!(24 * DAYS, 1 * DAYS, "VITREUS_SPEND_PERIOD");
     pub const Burn: Permill = Permill::from_percent(0);
     pub const TreasuryPalletId: PalletId = PalletId(*b"py/trsry");
     pub const PayoutSpendPeriod: BlockNumber = 30 * DAYS;
@@ -215,7 +216,30 @@ impl pallet_treasury::Config for Runtime {
     type BalanceConverter = UnityAssetBalanceConversion;
     type PayoutPeriod = PayoutSpendPeriod;
     #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BenchmarkHelper = TreasuryBenchmarkHelper;
+}
+
+/// Benchmark args for both treasuries: `()` needs `FromEntropy`, which `AccountId20` /
+/// `NativeOrAssetId` lack. Always uses the native asset kind.
+#[cfg(feature = "runtime-benchmarks")]
+pub struct TreasuryBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_treasury::ArgumentsFactory<(), AccountId> for TreasuryBenchmarkHelper {
+    fn create_asset_kind(_seed: u32) {}
+    fn create_beneficiary(seed: [u8; 32]) -> AccountId {
+        let mut id = [0u8; 20];
+        id.copy_from_slice(&seed[..20]);
+        AccountId::from(id)
+    }
+}
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_treasury::ArgumentsFactory<NativeOrAssetId, AccountId> for TreasuryBenchmarkHelper {
+    fn create_asset_kind(_seed: u32) -> NativeOrAssetId {
+        NativeOrAssetId::Native
+    }
+    fn create_beneficiary(seed: [u8; 32]) -> AccountId {
+        <Self as pallet_treasury::ArgumentsFactory<(), AccountId>>::create_beneficiary(seed)
+    }
 }
 
 parameter_types! {
@@ -259,11 +283,11 @@ impl pallet_treasury::Config<TechnicalCommitteeTreasury> for Runtime {
     >;
     type PayoutPeriod = PayoutSpendPeriod;
     #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BenchmarkHelper = TreasuryBenchmarkHelper;
 }
 
 parameter_types! {
-    pub const SpendThreshold: Permill = Permill::from_percent(10);
+    pub const SpendThreshold: Permill = prod_or_fast!(Permill::from_percent(10), Permill::from_percent(1));
     pub const StakingRewardsPalletId: PalletId = PalletId(*b"stknrwrd");
     pub const LiquidityPalletId: PalletId = PalletId(*b"liquidty");
     pub const LiquidityReservesPalletId: PalletId = PalletId(*b"liqresrv");
@@ -290,8 +314,9 @@ impl pallet_treasury_extension::Config for Runtime {
     type EnergyAsset = EnergyAsset;
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
-    type StaticEnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, SNRG>;
-    type LiquidEnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, LNRG>;
+    type EnergyExchange = EnergyToNativeExchange;
+    type StaticEnergyExchange = StaticEnergyToNativeExchange;
+    type LiquidEnergyExchange = LiquidEnergyToNativeExchange;
     type SpendThreshold = SpendThreshold;
     type OnRecycled = StakingRewardsSink;
     type TreasuryTargetBalance = TreasuryTargetBalance;

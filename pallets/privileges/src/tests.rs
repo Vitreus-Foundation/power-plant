@@ -708,3 +708,105 @@ fn claim_rewards_works() {
         );
     })
 }
+
+#[test]
+fn claim_rewards_with_zero_points_works() {
+    ExtBuilder::default().build_and_execute(|| {
+        VipPoints::<Test>::insert(2019, 10, 0);
+        VippPoints::<Test>::insert(2019, 10, 0);
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), 2019, 1000, 2000));
+        let balance = Balances::balance(&10);
+        assert_ok!(Privileges::claim_rewards(RuntimeOrigin::signed(10), 2019));
+        assert_eq!(Balances::balance(&10), balance);
+        assert_noop!(
+            Privileges::claim_rewards(RuntimeOrigin::signed(10), 2019),
+            Error::<Test>::NoRewardsForAccount
+        );
+    });
+}
+
+#[test]
+fn claim_rewards_with_vipp_points_only_works() {
+    ExtBuilder::default().build_and_execute(|| {
+        // The v1 migration omits zero VIP rows. Corrections can also create VIPP-only rows.
+        VippPoints::<Test>::insert(2019, 10, 100);
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), 2019, 0, 2000));
+        let balance = Balances::balance(&10);
+        assert_ok!(Privileges::claim_rewards(RuntimeOrigin::signed(10), 2019));
+        assert_eq!(Balances::balance(&10), balance + 2000);
+        assert_noop!(
+            Privileges::claim_rewards(RuntimeOrigin::signed(10), 2019),
+            Error::<Test>::NoRewardsForAccount
+        );
+    });
+}
+
+#[test]
+fn claim_rewards_after_failed_transfer_works() {
+    ExtBuilder::default().build_and_execute(|| {
+        VipPoints::<Test>::insert(2019, 10, 100);
+        VippPoints::<Test>::insert(2019, 10, 200);
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), 2019, 1000, 2000));
+        assert_ok!(Balances::force_set_balance(
+            RuntimeOrigin::root(),
+            Privileges::account_id(),
+            10
+        ));
+        assert_noop!(
+            Privileges::claim_rewards(RuntimeOrigin::signed(10), 2019),
+            Error::<Test>::NotEnoughTokensForClaim
+        );
+        assert_eq!(Privileges::vip_points(2019, 10), Some(100));
+        assert_eq!(Privileges::vipp_points(2019, 10), Some(200));
+        assert_ok!(Balances::force_set_balance(
+            RuntimeOrigin::root(),
+            Privileges::account_id(),
+            3010
+        ));
+        assert_ok!(Privileges::claim_rewards(RuntimeOrigin::signed(10), 2019));
+    });
+}
+
+#[test]
+fn cannot_change_points_after_setting_rewards() {
+    ExtBuilder::default().build_and_execute(|| {
+        VipPoints::<Test>::insert(2019, 10, 100);
+        VippPoints::<Test>::insert(2019, 10, 200);
+        assert_ok!(Privileges::set_rewards(RuntimeOrigin::root(), 2019, 1000, 2000));
+        for claimed in [false, true] {
+            if claimed {
+                assert_ok!(Privileges::claim_rewards(RuntimeOrigin::signed(10), 2019));
+            }
+            assert_noop!(
+                Privileges::force_set_vip_points(RuntimeOrigin::root(), 2019, 10, 500),
+                Error::<Test>::YearRewardsAlreadySet
+            );
+            assert_noop!(
+                Privileges::force_set_vipp_points(RuntimeOrigin::root(), 2019, 10, 500),
+                Error::<Test>::YearRewardsAlreadySet
+            );
+        }
+    });
+}
+
+#[test]
+fn cannot_claim_rewards_with_invalid_total() {
+    for total in [0, 50] {
+        ExtBuilder::default().build_and_execute(|| {
+            VipPoints::<Test>::insert(2019, 10, 100);
+            Rewards::<Test>::insert(
+                2019,
+                RewardsInfo::<Test> {
+                    vip_points: total,
+                    vip_rewards: 1000,
+                    vipp_points: 0,
+                    vipp_rewards: 0,
+                },
+            );
+            assert_noop!(
+                Privileges::claim_rewards(RuntimeOrigin::signed(10), 2019),
+                Error::<Test>::InvalidRewardPoints
+            );
+        });
+    }
+}

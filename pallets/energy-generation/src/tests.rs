@@ -1102,6 +1102,88 @@ fn forcing_new_era_works() {
 }
 
 #[test]
+fn listeners_see_next_era_after_previous_one_is_calculated() {
+    use EraCall::{Calculate, NewSession};
+
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(2);
+
+        assert_eq!(
+            EraCalls::take(),
+            vec![
+                NewSession { session: 0, active_era: Some(0), era_start: Some(0) },
+                NewSession { session: 1, active_era: Some(0), era_start: Some(0) },
+                NewSession { session: 2, active_era: Some(0), era_start: Some(0) },
+                Calculate { era: 0 },
+                NewSession { session: 3, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 4, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 5, active_era: Some(1), era_start: Some(3) },
+                Calculate { era: 1 },
+                NewSession { session: 6, active_era: Some(2), era_start: Some(6) },
+            ]
+        );
+    });
+}
+
+#[test]
+fn listeners_see_same_era_while_force_none_is_set() {
+    use EraCall::{Calculate, NewSession};
+
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+        EraCalls::take();
+
+        PowerPlant::set_force_era(Forcing::ForceNone);
+        start_session(7);
+        PowerPlant::set_force_era(Forcing::NotForcing);
+        start_session(9);
+
+        assert_eq!(
+            EraCalls::take(),
+            vec![
+                NewSession { session: 4, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 5, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 6, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 7, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 8, active_era: Some(1), era_start: Some(3) },
+                Calculate { era: 1 },
+                NewSession { session: 9, active_era: Some(2), era_start: Some(9) },
+            ]
+        );
+    });
+}
+
+#[test]
+fn listeners_see_same_era_while_election_fails() {
+    use EraCall::{Calculate, NewSession};
+
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+        EraCalls::take();
+
+        let minimum_validator_count = MinimumValidatorCount::<Test>::get();
+        MinimumValidatorCount::<Test>::put(10);
+        start_session(7);
+        assert_eq!(*staking_events().last().unwrap(), Event::StakingElectionFailed);
+        MinimumValidatorCount::<Test>::put(minimum_validator_count);
+        start_session(9);
+
+        assert_eq!(
+            EraCalls::take(),
+            vec![
+                NewSession { session: 4, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 5, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 6, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 7, active_era: Some(1), era_start: Some(3) },
+                NewSession { session: 8, active_era: Some(1), era_start: Some(3) },
+                Calculate { era: 1 },
+                NewSession { session: 9, active_era: Some(2), era_start: Some(9) },
+            ]
+        );
+    });
+}
+
+#[test]
 fn cannot_transfer_staked_balance() {
     // Tests that a stash account cannot transfer funds
     ExtBuilder::default().no_cooperate().build_and_execute(|| {
@@ -1336,7 +1418,7 @@ fn bond_extra_works() {
         );
 
         // Call the bond_extra function with a large number, should handle it
-        assert_ok!(PowerPlant::bond_extra(RuntimeOrigin::signed(11), Balance::max_value()));
+        assert_ok!(PowerPlant::bond_extra(RuntimeOrigin::signed(11), Balance::MAX));
         // The full amount of the funds should now be in the total and active
         assert_eq!(
             PowerPlant::ledger(10),
@@ -1519,10 +1601,9 @@ fn many_unbond_calls_should_work() {
 
         // even though the number of unlocked chunks is the same as `MaxUnlockingChunks`,
         // unbonding works as expected.
-        for i in current_era..(current_era + max_unlocking_chunks) - 1 {
+        for era in current_era..(current_era + max_unlocking_chunks) - 1 {
             // There is only 1 chunk per era, so we need to be in a new era to create a chunk.
-            current_era = i;
-            mock::start_active_era(current_era);
+            mock::start_active_era(era);
             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(10), 1));
         }
 
@@ -2246,7 +2327,6 @@ fn reward_validator_slashing_validator_does_not_overflow() {
         ErasEnergyPerStakeCurrency::<Test>::insert(0, FixedU128::from_u32(1));
         mock::start_active_era(1);
         assert_ok!(PowerPlant::payout_stakers(RuntimeOrigin::signed(1337), 11, 0));
-        assert!(Assets::balance(VNRG::get(), 10) <= Balance::MAX);
 
         // Set staker
         let _ = Balances::make_free_balance_be(&11, stake);
@@ -2420,7 +2500,7 @@ fn offence_deselects_validator_even_when_slash_is_zero() {
 
             on_offence_now(
                 &[OffenceDetails {
-                    offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                     reporters: vec![],
                 }],
                 &[Perbill::from_percent(0)],
@@ -2817,7 +2897,7 @@ fn only_slash_for_max_in_era() {
 
         on_offence_now(
             &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                 reporters: vec![],
             }],
             &[Perbill::from_percent(50)],
@@ -2833,7 +2913,7 @@ fn only_slash_for_max_in_era() {
 
         on_offence_now(
             &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                 reporters: vec![],
             }],
             &[Perbill::from_percent(25)],
@@ -2848,7 +2928,7 @@ fn only_slash_for_max_in_era() {
 
         on_offence_now(
             &[OffenceDetails {
-                offender: (11, PowerPlant::eras_stakers(active_era(), &11)),
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
                 reporters: vec![],
             }],
             &[Perbill::from_percent(60)],

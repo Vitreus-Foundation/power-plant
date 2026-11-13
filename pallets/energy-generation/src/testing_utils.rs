@@ -69,6 +69,7 @@ pub fn create_funded_user_with_balance<T: Config>(
 }
 
 /// Create a stash and controller pair.
+#[allow(clippy::type_complexity)]
 pub fn create_stash_controller<T: Config>(
     n: u32,
     balance_factor: u32,

@@ -43,12 +43,12 @@ fn mint_tokens_to_claim() {
 #[test]
 fn basic_setup_works() {
     new_test_ext().execute_with(|| {
-        assert_eq!(Claiming::claims(&eth(&alice())), Some(100));
-        assert_eq!(Claiming::claims(&eth(&dave())), Some(200));
-        assert_eq!(Claiming::claims(&eth(&eve())), Some(300));
-        assert_eq!(Claiming::claims(&eth(&frank())), Some(400));
-        assert_eq!(Claiming::claims(&EthereumAddress::default()), None);
-        assert_eq!(Claiming::vesting(&eth(&alice())), Some((50, 10, 1)));
+        assert_eq!(Claiming::claims(eth(&alice())), Some(100));
+        assert_eq!(Claiming::claims(eth(&dave())), Some(200));
+        assert_eq!(Claiming::claims(eth(&eve())), Some(300));
+        assert_eq!(Claiming::claims(eth(&frank())), Some(400));
+        assert_eq!(Claiming::claims(EthereumAddress::default()), None);
+        assert_eq!(Claiming::vesting(eth(&alice())), Some((50, 10, 1)));
     });
 }
 
@@ -63,7 +63,7 @@ fn claiming_works() {
             42,
             sig::<Test>(&alice(), &42u64.encode(), &[][..])
         ));
-        assert_eq!(Balances::free_balance(&42), 100);
+        assert_eq!(Balances::free_balance(42), 100);
         assert_eq!(Vesting::vesting_balance(&42), Some(50));
         assert_eq!(total(), 50);
     });
@@ -93,7 +93,7 @@ fn add_claim_works() {
             69,
             sig::<Test>(&bob(), &69u64.encode(), &[][..])
         ));
-        assert_eq!(Balances::free_balance(&69), 200);
+        assert_eq!(Balances::free_balance(69), 200);
         assert_eq!(Vesting::vesting_balance(&69), None);
         assert_eq!(total(), 50);
     });
@@ -104,17 +104,17 @@ fn add_claim_to_existing_claim_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 250));
 
-        assert_eq!(Claiming::claims(&eth(&alice())), Some(100));
+        assert_eq!(Claiming::claims(eth(&alice())), Some(100));
 
         assert_ok!(Claiming::mint_claim(RuntimeOrigin::root(), eth(&alice()), 50, None, None));
-        assert_eq!(Claiming::claims(&eth(&alice())), Some(150));
+        assert_eq!(Claiming::claims(eth(&alice())), Some(150));
 
         assert_ok!(Claiming::claim(
             RuntimeOrigin::none(),
             42,
             sig::<Test>(&alice(), &42u64.encode(), &[][..])
         ));
-        assert_eq!(Balances::free_balance(&42), 150);
+        assert_eq!(Balances::free_balance(42), 150);
         assert_eq!(Vesting::vesting_balance(&42), Some(50));
         assert_eq!(total(), 100);
     });
@@ -134,7 +134,7 @@ fn claiming_more_than_available_doesnt_work() {
             ),
             Error::<Test>::NotEnoughTokensForClaim
         );
-        assert_eq!(Balances::free_balance(&42), 0);
+        assert_eq!(Balances::free_balance(42), 0);
         assert_eq!(total(), 50);
     });
 }
@@ -231,7 +231,7 @@ fn mint_claim_with_vesting_works() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 100));
 
-        assert_eq!(Claiming::vesting(&eth(&bob())), None);
+        assert_eq!(Claiming::vesting(eth(&bob())), None);
 
         let vesting_schedule = Some((100, 10, 1));
         assert_ok!(Claiming::mint_claim(
@@ -242,7 +242,7 @@ fn mint_claim_with_vesting_works() {
             None
         ));
 
-        assert_eq!(Claiming::vesting(&eth(&bob())), vesting_schedule);
+        assert_eq!(Claiming::vesting(eth(&bob())), vesting_schedule);
     });
 }
 
@@ -251,7 +251,7 @@ fn mint_claim_with_double_vesting_schedule_doesnt_work() {
     new_test_ext().execute_with(|| {
         assert_ok!(Claiming::mint_tokens_to_claim(RuntimeOrigin::root(), 100));
 
-        assert_eq!(Claiming::vesting(&eth(&alice())), Some((50, 10, 1)));
+        assert_eq!(Claiming::vesting(eth(&alice())), Some((50, 10, 1)));
 
         assert_noop!(
             Claiming::mint_claim(
@@ -302,7 +302,7 @@ fn add_claim_with_vesting_works() {
             69,
             sig::<Test>(&bob(), &69u64.encode(), &[][..])
         ));
-        assert_eq!(Balances::free_balance(&69), 200);
+        assert_eq!(Balances::free_balance(69), 200);
         assert_eq!(Vesting::vesting_balance(&69), Some(50));
 
         // Make sure we can not transfer the vested balance.

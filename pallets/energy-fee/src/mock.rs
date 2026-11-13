@@ -1,6 +1,6 @@
 use core::marker::PhantomData;
 
-use crate::{self as pallet_energy_fee, FeeCreditOf};
+use crate::{self as pallet_energy_fee, FeeCreditOf, OnWithdrawFeeHandler};
 use crate::{CallFee, CustomFee};
 use fp_account::AccountId20;
 
@@ -12,7 +12,7 @@ use frame_support::{
     traits::{
         fungible::{Balanced, ItemOf, Mutate},
         tokens::{Fortitude, Precision, Preservation},
-        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, Everything, OnUnbalanced,
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, OnUnbalanced,
     },
     weights::{ConstantMultiplier, IdentityFee},
 };
@@ -22,13 +22,13 @@ use pallet_evm::{EnsureAccountId20, IdentityAddressMapping};
 use parity_scale_codec::{Compact, Encode};
 
 use sp_arithmetic::{FixedPointNumber, FixedU128, Perbill, Perquintill};
-use sp_core::{Get, H256, U256};
+use sp_core::{Get, U256};
 
 use sp_runtime::{
-    traits::{BlakeTwo256, DispatchInfoOf, IdentityLookup, Zero},
+    traits::{DispatchInfoOf, IdentityLookup, Zero},
     BuildStorage, DispatchError, Permill,
 };
-use vitreus_runtime_common::{QuotePriceNativeForEnergy, SwapNativeForEnergy};
+use vitreus_runtime_common::{OnEnergyBurn, QuotePriceIntoEnergy, SwapIntoEnergy};
 
 type Block = frame_system::mocking::MockBlock<Test>;
 
@@ -37,13 +37,16 @@ pub(crate) type AssetId = u32;
 pub(crate) type Nonce = u64;
 pub(crate) type Balance = u128;
 pub(crate) type BalancesVNRG = ItemOf<Assets, GetVNRG, AccountId>;
-pub(crate) type StaticEnergyAsset = ItemOf<Assets, ConstU32<2>, AccountId>;
-pub(crate) type LiquidEnergyAsset = ItemOf<Assets, ConstU32<3>, AccountId>;
+pub(crate) type StaticEnergyAsset = ItemOf<Assets, ConstU32<SNRG>, AccountId>;
+pub(crate) type LiquidEnergyAsset = ItemOf<Assets, ConstU32<LNRG>, AccountId>;
 
 pub(crate) const VNRG: AssetId = 1;
+pub(crate) const SNRG: AssetId = 2;
+pub(crate) const LNRG: AssetId = 3;
 pub(crate) const ALICE: AccountId = AccountId20([1u8; 20]);
 pub(crate) const BOB: AccountId = AccountId20([2u8; 20]);
 pub(crate) const FEE_DEST: AccountId = AccountId20([3u8; 20]);
+pub(crate) const CHARLIE: AccountId = AccountId20([4u8; 20]);
 
 /// 10^9 with 18 decimals
 /// 1 VNRG = VNRG_TO_VTRS_RATE VTRS
@@ -89,29 +92,13 @@ parameter_types! {
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
-    type BaseCallFilter = Everything;
     type BlockWeights = BlockWeights;
-    type BlockLength = ();
-    type DbWeight = ();
-    type RuntimeOrigin = RuntimeOrigin;
-    type RuntimeCall = RuntimeCall;
     type Nonce = Nonce;
     type Block = Block;
-    type Hash = H256;
-    type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
-    type RuntimeEvent = RuntimeEvent;
     type BlockHashCount = ConstU64<250>;
-    type Version = ();
-    type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
-    type OnNewAccount = ();
-    type OnKilledAccount = ();
-    type SystemWeightInfo = ();
-    type SS58Prefix = ();
-    type OnSetCode = ();
-    type MaxConsumers = ConstU32<16>;
 }
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
@@ -120,11 +107,8 @@ impl pallet_balances::Config for Test {
     type MaxReserves = ConstU32<1>;
     type ReserveIdentifier = [u8; 8];
     type Balance = Balance;
-    type RuntimeEvent = RuntimeEvent;
-    type DustRemoval = ();
     type ExistentialDeposit = ConstU128<1>;
     type AccountStore = System;
-    type WeightInfo = ();
     type FreezeIdentifier = ();
     type MaxFreezes = ConstU32<1>;
     type RuntimeHoldReason = ();
@@ -146,13 +130,33 @@ impl<GetAccountId: Get<AccountId>> OnUnbalanced<FeeCreditOf<Test>>
     }
 }
 
+// Record what the fee hooks receive, so tests can check it.
+parameter_types! {
+    pub static ReportedEnergyBurn: Balance = 0;
+    pub static FeeWithdrawals: Vec<AccountId> = Vec::new();
+}
+
+pub struct MockOnEnergyBurn;
+
+impl OnEnergyBurn<Balance> for MockOnEnergyBurn {
+    fn on_energy_burn(amount: Balance) {
+        ReportedEnergyBurn::mutate(|total| *total = total.saturating_add(amount));
+    }
+}
+
+pub struct MockOnWithdrawFee;
+
+impl OnWithdrawFeeHandler<AccountId> for MockOnWithdrawFee {
+    fn on_withdraw_fee(who: &AccountId) {
+        FeeWithdrawals::mutate(|accounts| accounts.push(*who));
+    }
+}
+
 pub struct MockEnergyExchange;
 
-impl QuotePriceNativeForEnergy for MockEnergyExchange {
+impl QuotePriceIntoEnergy for MockEnergyExchange {
     type Balance = u128;
-    type AssetKind = ();
-    type NativeAsset = ();
-    type EnergyAsset = ();
+    type EnergyAsset = BalancesVNRG;
 
     fn quote_price_exact_tokens_for_tokens(
         amount: Self::Balance,
@@ -167,13 +171,16 @@ impl QuotePriceNativeForEnergy for MockEnergyExchange {
     ) -> Option<Self::Balance> {
         Some(VNRG_TO_VTRS_RATE.saturating_mul_int(amount))
     }
+
+    // The mock mints VNRG, so its supply has no limit.
+    fn max_amount_out() -> Self::Balance {
+        u128::MAX
+    }
 }
 
-impl SwapNativeForEnergy<AccountId> for MockEnergyExchange {
+impl SwapIntoEnergy<AccountId> for MockEnergyExchange {
     type Balance = u128;
-    type AssetKind = ();
-    type NativeAsset = ();
-    type EnergyAsset = ();
+    type EnergyAsset = BalancesVNRG;
 
     fn swap_exact_tokens_for_tokens(
         who: AccountId,
@@ -225,17 +232,15 @@ impl pallet_energy_fee::Config for Test {
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
     type EnergyExchange = MockEnergyExchange;
-    type OnWithdrawFee = ();
-    type OnEnergyBurn = ();
+    type OnWithdrawFee = MockOnWithdrawFee;
+    type OnEnergyBurn = MockOnEnergyBurn;
     type FeeRecyclingRate = FeeRecyclingRate;
     type FeeRecyclingDestination = FeeBurnDestination<FeeBurnAccount>;
 }
 
+#[derive_impl(pallet_timestamp::config_preludes::TestDefaultConfig)]
 impl pallet_timestamp::Config for Test {
     type MinimumPeriod = ConstU64<1000>;
-    type Moment = u64;
-    type OnTimestampSet = ();
-    type WeightInfo = ();
 }
 
 impl pallet_ethereum::Config for Test {
@@ -338,8 +343,8 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
     }
 }
 
+#[derive_impl(pallet_assets::config_preludes::TestDefaultConfig)]
 impl pallet_assets::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
     type AssetId = AssetId;
     type Currency = BalancesVTRS;
@@ -351,24 +356,18 @@ impl pallet_assets::Config for Test {
     type ApprovalDeposit = ApprovalDeposit;
     type StringLimit = AssetsStringLimit;
     type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
     type RemoveItemsLimit = ConstU32<1000>;
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type CallbackHandle = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
 }
 
 parameter_types! {
     pub const TransactionByteFee: Balance = 1;
 }
 
+#[derive_impl(pallet_transaction_payment::config_preludes::TestDefaultConfig)]
 impl pallet_transaction_payment::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type OnChargeTransaction = EnergyFee;
-    type OperationalFeeMultiplier = ();
     type WeightToFee = IdentityFee<Balance>;
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = EnergyFee;
@@ -397,8 +396,12 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
 
     pallet_assets::GenesisConfig::<Test> {
         accounts: vec![(GetVNRG::get(), BOB, 1000)].into_iter().chain(alice_account).collect(),
-        assets: vec![(GetVNRG::get(), BOB, false, 1)],
-        metadata: vec![(GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18)],
+        assets: vec![(GetVNRG::get(), BOB, false, 1), (SNRG, BOB, false, 1), (LNRG, BOB, false, 1)],
+        metadata: vec![
+            (GetVNRG::get(), b"VNRG".to_vec(), b"VNRG".to_vec(), 18),
+            (SNRG, b"SNRG".to_vec(), b"SNRG".to_vec(), 18),
+            (LNRG, b"LNRG".to_vec(), b"LNRG".to_vec(), 18),
+        ],
         next_asset_id: None,
     }
     .assimilate_storage(&mut t)

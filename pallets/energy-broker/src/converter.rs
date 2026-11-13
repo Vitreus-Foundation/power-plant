@@ -21,6 +21,16 @@ pub trait FixedPathAssetConverter<T: Config> {
     /// Computes the required input amount for a desired output.
     fn get_amount_in(amount_out: T::Balance) -> Option<T::Balance>;
 
+    /// The maximum amount of the output asset the path can currently supply, or
+    /// `Balance::max_value()` if the output is minted and therefore unbounded.
+    ///
+    /// This is what the pallet checks before it debits anyone, so it must never exceed what
+    /// [`Self::withdraw`] can take from the broker. It can be less when the path has a limit of
+    /// its own. Otherwise override it together with [`Self::withdraw`].
+    fn reducible_balance(broker: &T::AccountId) -> T::Balance {
+        T::Assets::reducible_balance(Self::TARGET, broker, Preserve, Polite)
+    }
+
     /// Withdraws balance from the broker account and returns a credit if successful.
     fn withdraw(
         broker: &T::AccountId,
@@ -57,6 +67,10 @@ pub trait AssetConverter<T: Config> {
         path: &(T::AssetKind, T::AssetKind),
         amount_out: T::Balance,
     ) -> Option<T::Balance>;
+
+    /// The maximum amount of the output asset the given path can currently supply, never more
+    /// than [`Self::withdraw`] can take from the broker.
+    fn reducible_balance(path: &(T::AssetKind, T::AssetKind), broker: &T::AccountId) -> T::Balance;
 
     /// Withdraws balance from the broker account and returns a credit if successful.
     fn withdraw(
@@ -114,6 +128,15 @@ impl<T: Config> AssetConverter<T> for Tuple {
             }
         )* );
         None
+    }
+
+    fn reducible_balance(path: &(T::AssetKind, T::AssetKind), broker: &T::AccountId) -> T::Balance {
+        for_tuples!( #(
+            if path == &(Tuple::SOURCE, Tuple::TARGET) {
+                return Tuple::reducible_balance(broker);
+            }
+        )* );
+        Zero::zero()
     }
 
     fn withdraw(

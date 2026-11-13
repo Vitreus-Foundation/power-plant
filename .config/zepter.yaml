@@ -1,0 +1,52 @@
+# Adapted from the Polkadot SDK's Zepter config.
+
+version:
+  format: 1
+  # Minimum version of the binary that is expected to work. This is just for printing a nice error
+  # message when someone tries to use an older version.
+  binary: 1.82.1
+
+# The examples in this file assume crate `A` to have a dependency on crate `B`.
+workflows:
+  check:
+    - [
+        'lint',
+        # Check that `A` activates the features of `B`.
+        'propagate-feature',
+        # These are the features to check. `testnet-native` and `mainnet-native` exclude each other,
+        # but each must still reach every crate that declares it.
+        '--features=try-runtime,runtime-benchmarks,std,testnet-native,mainnet-native',
+        # Do not try to add a new section into `[features]` of `A` only because `B` exposes that feature.
+        # There are edge-cases where this is still needed, but we can add them manually.
+        '--left-side-feature-missing=ignore',
+        # Ignore the case that `A` is outside of the workspace. Otherwise it will report errors
+        # in external dependencies that we have no influence on.
+        '--left-side-outside-workspace=ignore',
+        # Some features imply that they activate a specific dependency as non-optional.
+        # Otherwise the default behaviour with a `?` is used.
+        '--feature-enables-dep=try-runtime:frame-try-runtime,runtime-benchmarks:frame-benchmarking',
+        # Auxiliary flags:
+        '--offline',
+        '--locked',
+        '--show-path',
+        '--quiet',
+      ]
+    - [
+        'lint',
+        # Check that dependencies are not duplicated between normal and dev sections.
+        'duplicate-deps',
+        '--offline',
+        '--locked',
+        '--quiet',
+      ]
+  # Same as the feature propagation step of `check`, but with the `--fix` flag.
+  default:
+    - [ $check.0, '--fix' ]
+
+# Will be displayed when any workflow fails:
+help:
+  text: |
+    This repo uses the Zepter CLI to detect abnormalities in the feature configuration.
+    It looks like one or more checks failed; please check the console output. You can try to automatically address them by running `zepter`.
+  links:
+    - "https://github.com/ggwpez/zepter"

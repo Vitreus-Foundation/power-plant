@@ -18,32 +18,32 @@ fn vest_works() {
         System::set_block_number(5);
         assert_ok!(SimpleVesting::vest(RuntimeOrigin::signed(BOB)));
         assert_eq!(Balances::total_balance(&BOB), 12 * ED);
-        assert_eq!(Balances::free_balance(&BOB), 2 * ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 10 * ED);
+        assert_eq!(Balances::free_balance(BOB), 2 * ED);
+        assert_eq!(Balances::reserved_balance(BOB), 10 * ED);
 
         // Unlock first 3 units
         System::set_block_number(6);
         assert_ok!(SimpleVesting::vest(RuntimeOrigin::signed(BOB)));
-        assert_eq!(Balances::free_balance(&BOB), 5 * ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 7 * ED);
+        assert_eq!(Balances::free_balance(BOB), 5 * ED);
+        assert_eq!(Balances::reserved_balance(BOB), 7 * ED);
         System::assert_last_event(Event::VestingUpdated { account: BOB, unvested: 7 * ED }.into());
 
         // Unlock another 6 units
         System::set_block_number(8);
         assert_ok!(SimpleVesting::vest(RuntimeOrigin::signed(BOB)));
-        assert_eq!(Balances::free_balance(&BOB), 11 * ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 1 * ED);
-        System::assert_last_event(Event::VestingUpdated { account: BOB, unvested: 1 * ED }.into());
+        assert_eq!(Balances::free_balance(BOB), 11 * ED);
+        assert_eq!(Balances::reserved_balance(BOB), ED);
+        System::assert_last_event(Event::VestingUpdated { account: BOB, unvested: ED }.into());
 
         // Unlock the rest
         System::set_block_number(9);
         assert_ok!(SimpleVesting::vest(RuntimeOrigin::signed(BOB)));
         assert_eq!(Balances::total_balance(&BOB), 12 * ED);
-        assert_eq!(Balances::free_balance(&BOB), 12 * ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 0);
+        assert_eq!(Balances::free_balance(BOB), 12 * ED);
+        assert_eq!(Balances::reserved_balance(BOB), 0);
         System::assert_last_event(Event::VestingCompleted { account: BOB }.into());
 
-        assert_eq!(Balances::reserves(&BOB), vec![]);
+        assert_eq!(Balances::reserves(BOB), vec![]);
         assert_eq!(SimpleVesting::vesting(BOB), None);
     });
 }
@@ -65,19 +65,19 @@ fn vest_all_works() {
         System::set_block_number(2);
         assert_ok!(SimpleVesting::vest(RuntimeOrigin::signed(BOB)));
         assert_eq!(Balances::total_balance(&BOB), 21 * ED);
-        assert_eq!(Balances::free_balance(&BOB), ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 20 * ED);
+        assert_eq!(Balances::free_balance(BOB), ED);
+        assert_eq!(Balances::reserved_balance(BOB), 20 * ED);
 
         // Unlock all
         System::set_block_number(7); // 2 + (20 / 4)
         assert_ok!(SimpleVesting::vest(RuntimeOrigin::signed(BOB)));
         assert_eq!(Balances::total_balance(&BOB), 21 * ED);
-        assert_eq!(Balances::free_balance(&BOB), 21 * ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 0);
+        assert_eq!(Balances::free_balance(BOB), 21 * ED);
+        assert_eq!(Balances::reserved_balance(BOB), 0);
         System::assert_last_event(Event::VestingCompleted { account: BOB }.into());
 
         assert_eq!(SimpleVesting::vesting(BOB), None);
-        assert_eq!(Balances::reserves(&BOB), vec![]);
+        assert_eq!(Balances::reserves(BOB), vec![]);
         assert_eq!(System::providers(&BOB), 1);
     });
 }
@@ -204,8 +204,8 @@ fn force_remove_vesting_works() {
         assert_ok!(SimpleVesting::force_remove_vesting(RuntimeOrigin::root(), BOB));
 
         assert_eq!(System::providers(&BOB), 1);
-        assert_eq!(Balances::free_balance(&BOB), ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 0);
+        assert_eq!(Balances::free_balance(BOB), ED);
+        assert_eq!(Balances::reserved_balance(BOB), 0);
         assert_eq!(SimpleVesting::vesting(BOB), None);
     });
 }
@@ -223,13 +223,13 @@ fn force_remove_vesting_after_vested_works() {
 
         System::set_block_number(21);
         assert_ok!(SimpleVesting::vest(RuntimeOrigin::signed(BOB)));
-        assert_eq!(Balances::free_balance(&BOB), 2 * ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 2 * ED);
+        assert_eq!(Balances::free_balance(BOB), 2 * ED);
+        assert_eq!(Balances::reserved_balance(BOB), 2 * ED);
 
         assert_ok!(SimpleVesting::force_remove_vesting(RuntimeOrigin::root(), BOB));
 
-        assert_eq!(Balances::free_balance(&BOB), 2 * ED);
-        assert_eq!(Balances::reserved_balance(&BOB), 0);
+        assert_eq!(Balances::free_balance(BOB), 2 * ED);
+        assert_eq!(Balances::reserved_balance(BOB), 0);
         assert_eq!(SimpleVesting::vesting(BOB), None);
     });
 }
@@ -247,8 +247,8 @@ fn force_remove_vesting_without_free_balance_works() {
         assert_ok!(SimpleVesting::force_remove_vesting(RuntimeOrigin::root(), BOB));
 
         assert_eq!(System::providers(&BOB), 0);
-        assert_eq!(Balances::free_balance(&BOB), 0);
-        assert_eq!(Balances::reserved_balance(&BOB), 0);
+        assert_eq!(Balances::free_balance(BOB), 0);
+        assert_eq!(Balances::reserved_balance(BOB), 0);
         assert_eq!(SimpleVesting::vesting(BOB), None);
     });
 }

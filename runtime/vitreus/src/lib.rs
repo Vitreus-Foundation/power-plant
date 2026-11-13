@@ -5,10 +5,8 @@
 // #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
 // Make the WASM binary available.
-#[cfg(all(feature = "std", feature = "mainnet-runtime"))]
-include!(concat!(env!("OUT_DIR"), "/vitreus_power_plant_mainnet_runtime"));
-#[cfg(all(feature = "std", feature = "testnet-runtime"))]
-include!(concat!(env!("OUT_DIR"), "/vitreus_power_plant_testnet_runtime"));
+#[cfg(feature = "std")]
+include!(concat!(env!("OUT_DIR"), "/", env!("VITREUS_WASM_BINARY_FILE")));
 
 use frame_support::{
     genesis_builder_helper::{build_state, get_preset},
@@ -26,10 +24,10 @@ use polkadot_primitives::{
 use polkadot_runtime_common::{auctions, paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use polkadot_runtime_parachains::{
-    assigner_parachains as parachains_assigner_parachains,
-    configuration as parachains_configuration,
+    assigner_coretime as parachains_assigner_coretime,
+    assigner_on_demand as parachains_assigner_on_demand, configuration as parachains_configuration,
     configuration::ActiveConfigHrmpChannelSizeAndCapacityRatio,
-    disputes as parachains_disputes,
+    coretime, disputes as parachains_disputes,
     disputes::slashing as parachains_slashing,
     dmp as parachains_dmp, hrmp as parachains_hrmp, inclusion as parachains_inclusion,
     inclusion::{AggregateMessageOrigin, UmpQueueId},
@@ -42,7 +40,6 @@ use polkadot_runtime_parachains::{
     shared as parachains_shared,
 };
 
-use ethereum::{EIP1559Transaction, EIP2930Transaction, LegacyTransaction};
 use frame_support::pallet_prelude::{DispatchError, DispatchResult, RuntimeDebug};
 use frame_support::traits::tokens::{
     fungible,
@@ -128,10 +125,10 @@ use sp_consensus_beefy::{
     mmr::{BeefyDataProvider, MmrLeafVersion},
 };
 use sp_runtime::transaction_validity::InvalidTransaction;
-use vitreus_runtime_common::{ExposureMultiplier, NativeEnergyExchange, QuotePrice};
+use vitreus_runtime_common::{ExposureMultiplier, QuotePrice};
 use xcm::{
-    latest::prelude::AssetId as XcmAssetId, VersionedAssetId, VersionedAssets, VersionedLocation,
-    VersionedXcm,
+    latest::prelude::{AssetId as XcmAssetId, InteriorLocation, Junction},
+    VersionedAssetId, VersionedAssets, VersionedLocation, VersionedXcm,
 };
 use xcm_runtime_apis::{
     dry_run::{CallDryRunEffects, Error as XcmDryRunApiError, XcmDryRunEffects},
@@ -156,19 +153,40 @@ pub use paras_sudo_wrapper::Call as ParasSudoWrapperCall;
 
 pub use areas::{deposit, CouncilCollective, TechnicalCollective};
 
-mod precompiles;
-mod helpers {
-    pub mod runner;
-}
 pub mod areas;
+mod energy;
 pub mod migrations;
+mod precompiles;
 mod weights;
 mod xcm_config;
 
-#[cfg(all(test, feature = "testnet-runtime"))]
+#[cfg(feature = "testnet-runtime")]
+mod launchpad;
+
+#[cfg(test)]
 mod tests;
 
 use precompiles::VitreusPrecompiles;
+
+// `#[sp_version::runtime_version]` bakes `spec_name` into the wasm section and accepts only a
+// string literal, so each network has its own literal. The remaining fields are supplied once.
+macro_rules! decl_runtime_version {
+    ($($fields:tt)*) => {
+        #[cfg(feature = "mainnet-runtime")]
+        #[sp_version::runtime_version]
+        pub const VERSION: RuntimeVersion = RuntimeVersion {
+            spec_name: create_runtime_str!("vitreus-power-plant"),
+            $($fields)*
+        };
+
+        #[cfg(feature = "testnet-runtime")]
+        #[sp_version::runtime_version]
+        pub const VERSION: RuntimeVersion = RuntimeVersion {
+            spec_name: create_runtime_str!("vitreus-power-plant-testnet"),
+            $($fields)*
+        };
+    };
+}
 
 /// Type of block number.
 pub type BlockNumber = u32;
@@ -203,11 +221,17 @@ pub type Hash = H256;
 pub type DigestItem = generic::DigestItem;
 
 /// Asset ID.
-#[cfg(not(feature = "runtime-benchmarks"))]
 pub type AssetId = u128;
 
+/// Maps the `u32` benchmark seed to production `Compact<u128>` (`()` only covers `Compact<u32>`).
 #[cfg(feature = "runtime-benchmarks")]
-pub type AssetId = u32;
+pub struct AssetsBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl pallet_assets::BenchmarkHelper<Compact<AssetId>> for AssetsBenchmarkHelper {
+    fn create_asset_id_parameter(id: u32) -> Compact<AssetId> {
+        Compact(id.into())
+    }
+}
 
 /// Origin for council voting
 type MoreThanHalfCouncil = EitherOfDiverse<
@@ -251,17 +275,16 @@ pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
         allowed_slots: sp_consensus_babe::AllowedSlots::PrimaryAndSecondaryVRFSlots,
     };
 
-#[sp_version::runtime_version]
-pub const VERSION: RuntimeVersion = RuntimeVersion {
-    spec_name: create_runtime_str!("vitreus-power-plant"),
+// Each network gets its own `spec_name`, see `decl_runtime_version!` above.
+decl_runtime_version! {
     impl_name: create_runtime_str!("vitreus-power-plant"),
     authoring_version: 1,
-    spec_version: 213,
+    spec_version: 215,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 4,
     state_version: 1,
-};
+}
 
 // Time measurmement primitive
 pub type Moment = u64;
@@ -322,6 +345,11 @@ pub mod vnrg {
     pub const UNITS: Balance = 1_000_000_000_000_000_000;
 }
 
+/// VTRS amount treated as one US dollar when pricing deposits.
+pub const DOLLARS: Balance = 200 * UNITS;
+pub const CENTS: Balance = DOLLARS / 100;
+pub const MILLICENTS: Balance = CENTS / 1_000;
+
 parameter_types! {
     pub const VNRG: AssetId = 0; // Energy
     pub const SNRG: AssetId = 1; // Static Energy
@@ -342,13 +370,26 @@ parameter_types! {
     pub const SS58Prefix: u16 = 1943;
 }
 
+/// XCM entry points blocked by the `BaseCallFilter` below (as the `EverythingBut` exclusion set),
+/// locked down alongside `send`/`execute` in the XCM config. Simple transfer/teleport extrinsics
+/// are unaffected.
+pub struct BlockedCalls;
+impl frame_support::traits::Contains<RuntimeCall> for BlockedCalls {
+    fn contains(call: &RuntimeCall) -> bool {
+        matches!(
+            call,
+            RuntimeCall::XcmPallet(pallet_xcm::Call::transfer_assets_using_type_and_then { .. })
+        )
+    }
+}
+
 // Configure FRAME pallets to include in runtime.
 #[derive_impl(frame_system::config_preludes::RelayChainDefaultConfig)]
 impl frame_system::Config for Runtime {
     /// The ubiquitous event type.
     type RuntimeEvent = RuntimeEvent;
     /// The basic call filter to use in dispatchable.
-    type BaseCallFilter = frame_support::traits::Everything;
+    type BaseCallFilter = frame_support::traits::EverythingBut<BlockedCalls>;
     /// Block & extrinsics weights: base values and limits.
     type BlockWeights = BlockWeights;
     /// The maximum length of a block (in bytes).
@@ -505,7 +546,7 @@ impl pallet_assets::Config for Runtime {
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BenchmarkHelper = AssetsBenchmarkHelper;
 }
 
 impl pallet_assets_freezer::Config for Runtime {
@@ -722,8 +763,7 @@ parameter_types! {
     pub const RewardCurve: &'static PiecewiseLinear<'static> = &I_NPOS;
     pub const SessionsPerEra: SessionIndex = prod_or_fast!(4, 1);
     pub const BondingDuration: EraIndex = prod_or_fast!(42, 5);
-    // TODO: consider removing, since the slash defer feature was removed
-    pub const SlashDeferDuration: EraIndex = 0;
+    pub const SlashDeferDuration: EraIndex = prod_or_fast!(36, 0);
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const BatterySlotCapacity: Energy = 100_000_000_000;
@@ -800,7 +840,11 @@ impl pallet_energy_generation::Config for Runtime {
     type MaxUnlockingChunks = MaxUnlockingChunks;
     type NextNewSession = Session;
     type EventListeners = ();
-    type SessionChangeListeners = (EnergyBroker, DynamicEnergy, TreasuryExtension);
+    // The order matters. The treasury sells what is left of the closing session's payout quota,
+    // so its sale counts towards that session. The broker then updates its capacity and burns the
+    // surplus, and dynamic-energy closes the session: it calculates the rate from the warehouse
+    // fill after the burn and opens the next payout quota.
+    type SessionChangeListeners = (TreasuryExtension, EnergyBroker, DynamicEnergy);
     type Reward = ();
     type RewardRemainder = Treasury;
     type RuntimeEvent = RuntimeEvent;
@@ -865,8 +909,48 @@ impl pallet_nfts::Config for Runtime {
     type OffchainSignature = Signature;
     type OffchainPublic = <Signature as Verify>::Signer;
     #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
+    type Helper = NftsBenchmarkHelper;
     type WeightInfo = pallet_nfts::weights::SubstrateWeight<Runtime>;
+}
+
+#[cfg(feature = "runtime-benchmarks")]
+const NFTS_BENCH_KEY_TYPE: sp_core::crypto::KeyTypeId = sp_core::crypto::KeyTypeId(*b"nftb");
+
+/// Ethereum keys for NFT benchmarks (`()` is sr25519/`AccountId32` only).
+/// Signs `keccak_256(message)` via `ecdsa_sign_prehashed`; looks up the keystore key by address.
+#[cfg(feature = "runtime-benchmarks")]
+pub struct NftsBenchmarkHelper;
+#[cfg(feature = "runtime-benchmarks")]
+impl
+    pallet_nfts::BenchmarkHelper<
+        CollectionId,
+        ItemId,
+        fp_account::EthereumSigner,
+        AccountId,
+        Signature,
+    > for NftsBenchmarkHelper
+{
+    fn collection(i: u16) -> CollectionId {
+        i.into()
+    }
+    fn item(i: u16) -> ItemId {
+        i.into()
+    }
+    fn signer() -> (fp_account::EthereumSigner, AccountId) {
+        let public = sp_io::crypto::ecdsa_generate(NFTS_BENCH_KEY_TYPE, None);
+        let signer = fp_account::EthereumSigner::from(public);
+        (signer, signer.into_account())
+    }
+    fn sign(signer: &fp_account::EthereumSigner, message: &[u8]) -> Signature {
+        let public = sp_io::crypto::ecdsa_public_keys(NFTS_BENCH_KEY_TYPE)
+            .into_iter()
+            .find(|pk| fp_account::EthereumSigner::from(*pk) == *signer)
+            .expect("signer() generated this key in the benchmark keystore");
+        let hash = sp_io::hashing::keccak_256(message);
+        let signature = sp_io::crypto::ecdsa_sign_prehashed(NFTS_BENCH_KEY_TYPE, &public, &hash)
+            .expect("keystore holds the key it just returned");
+        EthereumSignature::new(signature)
+    }
 }
 
 parameter_types! {
@@ -949,7 +1033,7 @@ impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
+    type BenchmarkHelper = AssetsBenchmarkHelper;
 }
 
 pub type NativeOrAssetId = frame_support::traits::fungible::NativeOrWithId<AssetId>;
@@ -1002,6 +1086,13 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToNativeConverter {
 
     fn get_amount_in(amount_out: Balance) -> Option<Balance> {
         DynamicEnergyConversion::to_asset_balance(amount_out, Self::SOURCE).ok()
+    }
+
+    /// The broker's VTRS, but no more than the payout quota of the session still allows.
+    fn reducible_balance(broker: &AccountId) -> Balance {
+        let reserve =
+            Balances::reducible_balance(broker, Preservation::Preserve, Fortitude::Polite);
+        DynamicEnergy::remaining_payout_quota().map_or(reserve, |quota| reserve.min(quota))
     }
 
     fn resolve(
@@ -1058,6 +1149,11 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToEnergyConverter {
         Some(amount_out)
     }
 
+    /// The output is minted, so it is unbounded.
+    fn reducible_balance(_broker: &AccountId) -> Balance {
+        Balance::MAX
+    }
+
     fn withdraw(
         _broker: &AccountId,
         value: Balance,
@@ -1089,6 +1185,11 @@ impl FixedPathAssetConverter<Runtime> for StaticEnergyToEnergyConverter {
 
     fn get_amount_in(amount_out: Balance) -> Option<Balance> {
         Some(amount_out)
+    }
+
+    /// The output is minted, so it is unbounded.
+    fn reducible_balance(_broker: &AccountId) -> Balance {
+        Balance::MAX
     }
 
     fn withdraw(
@@ -1125,7 +1226,6 @@ impl pallet_energy_broker::Config for Runtime {
     type SwapFeeTarget = ResolveAssetTo<pallet_treasury::TreasuryAccountId<Runtime>, Self::Assets>;
     type OnEnergySell = DynamicEnergy;
     type SwapFee = SwapFee;
-    type NativeAsset = NativeAsset;
     type EnergyAsset = VNRG;
     type BurnedEnergySessionsCount = BurnedEnergySessionsCount;
 }
@@ -1146,7 +1246,6 @@ impl pallet_dynamic_energy::Config for Runtime {
     type Staking = EnergyGeneration;
     type Warehouse = EnergyBroker;
     type UnixTime = Timestamp;
-    type SessionsPerEra = SessionsPerEra;
     type ExpectedSessionDuration = ExpectedSessionDuration;
     type DefaultAnnualPercentageRate = AnnualPercentageRate;
     type DefaultMultiplierCoefficients = MultiplierCoefficients;
@@ -1154,7 +1253,6 @@ impl pallet_dynamic_energy::Config for Runtime {
 
 parameter_types! {
     pub const GetConstantEnergyFee: Balance = 1_000_000_000;
-    pub GetConstantGasLimit: U256 = U256::from(100_000);
 }
 
 impl pallet_energy_fee::Config for Runtime {
@@ -1165,7 +1263,7 @@ impl pallet_energy_fee::Config for Runtime {
     type EnergyAsset = EnergyAsset;
     type StaticEnergyAsset = StaticEnergyAsset;
     type LiquidEnergyAsset = LiquidEnergyAsset;
-    type EnergyExchange = NativeEnergyExchange<EnergyBroker, NativeAsset, VNRG>;
+    type EnergyExchange = energy::NativeToEnergyExchange;
     type OnWithdrawFee = NacManaging;
     type OnEnergyBurn = (EnergyBroker, DynamicEnergy);
     type FeeRecyclingRate = TreasuryExtension;
@@ -1298,7 +1396,6 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::Kickstart(..)
             | RuntimeCall::Vesting(..)
             | RuntimeCall::NacManaging(..)
-            | RuntimeCall::ManualBridge(..)
             | RuntimeCall::Privileges(..)
             | RuntimeCall::Council(..)
             | RuntimeCall::TechnicalCommittee(..)
@@ -1312,7 +1409,19 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             | RuntimeCall::SimpleVesting(..)
             | RuntimeCall::Multisig(..)
             | RuntimeCall::Proxy(..)
-            | RuntimeCall::Reputation(..) => CallFee::Regular(Self::custom_fee()),
+            | RuntimeCall::Reputation(..)
+            | RuntimeCall::OnDemandAssignmentProvider(..) => CallFee::Regular(Self::custom_fee()),
+
+            // Experimental pallets, testnet only.
+            #[cfg(feature = "testnet-runtime")]
+            RuntimeCall::VitreusDex(..)
+            | RuntimeCall::Launchpad(..)
+            | RuntimeCall::LaunchTreasury(..) => CallFee::Regular(Self::custom_fee()),
+
+            // Runs no EVM code, so it pays no EVM fee on top, see `CallFee::EVM`.
+            RuntimeCall::EVM(pallet_evm::Call::withdraw { .. }) => {
+                CallFee::Regular(Self::ethereum_fee())
+            },
             RuntimeCall::EVM(..) | RuntimeCall::Ethereum(..) => CallFee::EVM(Self::ethereum_fee()),
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
             | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
@@ -1327,11 +1436,14 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
                     .max(Self::custom_fee());
                 CallFee::Regular(resulting_fee)
             },
+            // The call inside runs from another origin, so the EVM fee of an EVM call inside is
+            // charged to that origin's account, not to the signer.
             RuntimeCall::Utility(pallet_utility::Call::dispatch_as { call, .. })
             | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
-                Self::dispatch_info_to_fee(call, None, calculated_fee)
+                CallFee::Regular(
+                    Self::dispatch_info_to_fee(call, None, calculated_fee).into_inner(),
+                )
             },
-            RuntimeCall::Sudo(..) => CallFee::Regular(0),
             _ => CallFee::Regular(Self::weight_fee(runtime_call, dispatch_info, calculated_fee)),
         }
     }
@@ -1361,13 +1473,15 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
 }
 
 parameter_types! {
-    // One storage item; key size 32, value size 8; .
-    pub const ProxyDepositBase: Balance = deposit(1, 8);
-    // Additional storage item size of 33 bytes.
-    pub const ProxyDepositFactor: Balance = deposit(0, 33);
+    // One storage item; key size 20, value size 16.
+    pub const ProxyDepositBase: Balance = deposit(1, 36);
+    // Additional storage item size of 25 bytes: AccountId 20 + ProxyType 1 + delay 4.
+    pub const ProxyDepositFactor: Balance = deposit(0, 25);
     pub const MaxProxies: u16 = 32;
-    pub const AnnouncementDepositBase: Balance = deposit(1, 8);
-    pub const AnnouncementDepositFactor: Balance = deposit(0, 66);
+    // One storage item; key size 20, value size 16.
+    pub const AnnouncementDepositBase: Balance = deposit(1, 36);
+    // Additional storage item size of 56 bytes: AccountId 20 + call hash 32 + block number 4.
+    pub const AnnouncementDepositFactor: Balance = deposit(0, 56);
     pub const MaxPending: u16 = 32;
 }
 
@@ -1389,6 +1503,9 @@ pub enum ProxyType {
     #[default]
     Any = 0,
     Staking = 1,
+    // Experimental pallets, testnet only: a separate range from 64.
+    #[cfg(feature = "testnet-runtime")]
+    Launchpad = 64,
 }
 
 impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
@@ -1402,6 +1519,10 @@ impl frame_support::traits::InstanceFilter<RuntimeCall> for ProxyType {
                         | RuntimeCall::Session(..)
                         | RuntimeCall::Utility(..)
                 )
+            },
+            #[cfg(feature = "testnet-runtime")]
+            ProxyType::Launchpad => {
+                matches!(c, RuntimeCall::Launchpad(pallet_launchpad::Call::buy { .. }))
             },
         }
     }
@@ -1740,7 +1861,7 @@ impl parachains_paras::Config for Runtime {
     type QueueFootprinter = ParaInclusion;
     type OnNewHead = Registrar;
     type WeightInfo = weights::runtime_parachains_paras::WeightInfo<Runtime>;
-    type AssignCoretime = ();
+    type AssignCoretime = CoretimeAssignmentProvider;
 }
 
 parameter_types! {
@@ -1823,10 +1944,58 @@ impl parachains_paras_inherent::Config for Runtime {
 }
 
 impl parachains_scheduler::Config for Runtime {
-    type AssignmentProvider = ParaAssignmentProvider;
+    type AssignmentProvider = CoretimeAssignmentProvider;
 }
 
-impl parachains_assigner_parachains::Config for Runtime {}
+parameter_types! {
+    pub const OnDemandTrafficDefaultValue: FixedU128 = FixedU128::from_u32(1);
+    // Blocks of on-demand revenue kept for `request_revenue_at`: two timeslices of 80 blocks.
+    pub const MaxHistoricalRevenue: u32 = 2 * 80;
+    pub const OnDemandPalletId: PalletId = PalletId(*b"py/ondmd");
+}
+
+impl parachains_assigner_on_demand::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type TrafficDefaultValue = OnDemandTrafficDefaultValue;
+    type WeightInfo = weights::runtime_parachains_assigner_on_demand::WeightInfo<Runtime>;
+    type MaxHistoricalRevenue = MaxHistoricalRevenue;
+    type PalletId = OnDemandPalletId;
+}
+
+impl parachains_assigner_coretime::Config for Runtime {}
+
+parameter_types! {
+    // Parachain that `Coretime` accepts broker calls from, besides Root. It is in the system
+    // range, which only Root can register, and stays unregistered while Root assigns the cores.
+    pub const BrokerId: u32 = 1005;
+    pub const BrokerPalletId: PalletId = PalletId(*b"py/broke");
+    pub MaxXcmTransactWeight: Weight = Weight::from_parts(200_000_000, 20_000);
+}
+
+/// Account of the broker pallet on the coretime chain.
+pub struct BrokerPot;
+impl Get<InteriorLocation> for BrokerPot {
+    fn get() -> InteriorLocation {
+        Junction::AccountId32 { network: None, id: BrokerPalletId::get().into_account_truncating() }
+            .into()
+    }
+}
+
+impl coretime::Config for Runtime {
+    type RuntimeOrigin = RuntimeOrigin;
+    type RuntimeEvent = RuntimeEvent;
+    type Currency = Balances;
+    type BrokerId = BrokerId;
+    type BrokerPotLocation = BrokerPot;
+    type WeightInfo = weights::runtime_parachains_coretime::WeightInfo<Runtime>;
+    // There is no coretime chain, so nothing is sent to the broker.
+    type SendXcm = ();
+    type AssetTransactor = xcm_config::LocalAssetTransactor;
+    type AccountToLocation =
+        xcm_config::AliasesIntoAccountKey20<xcm_config::ThisNetwork, AccountId>;
+    type MaxXcmTransactWeight = MaxXcmTransactWeight;
+}
 
 impl parachains_initializer::Config for Runtime {
     type Randomness = pallet_babe::RandomnessFromOneEpochAgo<Runtime>;
@@ -1922,17 +2091,6 @@ impl pallet_faucet::Config for Runtime {
     type WeightInfo = pallet_faucet::weights::SubstrateWeight<Runtime>;
 }
 
-impl pallet_manual_bridge::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
-    type PayoutOrigin =
-        pallet_collective::EnsureProportionAtLeast<AccountId, CouncilCollective, 1, 2>;
-    type BridgeAccount = xcm_config::CheckAccount;
-    type FeeReceiverAccount = xcm_config::TreasuryAccount;
-    type DepositFeePercent = xcm_config::DepositFeePercent;
-    type WithdrawalFeePercent = xcm_config::WithdrawalFeePercent;
-}
-
 // Create the runtime by composing the FRAME pallets that were previously configured.
 construct_runtime!(
     pub enum Runtime {
@@ -2006,13 +2164,16 @@ construct_runtime!(
         ParaSessionInfo: parachains_session_info::{Pallet, Storage} = 71,
         ParasDisputes: parachains_disputes::{Pallet, Call, Storage, Event<T>} = 72,
         ParasSlashing: parachains_slashing::{Pallet, Call, Storage, ValidateUnsigned} = 73,
-        ParaAssignmentProvider: parachains_assigner_parachains = 74,
+        // ParaAssignmentProvider (removed) = 74,
+        CoretimeAssignmentProvider: parachains_assigner_coretime = 75,
+        OnDemandAssignmentProvider: parachains_assigner_on_demand = 76,
 
         // Parachain Onboarding Pallets. Start indices at 80 to leave room.
         Registrar: paras_registrar::{Pallet, Call, Storage, Event<T>} = 80,
         Slots: slots::{Pallet, Call, Storage, Event<T>} = 81,
         ParasSudoWrapper: paras_sudo_wrapper::{Pallet, Call} = 82,
         Auctions: auctions = 83,
+        Coretime: coretime = 85,
 
         // Pallet for sending XCM.
         XcmPallet: pallet_xcm::{Pallet, Call, Storage, Event<T>, Origin, Config<T>} = 99,
@@ -2028,9 +2189,16 @@ construct_runtime!(
         MmrLeaf: pallet_beefy_mmr = 202,
 
         #[cfg(feature = "testnet-runtime")]
+        VitreusDex: pallet_vitreus_dex = 210,
+        #[cfg(feature = "testnet-runtime")]
+        Launchpad: pallet_launchpad = 211,
+        #[cfg(feature = "testnet-runtime")]
+        LaunchTreasury: pallet_launch_treasury = 212,
+
+        #[cfg(feature = "testnet-runtime")]
         Faucet: pallet_faucet = 240,
 
-        ManualBridge: pallet_manual_bridge = 245,
+        // ManualBridge (removed) = 245,
     }
 );
 
@@ -2096,8 +2264,10 @@ pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
 /// upgrades in case governance decides to do so. THE ORDER IS IMPORTANT.
 #[rustfmt::skip]
 pub type Migrations = (
-    migrations::Unreleased,
     migrations::V0213,
+    migrations::V0214,
+    migrations::V0215,
+    migrations::Unreleased,
     migrations::Permanent,
 );
 
@@ -2111,35 +2281,8 @@ pub type Executive = frame_executive::Executive<
     Migrations,
 >;
 
-#[allow(dead_code)]
-fn transact_with_new_gas_limit(
-    transact_call: pallet_ethereum::Call<Runtime>,
-) -> pallet_ethereum::Call<Runtime> {
-    match transact_call {
-        transact { transaction } => {
-            let transaction = match transaction {
-                EthereumTransaction::Legacy(tx) => EthereumTransaction::Legacy(LegacyTransaction {
-                    gas_limit: GetConstantGasLimit::get(),
-                    ..tx
-                }),
-                EthereumTransaction::EIP1559(tx) => {
-                    EthereumTransaction::EIP1559(EIP1559Transaction {
-                        gas_limit: GetConstantGasLimit::get(),
-                        ..tx
-                    })
-                },
-                EthereumTransaction::EIP2930(tx) => {
-                    EthereumTransaction::EIP2930(EIP2930Transaction {
-                        gas_limit: GetConstantGasLimit::get(),
-                        ..tx
-                    })
-                },
-            };
-            pallet_ethereum::Call::new_call_variant_transact(transaction)
-        },
-        _ => transact_call,
-    }
-}
+// NAC level required for an Ethereum transaction.
+const CALL_ACCESS_LEVEL: u8 = 1;
 
 // user doesn't have NAC to dispatch transaction
 const ACCESS_RESTRICTED: u8 = u8::MAX;
@@ -2193,7 +2336,7 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
                     }
                 }
 
-                if !NacManaging::user_has_access(account_id, helpers::runner::CALL_ACCESS_LEVEL) {
+                if !NacManaging::user_has_access(account_id, CALL_ACCESS_LEVEL) {
                     return Some(Err(InvalidTransaction::Custom(ACCESS_RESTRICTED).into()));
                 };
 
@@ -2237,8 +2380,33 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
 extern crate frame_benchmarking;
 
 #[cfg(feature = "runtime-benchmarks")]
+impl frame_system_benchmarking::Config for Runtime {}
+
+#[cfg(all(feature = "runtime-benchmarks", feature = "mainnet-runtime"))]
 mod benches {
-    define_benchmarks!([pallet_evm, EVM]);
+    define_benchmarks!(
+        [frame_system, SystemBench::<Runtime>]
+        [pallet_evm, EVM]
+        [pallet_treasury_extension, TreasuryExtension]
+        [polkadot_runtime_parachains::assigner_on_demand, OnDemandAssignmentProvider]
+        // `request_revenue_at` fails while `SendXcm` is `()`: benchmark the other calls only.
+        [polkadot_runtime_parachains::coretime, Coretime]
+    );
+}
+
+#[cfg(all(feature = "runtime-benchmarks", feature = "testnet-runtime"))]
+mod benches {
+    define_benchmarks!(
+        [frame_system, SystemBench::<Runtime>]
+        [pallet_evm, EVM]
+        [pallet_treasury_extension, TreasuryExtension]
+        [polkadot_runtime_parachains::assigner_on_demand, OnDemandAssignmentProvider]
+        // `request_revenue_at` fails while `SendXcm` is `()`: benchmark the other calls only.
+        [polkadot_runtime_parachains::coretime, Coretime]
+        [pallet_vitreus_dex, VitreusDex]
+        [pallet_launchpad, Launchpad]
+        [pallet_launch_treasury, LaunchTreasury]
+    );
 }
 
 impl_runtime_apis! {
@@ -2834,23 +3002,21 @@ impl_runtime_apis! {
 
     impl energy_broker_runtime_api::EnergyBrokerApi<Block, AccountId, NativeOrAssetId, Balance> for Runtime {
         fn estimate_energy_from_native(amount: Balance) -> Option<Balance> {
-            Self::quote_price_exact_tokens_for_tokens(
-                None,
-                NativeOrAssetId::Native,
-                NativeOrAssetId::WithId(VNRG::get()),
+            EnergyBroker::get_amount_out(
                 amount,
+                &(NativeOrAssetId::Native, NativeOrAssetId::WithId(VNRG::get())),
                 true,
             )
+            .ok()
         }
 
         fn estimate_native_from_energy(amount: Balance) -> Option<Balance> {
-            Self::quote_price_exact_tokens_for_tokens(
-                None,
-                NativeOrAssetId::WithId(LNRG::get()),
-                NativeOrAssetId::Native,
+            EnergyBroker::get_amount_out(
                 amount,
+                &(NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native),
                 true,
             )
+            .ok()
         }
 
         fn quote_price_exact_tokens_for_tokens(
@@ -2887,6 +3053,10 @@ impl_runtime_apis! {
             use pallet_energy_broker::AssetConverter;
 
             <Runtime as pallet_energy_broker::Config>::AssetConverter::paths()
+        }
+
+        fn max_amount_out(asset1: NativeOrAssetId, asset2: NativeOrAssetId) -> Balance {
+            EnergyBroker::max_amount_out(&(asset1, asset2))
         }
     }
 
@@ -2963,11 +3133,10 @@ impl_runtime_apis! {
         ) {
             use frame_benchmarking::{Benchmarking, BenchmarkList};
             use frame_support::traits::StorageInfoTrait;
-            use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
+            use frame_system_benchmarking::Pallet as SystemBench;
 
             let mut list = Vec::<BenchmarkList>::new();
             list_benchmarks!(list, extra);
-            list_benchmark!(list, extra, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
 
             let storage_info = AllPalletsWithSystem::storage_info();
             (list, storage_info)
@@ -2976,16 +3145,15 @@ impl_runtime_apis! {
         fn dispatch_benchmark(
             config: frame_benchmarking::BenchmarkConfig
         ) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
-            use frame_benchmarking::{Benchmarking, BenchmarkBatch, add_benchmark, TrackedStorageKey};
-            use pallet_treasury_extension::Pallet as PalletTreasuryExtension;
-            impl frame_system_benchmarking::Config for Runtime {}
+            use frame_benchmarking::{Benchmarking, BenchmarkBatch};
+            use frame_support::traits::{TrackedStorageKey, WhitelistedStorageKeys};
+            use frame_system_benchmarking::Pallet as SystemBench;
 
-            let whitelist: Vec<TrackedStorageKey> = vec![];
+            let whitelist: Vec<TrackedStorageKey> = AllPalletsWithSystem::whitelisted_storage_keys();
 
             let mut batches = Vec::<BenchmarkBatch>::new();
             let params = (&config, &whitelist);
-
-            add_benchmark!(params, batches, pallet_treasury_extension, PalletTreasuryExtension::<Runtime>);
+            add_benchmarks!(params, batches);
 
             if batches.is_empty() { return Err("Benchmark not found for this pallet.".into()) }
             Ok(batches)

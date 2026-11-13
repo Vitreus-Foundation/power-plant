@@ -3,9 +3,6 @@
   "version": "0.0.0",
   "type": "module",
   "dependencies": {
-    "@polkadot/keyring": "^12.4.2",
-    "@polkadot/util-crypto": "^2.2.1",
-    "keccak": "^3.0.0",
-    "web3": "^1.8.0"
+    "@polkadot/keyring": "^14.0.3"
   }
 }

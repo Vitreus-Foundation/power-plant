@@ -6,6 +6,9 @@
 
 **/node_modules/
 
+# Python bytecode cache, e.g. from the scripts in .github/scripts
+__pycache__/
+
 .DS_Store
 
 .env

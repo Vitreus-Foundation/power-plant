@@ -1,0 +1,12 @@
+version: 2
+updates:
+  # Only the actions in .github/workflows. Cargo and Docker updates are deliberate: the SDK, and
+  # Rust pinned to match srtool.
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    # Minor and patch bumps come in one PR; each major bump comes in its own.
+    groups:
+      actions-minor:
+        update-types: [minor, patch]

@@ -1,0 +1,112 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  pull_request:
+  # Saves the Rust cache on main: a PR restores the caches of its base branch.
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Runs on main aren't cancelled: a cancelled run saves no cache.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+jobs:
+  fmt:
+    name: "cargo fmt"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v7
+
+      # The toolchain from rust-toolchain.toml: every option in rustfmt.toml is stable.
+      # A third-party action, so it is pinned to a commit, here and below.
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          components: rustfmt
+          cache: false
+
+      - run: cargo fmt -- --check
+
+  zepter:
+    name: "zepter"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          cache: false
+
+      # Newer releases need a newer Rust than rust-toolchain.toml.
+      - run: cargo install zepter@1.82.1 --locked -q
+
+      # Zepter reads `cargo metadata` offline, so the sources must be fetched first.
+      - run: cargo fetch --locked
+
+      - run: zepter run check
+
+  dependencies:
+    name: "dependencies"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Check the SDK is on a release tag
+        run: python3 .github/scripts/dependencies.py sdk-pin
+
+  rust:
+    name: "cargo clippy, build, test"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        feature: [testnet-native, mainnet-native]
+
+    env:
+      CARGO_TERM_COLOR: always
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          target: wasm32-unknown-unknown
+          components: clippy rust-src
+          # One cache per network. Only main saves it: a PR's cache is visible to that PR alone,
+          # and a copy per PR fills the repository's cache limit.
+          cache-key: ${{ matrix.feature }}
+          cache-save-if: ${{ github.ref == 'refs/heads/main' }}
+
+      # A mirror that stalls is dropped after 10 s, and apt moves on to the next one in its list.
+      # Retries are off: apt spends them on the same mirror before it tries the next one.
+      - run: |
+          sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=10 update
+          sudo apt-get -o Acquire::Retries=0 -o Acquire::http::Timeout=10 install -y protobuf-compiler libclang-dev libssl-dev
+
+      # Before build and test: check mode reports compile errors and lints sooner.
+      # Clippy lints only native code, so it skips the wasm build; `cargo build` does it.
+      - run: cargo clippy --locked --features ${{ matrix.feature }} --workspace --all-targets -- --deny warnings
+        env:
+          SKIP_WASM_BUILD: 1
+
+      - run: cargo build --locked --features ${{ matrix.feature }}
+
+      - run: cargo test --features ${{ matrix.feature }} --workspace --locked
+
+      # Only the benchmark tests: the other tests already ran above without the feature.
+      # They run on the pallet mocks, so the wasm build is skipped.
+      - run: cargo test --features ${{ matrix.feature }},runtime-benchmarks --workspace --locked benchmark
+        env:
+          SKIP_WASM_BUILD: 1

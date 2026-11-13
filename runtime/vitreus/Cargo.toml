@@ -88,14 +88,12 @@ pallet-timestamp = { workspace = true }
 pallet-transaction-payment = { workspace = true }
 pallet-transaction-payment-rpc-runtime-api = { workspace = true }
 pallet-treasury = { workspace = true }
-pallet-uniques = { workspace = true }
 pallet-utility = { workspace = true }
 pallet-vesting = { workspace = true }
 pallet-xcm = { workspace = true }
 xcm-runtime-apis = { workspace = true }
 
 # Frontier
-ethereum = { workspace = true }
 fp-account = { workspace = true, features = ["serde"] }
 fp-evm = { workspace = true, features = ["serde"] }
 fp-rpc = { workspace = true }
@@ -107,7 +105,6 @@ pallet-ethereum = { workspace = true }
 pallet-evm = { workspace = true }
 pallet-evm-chain-id = { workspace = true }
 pallet-evm-precompile-modexp = { workspace = true }
-pallet-evm-precompile-sha3fips = { workspace = true }
 pallet-evm-precompile-simple = { workspace = true }
 pallet-hotfix-sufficients = { workspace = true }
 
@@ -122,13 +119,17 @@ pallet-energy-broker = { workspace = true }
 pallet-energy-fee = { workspace = true }
 pallet-energy-generation = { workspace = true }
 pallet-faucet = { workspace = true }
-pallet-manual-bridge = { workspace = true }
 pallet-nac-managing = { workspace = true }
 pallet-privileges = { workspace = true }
 pallet-reputation = { workspace = true }
 pallet-simple-vesting = { workspace = true }
 pallet-treasury-extension = { workspace = true }
 vitreus-runtime-common = { workspace = true }
+
+# Experimental vitreus pallets
+pallet-vitreus-dex = { workspace = true }
+pallet-launchpad = { workspace = true }
+pallet-launch-treasury = { workspace = true }
 
 # Runtime API
 dynamic-energy-runtime-api = { workspace = true }
@@ -140,8 +141,8 @@ nfts-runtime-api = { workspace = true }
 vitreus-utility-runtime-api = { workspace = true }
 
 [dev-dependencies]
-chain-spec = { workspace = true }
 energy-generation-runtime-api = { workspace = true, default-features = true }
+ethereum = { workspace = true, default-features = true }
 
 [build-dependencies]
 substrate-wasm-builder = { workspace = true, optional = true }
@@ -155,8 +156,10 @@ with-paritydb-weights = []
 try-runtime = [
     "fp-self-contained/try-runtime",
     "frame-executive/try-runtime",
+    "frame-support/try-runtime",
     "frame-system/try-runtime",
     "frame-try-runtime",
+    "frame-try-runtime/try-runtime",
     "pallet-asset-rate/try-runtime",
     "pallet-assets-freezer/try-runtime",
     "pallet-assets/try-runtime",
@@ -177,7 +180,6 @@ try-runtime = [
     "pallet-energy-broker/try-runtime",
     "pallet-energy-fee/try-runtime",
     "pallet-energy-generation/try-runtime",
-    "pallet-energy-generation/try-runtime",
     "pallet-ethereum/try-runtime",
     "pallet-evm-chain-id/try-runtime",
     "pallet-evm/try-runtime",
@@ -185,7 +187,8 @@ try-runtime = [
     "pallet-grandpa/try-runtime",
     "pallet-hotfix-sufficients/try-runtime",
     "pallet-im-online/try-runtime",
-    "pallet-manual-bridge/try-runtime",
+    "pallet-launch-treasury/try-runtime",
+    "pallet-launchpad/try-runtime",
     "pallet-membership/try-runtime",
     "pallet-message-queue/try-runtime",
     "pallet-mmr/try-runtime",
@@ -207,30 +210,36 @@ try-runtime = [
     "pallet-treasury/try-runtime",
     "pallet-utility/try-runtime",
     "pallet-vesting/try-runtime",
+    "pallet-vitreus-dex/try-runtime",
     "pallet-xcm/try-runtime",
     "polkadot-runtime-common/try-runtime",
     "polkadot-runtime-parachains/try-runtime",
+    "sp-runtime/try-runtime",
 ]
 fast-runtime = []
 std = [
     "log/std",
+    "num_enum/std",
     "parity-scale-codec/std",
     "primitive-types/std",
     "scale-info/std",
     # Polkadot
     "polkadot-primitives/std",
     "polkadot-runtime-common/std",
+    "polkadot-runtime-parachains/std",
     # XCM
     "xcm/std",
     "xcm-executor/std",
     "xcm-builder/std",
     # Substrate
+    "binary-merkle-tree/std",
     "sp-api/std",
     "sp-authority-discovery/std",
     "sp-block-builder/std",
     "sp-consensus-babe/std",
     "sp-consensus-beefy/std",
     "sp-core/std",
+    "sp-genesis-builder/std",
     "sp-inherents/std",
     "sp-io/std",
     "sp-mmr-primitives/std",
@@ -282,7 +291,6 @@ std = [
     "pallet-transaction-payment-rpc-runtime-api/std",
     "pallet-transaction-payment/std",
     "pallet-treasury/std",
-    "pallet-uniques/std",
     "pallet-utility/std",
     "pallet-vesting/std",
     "pallet-xcm/std",
@@ -297,7 +305,6 @@ std = [
     "pallet-ethereum/std",
     "pallet-evm-chain-id/std",
     "pallet-evm-precompile-modexp/std",
-    "pallet-evm-precompile-sha3fips/std",
     "pallet-evm-precompile-simple/std",
     "pallet-evm/std",
     "pallet-hotfix-sufficients/std",
@@ -308,10 +315,12 @@ std = [
     "pallet-democracy-extension/std",
     "pallet-dynamic-energy/std",
     "pallet-energy-broker/std",
+    "pallet-vitreus-dex/std",
+    "pallet-launchpad/std",
+    "pallet-launch-treasury/std",
     "pallet-energy-fee/std",
     "pallet-energy-generation/std",
     "pallet-faucet/std",
-    "pallet-manual-bridge/std",
     "pallet-nac-managing/std",
     "pallet-privileges/std",
     "pallet-reputation/std",
@@ -329,22 +338,57 @@ std = [
 ]
 runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
+    "frame-support/runtime-benchmarks",
     "frame-system-benchmarking/runtime-benchmarks",
     "frame-system/runtime-benchmarks",
+    "pallet-asset-rate/runtime-benchmarks",
     "pallet-assets-freezer/runtime-benchmarks",
     "pallet-assets/runtime-benchmarks",
+    "pallet-babe/runtime-benchmarks",
+    "pallet-balances/runtime-benchmarks",
+    "pallet-bounties/runtime-benchmarks",
+    "pallet-claiming/runtime-benchmarks",
     "pallet-collective/runtime-benchmarks",
+    "pallet-democracy/runtime-benchmarks",
+    "pallet-dynamic-energy/runtime-benchmarks",
+    "pallet-elections-phragmen/runtime-benchmarks",
     "pallet-energy-broker/runtime-benchmarks",
     "pallet-energy-fee/runtime-benchmarks",
+    "pallet-energy-generation/runtime-benchmarks",
     "pallet-ethereum/runtime-benchmarks",
+    "pallet-evm/runtime-benchmarks",
     "pallet-faucet/runtime-benchmarks",
+    "pallet-grandpa/runtime-benchmarks",
     "pallet-hotfix-sufficients/runtime-benchmarks",
+    "pallet-im-online/runtime-benchmarks",
+    "pallet-launch-treasury/runtime-benchmarks",
+    "pallet-launchpad/runtime-benchmarks",
+    "pallet-membership/runtime-benchmarks",
+    "pallet-message-queue/runtime-benchmarks",
+    "pallet-mmr/runtime-benchmarks",
     "pallet-multisig/runtime-benchmarks",
+    "pallet-nac-managing/runtime-benchmarks",
     "pallet-nfts/runtime-benchmarks",
+    "pallet-offences/runtime-benchmarks",
+    "pallet-preimage/runtime-benchmarks",
+    "pallet-privileges/runtime-benchmarks",
     "pallet-proxy/runtime-benchmarks",
+    "pallet-reputation/runtime-benchmarks",
+    "pallet-scheduler/runtime-benchmarks",
+    "pallet-sudo/runtime-benchmarks",
+    "pallet-timestamp/runtime-benchmarks",
     "pallet-treasury-extension/runtime-benchmarks",
-    "pallet-uniques/runtime-benchmarks",
+    "pallet-treasury/runtime-benchmarks",
+    "pallet-utility/runtime-benchmarks",
+    "pallet-vesting/runtime-benchmarks",
+    "pallet-vitreus-dex/runtime-benchmarks",
     "pallet-xcm/runtime-benchmarks",
+    "polkadot-primitives/runtime-benchmarks",
+    "polkadot-runtime-common/runtime-benchmarks",
+    "polkadot-runtime-parachains/runtime-benchmarks",
+    "sp-runtime/runtime-benchmarks",
+    "sp-staking/runtime-benchmarks",
     "xcm-builder/runtime-benchmarks",
+    "xcm-executor/runtime-benchmarks",
     "xcm-runtime-apis/runtime-benchmarks",
 ]

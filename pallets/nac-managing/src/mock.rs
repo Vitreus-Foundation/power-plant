@@ -28,8 +28,6 @@ use frame_support::{
 };
 use frame_system::{EnsureRoot, EnsureSigned};
 use parity_scale_codec::Compact;
-use sp_core::H256;
-use sp_runtime::traits::BlakeTwo256;
 use sp_runtime::{
     testing::{TestSignature, UintAuthorityId},
     traits::IdentityLookup,
@@ -63,29 +61,14 @@ frame_support::construct_runtime!(
 
 #[derive_impl(frame_system::config_preludes::TestDefaultConfig)]
 impl frame_system::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type BaseCallFilter = frame_support::traits::Everything;
-    type BlockWeights = ();
-    type BlockLength = ();
-    type RuntimeOrigin = RuntimeOrigin;
-    type RuntimeCall = RuntimeCall;
     type Nonce = Nonce;
-    type Hash = H256;
-    type Hashing = BlakeTwo256;
     type AccountId = AccountId;
     type Lookup = IdentityLookup<Self::AccountId>;
     type Block = Block;
     type BlockHashCount = ConstU64<250>;
     type DbWeight = RocksDbWeight;
-    type Version = ();
-    type PalletInfo = PalletInfo;
     type AccountData = pallet_balances::AccountData<Balance>;
     type OnNewAccount = NacManaging;
-    type OnKilledAccount = ();
-    type SystemWeightInfo = ();
-    type SS58Prefix = ();
-    type OnSetCode = ();
-    type MaxConsumers = ConstU32<16>;
 }
 
 parameter_types! {
@@ -95,6 +78,32 @@ parameter_types! {
 
 pub type CollectionId = u32;
 pub type ItemId = u32;
+
+// `()` implements the nfts helper only for `MultiSigner` and `MultiSignature`, not for the test types.
+// Compiled when `pallet-nfts` has `runtime-benchmarks`, which another crate in the build can switch on.
+pallet_nfts::runtime_benchmarks_enabled! {
+    pub struct NftsBenchmarkHelper;
+
+    impl pallet_nfts::BenchmarkHelper<CollectionId, ItemId, AccountPublic, AccountId, Signature>
+        for NftsBenchmarkHelper
+    {
+        fn collection(i: u16) -> CollectionId {
+            i.into()
+        }
+
+        fn item(i: u16) -> ItemId {
+            i.into()
+        }
+
+        fn signer() -> (AccountPublic, AccountId) {
+            (UintAuthorityId(1), 1)
+        }
+
+        fn sign(signer: &AccountPublic, message: &[u8]) -> Signature {
+            TestSignature(signer.0, message.to_vec())
+        }
+    }
+}
 
 impl pallet_nfts::Config for Test {
     type RuntimeEvent = RuntimeEvent;
@@ -119,8 +128,9 @@ impl pallet_nfts::Config for Test {
     type KeyLimit = ConstU32<50>;
     type ValueLimit = ConstU32<50>;
     type WeightInfo = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type Helper = ();
+    pallet_nfts::runtime_benchmarks_enabled! {
+        type Helper = NftsBenchmarkHelper;
+    }
     type CreateOrigin = AsEnsureOriginWithArg<frame_system::EnsureSigned<Self::AccountId>>;
     type Locker = ();
 }
@@ -156,8 +166,8 @@ parameter_types! {
 
 pub type AssetId = u32;
 
+#[derive_impl(pallet_assets::config_preludes::TestDefaultConfig)]
 impl pallet_assets::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type Balance = Balance;
     type AssetId = AssetId;
     type Currency = Balances;
@@ -169,14 +179,9 @@ impl pallet_assets::Config for Test {
     type ApprovalDeposit = ApprovalDeposit;
     type StringLimit = AssetsStringLimit;
     type Freezer = ();
-    type Extra = ();
-    type WeightInfo = ();
     type RemoveItemsLimit = ConstU32<1000>;
     type AssetIdParameter = Compact<AssetId>;
     type CreateOrigin = AsEnsureOriginWithArg<EnsureSigned<AccountId>>;
-    type CallbackHandle = ();
-    #[cfg(feature = "runtime-benchmarks")]
-    type BenchmarkHelper = ();
 }
 
 impl pallet_reputation::Config for Test {
@@ -186,11 +191,7 @@ impl pallet_reputation::Config for Test {
 
 #[derive_impl(pallet_balances::config_preludes::TestDefaultConfig)]
 impl pallet_balances::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type WeightInfo = ();
     type Balance = Balance;
-    type DustRemoval = ();
-    type ExistentialDeposit = ConstU64<1>;
     type AccountStore = System;
     type ReserveIdentifier = [u8; 8];
     type RuntimeHoldReason = ();

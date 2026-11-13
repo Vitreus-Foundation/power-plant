@@ -25,9 +25,19 @@ default = ["std"]
 std = [
     "frame-support/std",
     "frame-system/std",
+    "pallet-balances/std",
     "pallet-democracy/std",
+    "pallet-scheduler/std",
     "parity-scale-codec/std",
     "scale-info/std",
+    "sp-io/std",
     "sp-runtime/std",
 ]
-try-runtime = ["frame-support/try-runtime"]
+try-runtime = [
+    "frame-support/try-runtime",
+    "frame-system/try-runtime",
+    "pallet-balances/try-runtime",
+    "pallet-democracy/try-runtime",
+    "pallet-scheduler/try-runtime",
+    "sp-runtime/try-runtime",
+]
