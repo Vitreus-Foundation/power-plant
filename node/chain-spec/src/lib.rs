@@ -18,13 +18,12 @@ use sp_runtime::{FixedU128, Perbill};
 use crate::tech_addresses::treasury;
 use vitreus_power_plant_runtime::{
     opaque, vtrs, AccountId, AssetsConfig, AuthorityDiscoveryConfig, BabeConfig, Balance,
-    BalancesConfig, Claiming, ClaimingConfig, ConfigurationConfig, CouncilConfig,
-    DynamicEnergyConfig, EVMChainIdConfig, EnergyBrokerConfig, EnergyGenerationConfig,
-    ImOnlineConfig, ImOnlineId, MaxCooperations, NacManagingConfig, PrivilegesConfig,
-    ReputationConfig, ReputationPoint, RuntimeGenesisConfig, SS58Prefix, SessionConfig, Signature,
-    SimpleVestingConfig, StakerStatus, SudoConfig, SystemConfig, TechnicalCommitteeConfig,
-    BABE_GENESIS_EPOCH_CONFIG, COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, LNRG, SNRG, VNRG,
-    WASM_BINARY,
+    BalancesConfig, ConfigurationConfig, CouncilConfig, DynamicEnergyConfig, EVMChainIdConfig,
+    EnergyBrokerConfig, EnergyGenerationConfig, ImOnlineConfig, ImOnlineId, MaxCooperations,
+    NacManagingConfig, PrivilegesConfig, ReputationConfig, ReputationPoint, RuntimeGenesisConfig,
+    SS58Prefix, SessionConfig, Signature, StakerStatus, SudoConfig, SystemConfig,
+    TechnicalCommitteeConfig, BABE_GENESIS_EPOCH_CONFIG,
+    COLLABORATIVE_VALIDATOR_REPUTATION_THRESHOLD, LNRG, SNRG, VNRG, WASM_BINARY,
 };
 
 /// Node `ChainSpec` extensions.
