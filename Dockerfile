@@ -26,7 +26,7 @@ WORKDIR /app
 
 # Copy the built binary from the builder stage
 COPY --from=builder \
-    /app/chain-specs/* \
+    /app/node/chain-spec/chain-specs/* \
     /app/scripts/purge_chain.sh \
     /app/scripts/revert_chain.sh \
     /app/target/release/vitreus-power-plant-node \

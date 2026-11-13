@@ -10,7 +10,7 @@ if [ -e "$FLAG_FILE" ]; then
     exit 0
 fi
 
-./target/release/vitreus-power-plant-node revert --base-path /tmp/node --chain ./target/release/vitreus-power-plant-mainnet.json 1024 &>> "$LOG_FILE"
+./target/release/vitreus-power-plant-node revert --base-path /tmp/node --chain mainnet 1024 &>> "$LOG_FILE"
 
 if [ $? -eq 0 ]; then
     echo "revert-chain successfully completed." | tee -a "$LOG_FILE"
