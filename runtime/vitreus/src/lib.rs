@@ -769,7 +769,7 @@ parameter_types! {
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const BatterySlotCapacity: Energy = 100_000_000_000;
-    pub const MaxCooperations: u32 = 256;
+    pub const MaxCooperations: u32 = 16;
     pub const HistoryDepth: u32 = 84;
     pub const MaxUnlockingChunks: u32 = 64;
     pub const RewardOnUnbalanceWasCalled: bool = false;
