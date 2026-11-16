@@ -151,7 +151,8 @@ use parity_scale_codec::{Decode, Encode, HasCompact, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{Convert, Saturating, StaticLookup, Zero},
-    BoundedBTreeMap, Perbill, Perquintill, Rounding, RuntimeDebug,
+    BoundedBTreeMap, FixedPointNumber, FixedPointOperand, Perbill, Perquintill, Rounding,
+    RuntimeDebug,
 };
 pub use sp_staking::EraIndex;
 use sp_staking::{
@@ -159,6 +160,7 @@ use sp_staking::{
     OnStakingUpdate, SessionIndex,
 };
 use sp_std::{collections::btree_map::BTreeMap, prelude::*};
+use vitreus_runtime_common::ExposureMultiplier;
 pub use weights::WeightInfo;
 
 pub use pallet::pallet::*;
@@ -586,6 +588,32 @@ pub struct Exposure<AccountId, Balance: HasCompact> {
 impl<AccountId, Balance: Default + HasCompact> Default for Exposure<AccountId, Balance> {
     fn default() -> Self {
         Self { total: Default::default(), own: Default::default(), others: vec![] }
+    }
+}
+
+impl<AccountId, Balance: HasCompact + Saturating + Zero + Copy> Exposure<AccountId, Balance> {
+    /// Builds an exposure with `total` summed from `own` and `others`.
+    pub(crate) fn new(own: Balance, others: Vec<IndividualExposure<AccountId, Balance>>) -> Self {
+        let others_stake =
+            others.iter().fold(Balance::zero(), |total, x| total.saturating_add(x.value));
+
+        Self { total: own.saturating_add(others_stake), own, others }
+    }
+
+    /// The effective exposure of `validator`, with the exposure multipliers of `T` applied.
+    pub(crate) fn effective<T>(mut self, validator: &AccountId) -> Self
+    where
+        T: Config<AccountId = AccountId>,
+        Balance: FixedPointOperand,
+    {
+        let own =
+            T::ValidatorExposureMultiplier::multiplier(validator).saturating_mul_int(self.own);
+        for other in &mut self.others {
+            other.value = T::CooperatorExposureMultiplier::multiplier(&other.who)
+                .saturating_mul_int(other.value);
+        }
+
+        Self::new(own, self.others)
     }
 }
 

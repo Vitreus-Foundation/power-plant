@@ -6042,9 +6042,17 @@ fn exposure_multiplier_works() {
             CooperatorExposureMultiplier::<Test>::insert(101, FixedU64::from_rational(10, 100));
             mock::start_active_era(2);
 
-            // Exposure increased
+            // Only the clipped exposure increased
             assert_eq!(
                 PowerPlant::eras_stakers(active_era(), 11),
+                Exposure {
+                    total: 1000 + 200,
+                    own: 1000,
+                    others: vec![IndividualExposure { who: 101, value: 200 }]
+                },
+            );
+            assert_eq!(
+                PowerPlant::eras_stakers_clipped(active_era(), 11),
                 Exposure {
                     total: 1200 + 220,
                     own: 1200,
@@ -6053,6 +6061,14 @@ fn exposure_multiplier_works() {
             );
             assert_eq!(
                 PowerPlant::eras_stakers(active_era(), 21),
+                Exposure {
+                    total: 1000 + 300,
+                    own: 1000,
+                    others: vec![IndividualExposure { who: 101, value: 300 }]
+                },
+            );
+            assert_eq!(
+                PowerPlant::eras_stakers_clipped(active_era(), 21),
                 Exposure {
                     total: 1000 + 330,
                     own: 1000,
