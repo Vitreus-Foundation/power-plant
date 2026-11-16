@@ -23,6 +23,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Switch parachains from `ParaAssignmentProvider` to coretime without a broker chain
 - Limit LNRG sales in `pallet-energy-broker` to the payout quota
 - Make `pallet-treasury-extension` sell the treasury's energy before the exchange rate update
+- Lower `MaxCooperations` of `pallet-energy-generation` from 256 to 16
 
 ### Removed
 
