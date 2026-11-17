@@ -42,6 +42,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Pick a free item id when `pallet-nac-managing` mints NAC and VIPP NFTs
 - Reject signed EVM calls in `pallet-energy-fee` that can't pay both the prepaid fee and the EVM fee
 - Round up the input of swaps and quotes for an exact output in `pallet-energy-broker`
+- Make `pallet-energy-generation` slash and elect validators by stake without the exposure multipliers
 
 ## [215] - 2026-10-19
 

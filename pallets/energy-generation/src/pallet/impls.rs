@@ -28,9 +28,7 @@ use sp_staking::{
     EraIndex, SessionIndex,
 };
 use sp_std::prelude::*;
-use vitreus_runtime_common::{
-    EraEnergyRateCalculator, EraSessionLookup, ExposureMultiplier, OnSessionChange, Staking,
-};
+use vitreus_runtime_common::{EraEnergyRateCalculator, EraSessionLookup, OnSessionChange, Staking};
 
 use crate::slashing::NegativeImbalanceOf;
 use crate::{
@@ -696,10 +694,11 @@ impl<T: Config> Pallet<T> {
         // Populate stakers, exposures, and the snapshot of validator prefs.
         let mut total_stake: StakeOf<T> = Zero::zero();
         exposures.into_iter().for_each(|(stash, exposure)| {
-            total_stake = total_stake.saturating_add(exposure.total);
             <ErasStakers<T>>::insert(new_planned_era, &stash, &exposure);
 
-            let mut exposure_clipped = exposure;
+            let mut exposure_clipped = exposure.effective::<T>(&stash);
+            total_stake = total_stake.saturating_add(exposure_clipped.total);
+
             let clipped_max_len = T::MaxCooperatorRewardedPerValidator::get() as usize;
             if exposure_clipped.others.len() > clipped_max_len {
                 exposure_clipped.others.sort_by(|a, b| a.value.cmp(&b.value).reverse());
@@ -736,9 +735,6 @@ impl<T: Config> Pallet<T> {
                 let controller = Self::bonded(&validator)?;
                 let ledger = Self::ledger(&controller)?;
 
-                let own = T::ValidatorExposureMultiplier::multiplier(&validator)
-                    .saturating_mul_int(ledger.active);
-
                 let others = match Collaborations::<T>::get(&validator) {
                     Some(coops) => coops
                         .iter()
@@ -749,11 +745,7 @@ impl<T: Config> Pallet<T> {
 
                             if record.reputation >= prefs.min_coop_reputation {
                                 let value = Self::cooperators(&who)
-                                    .and_then(|collab| collab.targets.get(&validator).cloned())
-                                    .map(|stake| {
-                                        T::CooperatorExposureMultiplier::multiplier(&who)
-                                            .saturating_mul_int(stake)
-                                    })?;
+                                    .and_then(|collab| collab.targets.get(&validator).cloned())?;
 
                                 Some(IndividualExposure { who, value })
                             } else {
@@ -765,13 +757,7 @@ impl<T: Config> Pallet<T> {
                     None => Vec::new(),
                 };
 
-                let others_stake = others
-                    .iter()
-                    .fold(StakeOf::<T>::zero(), |total, x| total.saturating_add(x.value));
-
-                let exposure = Exposure { total: own.saturating_add(others_stake), own, others };
-
-                Some((validator, exposure))
+                Some((validator, Exposure::new(ledger.active, others)))
             })
             .collect()
     }
