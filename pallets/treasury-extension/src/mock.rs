@@ -222,8 +222,9 @@ impl<const ID: u32> QuotePriceFromEnergy for MockExchange<ID> {
         Some((numerator / native).max(1))
     }
 
-    fn max_amount_out() -> Balance {
-        ExchangeLiquidity::get()
+    fn max_amount_out() -> Option<Balance> {
+        Self::behaviour().price?;
+        Some(ExchangeLiquidity::get())
     }
 }
 

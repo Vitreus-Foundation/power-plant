@@ -236,16 +236,22 @@ impl<T: Config<I>, I: 'static> Pallet<T, I> {
             Preservation::Preserve,
             Fortitude::Polite,
         );
-        let max_amount_out = Exchange::max_amount_out();
 
-        // Nothing to sell, or an exchange with nothing to pay out, is not a failure.
-        if balance.is_zero() || max_amount_out.is_zero() {
+        // Nothing to sell is not a failure.
+        if balance.is_zero() {
+            return Ok((Zero::zero(), Zero::zero()));
+        }
+
+        // An exchange that can't price the energy fails the sale, even with nothing to pay out.
+        let max_amount_out = Exchange::max_amount_out().ok_or(DispatchError::Unavailable)?;
+
+        // An exchange with nothing to pay out is not a failure.
+        if max_amount_out.is_zero() {
             return Ok((Zero::zero(), Zero::zero()));
         }
 
         // A swap for more than `max_amount_out` fails as a whole, so sell at most the input that
         // buys exactly that. The quote leaves the fee out: with a fee the payout is only smaller.
-        // Without a quote the exchange can't price the energy, and that is a failure.
         // TODO: once the exchange traits can tell the largest input an exchange pays for, take it
         // from there and drop both this quote and the step back below. The quote can overflow at
         // an exchange with no limit.

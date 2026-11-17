@@ -173,8 +173,8 @@ impl QuotePriceIntoEnergy for MockEnergyExchange {
     }
 
     // The mock mints VNRG, so its supply has no limit.
-    fn max_amount_out() -> Self::Balance {
-        u128::MAX
+    fn max_amount_out() -> Option<Self::Balance> {
+        Some(u128::MAX)
     }
 }
 

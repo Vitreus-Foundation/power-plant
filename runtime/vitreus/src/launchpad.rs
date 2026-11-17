@@ -321,6 +321,7 @@ impl TreasuryExchange<AccountId, Balance> for EnergyBrokerExchange {
     }
     fn depth() -> Balance {
         EnergyBroker::max_amount_out(&(LnrgAssetKind::get(), NativeOrAssetId::Native))
+            .unwrap_or_default()
     }
     fn sell(who: &AccountId, lnrg: Balance, min_native: Balance) -> Result<Balance, DispatchError> {
         <EnergyBroker as vitreus_runtime_common::Swap<AccountId>>::swap_exact_tokens_for_tokens(
