@@ -15,11 +15,10 @@ pub trait FixedPathAssetConverter<T: Config> {
         None
     }
 
-    /// Computes the output amount for a given input.
-    fn get_amount_out(amount_in: T::Balance) -> Option<T::Balance>;
-
-    /// Computes the required input amount for a desired output.
-    fn get_amount_in(amount_out: T::Balance) -> Option<T::Balance>;
+    /// The rate of the path, `TARGET` per unit of `SOURCE`.
+    ///
+    /// `None` when the path has no rate, such as before its rate source is set.
+    fn conversion_rate() -> Option<FixedU128>;
 
     /// The maximum amount of the output asset the path can currently supply, or
     /// `Balance::max_value()` if the output is minted and therefore unbounded.
@@ -56,17 +55,10 @@ pub trait AssetConverter<T: Config> {
     /// Returns a custom swap fee for the given asset pair, or `None` to use the default fee.
     fn swap_fee(path: &(T::AssetKind, T::AssetKind)) -> Option<u32>;
 
-    /// Computes the output amount for a given input.
-    fn get_amount_out(
-        path: &(T::AssetKind, T::AssetKind),
-        amount_in: T::Balance,
-    ) -> Option<T::Balance>;
-
-    /// Computes the required input amount for a desired output.
-    fn get_amount_in(
-        path: &(T::AssetKind, T::AssetKind),
-        amount_out: T::Balance,
-    ) -> Option<T::Balance>;
+    /// [`FixedPathAssetConverter::conversion_rate`] of the converter for `path`.
+    ///
+    /// `None` for a path no converter serves.
+    fn conversion_rate(path: &(T::AssetKind, T::AssetKind)) -> Option<FixedU128>;
 
     /// The maximum amount of the output asset the given path can currently supply, never more
     /// than [`Self::withdraw`] can take from the broker.
@@ -106,25 +98,10 @@ impl<T: Config> AssetConverter<T> for Tuple {
         None
     }
 
-    fn get_amount_out(
-        path: &(T::AssetKind, T::AssetKind),
-        amount_in: T::Balance,
-    ) -> Option<T::Balance> {
+    fn conversion_rate(path: &(T::AssetKind, T::AssetKind)) -> Option<FixedU128> {
         for_tuples!( #(
             if path == &(Tuple::SOURCE, Tuple::TARGET) {
-                return Tuple::get_amount_out(amount_in);
-            }
-        )* );
-        None
-    }
-
-    fn get_amount_in(
-        path: &(T::AssetKind, T::AssetKind),
-        amount_out: T::Balance,
-    ) -> Option<T::Balance> {
-        for_tuples!( #(
-            if path == &(Tuple::SOURCE, Tuple::TARGET) {
-                return Tuple::get_amount_in(amount_out);
+                return Tuple::conversion_rate();
             }
         )* );
         None

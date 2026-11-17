@@ -23,6 +23,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Switch parachains from `ParaAssignmentProvider` to coretime without a broker chain
 - Limit LNRG sales in `pallet-energy-broker` to the payout quota
 - Make `pallet-treasury-extension` sell the treasury's energy before the exchange rate update
+- Make the converters of `pallet-energy-broker` report a conversion rate instead of amounts
 
 ### Removed
 
@@ -39,6 +40,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Make signed EVM calls prepay their fee in `pallet-energy-fee` and refund it once the call has run
 - Pick a free item id when `pallet-nac-managing` mints NAC and VIPP NFTs
 - Reject signed EVM calls in `pallet-energy-fee` that can't pay both the prepaid fee and the EVM fee
+- Round up the input of swaps and quotes for an exact output in `pallet-energy-broker`
 
 ## [215] - 2026-10-19
 
