@@ -351,13 +351,21 @@ pub mod pallet {
             T::AssetConverter::conversion_rate(path).filter(|rate| !rate.is_zero())
         }
 
-        /// The maximum amount of the output asset that `path` can currently supply.
+        /// The maximum amount of the output asset that `path` can supply, whatever its rate.
         ///
-        /// `None` if the path can't be priced, an unsupported path included. A path that mints its
-        /// output is unbounded and returns `Balance::max_value()`.
+        /// Zero on an unsupported path, otherwise the path converter's
+        /// [`FixedPathAssetConverter::reducible_balance`].
+        pub fn liquidity(path: &(T::AssetKind, T::AssetKind)) -> T::Balance {
+            T::AssetConverter::reducible_balance(path, &Self::account_id())
+        }
+
+        /// The maximum amount of the output asset that a swap along `path` can currently supply.
+        ///
+        /// [`Self::liquidity`] of `path`, or `None` if the path can't be priced, an unsupported
+        /// path included.
         pub fn max_amount_out(path: &(T::AssetKind, T::AssetKind)) -> Option<T::Balance> {
             Self::conversion_rate(path)?;
-            Some(T::AssetConverter::reducible_balance(path, &Self::account_id()))
+            Some(Self::liquidity(path))
         }
 
         /// The output amount for `amount_in` along `path`, rounded down.
@@ -532,8 +540,7 @@ pub mod pallet {
                 ensure!(free >= amount_in, TokenError::NotExpendable);
             }
 
-            // The amounts are priced already, so only the liquidity is left to check.
-            let liquidity = T::AssetConverter::reducible_balance(path, &broker_account);
+            let liquidity = Self::liquidity(path);
             ensure!(liquidity >= amount_out, Error::<T>::InsufficientLiquidity);
 
             let energy_before_input = T::Assets::balance(T::EnergyAsset::get(), &broker_account);

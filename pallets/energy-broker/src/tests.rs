@@ -531,6 +531,10 @@ fn max_amount_out_is_none_without_rate() {
 
         assert_eq!(EnergyBroker::max_amount_out(&to_energy), None);
         assert_eq!(EnergyBroker::max_amount_out(&to_native), None);
+
+        // Only the rate is missing: the liquidity is still there.
+        assert_eq!(EnergyBroker::liquidity(&to_energy), 100);
+        assert_eq!(EnergyBroker::liquidity(&to_native), 100);
     });
 }
 
