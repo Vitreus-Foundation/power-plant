@@ -710,6 +710,30 @@ mod energy_broker {
     }
 
     #[test]
+    fn lnrg_max_amount_in_is_limited_by_payout_quota() {
+        use energy_broker_runtime_api::runtime_decl_for_energy_broker_api::EnergyBrokerApi;
+
+        new_test_ext().execute_with(|| {
+            let lnrg = NativeOrAssetId::WithId(LNRG::get());
+            let path = (lnrg.clone(), NativeOrAssetId::Native);
+            let quota = 20 * vtrs::UNITS;
+
+            // A quota of 20 VTRS, far below the broker's VTRS.
+            fund_broker();
+            set_payout_quota(quota);
+
+            let max_amount_in = Runtime::max_amount_in(lnrg, NativeOrAssetId::Native, true)
+                .expect("the LNRG path must be priced");
+            let payout = |amount_in| {
+                EnergyBroker::get_amount_out(amount_in, &path, true)
+                    .expect("the LNRG path must price the sale")
+            };
+            assert!(payout(max_amount_in) <= quota);
+            assert!(payout(max_amount_in + 1) > quota);
+        })
+    }
+
+    #[test]
     fn snrg_buyback_is_not_limited_by_payout_quota() {
         new_test_ext().execute_with(|| {
             let snrg_path = (NativeOrAssetId::WithId(SNRG::get()), NativeOrAssetId::Native);
