@@ -50,11 +50,13 @@ fn asset_issuance(asset: &NativeOrAssetId) -> Balance {
 /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
 fn fund_broker() {
     Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
-    pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
-    pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
-        SNRG::get(),
-        FixedU128::from_u32(1),
-    );
+    set_broker_rates(FixedU128::from_u32(1), FixedU128::from_u32(1));
+}
+
+/// Sets the energy exchange rate to `energy` and the SNRG rate to `snrg`.
+fn set_broker_rates(energy: FixedU128, snrg: FixedU128) {
+    pallet_dynamic_energy::ExchangeRate::<Runtime>::put(energy);
+    pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), snrg);
 }
 
 /// The VTRS the broker can pay out.
@@ -552,6 +554,34 @@ mod energy_broker {
     }
 
     #[test]
+    fn broker_paths_convert_at_their_rates() {
+        new_test_ext().execute_with(|| {
+            // Different exact rates, so a path that reads the other rate or turns its rate around
+            // gets another amount. The energy exchange rate counts VNRG per VTRS, the SNRG rate
+            // VTRS per SNRG.
+            set_broker_rates(FixedU128::from_u32(2), FixedU128::from_u32(4));
+
+            let vtrs = NativeOrAssetId::Native;
+            for (path, amount_in, amount_out) in [
+                ((vtrs.clone(), NativeOrAssetId::WithId(VNRG::get())), 10, 20),
+                ((NativeOrAssetId::WithId(LNRG::get()), vtrs.clone()), 20, 10),
+                ((NativeOrAssetId::WithId(SNRG::get()), vtrs), 10, 40),
+            ] {
+                assert_eq!(
+                    EnergyBroker::get_amount_out(amount_in, &path, false).ok(),
+                    Some(amount_out),
+                    "{path:?}"
+                );
+                assert_eq!(
+                    EnergyBroker::get_amount_in(amount_out, &path, false).ok(),
+                    Some(amount_in),
+                    "{path:?}"
+                );
+            }
+        });
+    }
+
+    #[test]
     fn snrg_conversion_is_one_to_one_and_without_swap_fee() {
         new_test_ext()
             .execute_with(|| assert_conversion_is_one_to_one_and_without_swap_fee(SNRG::get()))
@@ -731,9 +761,9 @@ mod treasury {
     const EXACT_RATE: FixedU128 = FixedU128::from_u32(1);
     /// A rate at which the broker's conversions round down.
     const ROUNDING_RATE: FixedU128 = FixedU128::from_rational(3, 2);
-    /// A rate at which a base unit of VTRS at the broker pays for no energy on either path: LNRG
-    /// rounds the output down to zero, SNRG would pay out more than the unit. At `ROUNDING_RATE`
-    /// the SNRG path still swaps one for one.
+    /// VTRS per base unit of energy at which a base unit of VTRS at the broker pays for no energy:
+    /// the smallest sale would pay out more than the unit. At `ROUNDING_RATE` the SNRG path still
+    /// swaps one for one.
     const DUST_RATE: FixedU128 = FixedU128::from_rational(7, 3);
 
     /// Changes the session through the listeners as the runtime wires them, in their order.
@@ -778,8 +808,7 @@ mod treasury {
 
         System::set_block_number(1);
         fund_broker();
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(rate);
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), rate);
+        set_broker_rates(rate, rate);
         let broker_vtrs_before = broker_vtrs();
 
         // More energy than the broker can pay for.
@@ -832,8 +861,9 @@ mod treasury {
         let treasury = Treasury::account_id();
 
         System::set_block_number(1);
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(DUST_RATE);
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), DUST_RATE);
+        // Energy is worth seven thirds of VTRS on both paths: the LNRG rate counts energy per VTRS,
+        // the SNRG rate VTRS per energy.
+        set_broker_rates(FixedU128::from_rational(3, 7), DUST_RATE);
         Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get() + 1);
 
         Balances::set_balance(&treasury, ExistentialDeposit::get());
@@ -862,11 +892,7 @@ mod treasury {
         fund_broker();
         // Energy is worth two thirds of VTRS on both paths: the LNRG rate counts energy per VTRS,
         // the SNRG rate VTRS per energy.
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(ROUNDING_RATE);
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
-            SNRG::get(),
-            FixedU128::from_rational(2, 3),
-        );
+        set_broker_rates(ROUNDING_RATE, FixedU128::from_rational(2, 3));
 
         Balances::set_balance(&treasury, ExistentialDeposit::get());
         let min_balance =
