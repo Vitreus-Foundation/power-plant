@@ -444,6 +444,8 @@ parameter_types! {
     pub const ReportLongevity: u64 = 24 * 28 * 6 * EpochDuration::get();
         // BondingDuration::get() as u64 * SessionsPerEra::get() as u64 * EpochDuration::get();
     pub const MaxAuthorities: u32 = 10_000;
+    /// Used only to weigh equivocation reports. Nothing limits a validator's cooperators to it.
+    pub const MaxCooperatorsPerValidator: u32 = 256;
 }
 
 impl pallet_babe::Config for Runtime {
@@ -453,7 +455,7 @@ impl pallet_babe::Config for Runtime {
     type DisabledValidators = Session;
     type WeightInfo = ();
     type MaxAuthorities = MaxAuthorities;
-    type MaxNominators = MaxCooperations;
+    type MaxNominators = MaxCooperatorsPerValidator;
     type KeyOwnerProof =
         <Historical as KeyOwnerProofSystem<(KeyTypeId, pallet_babe::AuthorityId)>>::Proof;
     type EquivocationReportSystem =
@@ -464,7 +466,7 @@ impl pallet_grandpa::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type WeightInfo = ();
     type MaxAuthorities = MaxAuthorities;
-    type MaxNominators = MaxCooperations;
+    type MaxNominators = MaxCooperatorsPerValidator;
     type MaxSetIdSessionEntries = ConstU64<168>;
     type KeyOwnerProof = <Historical as KeyOwnerProofSystem<(KeyTypeId, GrandpaId)>>::Proof;
     type EquivocationReportSystem =
@@ -684,7 +686,7 @@ parameter_types! {
 impl pallet_beefy::Config for Runtime {
     type BeefyId = BeefyId;
     type MaxAuthorities = MaxAuthorities;
-    type MaxNominators = MaxCooperations;
+    type MaxNominators = MaxCooperatorsPerValidator;
     type MaxSetIdSessionEntries = BeefySetIdSessionEntries;
     type OnNewValidatorSet = MmrLeaf;
     type WeightInfo = ();
@@ -766,7 +768,7 @@ parameter_types! {
     pub const Period: BlockNumber = 5;
     pub const Offset: BlockNumber = 0;
     pub const BatterySlotCapacity: Energy = 100_000_000_000;
-    pub const MaxCooperations: u32 = 256;
+    pub const MaxCooperations: u32 = 16;
     pub const HistoryDepth: u32 = 84;
     pub const MaxUnlockingChunks: u32 = 64;
     pub const RewardOnUnbalanceWasCalled: bool = false;
