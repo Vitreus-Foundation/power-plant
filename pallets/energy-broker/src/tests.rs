@@ -3,7 +3,7 @@ use frame_support::{
     assert_noop, assert_ok,
     traits::fungibles::{Inspect, Mutate},
 };
-use sp_runtime::{DispatchError, TokenError};
+use sp_runtime::{DispatchError, FixedU128, TokenError};
 use vitreus_runtime_common::{OnEnergyBurn, OnSessionChange, QuotePrice, Swap};
 
 const NATIVE_TOKEN: NativeOrAssetId = NativeOrAssetId::Native;
@@ -45,6 +45,29 @@ fn set_output_liquidity(asset_out: NativeOrAssetId, liquidity: u128) {
     <<Test as Config>::Assets>::set_balance(asset_out, &broker, liquidity + ed);
 }
 
+/// Checks that the input `get_amount_in` quotes for `amount_out` along `path` buys it, and that
+/// one unit less doesn't.
+fn assert_smallest_input(
+    path: &(NativeOrAssetId, NativeOrAssetId),
+    amount_out: u128,
+    include_fee: bool,
+) {
+    // An input too small to buy anything is rejected with `ZeroAmount`.
+    let bought = |amount_in| match EnergyBroker::get_amount_out(amount_in, path, include_fee) {
+        Ok(amount_out) => amount_out,
+        Err(Error::<Test>::ZeroAmount) => 0,
+        Err(error) => panic!("{path:?} can't price {amount_in}: {error:?}"),
+    };
+
+    let amount_in =
+        EnergyBroker::get_amount_in(amount_out, path, include_fee).expect("path is priced");
+    assert!(bought(amount_in) >= amount_out, "{path:?}: {amount_in} buys less than {amount_out}");
+    assert!(
+        bought(amount_in - 1) < amount_out,
+        "{path:?}: {amount_in} is not the smallest input for {amount_out}"
+    );
+}
+
 #[test]
 fn get_amount_works() {
     new_test_ext().execute_with(|| {
@@ -63,6 +86,39 @@ fn get_amount_works() {
 }
 
 #[test]
+fn get_amount_in_rounds_swap_fee_up() {
+    new_test_ext().execute_with(|| {
+        let path = (NATIVE_TOKEN, ENERGY_TOKEN);
+
+        // 1000 energy cost 100 native before the 2% swap fee. With the fee, the smallest input
+        // that buys them is 103: 102 buys only 990.
+        assert_eq!(EnergyBroker::get_amount_in(1000, &path, true).ok(), Some(103));
+        assert_eq!(EnergyBroker::get_amount_out(103, &path, true).ok(), Some(1000));
+        assert_eq!(EnergyBroker::get_amount_out(102, &path, true).ok(), Some(990));
+
+        // A fee that divides evenly adds nothing on top.
+        assert_eq!(EnergyBroker::get_amount_in(980, &path, true).ok(), Some(100));
+        assert_eq!(EnergyBroker::get_amount_out(100, &path, true).ok(), Some(980));
+    });
+}
+
+#[test]
+fn get_amount_in_is_smallest_input_on_every_path() {
+    new_test_ext().execute_with(|| {
+        // A rate whose reciprocal `FixedU128` can't hold exactly, so rounding shows on both paths
+        // with a rate.
+        Rate::set(&FixedU128::from_rational(1, 3));
+
+        for path in <Test as Config>::AssetConverter::paths() {
+            for include_fee in [false, true] {
+                assert_smallest_input(&path, 10, include_fee);
+                assert_smallest_input(&path, 10u128.pow(24) + 7, include_fee);
+            }
+        }
+    });
+}
+
+#[test]
 fn can_swap_native_for_exact_energy() {
     new_test_ext().execute_with(|| {
         let broker_account = EnergyBroker::account_id();
@@ -75,7 +131,8 @@ fn can_swap_native_for_exact_energy() {
 
         let exchange_out = 1000;
         let expect_in = 100;
-        let expect_fee = 2;
+        // An input of 102 leaves less than 100 after the 2% fee, so the fee comes to 3.
+        let expect_fee = 3;
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
@@ -141,7 +198,8 @@ fn can_swap_energy_for_exact_native() {
 
         let exchange_out = 100;
         let expect_in = 1000;
-        let expect_fee = 20;
+        // An input of 1020 leaves less than 1000 after the 2% fee, so the fee comes to 21.
+        let expect_fee = 21;
 
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
@@ -860,7 +918,8 @@ fn swap_tokens_for_exact_tokens_works_for_low_amount_out() {
         let alice_balance_before = balance(ALICE);
         let alice_energy_before = energy_balance(ALICE);
 
-        // amount_in = 1, even though 5 / 10 = 0
+        // 5 energy need a whole native at the exchange, and 1 native leaves nothing after the
+        // 2% fee, so the input is 2.
         assert_ok!(EnergyBroker::swap_tokens_for_exact_tokens(
             RuntimeOrigin::signed(ALICE),
             ALICE,
@@ -870,7 +929,7 @@ fn swap_tokens_for_exact_tokens_works_for_low_amount_out() {
             true
         ));
 
-        assert_eq!(balance(ALICE), alice_balance_before - 1);
+        assert_eq!(balance(ALICE), alice_balance_before - 2);
         assert_eq!(energy_balance(ALICE), alice_energy_before + 5);
     });
 }

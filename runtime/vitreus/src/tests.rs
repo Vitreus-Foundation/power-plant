@@ -30,6 +30,13 @@ fn new_test_ext() -> sp_io::TestExternalities {
                 ..Default::default()
             },
             nac_managing: NacManagingConfig { accounts: vec![(alith(), 2)], owners: vec![alith()] },
+            // The default configuration lets no downward message through.
+            configuration: ConfigurationConfig {
+                config: parachains_configuration::HostConfiguration {
+                    max_downward_message_size: 51200,
+                    ..Default::default()
+                },
+            },
             ..Default::default()
         }
         .build_storage()
@@ -50,11 +57,13 @@ fn asset_issuance(asset: &NativeOrAssetId) -> Balance {
 /// Gives the broker VTRS to pay for energy and sets the rates of its SNRG and LNRG paths.
 fn fund_broker() {
     Balances::set_balance(&EnergyBroker::account_id(), 1_000 * vtrs::UNITS);
-    pallet_dynamic_energy::ExchangeRate::<Runtime>::put(FixedU128::from_u32(1));
-    pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
-        SNRG::get(),
-        FixedU128::from_u32(1),
-    );
+    set_broker_rates(FixedU128::from_u32(1), FixedU128::from_u32(1));
+}
+
+/// Sets the energy exchange rate to `energy` and the SNRG rate to `snrg`.
+fn set_broker_rates(energy: FixedU128, snrg: FixedU128) {
+    pallet_dynamic_energy::ExchangeRate::<Runtime>::put(energy);
+    pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), snrg);
 }
 
 /// The VTRS the broker can pay out.
@@ -552,6 +561,34 @@ mod energy_broker {
     }
 
     #[test]
+    fn broker_paths_convert_at_their_rates() {
+        new_test_ext().execute_with(|| {
+            // Different exact rates, so a path that reads the other rate or turns its rate around
+            // gets another amount. The energy exchange rate counts VNRG per VTRS, the SNRG rate
+            // VTRS per SNRG.
+            set_broker_rates(FixedU128::from_u32(2), FixedU128::from_u32(4));
+
+            let vtrs = NativeOrAssetId::Native;
+            for (path, amount_in, amount_out) in [
+                ((vtrs.clone(), NativeOrAssetId::WithId(VNRG::get())), 10, 20),
+                ((NativeOrAssetId::WithId(LNRG::get()), vtrs.clone()), 20, 10),
+                ((NativeOrAssetId::WithId(SNRG::get()), vtrs), 10, 40),
+            ] {
+                assert_eq!(
+                    EnergyBroker::get_amount_out(amount_in, &path, false).ok(),
+                    Some(amount_out),
+                    "{path:?}"
+                );
+                assert_eq!(
+                    EnergyBroker::get_amount_in(amount_out, &path, false).ok(),
+                    Some(amount_in),
+                    "{path:?}"
+                );
+            }
+        });
+    }
+
+    #[test]
     fn snrg_conversion_is_one_to_one_and_without_swap_fee() {
         new_test_ext()
             .execute_with(|| assert_conversion_is_one_to_one_and_without_swap_fee(SNRG::get()))
@@ -731,9 +768,9 @@ mod treasury {
     const EXACT_RATE: FixedU128 = FixedU128::from_u32(1);
     /// A rate at which the broker's conversions round down.
     const ROUNDING_RATE: FixedU128 = FixedU128::from_rational(3, 2);
-    /// A rate at which a base unit of VTRS at the broker pays for no energy on either path: LNRG
-    /// rounds the output down to zero, SNRG would pay out more than the unit. At `ROUNDING_RATE`
-    /// the SNRG path still swaps one for one.
+    /// VTRS per base unit of energy at which a base unit of VTRS at the broker pays for no energy:
+    /// the smallest sale would pay out more than the unit. At `ROUNDING_RATE` the SNRG path still
+    /// swaps one for one.
     const DUST_RATE: FixedU128 = FixedU128::from_rational(7, 3);
 
     /// Changes the session through the listeners as the runtime wires them, in their order.
@@ -778,8 +815,7 @@ mod treasury {
 
         System::set_block_number(1);
         fund_broker();
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(rate);
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), rate);
+        set_broker_rates(rate, rate);
         let broker_vtrs_before = broker_vtrs();
 
         // More energy than the broker can pay for.
@@ -832,8 +868,9 @@ mod treasury {
         let treasury = Treasury::account_id();
 
         System::set_block_number(1);
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(DUST_RATE);
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(SNRG::get(), DUST_RATE);
+        // Energy is worth seven thirds of VTRS on both paths: the LNRG rate counts energy per VTRS,
+        // the SNRG rate VTRS per energy.
+        set_broker_rates(FixedU128::from_rational(3, 7), DUST_RATE);
         Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get() + 1);
 
         Balances::set_balance(&treasury, ExistentialDeposit::get());
@@ -862,11 +899,7 @@ mod treasury {
         fund_broker();
         // Energy is worth two thirds of VTRS on both paths: the LNRG rate counts energy per VTRS,
         // the SNRG rate VTRS per energy.
-        pallet_dynamic_energy::ExchangeRate::<Runtime>::put(ROUNDING_RATE);
-        pallet_asset_rate::ConversionRateToNative::<Runtime>::insert(
-            SNRG::get(),
-            FixedU128::from_rational(2, 3),
-        );
+        set_broker_rates(ROUNDING_RATE, FixedU128::from_rational(2, 3));
 
         Balances::set_balance(&treasury, ExistentialDeposit::get());
         let min_balance =
@@ -1390,11 +1423,12 @@ mod offences {
 
 mod xcm_tests {
     use super::*;
-    use frame_support::{assert_err_ignore_postinfo, assert_noop};
+    use frame_support::{assert_err_ignore_postinfo, assert_noop, assert_ok};
     use sp_runtime::{traits::Dispatchable, DispatchError};
     use xcm::latest::prelude::{
-        Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, Here, Location, OriginKind, Parachain,
-        ReceiveTeleportedAsset, Transact, Weight, WeightLimit, Xcm, XcmError,
+        AccountId32, AccountKey20, Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, GeneralIndex,
+        Here, Location, OriginKind, PalletInstance, Parachain, ReceiveTeleportedAsset, Transact,
+        Weight, WeightLimit, Xcm, XcmError,
     };
     use xcm::{VersionedAssets, VersionedLocation, VersionedXcm};
     use xcm_executor::{traits::TransferType, XcmExecutor};
@@ -1406,6 +1440,103 @@ mod xcm_tests {
 
     fn energy_asset(amount: u128) -> Asset {
         Asset { id: AssetId(crate::xcm_config::EnergyTokenLocation::get()), fun: Fungible(amount) }
+    }
+
+    /// Makes `para` reachable for downward messages, which later SDK releases queue only for a
+    /// para with a head. A copy of `dmp::Pallet::make_parachain_reachable` from those releases.
+    fn make_parachain_reachable(para: impl Into<ParaId>) {
+        use sp_runtime::codec::Encode;
+        let para = para.into();
+        parachains_paras::Heads::<Runtime>::insert(
+            para,
+            polkadot_primitives::HeadData(para.encode()),
+        );
+    }
+
+    /// A teleport of `asset` to a parachain burns it here, counts it as burned energy and queues
+    /// the parachain a v3 message that deposits it to the beneficiary. Regression guard for what
+    /// parachains receive.
+    fn assert_teleport_burns_and_queues_v3_message(asset: crate::AssetId) {
+        use sp_runtime::codec::Decode;
+        System::set_block_number(1);
+        // Parachains whose XCM version the relay doesn't know get messages in this version,
+        // the oldest one ours understand.
+        assert_ok!(XcmPallet::force_default_xcm_version(RuntimeOrigin::root(), Some(3)));
+        make_parachain_reachable(2000);
+        let energy = NativeOrAssetId::WithId(asset);
+        let balance = asset_balance(&energy, &alith());
+        let issuance = asset_issuance(&energy);
+        // Alice's sr25519 key, an account on a parachain with 32-byte accounts.
+        let account =
+            hex_literal::hex!("d43593c715fdd31c61141abd04a99fd6822c8558854ccde39a5684e7a56da27d");
+
+        assert_ok!(RuntimeCall::XcmPallet(pallet_xcm::Call::limited_teleport_assets {
+            dest: Box::new(VersionedLocation::from(parachain())),
+            beneficiary: Box::new(VersionedLocation::from(Location::new(
+                0,
+                [AccountId32 { network: None, id: account }],
+            ))),
+            assets: Box::new(VersionedAssets::from(vec![Asset {
+                id: AssetId(Location::new(
+                    0,
+                    [PalletInstance(crate::xcm_config::ASSETS_PALLET_ID), GeneralIndex(asset)],
+                )),
+                fun: Fungible(AMOUNT),
+            }])),
+            fee_asset_item: 0,
+            weight_limit: WeightLimit::Unlimited,
+        })
+        .dispatch(RuntimeOrigin::signed(alith())));
+
+        assert_eq!(asset_balance(&energy, &alith()), balance - AMOUNT);
+        assert_eq!(asset_issuance(&energy), issuance - AMOUNT);
+        assert_eq!(pallet_energy_broker::SessionEnergyBurn::<Runtime>::get(), AMOUNT);
+        assert_eq!(pallet_dynamic_energy::SessionEnergyBurn::<Runtime>::get(), AMOUNT);
+        let (origin, destination, message_id) = System::events()
+            .into_iter()
+            .find_map(|record| match record.event {
+                RuntimeEvent::XcmPallet(pallet_xcm::Event::Sent {
+                    origin,
+                    destination,
+                    message_id,
+                    ..
+                }) => Some((origin, destination, message_id)),
+                _ => None,
+            })
+            .expect("the teleport is sent");
+        let sender = Location::new(
+            0,
+            [AccountKey20 {
+                network: Some(crate::xcm_config::ThisNetwork::get()),
+                key: alith().into(),
+            }],
+        );
+        assert_eq!((origin, destination), (sender, parachain()));
+
+        // The message as the parachain gets it.
+        let expected = {
+            use xcm::v3::prelude::*;
+            // The asset as the parachain sees it: in the assets pallet of its parent.
+            let teleported: MultiAsset = (
+                (Parent, PalletInstance(crate::xcm_config::ASSETS_PALLET_ID), GeneralIndex(asset)),
+                AMOUNT,
+            )
+                .into();
+            VersionedXcm::<()>::V3(Xcm(vec![
+                ReceiveTeleportedAsset(teleported.clone().into()),
+                ClearOrigin,
+                BuyExecution { fees: teleported, weight_limit: Unlimited },
+                DepositAsset {
+                    assets: Wild(AllCounted(1)),
+                    beneficiary: [AccountId32 { network: None, id: account }].into(),
+                },
+                SetTopic(message_id),
+            ]))
+        };
+        let queue = parachains_dmp::DownwardMessageQueues::<Runtime>::get(ParaId::from(2000));
+        assert_eq!(queue.len(), 1);
+        let queued = VersionedXcm::<()>::decode(&mut &queue[0].msg[..]).expect("a valid XCM");
+        assert_eq!(queued, expected);
     }
 
     /// Inbound energy teleports must be rejected explicitly with `UntrustedTeleportLocation`,
@@ -1428,6 +1559,21 @@ mod xcm_tests {
 
             assert_eq!(outcome.ensure_complete(), Err(XcmError::UntrustedTeleportLocation));
         });
+    }
+
+    #[test]
+    fn teleport_burns_vnrg_and_queues_v3_message() {
+        new_test_ext().execute_with(|| assert_teleport_burns_and_queues_v3_message(VNRG::get()))
+    }
+
+    #[test]
+    fn teleport_burns_snrg_and_queues_v3_message() {
+        new_test_ext().execute_with(|| assert_teleport_burns_and_queues_v3_message(SNRG::get()))
+    }
+
+    #[test]
+    fn teleport_burns_lnrg_and_queues_v3_message() {
+        new_test_ext().execute_with(|| assert_teleport_burns_and_queues_v3_message(LNRG::get()))
     }
 
     /// Only governance may `send` arbitrary XCM. Regression guard for `SendXcmOrigin`.
