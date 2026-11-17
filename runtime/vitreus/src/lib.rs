@@ -46,8 +46,7 @@ use frame_support::traits::tokens::{
     fungible::Inspect as FungibleInspect,
     imbalance::{ResolveAssetTo, ResolveTo},
     nonfungibles_v2::{Inspect, InspectEnumerable},
-    ConversionFromAssetBalance, ConversionToAssetBalance, DepositConsequence, Fortitude, Precision,
-    Preservation, Provenance, WithdrawConsequence,
+    DepositConsequence, Fortitude, Precision, Preservation, Provenance, WithdrawConsequence,
 };
 use frame_support::traits::{
     Currency, EitherOfDiverse, Equals, ExistenceRequirement, Imbalance, ProcessMessage,
@@ -1058,20 +1057,13 @@ ord_parameter_types! {
         AccountIdConversion::<AccountId>::into_account_truncating(&AssetConversionPalletId::get());
 }
 
-pub type DynamicEnergyConversion =
-    pallet_dynamic_energy::DynamicEnergyConversion<Runtime, (Equals<VNRG>, Equals<LNRG>)>;
-
 pub struct NativeToEnergyConverter;
 impl FixedPathAssetConverter<Runtime> for NativeToEnergyConverter {
     const SOURCE: NativeOrAssetId = NativeOrAssetId::Native;
     const TARGET: NativeOrAssetId = NativeOrAssetId::WithId(VNRG::get());
 
-    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
-        DynamicEnergyConversion::to_asset_balance(amount_in, Self::TARGET).ok()
-    }
-
-    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
-        DynamicEnergyConversion::from_asset_balance(amount_out, Self::TARGET).ok()
+    fn conversion_rate() -> Option<FixedU128> {
+        DynamicEnergy::exchange_rate()
     }
 }
 
@@ -1080,12 +1072,9 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToNativeConverter {
     const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(LNRG::get());
     const TARGET: NativeOrAssetId = NativeOrAssetId::Native;
 
-    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
-        DynamicEnergyConversion::from_asset_balance(amount_in, Self::SOURCE).ok()
-    }
-
-    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
-        DynamicEnergyConversion::to_asset_balance(amount_out, Self::SOURCE).ok()
+    // The exchange rate counts VNRG per VTRS, so a sale of LNRG takes its reciprocal.
+    fn conversion_rate() -> Option<FixedU128> {
+        DynamicEnergy::exchange_rate().and_then(FixedPointNumber::reciprocal)
     }
 
     /// The broker's VTRS, but no more than the payout quota of the session still allows.
@@ -1115,12 +1104,8 @@ impl FixedPathAssetConverter<Runtime> for StaticEnergyToNativeConverter {
     const SOURCE: NativeOrAssetId = NativeOrAssetId::WithId(SNRG::get());
     const TARGET: NativeOrAssetId = NativeOrAssetId::Native;
 
-    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
-        AssetRate::from_asset_balance(amount_in, SNRG::get()).ok()
-    }
-
-    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
-        AssetRate::to_asset_balance(amount_out, SNRG::get()).ok()
+    fn conversion_rate() -> Option<FixedU128> {
+        pallet_asset_rate::ConversionRateToNative::<Runtime>::get(SNRG::get())
     }
 
     fn resolve(
@@ -1141,12 +1126,8 @@ impl FixedPathAssetConverter<Runtime> for LiquidEnergyToEnergyConverter {
         Some(0)
     }
 
-    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
-        Some(amount_in)
-    }
-
-    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
-        Some(amount_out)
+    fn conversion_rate() -> Option<FixedU128> {
+        Some(FixedU128::from_u32(1))
     }
 
     /// The output is minted, so it is unbounded.
@@ -1179,12 +1160,8 @@ impl FixedPathAssetConverter<Runtime> for StaticEnergyToEnergyConverter {
         Some(0)
     }
 
-    fn get_amount_out(amount_in: Balance) -> Option<Balance> {
-        Some(amount_in)
-    }
-
-    fn get_amount_in(amount_out: Balance) -> Option<Balance> {
-        Some(amount_out)
+    fn conversion_rate() -> Option<FixedU128> {
+        Some(FixedU128::from_u32(1))
     }
 
     /// The output is minted, so it is unbounded.

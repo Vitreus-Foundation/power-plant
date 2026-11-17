@@ -8,8 +8,9 @@ on:
     paths: [CHANGELOG.md]
   # By hand on main: retries a release that failed. On any other branch: a dry run.
   workflow_dispatch:
-  # A release PR gets a dry run: the runtimes are built and the notes rendered, nothing is
-  # published. The prepare job tells release PRs apart: they cut a version that has no tag yet.
+  # A release PR gets a dry run: the runtimes are built, their migrations run on the current state
+  # of mainnet and testnet, and the notes rendered, nothing is published. The prepare job tells
+  # release PRs apart: they cut a version that has no tag yet.
   # Every PR into main runs this workflow: under a path filter, PRs that don't change
   # CHANGELOG.md would never get the required Release check.
   pull_request:
@@ -97,6 +98,47 @@ jobs:
           path: out/
           if-no-files-found: error
 
+  try-runtime:
+    name: "try-runtime"
+    needs: prepare
+    # Release PRs and dry runs on other branches. A run on main publishes what the release PR's
+    # run already checked.
+    if: needs.prepare.outputs.should-release == '1' && github.ref != 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+
+    strategy:
+      fail-fast: false
+      matrix:
+        network: [mainnet, testnet]
+
+    env:
+      CARGO_TERM_COLOR: always
+      NETWORK: ${{ matrix.network }}
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+
+      # Without a cache, for the reason given in try-runtime.yml.
+      - uses: actions-rust-lang/setup-rust-toolchain@166cdcfd11aee3cb47222f9ddb555ce30ddb9659 # v1.17.0
+        with:
+          target: wasm32-unknown-unknown
+          components: rust-src
+          cache: false
+
+      - name: Install try-runtime-cli
+        run: |
+          .github/scripts/try-runtime.sh install "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: Build the ${{ matrix.network }} runtime with try-runtime
+        run: .github/scripts/try-runtime.sh build "$NETWORK"
+
+      - name: Run the migrations on the ${{ matrix.network }} state
+        run: .github/scripts/try-runtime.sh check "$NETWORK" --strict
+
   notes:
     name: Release notes
     needs: [prepare, build]
@@ -160,7 +202,7 @@ jobs:
   # from skipping it too.
   check:
     name: Release check
-    needs: [prepare, build, notes, publish]
+    needs: [prepare, build, notes, publish, try-runtime]
     if: always() && (needs.prepare.result != 'success' || needs.build.result != 'skipped')
     runs-on: ubuntu-24.04
     timeout-minutes: 5
