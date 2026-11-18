@@ -12,6 +12,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Add the `EnergyExchangeFailed` event to `pallet-treasury-extension`
 - Add the `NftMintFailed` event to `pallet-nac-managing`
 - Add a per-session payout quota on energy sales to `pallet-dynamic-energy`, off by default
+- Add `max_amount_in` to the EnergyBroker runtime API to query how much a swap path can take
 
 ### Changed
 
@@ -25,6 +26,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Make `pallet-treasury-extension` sell the treasury's energy before the exchange rate update
 - Make the converters of `pallet-energy-broker` report a conversion rate instead of amounts
 - Lower `MaxCooperations` of `pallet-energy-generation` from 256 to 16
+- Make `max_amount_out` of the EnergyBroker runtime API return `None` for a path that can't be priced
 - Let only Root submit public proposals in `pallet-democracy` and lengthen its periods, on testnet
 
 ### Removed

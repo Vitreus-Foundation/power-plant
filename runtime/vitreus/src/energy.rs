@@ -51,7 +51,7 @@ impl QuotePriceFromEnergy for EnergyToNativeExchange {
         LiquidEnergyToNativeExchange::quote_price_tokens_for_exact_tokens(amount, include_fee)
     }
 
-    fn max_amount_out() -> Balance {
+    fn max_amount_out() -> Option<Balance> {
         LiquidEnergyToNativeExchange::max_amount_out()
     }
 }

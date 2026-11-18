@@ -45,6 +45,20 @@ fn set_output_liquidity(asset_out: NativeOrAssetId, liquidity: u128) {
     <<Test as Config>::Assets>::set_balance(asset_out, &broker, liquidity + ed);
 }
 
+/// What `amount_in` buys along `path`, zero for an input too small to buy anything.
+fn amount_bought(
+    path: &(NativeOrAssetId, NativeOrAssetId),
+    amount_in: u128,
+    include_fee: bool,
+) -> u128 {
+    match EnergyBroker::get_amount_out(amount_in, path, include_fee) {
+        Ok(amount_out) => amount_out,
+        // An input too small to buy anything is rejected with `ZeroAmount`.
+        Err(Error::<Test>::ZeroAmount) => 0,
+        Err(error) => panic!("{path:?} can't price {amount_in}: {error:?}"),
+    }
+}
+
 /// Checks that the input `get_amount_in` quotes for `amount_out` along `path` buys it, and that
 /// one unit less doesn't.
 fn assert_smallest_input(
@@ -52,12 +66,7 @@ fn assert_smallest_input(
     amount_out: u128,
     include_fee: bool,
 ) {
-    // An input too small to buy anything is rejected with `ZeroAmount`.
-    let bought = |amount_in| match EnergyBroker::get_amount_out(amount_in, path, include_fee) {
-        Ok(amount_out) => amount_out,
-        Err(Error::<Test>::ZeroAmount) => 0,
-        Err(error) => panic!("{path:?} can't price {amount_in}: {error:?}"),
-    };
+    let bought = |amount_in| amount_bought(path, amount_in, include_fee);
 
     let amount_in =
         EnergyBroker::get_amount_in(amount_out, path, include_fee).expect("path is priced");
@@ -65,6 +74,23 @@ fn assert_smallest_input(
     assert!(
         bought(amount_in - 1) < amount_out,
         "{path:?}: {amount_in} is not the smallest input for {amount_out}"
+    );
+}
+
+/// Checks that the input `max_amount_in` gives for `path` buys no more than `max_amount_out`, and
+/// that one unit more buys more.
+fn assert_largest_input(path: &(NativeOrAssetId, NativeOrAssetId), include_fee: bool) {
+    let bought = |amount_in| amount_bought(path, amount_in, include_fee);
+
+    let max_amount_out = EnergyBroker::max_amount_out(path).expect("path is priced");
+    let amount_in = EnergyBroker::max_amount_in(path, include_fee).expect("path is priced");
+    assert!(
+        bought(amount_in) <= max_amount_out,
+        "{path:?}: {amount_in} buys more than {max_amount_out}"
+    );
+    assert!(
+        bought(amount_in + 1) > max_amount_out,
+        "{path:?}: {amount_in} is not the largest input within {max_amount_out}"
     );
 }
 
@@ -468,7 +494,7 @@ fn quote_of_conversion_does_not_require_liquidity() {
         let amount = 1_000u128;
 
         <<Test as Config>::Assets>::set_balance(ENERGY_TOKEN, &broker, get_energy_ed());
-        assert_eq!(EnergyBroker::max_amount_out(&path), u128::MAX);
+        assert_eq!(EnergyBroker::max_amount_out(&path), Some(u128::MAX));
 
         assert_eq!(
             <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
@@ -499,15 +525,126 @@ fn max_amount_out_works() {
         // The broker's energy, less the deposit that keeps its account alive.
         assert_eq!(
             EnergyBroker::max_amount_out(&(NATIVE_TOKEN, ENERGY_TOKEN)),
-            INITIAL_ENERGY_BALANCE - get_energy_ed()
+            Some(INITIAL_ENERGY_BALANCE - get_energy_ed())
         );
 
         <Test as Config>::Assets::set_balance(ENERGY_TOKEN, &broker, get_energy_ed());
-        assert_eq!(EnergyBroker::max_amount_out(&(NATIVE_TOKEN, ENERGY_TOKEN)), 0);
+        assert_eq!(EnergyBroker::max_amount_out(&(NATIVE_TOKEN, ENERGY_TOKEN)), Some(0));
 
-        assert_eq!(EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, ENERGY_TOKEN)), u128::MAX);
+        assert_eq!(
+            EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, ENERGY_TOKEN)),
+            Some(u128::MAX)
+        );
 
-        assert_eq!(EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, NATIVE_TOKEN)), 0);
+        // An unsupported path can't be priced.
+        assert_eq!(EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, NATIVE_TOKEN)), None);
+    });
+}
+
+#[test]
+fn max_amount_out_is_none_without_rate() {
+    new_test_ext().execute_with(|| {
+        let to_energy = (NATIVE_TOKEN, ENERGY_TOKEN);
+        let to_native = (ENERGY_TOKEN, NATIVE_TOKEN);
+        set_output_liquidity(ENERGY_TOKEN, 100);
+        set_output_liquidity(NATIVE_TOKEN, 100);
+        assert_eq!(EnergyBroker::max_amount_out(&to_energy), Some(100));
+        assert_eq!(EnergyBroker::max_amount_out(&to_native), Some(100));
+
+        // A zero rate leaves the path to energy without a rate, as the reciprocal of zero, and
+        // gives the path to native currency a zero one.
+        Rate::set(&FixedU128::from_u32(0));
+
+        assert_eq!(EnergyBroker::max_amount_out(&to_energy), None);
+        assert_eq!(EnergyBroker::max_amount_out(&to_native), None);
+
+        // Only the rate is missing: the liquidity is still there.
+        assert_eq!(EnergyBroker::liquidity(&to_energy), 100);
+        assert_eq!(EnergyBroker::liquidity(&to_native), 100);
+    });
+}
+
+#[test]
+fn max_amount_in_is_largest_input_on_every_path() {
+    new_test_ext().execute_with(|| {
+        // A rate whose reciprocal `FixedU128` can't hold exactly, so rounding shows on both paths
+        // with a rate.
+        Rate::set(&FixedU128::from_rational(1, 3));
+
+        for liquidity in [10, 10u128.pow(24) + 7] {
+            set_output_liquidity(NATIVE_TOKEN, liquidity);
+            set_output_liquidity(ENERGY_TOKEN, liquidity);
+
+            for path in <Test as Config>::AssetConverter::paths() {
+                for include_fee in [false, true] {
+                    if EnergyBroker::max_amount_out(&path) == Some(u128::MAX) {
+                        // A minted output takes any input.
+                        assert_eq!(
+                            EnergyBroker::max_amount_in(&path, include_fee),
+                            Some(u128::MAX)
+                        );
+                    } else {
+                        assert_largest_input(&path, include_fee);
+                    }
+                }
+            }
+        }
+    });
+}
+
+#[test]
+fn max_amount_in_is_zero_when_path_supplies_nothing() {
+    new_test_ext().execute_with(|| {
+        set_output_liquidity(ENERGY_TOKEN, 0);
+        assert_eq!(EnergyBroker::max_amount_in(&(NATIVE_TOKEN, ENERGY_TOKEN), true), Some(0));
+    });
+}
+
+#[test]
+fn max_amount_in_is_zero_when_inputs_within_limit_buy_nothing() {
+    new_test_ext().execute_with(|| {
+        let path = (NATIVE_TOKEN, ENERGY_TOKEN);
+
+        // After the swap fee one native buys nothing and two buy ten energy, so no input buys
+        // anything within a limit of five, though one native stays within it.
+        set_output_liquidity(ENERGY_TOKEN, 5);
+        assert_eq!(amount_bought(&path, 1, true), 0);
+        assert_eq!(amount_bought(&path, 2, true), 10);
+        assert_eq!(EnergyBroker::max_amount_in(&path, true), Some(0));
+
+        // A limit that the smallest output reaches takes the input that buys it.
+        set_output_liquidity(ENERGY_TOKEN, 10);
+        assert_eq!(EnergyBroker::max_amount_in(&path, true), Some(2));
+    });
+}
+
+#[test]
+fn max_amount_in_is_unbounded_when_any_input_fits() {
+    new_test_ext().execute_with(|| {
+        let path = (ENERGY_TOKEN, NATIVE_TOKEN);
+
+        // Ten energy buy one native, so even the largest input buys no more than this.
+        set_output_liquidity(NATIVE_TOKEN, u128::MAX / 10);
+        assert_eq!(
+            EnergyBroker::get_amount_out(u128::MAX, &path, false).ok(),
+            Some(u128::MAX / 10)
+        );
+
+        assert_eq!(EnergyBroker::max_amount_in(&path, false), Some(u128::MAX));
+    });
+}
+
+#[test]
+fn max_amount_in_is_none_without_rate() {
+    new_test_ext().execute_with(|| {
+        // Even with nothing to supply, where a path with a rate takes zero.
+        set_output_liquidity(ENERGY_TOKEN, 0);
+        Rate::set(&FixedU128::from_u32(0));
+
+        assert_eq!(EnergyBroker::max_amount_in(&(NATIVE_TOKEN, ENERGY_TOKEN), true), None);
+        assert_eq!(EnergyBroker::max_amount_in(&(ENERGY_TOKEN, NATIVE_TOKEN), true), None);
+        // An unsupported path has no rate either.
+        assert_eq!(EnergyBroker::max_amount_in(&(STATIC_ENERGY_TOKEN, NATIVE_TOKEN), true), None);
     });
 }
 
@@ -521,7 +658,7 @@ fn can_swap_up_to_max_amount_out() {
 
         for path in [(NATIVE_TOKEN, ENERGY_TOKEN), (ENERGY_TOKEN, NATIVE_TOKEN)] {
             set_balances(broker, liquidity + get_ed(), liquidity + get_energy_ed());
-            assert_eq!(EnergyBroker::max_amount_out(&path), liquidity);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(liquidity));
 
             assert_noop!(
                 EnergyBroker::swap_tokens_for_exact_tokens(
@@ -543,7 +680,7 @@ fn can_swap_up_to_max_amount_out() {
                 None,
                 true
             ));
-            assert_eq!(EnergyBroker::max_amount_out(&path), 0);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(0));
         }
     });
 }
@@ -557,7 +694,7 @@ fn can_quote_tokens_for_exact_tokens_up_to_max_amount_out() {
         for path in [(NATIVE_TOKEN, ENERGY_TOKEN), (ENERGY_TOKEN, NATIVE_TOKEN)] {
             let (asset_in, asset_out) = path.clone();
             set_output_liquidity(asset_out.clone(), liquidity);
-            assert_eq!(EnergyBroker::max_amount_out(&path), liquidity);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(liquidity));
 
             let at_limit = <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
                 asset_in.clone(),
@@ -596,7 +733,7 @@ fn can_quote_exact_tokens_for_tokens_up_to_max_amount_out() {
             assert!(amount_out > 1);
 
             set_output_liquidity(asset_out.clone(), amount_out);
-            assert_eq!(EnergyBroker::max_amount_out(&path), amount_out);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(amount_out));
             assert_eq!(
                 <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
                     asset_in.clone(),

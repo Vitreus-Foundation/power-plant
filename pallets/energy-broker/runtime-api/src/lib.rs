@@ -4,7 +4,7 @@ use parity_scale_codec::{Decode, Encode};
 use sp_runtime::{FixedU128, Percent, Vec};
 
 sp_api::decl_runtime_apis! {
-    #[api_version(4)]
+    #[api_version(5)]
     pub trait EnergyBrokerApi<AccountId, AssetKind, Balance>
     where
         AccountId: Encode,
@@ -52,10 +52,21 @@ sp_api::decl_runtime_apis! {
         /// Returns the supported swap paths.
         fn paths() -> Vec<(AssetKind, AssetKind)>;
 
-        /// The maximum amount of `asset2` the path `(asset1, asset2)` can currently supply.
+        /// The maximum amount of `asset2` a swap from `asset1` can currently supply.
         ///
-        /// A path not in [`Self::paths`] returns zero. An unbounded path returns
-        /// `Balance::max_value()`.
-        fn max_amount_out(asset1: AssetKind, asset2: AssetKind) -> Balance;
+        /// `None` if the swap can't be priced, a path not in [`Self::paths`] included. Otherwise
+        /// zero if nothing can be supplied and `Balance::max_value()` if the path is unbounded.
+        fn max_amount_out(asset1: AssetKind, asset2: AssetKind) -> Option<Balance>;
+
+        /// The maximum exact amount of `asset1` a swap to `asset2` can currently take.
+        ///
+        /// `None` if the swap can't be priced, a path not in [`Self::paths`] included. Otherwise
+        /// zero if nothing can be taken and `Balance::max_value()` if the path is unbounded. If
+        /// `include_fee` is `true`, the amount includes the swap fee.
+        fn max_amount_in(
+            asset1: AssetKind,
+            asset2: AssetKind,
+            include_fee: bool,
+        ) -> Option<Balance>;
     }
 }
