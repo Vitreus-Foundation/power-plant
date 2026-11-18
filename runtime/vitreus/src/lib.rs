@@ -3037,6 +3037,14 @@ impl_runtime_apis! {
         fn max_amount_out(asset1: NativeOrAssetId, asset2: NativeOrAssetId) -> Option<Balance> {
             EnergyBroker::max_amount_out(&(asset1, asset2))
         }
+
+        fn max_amount_in(
+            asset1: NativeOrAssetId,
+            asset2: NativeOrAssetId,
+            include_fee: bool,
+        ) -> Option<Balance> {
+            EnergyBroker::max_amount_in(&(asset1, asset2), include_fee)
+        }
     }
 
     impl energy_fee_runtime_api::EnergyFeeApi<Block, AccountId, Balance, RuntimeCall> for Runtime {

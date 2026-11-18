@@ -25,7 +25,9 @@ pub trait FixedPathAssetConverter<T: Config> {
     ///
     /// This is what the pallet checks before it debits anyone, so it must never exceed what
     /// [`Self::withdraw`] can take from the broker. It can be less when the path has a limit of
-    /// its own. Otherwise override it together with [`Self::withdraw`].
+    /// its own. Otherwise override it together with [`Self::withdraw`]. A path that returns
+    /// `Balance::max_value()` must have a [`Self::conversion_rate`] of at most one, so that any
+    /// input converts without overflow.
     fn reducible_balance(broker: &T::AccountId) -> T::Balance {
         T::Assets::reducible_balance(Self::TARGET, broker, Preserve, Polite)
     }

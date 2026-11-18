@@ -12,6 +12,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Add the `EnergyExchangeFailed` event to `pallet-treasury-extension`
 - Add the `NftMintFailed` event to `pallet-nac-managing`
 - Add a per-session payout quota on energy sales to `pallet-dynamic-energy`, off by default
+- Add `max_amount_in` to the EnergyBroker runtime API to query how much a swap path can take
 
 ### Changed
 

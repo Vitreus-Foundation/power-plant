@@ -18,6 +18,7 @@ mod mock;
 pub use pallet::*;
 
 use frame_support::{
+    defensive,
     storage::with_storage_layer,
     traits::{
         fungibles::{Balanced, Credit, Inspect, Mutate},
@@ -34,7 +35,7 @@ use frame_support::{
 use sp_runtime::{
     helpers_128bit::multiply_by_rational_with_rounding,
     traits::{
-        AccountIdConversion, Bounded, CheckedAdd, CheckedDiv, CheckedMul, Ensure, Get,
+        AccountIdConversion, Bounded, CheckedAdd, CheckedDiv, CheckedMul, Ensure, Get, One,
         StaticLookup, UniqueSaturatedInto, Zero,
     },
     DispatchError, FixedPointNumber, FixedU128, Rounding, Saturating, TokenError, Vec,
@@ -366,6 +367,52 @@ pub mod pallet {
         pub fn max_amount_out(path: &(T::AssetKind, T::AssetKind)) -> Option<T::Balance> {
             Self::conversion_rate(path)?;
             Some(Self::liquidity(path))
+        }
+
+        /// The largest input along `path` whose output stays within [`Self::max_amount_out`].
+        ///
+        /// If `include_fee` is `true`, the input includes the path's swap fee. `None` if the path
+        /// can't be priced, an unsupported path included. Otherwise zero if no input within the
+        /// limit buys anything, as when the path can supply nothing, and `Balance::max_value()` if
+        /// every input fits, such as on a path that mints its output.
+        pub fn max_amount_in(
+            path: &(T::AssetKind, T::AssetKind),
+            include_fee: bool,
+        ) -> Option<T::Balance> {
+            let max_amount_out = Self::max_amount_out(path)?;
+
+            if max_amount_out.is_zero() {
+                return Some(Zero::zero());
+            }
+
+            // `get_amount_in(max_amount_out + 1)` is the smallest input that buys more than
+            // `max_amount_out`. The output doesn't drop as the input grows, so every smaller input
+            // fits, and the largest of them is one unit less.
+            let amount_in = match max_amount_out.checked_add(&One::one()) {
+                Some(above_limit) => match Self::get_amount_in(above_limit, path, include_fee) {
+                    Ok(amount_in) => amount_in.saturating_sub(One::one()),
+                    // The smallest input that buys more than `max_amount_out` doesn't fit in
+                    // `Balance`, so every input fits.
+                    Err(Error::<T>::Overflow) => T::Balance::max_value(),
+                    Err(error) => {
+                        defensive!(
+                            error,
+                            "`max_amount_out` found a rate and the amount isn't zero"
+                        );
+                        return None;
+                    },
+                },
+                // `FixedPathAssetConverter` requires an unbounded path to convert any input without
+                // overflow, and no output can exceed the largest balance, so every input fits.
+                None => T::Balance::max_value(),
+            };
+
+            // Rounding can leave even the largest input within the limit buying nothing, and then
+            // every smaller one buys nothing too.
+            match Self::get_amount_out(amount_in, path, include_fee) {
+                Err(Error::<T>::ZeroAmount) => Some(Zero::zero()),
+                _ => Some(amount_in),
+            }
         }
 
         /// The output amount for `amount_in` along `path`, rounded down.

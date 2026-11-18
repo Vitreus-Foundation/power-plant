@@ -57,5 +57,16 @@ sp_api::decl_runtime_apis! {
         /// `None` if the swap can't be priced, a path not in [`Self::paths`] included. Otherwise
         /// zero if nothing can be supplied and `Balance::max_value()` if the path is unbounded.
         fn max_amount_out(asset1: AssetKind, asset2: AssetKind) -> Option<Balance>;
+
+        /// The maximum exact amount of `asset1` a swap to `asset2` can currently take.
+        ///
+        /// `None` if the swap can't be priced, a path not in [`Self::paths`] included. Otherwise
+        /// zero if nothing can be taken and `Balance::max_value()` if the path is unbounded. If
+        /// `include_fee` is `true`, the amount includes the swap fee.
+        fn max_amount_in(
+            asset1: AssetKind,
+            asset2: AssetKind,
+            include_fee: bool,
+        ) -> Option<Balance>;
     }
 }
