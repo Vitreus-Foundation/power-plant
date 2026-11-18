@@ -345,12 +345,27 @@ pub mod pallet {
             T::AssetConverter::swap_fee(path).unwrap_or_else(T::SwapFee::get)
         }
 
-        /// The maximum amount of the output asset that `path` can currently supply.
+        /// The rate of `path`, or `None` if the path can't be priced: it is unsupported, has no
+        /// rate, or has a zero rate, at which no input buys anything.
+        fn conversion_rate(path: &(T::AssetKind, T::AssetKind)) -> Option<FixedU128> {
+            T::AssetConverter::conversion_rate(path).filter(|rate| !rate.is_zero())
+        }
+
+        /// The maximum amount of the output asset that `path` can supply, whatever its rate.
         ///
-        /// An unsupported path returns zero. A path that mints its output is unbounded and returns
-        /// `Balance::max_value()`.
-        pub fn max_amount_out(path: &(T::AssetKind, T::AssetKind)) -> T::Balance {
+        /// Zero on an unsupported path, otherwise the path converter's
+        /// [`FixedPathAssetConverter::reducible_balance`].
+        pub fn liquidity(path: &(T::AssetKind, T::AssetKind)) -> T::Balance {
             T::AssetConverter::reducible_balance(path, &Self::account_id())
+        }
+
+        /// The maximum amount of the output asset that a swap along `path` can currently supply.
+        ///
+        /// [`Self::liquidity`] of `path`, or `None` if the path can't be priced, an unsupported
+        /// path included.
+        pub fn max_amount_out(path: &(T::AssetKind, T::AssetKind)) -> Option<T::Balance> {
+            Self::conversion_rate(path)?;
+            Some(Self::liquidity(path))
         }
 
         /// The output amount for `amount_in` along `path`, rounded down.
@@ -417,9 +432,7 @@ pub mod pallet {
         ) -> Result<(T::Balance, T::Balance), Error<T>> {
             ensure!(amount_out > Zero::zero(), Error::<T>::ZeroAmount);
 
-            let rate = T::AssetConverter::conversion_rate(path).ok_or(Error::<T>::InvalidPath)?;
-            // At a zero rate no input buys anything.
-            ensure!(!rate.is_zero(), Error::<T>::InvalidPath);
+            let rate = Self::conversion_rate(path).ok_or(Error::<T>::InvalidPath)?;
 
             // Rounds up to the smallest input that `rate` converts to at least `amount_out`.
             let exchange_in = multiply_by_rational_with_rounding(
@@ -527,7 +540,7 @@ pub mod pallet {
                 ensure!(free >= amount_in, TokenError::NotExpendable);
             }
 
-            let liquidity = Self::max_amount_out(path);
+            let liquidity = Self::liquidity(path);
             ensure!(liquidity >= amount_out, Error::<T>::InsufficientLiquidity);
 
             let energy_before_input = T::Assets::balance(T::EnergyAsset::get(), &broker_account);
@@ -637,7 +650,8 @@ impl<T: Config> QuotePrice for Pallet<T> {
     ) -> Option<Self::Balance> {
         let path = (asset1, asset2);
         let amount_in = Self::get_amount_in(amount_out, &path, include_fee).ok()?;
-        (amount_out <= Self::max_amount_out(&path)).then_some(amount_in)
+        let max_amount_out = Self::max_amount_out(&path)?;
+        (amount_out <= max_amount_out).then_some(amount_in)
     }
 
     fn quote_price_exact_tokens_for_tokens(
@@ -648,12 +662,13 @@ impl<T: Config> QuotePrice for Pallet<T> {
     ) -> Option<Self::Balance> {
         let path = (asset1, asset2);
         let amount_out = Self::get_amount_out(amount_in, &path, include_fee).ok()?;
-        (amount_out <= Self::max_amount_out(&path)).then_some(amount_out)
+        let max_amount_out = Self::max_amount_out(&path)?;
+        (amount_out <= max_amount_out).then_some(amount_out)
     }
 }
 
 impl<T: Config> MaxAmountOut for Pallet<T> {
-    fn max_amount_out(asset1: Self::AssetKind, asset2: Self::AssetKind) -> Self::Balance {
+    fn max_amount_out(asset1: Self::AssetKind, asset2: Self::AssetKind) -> Option<Self::Balance> {
         // Calls the inherent function.
         Self::max_amount_out(&(asset1, asset2))
     }

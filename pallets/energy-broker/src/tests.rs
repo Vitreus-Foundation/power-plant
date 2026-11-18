@@ -468,7 +468,7 @@ fn quote_of_conversion_does_not_require_liquidity() {
         let amount = 1_000u128;
 
         <<Test as Config>::Assets>::set_balance(ENERGY_TOKEN, &broker, get_energy_ed());
-        assert_eq!(EnergyBroker::max_amount_out(&path), u128::MAX);
+        assert_eq!(EnergyBroker::max_amount_out(&path), Some(u128::MAX));
 
         assert_eq!(
             <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
@@ -499,15 +499,42 @@ fn max_amount_out_works() {
         // The broker's energy, less the deposit that keeps its account alive.
         assert_eq!(
             EnergyBroker::max_amount_out(&(NATIVE_TOKEN, ENERGY_TOKEN)),
-            INITIAL_ENERGY_BALANCE - get_energy_ed()
+            Some(INITIAL_ENERGY_BALANCE - get_energy_ed())
         );
 
         <Test as Config>::Assets::set_balance(ENERGY_TOKEN, &broker, get_energy_ed());
-        assert_eq!(EnergyBroker::max_amount_out(&(NATIVE_TOKEN, ENERGY_TOKEN)), 0);
+        assert_eq!(EnergyBroker::max_amount_out(&(NATIVE_TOKEN, ENERGY_TOKEN)), Some(0));
 
-        assert_eq!(EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, ENERGY_TOKEN)), u128::MAX);
+        assert_eq!(
+            EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, ENERGY_TOKEN)),
+            Some(u128::MAX)
+        );
 
-        assert_eq!(EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, NATIVE_TOKEN)), 0);
+        // An unsupported path can't be priced.
+        assert_eq!(EnergyBroker::max_amount_out(&(STATIC_ENERGY_TOKEN, NATIVE_TOKEN)), None);
+    });
+}
+
+#[test]
+fn max_amount_out_is_none_without_rate() {
+    new_test_ext().execute_with(|| {
+        let to_energy = (NATIVE_TOKEN, ENERGY_TOKEN);
+        let to_native = (ENERGY_TOKEN, NATIVE_TOKEN);
+        set_output_liquidity(ENERGY_TOKEN, 100);
+        set_output_liquidity(NATIVE_TOKEN, 100);
+        assert_eq!(EnergyBroker::max_amount_out(&to_energy), Some(100));
+        assert_eq!(EnergyBroker::max_amount_out(&to_native), Some(100));
+
+        // A zero rate leaves the path to energy without a rate, as the reciprocal of zero, and
+        // gives the path to native currency a zero one.
+        Rate::set(&FixedU128::from_u32(0));
+
+        assert_eq!(EnergyBroker::max_amount_out(&to_energy), None);
+        assert_eq!(EnergyBroker::max_amount_out(&to_native), None);
+
+        // Only the rate is missing: the liquidity is still there.
+        assert_eq!(EnergyBroker::liquidity(&to_energy), 100);
+        assert_eq!(EnergyBroker::liquidity(&to_native), 100);
     });
 }
 
@@ -521,7 +548,7 @@ fn can_swap_up_to_max_amount_out() {
 
         for path in [(NATIVE_TOKEN, ENERGY_TOKEN), (ENERGY_TOKEN, NATIVE_TOKEN)] {
             set_balances(broker, liquidity + get_ed(), liquidity + get_energy_ed());
-            assert_eq!(EnergyBroker::max_amount_out(&path), liquidity);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(liquidity));
 
             assert_noop!(
                 EnergyBroker::swap_tokens_for_exact_tokens(
@@ -543,7 +570,7 @@ fn can_swap_up_to_max_amount_out() {
                 None,
                 true
             ));
-            assert_eq!(EnergyBroker::max_amount_out(&path), 0);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(0));
         }
     });
 }
@@ -557,7 +584,7 @@ fn can_quote_tokens_for_exact_tokens_up_to_max_amount_out() {
         for path in [(NATIVE_TOKEN, ENERGY_TOKEN), (ENERGY_TOKEN, NATIVE_TOKEN)] {
             let (asset_in, asset_out) = path.clone();
             set_output_liquidity(asset_out.clone(), liquidity);
-            assert_eq!(EnergyBroker::max_amount_out(&path), liquidity);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(liquidity));
 
             let at_limit = <EnergyBroker as QuotePrice>::quote_price_tokens_for_exact_tokens(
                 asset_in.clone(),
@@ -596,7 +623,7 @@ fn can_quote_exact_tokens_for_tokens_up_to_max_amount_out() {
             assert!(amount_out > 1);
 
             set_output_liquidity(asset_out.clone(), amount_out);
-            assert_eq!(EnergyBroker::max_amount_out(&path), amount_out);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(amount_out));
             assert_eq!(
                 <EnergyBroker as QuotePrice>::quote_price_exact_tokens_for_tokens(
                     asset_in.clone(),

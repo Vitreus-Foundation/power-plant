@@ -234,12 +234,23 @@ mod energy_fee {
             let broker = EnergyBroker::account_id();
 
             fund_broker_with_vnrg(vnrg::UNITS);
-            assert!(EnergyFeeExchange::max_amount_out() > 0);
+            assert!(EnergyFeeExchange::max_amount_out() > Some(0));
             assert_eq!(EnergyFeeExchange::max_amount_out(), EnergyBroker::max_amount_out(&path));
 
             // Without VNRG of its own, the broker has none to sell.
             NativeAndAssets::set_balance(energy, &broker, 0);
-            assert_eq!(EnergyFeeExchange::max_amount_out(), 0);
+            assert_eq!(EnergyFeeExchange::max_amount_out(), Some(0));
+        })
+    }
+
+    #[test]
+    fn energy_fee_exchange_cannot_be_priced_without_energy_rate() {
+        new_test_ext().execute_with(|| {
+            fund_broker_with_vnrg(vnrg::UNITS);
+            assert!(EnergyFeeExchange::max_amount_out() > Some(0));
+
+            pallet_dynamic_energy::ExchangeRate::<Runtime>::kill();
+            assert_eq!(EnergyFeeExchange::max_amount_out(), None);
         })
     }
 
@@ -616,11 +627,11 @@ mod energy_broker {
             let lnrg_path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
 
             fund_broker();
-            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), broker_vtrs());
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), Some(broker_vtrs()));
 
             // A zero quota closes the LNRG → VTRS path, but not the conversion.
             set_payout_quota(0);
-            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 0);
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), Some(0));
 
             assert_conversion_burns_and_mints(LNRG::get());
         })
@@ -637,7 +648,7 @@ mod energy_broker {
             // A quota of 20 VTRS, far below the broker's VTRS.
             fund_broker();
             set_payout_quota(20 * vtrs::UNITS);
-            assert_eq!(EnergyBroker::max_amount_out(&path), 20 * vtrs::UNITS);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(20 * vtrs::UNITS));
 
             // At one energy per VTRS and the 1% swap fee, 25 LNRG would be paid 24.75 VTRS.
             let too_much = 25 * vtrs::UNITS;
@@ -684,7 +695,7 @@ mod energy_broker {
             assert_eq!(Balances::free_balance(broker), broker_vtrs_before - payout);
             assert_eq!(energy_sale(), exchange_in);
             assert_eq!(energy_payout(), payout);
-            assert_eq!(EnergyBroker::max_amount_out(&path), 20 * vtrs::UNITS - payout);
+            assert_eq!(EnergyBroker::max_amount_out(&path), Some(20 * vtrs::UNITS - payout));
             System::assert_has_event(
                 pallet_energy_broker::Event::<Runtime>::SwapExecuted {
                     who: alith(),
@@ -709,8 +720,8 @@ mod energy_broker {
             set_payout_quota(20 * vtrs::UNITS);
 
             // The legacy SNRG buyback is not an energy sale: only the broker's VTRS limit it.
-            assert_eq!(EnergyBroker::max_amount_out(&snrg_path), broker_vtrs());
-            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 20 * vtrs::UNITS);
+            assert_eq!(EnergyBroker::max_amount_out(&snrg_path), Some(broker_vtrs()));
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), Some(20 * vtrs::UNITS));
 
             // It pays out of the same VTRS, though, so it can leave LNRG sales less than the quota.
             let snrg = NativeOrAssetId::WithId(SNRG::get());
@@ -732,7 +743,7 @@ mod energy_broker {
             assert_eq!(asset_balance(&snrg, &alith()), snrg_before - snrg_in);
             assert_eq!(Balances::free_balance(alith()), alith_vtrs_before + paid_out);
             assert_eq!(broker_vtrs(), 5 * vtrs::UNITS);
-            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), 5 * vtrs::UNITS);
+            assert_eq!(EnergyBroker::max_amount_out(&lnrg_path), Some(5 * vtrs::UNITS));
             assert_eq!(energy_sale(), 0);
             assert_eq!(energy_payout(), 0);
 
@@ -1122,7 +1133,7 @@ mod treasury {
             let path = (NativeOrAssetId::WithId(LNRG::get()), NativeOrAssetId::Native);
 
             fund_broker();
-            assert!(TreasuryLiquidEnergyExchange::max_amount_out() > 0);
+            assert!(TreasuryLiquidEnergyExchange::max_amount_out() > Some(0));
             assert_eq!(
                 TreasuryLiquidEnergyExchange::max_amount_out(),
                 EnergyBroker::max_amount_out(&path),
@@ -1130,7 +1141,18 @@ mod treasury {
 
             // With only its existential deposit left, the broker has no VTRS to pay out.
             Balances::set_balance(&EnergyBroker::account_id(), ExistentialDeposit::get());
-            assert_eq!(TreasuryLiquidEnergyExchange::max_amount_out(), 0);
+            assert_eq!(TreasuryLiquidEnergyExchange::max_amount_out(), Some(0));
+        })
+    }
+
+    #[test]
+    fn snrg_exchange_cannot_be_priced_without_snrg_rate() {
+        new_test_ext().execute_with(|| {
+            fund_broker();
+            assert!(TreasuryStaticEnergyExchange::max_amount_out() > Some(0));
+
+            pallet_asset_rate::ConversionRateToNative::<Runtime>::remove(SNRG::get());
+            assert_eq!(TreasuryStaticEnergyExchange::max_amount_out(), None);
         })
     }
 

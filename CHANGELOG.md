@@ -25,6 +25,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Make `pallet-treasury-extension` sell the treasury's energy before the exchange rate update
 - Make the converters of `pallet-energy-broker` report a conversion rate instead of amounts
 - Lower `MaxCooperations` of `pallet-energy-generation` from 256 to 16
+- Make `max_amount_out` of the EnergyBroker runtime API return `None` for a path that can't be priced
 
 ### Removed
 
