@@ -27,6 +27,7 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Make the converters of `pallet-energy-broker` report a conversion rate instead of amounts
 - Lower `MaxCooperations` of `pallet-energy-generation` from 256 to 16
 - Make `max_amount_out` of the EnergyBroker runtime API return `None` for a path that can't be priced
+- Let only Root submit public proposals in `pallet-democracy` and lengthen its periods, on testnet
 
 ### Removed
 
