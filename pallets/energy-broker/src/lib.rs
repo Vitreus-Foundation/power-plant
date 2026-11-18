@@ -372,9 +372,9 @@ pub mod pallet {
         /// The largest input along `path` whose output stays within [`Self::max_amount_out`].
         ///
         /// If `include_fee` is `true`, the input includes the path's swap fee. `None` if the path
-        /// can't be priced, an unsupported path included. Otherwise zero if the path can supply
-        /// nothing and `Balance::max_value()` if every input fits, such as on a path that mints its
-        /// output.
+        /// can't be priced, an unsupported path included. Otherwise zero if no input within the
+        /// limit buys anything, as when the path can supply nothing, and `Balance::max_value()` if
+        /// every input fits, such as on a path that mints its output.
         pub fn max_amount_in(
             path: &(T::AssetKind, T::AssetKind),
             include_fee: bool,
@@ -393,15 +393,22 @@ pub mod pallet {
                 // overflow, and no output can exceed the largest balance, so every input fits.
                 return Some(T::Balance::max_value());
             };
-            match Self::get_amount_in(above_limit, path, include_fee) {
-                Ok(amount_in) => Some(amount_in.saturating_sub(One::one())),
+            let amount_in = match Self::get_amount_in(above_limit, path, include_fee) {
+                Ok(amount_in) => amount_in.saturating_sub(One::one()),
                 // The smallest input that buys more than `max_amount_out` doesn't fit in `Balance`,
                 // so every input fits.
-                Err(Error::<T>::Overflow) => Some(T::Balance::max_value()),
+                Err(Error::<T>::Overflow) => return Some(T::Balance::max_value()),
                 Err(error) => {
                     defensive!(error, "`max_amount_out` found a rate and the amount isn't zero");
-                    None
+                    return None;
                 },
+            };
+
+            // Rounding can leave even the largest input within the limit buying nothing, and then
+            // every smaller one buys nothing too.
+            match Self::get_amount_out(amount_in, path, include_fee) {
+                Err(Error::<T>::ZeroAmount) => Some(Zero::zero()),
+                _ => Some(amount_in),
             }
         }
 
