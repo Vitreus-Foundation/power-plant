@@ -601,6 +601,24 @@ fn max_amount_in_is_zero_when_path_supplies_nothing() {
 }
 
 #[test]
+fn max_amount_in_is_zero_when_inputs_within_limit_buy_nothing() {
+    new_test_ext().execute_with(|| {
+        let path = (NATIVE_TOKEN, ENERGY_TOKEN);
+
+        // After the swap fee one native buys nothing and two buy ten energy, so no input buys
+        // anything within a limit of five, though one native stays within it.
+        set_output_liquidity(ENERGY_TOKEN, 5);
+        assert_eq!(amount_bought(&path, 1, true), 0);
+        assert_eq!(amount_bought(&path, 2, true), 10);
+        assert_eq!(EnergyBroker::max_amount_in(&path, true), Some(0));
+
+        // A limit that the smallest output reaches takes the input that buys it.
+        set_output_liquidity(ENERGY_TOKEN, 10);
+        assert_eq!(EnergyBroker::max_amount_in(&path, true), Some(2));
+    });
+}
+
+#[test]
 fn max_amount_in_is_unbounded_when_any_input_fits() {
     new_test_ext().execute_with(|| {
         let path = (ENERGY_TOKEN, NATIVE_TOKEN);
