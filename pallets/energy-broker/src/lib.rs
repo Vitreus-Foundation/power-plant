@@ -389,7 +389,8 @@ pub mod pallet {
             // `max_amount_out`. The output doesn't drop as the input grows, so every smaller input
             // fits, and the largest of them is one unit less.
             let Some(above_limit) = max_amount_out.checked_add(&One::one()) else {
-                // No output can exceed the largest balance, so every input fits.
+                // `FixedPathAssetConverter` requires an unbounded path to convert any input without
+                // overflow, and no output can exceed the largest balance, so every input fits.
                 return Some(T::Balance::max_value());
             };
             match Self::get_amount_in(above_limit, path, include_fee) {
