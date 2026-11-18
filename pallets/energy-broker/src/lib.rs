@@ -388,20 +388,23 @@ pub mod pallet {
             // `get_amount_in(max_amount_out + 1)` is the smallest input that buys more than
             // `max_amount_out`. The output doesn't drop as the input grows, so every smaller input
             // fits, and the largest of them is one unit less.
-            let Some(above_limit) = max_amount_out.checked_add(&One::one()) else {
+            let amount_in = match max_amount_out.checked_add(&One::one()) {
+                Some(above_limit) => match Self::get_amount_in(above_limit, path, include_fee) {
+                    Ok(amount_in) => amount_in.saturating_sub(One::one()),
+                    // The smallest input that buys more than `max_amount_out` doesn't fit in
+                    // `Balance`, so every input fits.
+                    Err(Error::<T>::Overflow) => T::Balance::max_value(),
+                    Err(error) => {
+                        defensive!(
+                            error,
+                            "`max_amount_out` found a rate and the amount isn't zero"
+                        );
+                        return None;
+                    },
+                },
                 // `FixedPathAssetConverter` requires an unbounded path to convert any input without
                 // overflow, and no output can exceed the largest balance, so every input fits.
-                return Some(T::Balance::max_value());
-            };
-            let amount_in = match Self::get_amount_in(above_limit, path, include_fee) {
-                Ok(amount_in) => amount_in.saturating_sub(One::one()),
-                // The smallest input that buys more than `max_amount_out` doesn't fit in `Balance`,
-                // so every input fits.
-                Err(Error::<T>::Overflow) => return Some(T::Balance::max_value()),
-                Err(error) => {
-                    defensive!(error, "`max_amount_out` found a rate and the amount isn't zero");
-                    return None;
-                },
+                None => T::Balance::max_value(),
             };
 
             // Rounding can leave even the largest input within the limit buying nothing, and then
