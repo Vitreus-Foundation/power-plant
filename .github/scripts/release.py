@@ -22,7 +22,7 @@ from changelog import fail
 # srtool ignores rust-toolchain.toml, so the Rust part is read from there. PACKAGE and
 # RUNTIME_DIR must match the srtool step in release.yml.
 SRTOOL_IMAGE = "paritytech/srtool"
-SRTOOL_VERSION = "0.18.2"
+SRTOOL_VERSION = "0.18.3"
 PROFILE = "production"
 PACKAGE = "vitreus-power-plant-runtime"
 RUNTIME_DIR = "runtime/vitreus"

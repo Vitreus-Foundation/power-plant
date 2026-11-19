@@ -19,7 +19,7 @@ currency of the EVM, used for balances, transfers and gas.
 ### Prerequisites
 
 - The Rust toolchain pinned in [rust-toolchain.toml](rust-toolchain.toml), with its
-  `wasm32-unknown-unknown` target
+  `wasm32v1-none` target
 - The system packages from the
   [Polkadot SDK install guide](https://docs.polkadot.com/parachains/install-polkadot-sdk/); on
   Debian or Ubuntu:
