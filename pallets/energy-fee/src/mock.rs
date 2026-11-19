@@ -244,8 +244,8 @@ impl pallet_timestamp::Config for Test {
 }
 
 impl pallet_ethereum::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
-    type StateRoot = pallet_ethereum::IntermediateStateRoot<Self>;
+    type StateRoot =
+        pallet_ethereum::IntermediateStateRoot<<Test as frame_system::Config>::Version>;
     type PostLogContent = GetPostLogContent;
     type ExtraDataLength = ConstU32<1000>;
 }
@@ -269,21 +269,22 @@ parameter_types! {
 }
 
 impl pallet_base_fee::Config for Test {
-    type RuntimeEvent = RuntimeEvent;
     type Threshold = BaseFeeThreshold;
     type DefaultBaseFeePerGas = DefaultBaseFeePerGas;
     type DefaultElasticity = DefaultElasticity;
 }
 
 impl pallet_evm::Config for Test {
+    type AccountProvider = pallet_evm::FrameSystemAccountProvider<Self>;
     type AddressMapping = IdentityAddressMapping;
     type BlockGasLimit = BlockGasLimit;
     type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
     type CallOrigin = EnsureAccountId20;
+    type CreateOriginFilter = ();
+    type CreateInnerOriginFilter = ();
     type ChainId = ConstU64<42>;
     type Currency = BalancesVTRS;
     type Runner = pallet_evm::runner::stack::Runner<Self>;
-    type RuntimeEvent = RuntimeEvent;
     type WeightPerGas = WeightPerGas;
     type WithdrawOrigin = EnsureAccountId20;
     type OnCreate = ();
@@ -291,12 +292,12 @@ impl pallet_evm::Config for Test {
     type FeeCalculator = BaseFee;
     type FindAuthor = ();
     type GasLimitPovSizeRatio = ConstU64<1000>;
+    type GasLimitStorageGrowthRatio = ConstU64<0>;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
     type OnChargeTransaction = EnergyFee; //EVMCurrencyAdapter<Balances, ()>;
     type PrecompilesType = ();
     type PrecompilesValue = GetPrecompilesValue;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Test>;
-    type SuicideQuickClearLimit = ();
 }
 
 impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEnergyFee>
@@ -390,6 +391,7 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
             // required for account creation
             (FEE_DEST, 1),
         ],
+        ..Default::default()
     }
     .assimilate_storage(&mut t)
     .unwrap();
@@ -403,6 +405,7 @@ pub fn new_test_ext(energy_balance: Balance) -> sp_io::TestExternalities {
             (LNRG, b"LNRG".to_vec(), b"LNRG".to_vec(), 18),
         ],
         next_asset_id: None,
+        reserves: vec![],
     }
     .assimilate_storage(&mut t)
     .unwrap();

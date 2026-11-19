@@ -191,6 +191,7 @@ pub(crate) fn new_test_ext() -> sp_io::TestExternalities {
             (ALICE, 1000),
             (BOB, 1000),
         ],
+        ..Default::default()
     }
     .assimilate_storage(&mut t)
     .unwrap();

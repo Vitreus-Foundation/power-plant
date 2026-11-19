@@ -43,7 +43,7 @@ fn vest_works() {
         assert_eq!(Balances::reserved_balance(BOB), 0);
         System::assert_last_event(Event::VestingCompleted { account: BOB }.into());
 
-        assert_eq!(Balances::reserves(BOB), vec![]);
+        assert_eq!(Balances::reserves(&BOB), vec![]);
         assert_eq!(SimpleVesting::vesting(BOB), None);
     });
 }
@@ -77,7 +77,7 @@ fn vest_all_works() {
         System::assert_last_event(Event::VestingCompleted { account: BOB }.into());
 
         assert_eq!(SimpleVesting::vesting(BOB), None);
-        assert_eq!(Balances::reserves(BOB), vec![]);
+        assert_eq!(Balances::reserves(&BOB), vec![]);
         assert_eq!(System::providers(&BOB), 1);
     });
 }

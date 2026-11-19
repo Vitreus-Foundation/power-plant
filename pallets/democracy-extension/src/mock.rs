@@ -43,6 +43,7 @@ impl pallet_balances::Config for Test {
 }
 
 impl pallet_scheduler::Config for Test {
+    type BlockNumberProvider = System;
     type RuntimeEvent = RuntimeEvent;
     type RuntimeOrigin = RuntimeOrigin;
     type PalletsOrigin = OriginCaller;
@@ -95,9 +96,12 @@ impl Config for Test {
 
 pub fn new_test_ext() -> sp_io::TestExternalities {
     let mut t = frame_system::GenesisConfig::<Test>::default().build_storage().unwrap();
-    pallet_balances::GenesisConfig::<Test> { balances: vec![(1, 2000), (2, 3000)] }
-        .assimilate_storage(&mut t)
-        .unwrap();
+    pallet_balances::GenesisConfig::<Test> {
+        balances: vec![(1, 2000), (2, 3000)],
+        ..Default::default()
+    }
+    .assimilate_storage(&mut t)
+    .unwrap();
 
     pallet_democracy::GenesisConfig::<Test>::default()
         .assimilate_storage(&mut t)

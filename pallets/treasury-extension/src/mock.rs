@@ -102,6 +102,7 @@ parameter_types! {
 }
 
 impl pallet_treasury::Config for Test {
+    type BlockNumberProvider = System;
     type PalletId = TreasuryPalletId;
     type Currency = Balances;
     type RejectOrigin = EnsureRoot<AccountId>;
@@ -302,6 +303,7 @@ pub fn new_test_ext() -> sp_io::TestExternalities {
             (BOB, VTRS_INITIAL_BALANCE),
             (Treasury::account_id(), 1000),
         ],
+        ..Default::default()
     }
     .assimilate_storage(&mut t)
     .unwrap();

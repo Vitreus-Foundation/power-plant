@@ -30,13 +30,14 @@
 //! and exchange rates without submitting transactions.
 
 use ethereum_types::U256;
+use frame_support::MAX_EXTRINSIC_DEPTH;
 use jsonrpsee::{
     core::RpcResult,
     proc_macros::rpc,
     types::{ErrorCode, ErrorObject},
 };
 use parity_scale_codec::{Codec, DecodeLimit};
-use sp_api::{ProvideRuntimeApi, MAX_EXTRINSIC_DEPTH};
+use sp_api::ProvideRuntimeApi;
 use sp_blockchain::HeaderBackend;
 use sp_core::Bytes;
 use sp_runtime::traits::Block as BlockT;

@@ -14,9 +14,10 @@ fn spend_funds_should_work() {
         let spent = threshold - 1;
         let left = budget_remaining - threshold;
 
+        #[allow(deprecated)]
         Treasury::spend_local(RuntimeOrigin::root(), spent, ALICE)
             .expect("Expected to add and approve treasury spend proposal");
-        Treasury::spend_funds();
+        Treasury::spend_funds(1, 1);
 
         // making sure that Treasury hasn't emit Burnt event.
         let events = System::events();
@@ -39,9 +40,10 @@ fn ensure_no_recycle_upon_spend_threhsold_exceeding() {
         let spent = threshold;
         let left = budget_remaining - threshold;
 
+        #[allow(deprecated)]
         Treasury::spend_local(RuntimeOrigin::root(), spent, ALICE)
             .expect("Expected to add and approve treasury spend proposal");
-        Treasury::spend_funds();
+        Treasury::spend_funds(1, 1);
 
         // making sure that Treasury hasn't emit Burnt event
         // and TreasuryExtension hasn't emitted Recycled event.

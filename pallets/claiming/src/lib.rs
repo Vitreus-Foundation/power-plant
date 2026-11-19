@@ -100,7 +100,18 @@ impl<AccountId, Balance, ClaimData> OnClaimHandler<AccountId, Balance, ClaimData
 /// An Ethereum address (i.e. 20 bytes, used to represent an Ethereum account).
 ///
 /// This gets serialized to the 0x-prefixed hex representation.
-#[derive(Clone, Copy, PartialEq, Eq, Encode, Decode, Default, RuntimeDebug, TypeInfo)]
+#[derive(
+    Clone,
+    Copy,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Default,
+    RuntimeDebug,
+    TypeInfo,
+)]
 pub struct EthereumAddress(pub [u8; 20]);
 
 impl sp_std::fmt::Display for EthereumAddress {
@@ -142,7 +153,7 @@ impl<'de> Deserialize<'de> for EthereumAddress {
 }
 
 /// An Ethereum signature
-#[derive(Encode, Decode, Clone, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, Clone, TypeInfo)]
 pub struct EcdsaSignature(pub [u8; 65]);
 
 impl PartialEq for EcdsaSignature {
@@ -169,6 +180,7 @@ pub mod pallet {
     #[pallet::config]
     pub trait Config<I: 'static = ()>: frame_system::Config + pallet_balances::Config {
         /// The overarching event type.
+        #[allow(deprecated)]
         type RuntimeEvent: From<Event<Self, I>>
             + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 

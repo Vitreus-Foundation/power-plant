@@ -15,13 +15,15 @@ use frame_system::{
 };
 use pallet_assets::{weights::SubstrateWeight as AssetsWeight, WeightInfo as _};
 use pallet_evm::OnChargeEVMTransaction;
-use pallet_transaction_payment::{Multiplier, OnChargeTransaction};
+use pallet_transaction_payment::{ChargeTransactionPayment, Multiplier, OnChargeTransaction};
 use parity_scale_codec::Encode;
 use sp_arithmetic::Perbill;
 use sp_core::U256;
+#[allow(deprecated)]
+use sp_runtime::traits::SignedExtension;
 use sp_runtime::{
-    traits::{Dispatchable, One, SignedExtension},
-    transaction_validity::{InvalidTransaction, TransactionValidityError},
+    traits::{DispatchTransaction, Dispatchable, One},
+    transaction_validity::{InvalidTransaction, TransactionSource, TransactionValidityError},
     DispatchError, FixedPointNumber, Perquintill,
 };
 
@@ -41,7 +43,7 @@ fn withdraw_fee_with_stock_coefficients_works() {
             RuntimeCall::System(frame_system::Call::remark { remark: [1u8; 32].to_vec() });
 
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: SystemWeight::<Test>::remark(32), ..Default::default() };
+            DispatchInfo { call_weight: SystemWeight::<Test>::remark(32), ..Default::default() };
 
         let extrinsic_len: u32 =
             Extrinsic::new_signed(system_remark_call.clone(), ALICE, (), ()).encode().len() as u32;
@@ -96,7 +98,7 @@ fn withdraw_fee_with_custom_coefficients_works() {
             });
 
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+            DispatchInfo { call_weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
 
         // arbitrary number, since it does not influence resulting fee in this case
         let extrinsic_len: u32 = 1000;
@@ -160,7 +162,7 @@ fn pays_no_refunds_fee() {
             });
 
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+            DispatchInfo { call_weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
 
         // arbitrary number, since it does not influence resulting fee in this case
         let extrinsic_len: u32 = 1000;
@@ -223,7 +225,7 @@ fn pays_no_refunds_exchanged_fee_in_vnrg() {
             });
 
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+            DispatchInfo { call_weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
 
         // arbitrary number, since it does not influence resulting fee in this case
         let extrinsic_len: u32 = 1000;
@@ -282,7 +284,7 @@ fn zero_fee_withdraws_nothing() {
             RuntimeCall::System(frame_system::Call::remark { remark: [1u8; 32].to_vec() });
 
         let dispatch_info: DispatchInfo = DispatchInfo {
-            weight: SystemWeight::<Test>::remark(32),
+            call_weight: SystemWeight::<Test>::remark(32),
             pays_fee: Pays::No,
             ..Default::default()
         };
@@ -335,7 +337,7 @@ fn zero_fee_check_needs_no_funds() {
             });
 
         let dispatch_info: DispatchInfo = DispatchInfo {
-            weight: AssetsWeight::<Test>::transfer(),
+            call_weight: AssetsWeight::<Test>::transfer(),
             pays_fee: Pays::No,
             ..Default::default()
         };
@@ -372,6 +374,7 @@ fn alice_evm_call(max_fee_per_gas: U256) -> RuntimeCall {
         max_priority_fee_per_gas: None,
         nonce: None,
         access_list: vec![],
+        authorization_list: vec![],
     })
 }
 
@@ -501,19 +504,20 @@ fn evm_call_without_funds_for_both_fees_is_rejected() {
         let dispatch_info = evm_call.get_dispatch_info();
 
         // arbitrary number, since it does not influence resulting fee in this case
-        let extrinsic_len: u32 = 1000;
+        let extrinsic_len: usize = 1000;
 
-        let computed_fee = TransactionPayment::compute_fee(extrinsic_len, &dispatch_info, 0);
-
+        // The transaction payment extension rejects the call before it withdraws any fee.
         assert_eq!(
-            <EnergyFee as OnChargeTransaction<Test>>::withdraw_fee(
-                &ALICE,
-                &evm_call,
-                &dispatch_info,
-                computed_fee,
-                0,
-            )
-            .err(),
+            ChargeTransactionPayment::<Test>::from(0)
+                .validate_only(
+                    RuntimeOrigin::signed(ALICE),
+                    &evm_call,
+                    &dispatch_info,
+                    extrinsic_len,
+                    TransactionSource::External,
+                    0,
+                )
+                .err(),
             Some(TransactionValidityError::Invalid(InvalidTransaction::Payment))
         );
 
@@ -631,7 +635,7 @@ fn vtrs_exchange_during_withdraw_fee_with_stock_coefficients_works() {
             RuntimeCall::System(frame_system::Call::remark { remark: [1u8; 32].to_vec() });
 
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: SystemWeight::<Test>::remark(32), ..Default::default() };
+            DispatchInfo { call_weight: SystemWeight::<Test>::remark(32), ..Default::default() };
 
         let extrinsic_len: u32 =
             Extrinsic::new_signed(system_remark_call.clone(), ALICE, (), ()).encode().len() as u32;
@@ -676,7 +680,7 @@ fn fee_exchange_spends_snrg_before_lnrg() {
             });
 
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+            DispatchInfo { call_weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
 
         // arbitrary number, since it does not influence resulting fee in this case
         let extrinsic_len: u32 = 1000;
@@ -739,7 +743,7 @@ fn fee_exchange_buys_only_shortfall_with_vtrs() {
             });
 
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+            DispatchInfo { call_weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
 
         // arbitrary number, since it does not influence resulting fee in this case
         let extrinsic_len: u32 = 1000;
@@ -897,7 +901,7 @@ fn fee_withdrawal_fails_without_enough_vtrs() {
             });
 
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+            DispatchInfo { call_weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
 
         // arbitrary number, since it does not influence resulting fee in this case
         let extrinsic_len: u32 = 1000;
@@ -996,7 +1000,7 @@ fn flat_fee_call() -> (RuntimeCall, DispatchInfo, Balance) {
     });
 
     let dispatch_info: DispatchInfo =
-        DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+        DispatchInfo { call_weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
 
     // arbitrary number, since it does not influence resulting fee in this case
     let extrinsic_len: u32 = 1000;
@@ -1078,6 +1082,7 @@ fn fee_check_leaves_existential_deposit() {
 }
 
 #[test]
+#[allow(deprecated)]
 fn check_burned_energy_threshold_works() {
     new_test_ext(INITIAL_ENERGY_BALANCE).execute_with(|| {
         let transfer_amount: Balance = 1_000_000_000;
@@ -1088,7 +1093,7 @@ fn check_burned_energy_threshold_works() {
                 amount: transfer_amount,
             });
         let dispatch_info: DispatchInfo =
-            DispatchInfo { weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
+            DispatchInfo { call_weight: AssetsWeight::<Test>::transfer(), ..Default::default() };
         let extrinsic_len: usize = 1000;
 
         let extension: CheckEnergyFee<Test> = CheckEnergyFee::new();

@@ -34,7 +34,7 @@ use frame_support::dispatch::DispatchResult;
 use frame_support::traits::{
     Currency, ExistenceRequirement, NamedReservableCurrency, OnUnbalanced,
 };
-use parity_scale_codec::{Decode, Encode, MaxEncodedLen};
+use parity_scale_codec::{Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, Bounded, Convert, One, Saturating, Zero},
@@ -59,7 +59,18 @@ type NegativeImbalanceOf<T> = <<T as Config>::Currency as Currency<
 const VESTING_ID: [u8; 8] = *b"vesting ";
 
 /// Struct to encode the vesting schedule of an individual account.
-#[derive(Encode, Decode, Copy, Clone, PartialEq, Eq, RuntimeDebug, MaxEncodedLen, TypeInfo)]
+#[derive(
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    RuntimeDebug,
+    MaxEncodedLen,
+    TypeInfo,
+)]
 pub struct VestingInfo<Balance, BlockNumber> {
     /// Locked amount at genesis.
     locked: Balance,
@@ -121,6 +132,7 @@ pub mod pallet {
     #[pallet::config]
     pub trait Config: frame_system::Config {
         /// The overarching event type.
+        #[allow(deprecated)]
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
         /// The currency trait.
         type Currency: NamedReservableCurrency<Self::AccountId, ReserveIdentifier = [u8; 8]>;

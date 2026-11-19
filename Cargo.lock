@@ -2877,6 +2877,7 @@ version = "0.1.0"
 dependencies = [
  "energy-fee-runtime-api",
  "ethereum-types",
+ "frame-support",
  "jsonrpsee",
  "parity-scale-codec",
  "sp-api",

@@ -6,16 +6,18 @@ use frame_support::dispatch::DispatchInfo;
 use pallet_transaction_payment::{
     Config as TransactionPaymentConfig, OnChargeTransaction, Pallet as TransactionPaymentPallet,
 };
-use parity_scale_codec::{Decode, Encode};
+use parity_scale_codec::{Decode, DecodeWithMemTracking, Encode};
 use scale_info::TypeInfo;
+#[allow(deprecated)]
+use sp_runtime::traits::SignedExtension;
 use sp_runtime::{
-    traits::{DispatchInfoOf, Dispatchable, SignedExtension},
+    traits::{DispatchInfoOf, Dispatchable},
     transaction_validity::{InvalidTransaction, TransactionValidityError},
 };
 use sp_std::marker::PhantomData;
 
 /// A structure to validate transactions based on user call's fee during the pre-dispatch phase.
-#[derive(Encode, Decode, Clone, Eq, PartialEq, TypeInfo)]
+#[derive(Encode, Decode, DecodeWithMemTracking, Clone, Eq, PartialEq, TypeInfo)]
 #[scale_info(skip_type_params(T))]
 pub struct CheckEnergyFee<T: Config>(PhantomData<T>);
 
@@ -31,6 +33,7 @@ impl<T: Config> CheckEnergyFee<T> {
     }
 }
 
+#[allow(deprecated)]
 impl<T: Config + Send + Sync> SignedExtension for CheckEnergyFee<T>
 where
     <T as frame_system::Config>::RuntimeCall: Dispatchable<Info = DispatchInfo>,

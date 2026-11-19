@@ -165,6 +165,7 @@ pub mod pallet {
         frame_system::Config + pallet_reputation::Config + pallet_balances::Config
     {
         /// The overarching event type.
+        #[allow(deprecated)]
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// Registry for the minted NFTs.

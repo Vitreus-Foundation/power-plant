@@ -70,6 +70,7 @@ runtime-benchmarks = [
     "pallet-nfts/runtime-benchmarks",
     "pallet-reputation/runtime-benchmarks",
     "pallet-timestamp/runtime-benchmarks",
+    "pallet-transaction-payment/runtime-benchmarks",
     "sp-runtime/runtime-benchmarks",
 ]
 try-runtime = [

@@ -110,6 +110,7 @@ pub mod pallet {
         #[pallet::constant]
         type AccumulationPeriod: Get<BlockNumberFor<Self>>;
         /// Because this pallet emits events, it depends on the runtime's definition of an event.
+        #[allow(deprecated)]
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
         /// Type representing the weight of this pallet
         type WeightInfo: WeightInfo;
