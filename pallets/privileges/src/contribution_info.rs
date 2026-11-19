@@ -1,6 +1,7 @@
 use super::*;
 use core::default::Default;
 use pallet_nac_managing::OnVippStatusHandler;
+use parity_scale_codec::DecodeWithMemTracking;
 use sp_core::RuntimeDebug;
 use sp_runtime::DispatchError;
 
@@ -92,7 +93,9 @@ impl CurrentDateInfo {
 }
 
 /// Enum of penalty types.
-#[derive(Copy, Clone, Encode, Decode, RuntimeDebug, Eq, PartialEq, TypeInfo)]
+#[derive(
+    Copy, Clone, Encode, Decode, DecodeWithMemTracking, RuntimeDebug, Eq, PartialEq, TypeInfo,
+)]
 pub enum PenaltyType {
     /// Declining type of penalty.
     Declining,

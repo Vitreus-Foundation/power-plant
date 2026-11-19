@@ -155,6 +155,7 @@ pallet_nfts::runtime_benchmarks_enabled! {
 }
 
 impl pallet_nfts::Config for Test {
+    type BlockNumberProvider = System;
     type RuntimeEvent = RuntimeEvent;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
@@ -254,9 +255,13 @@ impl pallet_session::Config for Test {
     type ValidatorIdOf = pallet_energy_generation::StashOf<Test>;
     type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
     type WeightInfo = ();
+    type DisablingStrategy = pallet_session::disabling::UpToLimitDisablingStrategy;
+    type Currency = Balances;
+    type KeyDeposit = ();
 }
 
 impl pallet_session::historical::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
     type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Test>;
 }
@@ -288,7 +293,7 @@ impl pallet_balances::Config for Test {
     type Balance = Balance;
     type AccountStore = System;
     type ReserveIdentifier = [u8; 8];
-    type RuntimeHoldReason = ();
+    type RuntimeHoldReason = RuntimeHoldReason;
     type FreezeIdentifier = ();
     type MaxLocks = ();
     type MaxReserves = ();
@@ -639,6 +644,7 @@ impl ExtBuilder {
                 // Rewards
                 (Privileges::account_id(), 1_000_000),
             ],
+            ..Default::default()
         }
         .assimilate_storage(&mut storage);
 
@@ -716,6 +722,7 @@ impl ExtBuilder {
                     .map(|id| (id, id, SessionKeys { other: id.into() }))
                     .collect()
             },
+            ..Default::default()
         }
         .assimilate_storage(&mut storage);
 

@@ -106,6 +106,7 @@ pallet_nfts::runtime_benchmarks_enabled! {
 }
 
 impl pallet_nfts::Config for Test {
+    type BlockNumberProvider = System;
     type RuntimeEvent = RuntimeEvent;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
