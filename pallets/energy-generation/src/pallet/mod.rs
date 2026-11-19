@@ -74,7 +74,7 @@ pub mod pallet {
     pub struct Pallet<T>(_);
 
     /// Possible operations on the configuration values of this pallet.
-    #[derive(TypeInfo, Debug, Clone, Encode, Decode, PartialEq)]
+    #[derive(TypeInfo, Debug, Clone, Encode, Decode, DecodeWithMemTracking, PartialEq)]
     pub enum ConfigOp<T: Default + Codec> {
         /// Don't change.
         Noop,
@@ -153,6 +153,7 @@ pub mod pallet {
         type RewardRemainder: OnUnbalanced<StakeNegativeImbalanceOf<Self>>;
 
         /// The overarching event type.
+        #[allow(deprecated)]
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
 
         /// Handler for the unbalanced reduction when slashing a staker.

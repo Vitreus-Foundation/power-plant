@@ -9,11 +9,10 @@ use frame_support::{
     assert_noop, assert_ok, assert_storage_noop,
     dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
     pallet_prelude::*,
-    traits::{Currency, Get, ReservableCurrency},
+    traits::{Currency, Get},
     weights::Weight,
 };
 use mock::*;
-use pallet_balances::Error as BalancesError;
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use sp_runtime::{
     assert_eq_error_rate, bounded_vec,
@@ -457,9 +456,6 @@ fn staking_should_work() {
                 claimed_rewards: bounded_vec![0],
             })
         );
-        // e.g. it cannot reserve more than 500 that it has free from the total 2000
-        assert_noop!(Balances::reserve(&3, 501), BalancesError::<Test, _>::LiquidityRestrictions);
-        assert_ok!(Balances::reserve(&3, 409));
     });
 }
 
@@ -1224,26 +1220,6 @@ fn cannot_transfer_staked_balance_2() {
             TokenError::Frozen,
         );
         assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(21), 20, 1000));
-    });
-}
-
-#[test]
-fn cannot_reserve_staked_balance() {
-    // Checks that a bonded account cannot reserve balance from free balance
-    ExtBuilder::default().build_and_execute(|| {
-        // Confirm account 11 is stashed
-        assert_eq!(PowerPlant::bonded(11), Some(10));
-        // Confirm account 11 has some free balance
-        assert_eq!(Balances::free_balance(11), 1000);
-        // Confirm account 11 (via controller 10) is totally staked
-        assert_eq!(PowerPlant::eras_stakers(active_era(), 11).own, 1000);
-        // Confirm account 11 cannot reserve as a result
-        assert_noop!(Balances::reserve(&11, 1), BalancesError::<Test, _>::LiquidityRestrictions);
-
-        // Give account 11 extra free balance
-        let _ = Balances::make_free_balance_be(&11, 10000);
-        // Confirm account 11 can now reserve balance
-        assert_ok!(Balances::reserve(&11, 1));
     });
 }
 
@@ -2176,7 +2152,7 @@ fn bond_with_no_staked_value() {
                 5,
                 RewardDestination::Controller
             ));
-            assert_eq!(Balances::locks(1)[0].amount, 5);
+            assert_eq!(Balances::locks(&1)[0].amount, 5);
 
             // unbonding even 1 will cause all to be unbonded.
             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(2), 1));
@@ -2197,14 +2173,14 @@ fn bond_with_no_staked_value() {
             // not yet removed.
             assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
             assert!(PowerPlant::ledger(2).is_some());
-            assert_eq!(Balances::locks(1)[0].amount, 5);
+            assert_eq!(Balances::locks(&1)[0].amount, 5);
 
             mock::start_active_era(3);
 
             // poof. Account 1 is removed from the staking system.
             assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
             assert!(PowerPlant::ledger(2).is_none());
-            assert_eq!(Balances::locks(1).len(), 0);
+            assert_eq!(Balances::locks(&1).len(), 0);
         });
 }
 

@@ -147,7 +147,7 @@ use frame_support::{
     BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use pallet_reputation::Reputation;
-use parity_scale_codec::{Decode, Encode, HasCompact, MaxEncodedLen};
+use parity_scale_codec::{Decode, DecodeWithMemTracking, Encode, HasCompact, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{Convert, Saturating, StaticLookup, Zero},
@@ -239,7 +239,17 @@ impl<AccountId: Ord> Default for EraRewardPoints<AccountId> {
 
 /// A destination account for payment.
 #[derive(
-    PartialEq, Eq, Copy, Clone, Default, Encode, Decode, RuntimeDebug, TypeInfo, MaxEncodedLen,
+    PartialEq,
+    Eq,
+    Copy,
+    Clone,
+    Default,
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    RuntimeDebug,
+    TypeInfo,
+    MaxEncodedLen,
 )]
 pub enum RewardDestination<AccountId> {
     /// Pay into the stash account.
@@ -254,7 +264,18 @@ pub enum RewardDestination<AccountId> {
 }
 
 /// Preference of what happens regarding validation.
-#[derive(PartialEq, Eq, Clone, Encode, Decode, RuntimeDebug, TypeInfo, Default, MaxEncodedLen)]
+#[derive(
+    PartialEq,
+    Eq,
+    Clone,
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    RuntimeDebug,
+    TypeInfo,
+    Default,
+    MaxEncodedLen,
+)]
 pub struct ValidatorPrefs {
     /// Reward that validator takes up-front; only the rest is split between themselves and
     /// cooperators.
@@ -563,7 +584,18 @@ impl<T: Config> Cooperations<T> {
 }
 
 /// The amount of exposure (to slashing) than an individual cooperator has.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    RuntimeDebug,
+    TypeInfo,
+)]
 pub struct IndividualExposure<AccountId, Balance: HasCompact> {
     /// The stash account of the cooperator in question.
     pub who: AccountId,
@@ -573,7 +605,18 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
 }
 
 /// A snapshot of the stake backing a single validator in the system.
-#[derive(PartialEq, Eq, PartialOrd, Ord, Clone, Encode, Decode, RuntimeDebug, TypeInfo)]
+#[derive(
+    PartialEq,
+    Eq,
+    PartialOrd,
+    Ord,
+    Clone,
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    RuntimeDebug,
+    TypeInfo,
+)]
 pub struct Exposure<AccountId, Balance: HasCompact> {
     /// The total balance backing this validator.
     #[codec(compact)]
@@ -730,6 +773,7 @@ pub trait OnVipMembershipHandler<T, Res, Perbill> {
     serde::Deserialize,
     Encode,
     Decode,
+    DecodeWithMemTracking,
     RuntimeDebug,
     TypeInfo,
     MaxEncodedLen,

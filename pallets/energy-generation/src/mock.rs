@@ -133,7 +133,7 @@ impl pallet_balances::Config for Test {
     type AccountStore = System;
     type FreezeIdentifier = ();
     type MaxFreezes = ();
-    type RuntimeHoldReason = ();
+    type RuntimeHoldReason = RuntimeHoldReason;
 }
 
 impl pallet_reputation::Config for Test {
@@ -186,9 +186,13 @@ impl pallet_session::Config for Test {
     type ValidatorIdOf = crate::StashOf<Test>;
     type NextSessionRotation = pallet_session::PeriodicSessions<Period, Offset>;
     type WeightInfo = ();
+    type DisablingStrategy = pallet_session::disabling::UpToLimitDisablingStrategy;
+    type Currency = Balances;
+    type KeyDeposit = ();
 }
 
 impl pallet_session::historical::Config for Test {
+    type RuntimeEvent = RuntimeEvent;
     type FullIdentification = crate::Exposure<AccountId, Balance>;
     type FullIdentificationOf = crate::ExposureOf<Test>;
 }
@@ -593,6 +597,7 @@ impl ExtBuilder {
                 // This allows us to have a total_payout different from 0.
                 (999, 1_000_000_000_000),
             ],
+            ..Default::default()
         }
         .assimilate_storage(&mut storage);
 
@@ -675,6 +680,7 @@ impl ExtBuilder {
                     .map(|id| (id, id, SessionKeys { other: id.into() }))
                     .collect()
             },
+            ..Default::default()
         }
         .assimilate_storage(&mut storage);
 

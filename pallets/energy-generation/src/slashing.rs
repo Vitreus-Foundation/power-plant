@@ -43,7 +43,7 @@ use frame_support::{
     traits::{tokens::Imbalance, Currency, Defensive, OnUnbalanced},
 };
 use pallet_reputation::{Reputation, ReputationPoint, ReputationRecord, RANKS_PER_TIER};
-use parity_scale_codec::{Decode, Encode, FullCodec, MaxEncodedLen};
+use parity_scale_codec::{Decode, DecodeWithMemTracking, Encode, FullCodec, MaxEncodedLen};
 use scale_info::TypeInfo;
 use sp_runtime::{
     traits::{AtLeast32BitUnsigned, One, Saturating, Zero},
@@ -285,7 +285,19 @@ pub trait StorageEssentials: FullCodec + Clone + TypeInfo + Default + MaxEncoded
 
 impl<T: FullCodec + Clone + TypeInfo + Default + MaxEncodedLen> StorageEssentials for T {}
 
-#[derive(Copy, Clone, PartialEq, Eq, Encode, Decode, Default, Debug, TypeInfo, MaxEncodedLen)]
+#[derive(
+    Copy,
+    Clone,
+    PartialEq,
+    Eq,
+    Encode,
+    Decode,
+    DecodeWithMemTracking,
+    Default,
+    Debug,
+    TypeInfo,
+    MaxEncodedLen,
+)]
 pub struct SlashEntity<Stake: StorageEssentials + Copy> {
     pub reputation: ReputationPoint,
     pub stake: Stake,
