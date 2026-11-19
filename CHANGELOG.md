@@ -7,6 +7,8 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+## [216] - 2026-11-19
+
 ### Added
 
 - Add the `EnergyExchangeFailed` event to `pallet-treasury-extension`
@@ -19,14 +21,14 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Refactor the energy exchanges of `pallet-energy-fee` and `pallet-treasury-extension` and add `max_amount_out` to them
 - Limit the treasury's energy sales in `pallet-treasury-extension` to the broker's liquidity
 - Report the energy sold per asset in the `EnergyExchanged` event of `pallet-treasury-extension`
-- Set `SpendPeriod` of the treasury to 1 day and `SpendThreshold` of `pallet-treasury-extension` to 1%, on testnet
-- Raise the launchpad's default graduation target on testnet from 3,000 to 4,600,000 VTRS
+- Make `pallet-treasury-extension` sell the treasury's energy before the exchange rate update
 - Switch parachains from `ParaAssignmentProvider` to coretime without a broker chain
 - Limit LNRG sales in `pallet-energy-broker` to the payout quota
-- Make `pallet-treasury-extension` sell the treasury's energy before the exchange rate update
 - Make the converters of `pallet-energy-broker` report a conversion rate instead of amounts
-- Lower `MaxCooperations` of `pallet-energy-generation` from 256 to 16
 - Make `max_amount_out` of the EnergyBroker runtime API return `None` for a path that can't be priced
+- Lower `MaxCooperations` of `pallet-energy-generation` from 256 to 16
+- Set `SpendPeriod` of the treasury to 1 day and `SpendThreshold` of `pallet-treasury-extension` to 1%, on testnet
+- Raise the default graduation target of `pallet-launchpad` from 3,000 to 4,600,000 VTRS, on testnet
 - Let only Root submit public proposals in `pallet-democracy` and lengthen its periods, on testnet
 
 ### Removed
@@ -40,10 +42,9 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 - Make the treasury's VNRG sales in `pallet-treasury-extension` atomic
 - Stop re-creating the treasury's energy accounts every session in `pallet-treasury-extension`
 - Fix `pallet-privileges` reward claims for VIPP-only accounts and reject invalid reward shares without consuming points
-- Charge `pallet-sudo` calls by weight
-- Make signed EVM calls prepay their fee in `pallet-energy-fee` and refund it once the call has run
 - Pick a free item id when `pallet-nac-managing` mints NAC and VIPP NFTs
-- Reject signed EVM calls in `pallet-energy-fee` that can't pay both the prepaid fee and the EVM fee
+- Charge `pallet-sudo` calls by weight
+- Make signed EVM calls prepay a refundable fee in `pallet-energy-fee` and reject those that can't also pay the EVM fee
 - Round up the input of swaps and quotes for an exact output in `pallet-energy-broker`
 - Make `pallet-energy-generation` slash and elect validators by stake without the exposure multipliers
 
