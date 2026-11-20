@@ -25,7 +25,7 @@ use super::{
 };
 use frame_support::{
     parameter_types,
-    traits::{Contains, ContainsPair, Equals, Everything, Nothing},
+    traits::{Contains, ContainsPair, Disabled, Equals, Everything, Nothing},
     weights::{ConstantMultiplier, Weight},
 };
 use frame_system::EnsureRoot;
@@ -270,6 +270,7 @@ pub struct XcmConfig;
 impl xcm_executor::Config for XcmConfig {
     type RuntimeCall = RuntimeCall;
     type XcmSender = XcmRouter;
+    type XcmEventEmitter = XcmPallet;
     type AssetTransactor = (LocalAssetTransactor, EnergyTransactor);
     type OriginConverter = LocalOriginConverter;
     type IsReserve = ();
@@ -362,6 +363,7 @@ impl pallet_xcm::Config for Runtime {
     type RemoteLockConsumerIdentifier = ();
     type WeightInfo = crate::weights::pallet_xcm::WeightInfo<Runtime>;
     type AdminOrigin = EnsureRoot<AccountId>;
+    type AuthorizedAliasConsideration = Disabled;
 }
 
 mod energy {
@@ -400,7 +402,7 @@ mod energy {
             Assets: fungibles::Mutate<AccountId>,
             Matcher: MatchesFungibles<Assets::AssetId, Assets::Balance>,
             AccountIdConverter: ConvertLocation<AccountId>,
-            AccountId: Eq + Clone, /* can't get away without it since Currency is generic over it. */
+            AccountId: Eq + Clone + core::fmt::Debug, /* can't get away without it since Currency is generic over it. */
             CheckAsset: AssetChecking<Assets::AssetId>,
             CheckingAccount: Get<AccountId>,
             OnBurn: OnEnergyBurn<Assets::Balance>,
