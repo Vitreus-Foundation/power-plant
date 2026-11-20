@@ -4,6 +4,8 @@
 #![allow(clippy::identity_op, clippy::new_without_default, clippy::or_fun_call)]
 // #![cfg_attr(feature = "runtime-benchmarks", deny(unused_crate_dependencies))]
 
+extern crate alloc;
+
 // Make the WASM binary available.
 #[cfg(feature = "std")]
 include!(concat!(env!("OUT_DIR"), "/", env!("VITREUS_WASM_BINARY_FILE")));
@@ -52,7 +54,7 @@ use frame_support::traits::{
     Currency, EitherOfDiverse, Equals, ExistenceRequirement, Imbalance, ProcessMessage,
     ProcessMessageError, SignedImbalance, WithdrawReasons,
 };
-use parity_scale_codec::{Compact, Decode, Encode, MaxEncodedLen};
+use parity_scale_codec::{Compact, Decode, DecodeWithMemTracking, Encode, MaxEncodedLen};
 use sp_api::impl_runtime_apis;
 use sp_core::{
     crypto::{ByteArray, KeyTypeId},
@@ -60,13 +62,12 @@ use sp_core::{
 };
 use sp_runtime::traits::{AccountIdConversion, Convert, ConvertInto, Keccak256, One, Zero};
 use sp_runtime::{
-    create_runtime_str,
     curve::PiecewiseLinear,
     generic, impl_opaque_keys,
     traits::{
-        BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Extrinsic, Get,
+        BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Extrinsic, ExtrinsicCall, Get,
         IdentifyAccount, IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf,
-        SaturatedConversion, UniqueSaturatedInto, Verify,
+        UniqueSaturatedInto, Verify,
     },
     transaction_validity::{
         TransactionPriority, TransactionSource, TransactionValidity, TransactionValidityError,
@@ -94,8 +95,8 @@ use frame_support::{
     traits::{
         fungible::ItemOf,
         fungibles::{Balanced, Credit},
-        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8, ExtrinsicCall, FindAuthor,
-        Hooks, KeyOwnerProofSystem,
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8, FindAuthor, Hooks,
+        KeyOwnerProofSystem,
     },
     weights::{
         constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter, WeightToFee,
@@ -174,14 +175,14 @@ macro_rules! decl_runtime_version {
         #[cfg(feature = "mainnet-runtime")]
         #[sp_version::runtime_version]
         pub const VERSION: RuntimeVersion = RuntimeVersion {
-            spec_name: create_runtime_str!("vitreus-power-plant"),
+            spec_name: sp_runtime::Cow::Borrowed("vitreus-power-plant"),
             $($fields)*
         };
 
         #[cfg(feature = "testnet-runtime")]
         #[sp_version::runtime_version]
         pub const VERSION: RuntimeVersion = RuntimeVersion {
-            spec_name: create_runtime_str!("vitreus-power-plant-testnet"),
+            spec_name: sp_runtime::Cow::Borrowed("vitreus-power-plant-testnet"),
             $($fields)*
         };
     };
@@ -226,10 +227,12 @@ pub type AssetId = u128;
 #[cfg(feature = "runtime-benchmarks")]
 pub struct AssetsBenchmarkHelper;
 #[cfg(feature = "runtime-benchmarks")]
-impl pallet_assets::BenchmarkHelper<Compact<AssetId>> for AssetsBenchmarkHelper {
+impl pallet_assets::BenchmarkHelper<Compact<AssetId>, ()> for AssetsBenchmarkHelper {
     fn create_asset_id_parameter(id: u32) -> Compact<AssetId> {
         Compact(id.into())
     }
+
+    fn create_reserve_id_parameter(_id: u32) {}
 }
 
 /// Origin for council voting
@@ -276,13 +279,13 @@ pub const BABE_GENESIS_EPOCH_CONFIG: sp_consensus_babe::BabeEpochConfiguration =
 
 // Each network gets its own `spec_name`, see `decl_runtime_version!` above.
 decl_runtime_version! {
-    impl_name: create_runtime_str!("vitreus-power-plant"),
+    impl_name: sp_runtime::Cow::Borrowed("vitreus-power-plant"),
     authoring_version: 1,
     spec_version: 216,
     impl_version: 0,
     apis: RUNTIME_API_VERSIONS,
     transaction_version: 4,
-    state_version: 1,
+    system_version: 1,
 }
 
 // Time measurmement primitive
@@ -513,6 +516,7 @@ impl pallet_balances::Config for Runtime {
     type MaxLocks = MaxLocks;
     type MaxReserves = MaxReserves;
     type MaxFreezes = MaxFreezes;
+    type DoneSlashHandler = ();
 }
 
 parameter_types! {
@@ -543,9 +547,11 @@ impl pallet_assets::Config for Runtime {
     type ApprovalDeposit = ApprovalDeposit;
     type StringLimit = AssetsStringLimit;
     type Freezer = AssetsFreezer;
+    type Holder = ();
     type Extra = ();
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+    type ReserveData = ();
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = AssetsBenchmarkHelper;
 }
@@ -583,9 +589,16 @@ impl pallet_session::Config for Runtime {
     type SessionHandler = <opaque::SessionKeys as OpaqueKeys>::KeyTypeIdProviders;
     type Keys = opaque::SessionKeys;
     type WeightInfo = ();
+    // Energy generation disables validators itself, through `disable_index`, which bypasses
+    // this strategy. It takes effect only on `report_offence`, which nothing here calls, and
+    // matches energy generation's rule if something starts to.
+    type DisablingStrategy = pallet_session::disabling::UpToLimitDisablingStrategy;
+    type Currency = Balances;
+    type KeyDeposit = ();
 }
 
 impl pallet_session::historical::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
     type FullIdentification = pallet_energy_generation::Exposure<AccountId, Balance>;
     type FullIdentificationOf = pallet_energy_generation::ExposureOf<Runtime>;
 }
@@ -611,60 +624,21 @@ parameter_types! {
     pub const MaxPeerInHeartbeats: u32 = 10_000;
 }
 
-impl<LocalCall> frame_system::offchain::CreateSignedTransaction<LocalCall> for Runtime
-where
-    RuntimeCall: From<LocalCall>,
-{
-    fn create_transaction<C: frame_system::offchain::AppCrypto<Self::Public, Self::Signature>>(
-        call: RuntimeCall,
-        public: <Signature as Verify>::Signer,
-        account: AccountId,
-        nonce: Index,
-    ) -> Option<(RuntimeCall, <UncheckedExtrinsic as Extrinsic>::SignaturePayload)> {
-        let tip = 0;
-        // take the biggest period possible.
-        let period =
-            BlockHashCount::get().checked_next_power_of_two().map(|c| c / 2).unwrap_or(2) as u64;
-        let current_block = System::block_number()
-            .saturated_into::<u64>()
-            // The `System::block_number` is initialized with `n+1`,
-            // so the actual block number is `n`.
-            .saturating_sub(1);
-        let era = generic::Era::mortal(period, current_block);
-        let extra = (
-            frame_system::CheckNonZeroSender::<Runtime>::new(),
-            frame_system::CheckSpecVersion::<Runtime>::new(),
-            frame_system::CheckTxVersion::<Runtime>::new(),
-            frame_system::CheckGenesis::<Runtime>::new(),
-            frame_system::CheckEra::<Runtime>::from(era),
-            frame_system::CheckNonce::<Runtime>::from(nonce),
-            frame_system::CheckWeight::<Runtime>::new(),
-            pallet_transaction_payment::ChargeTransactionPayment::<Runtime>::from(tip),
-            pallet_energy_fee::CheckEnergyFee::<Runtime>::new(),
-        );
-        let raw_payload = SignedPayload::new(call, extra)
-            .map_err(|e| {
-                log::warn!("Unable to create signed payload: {:?}", e);
-            })
-            .ok()?;
-        let signature = raw_payload.using_encoded(|payload| C::sign(payload, public))?;
-        // let address = AccountIdLookup::unlookup(account);
-        let (call, extra, _) = raw_payload.deconstruct();
-        Some((call, (account, signature, extra)))
-    }
-}
-
-impl frame_system::offchain::SigningTypes for Runtime {
-    type Public = <Signature as Verify>::Signer;
-    type Signature = Signature;
-}
-
-impl<C> frame_system::offchain::SendTransactionTypes<C> for Runtime
+impl<C> frame_system::offchain::CreateTransactionBase<C> for Runtime
 where
     RuntimeCall: From<C>,
 {
+    type RuntimeCall = RuntimeCall;
     type Extrinsic = UncheckedExtrinsic;
-    type OverarchingCall = RuntimeCall;
+}
+
+impl<C> frame_system::offchain::CreateBare<C> for Runtime
+where
+    RuntimeCall: From<C>,
+{
+    fn create_bare(call: RuntimeCall) -> UncheckedExtrinsic {
+        UncheckedExtrinsic::new_bare(call)
+    }
 }
 
 impl pallet_im_online::Config for Runtime {
@@ -884,6 +858,7 @@ pub type ItemId = u32;
 
 impl pallet_nfts::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
+    type BlockNumberProvider = System;
     type CollectionId = CollectionId;
     type ItemId = ItemId;
     type Currency = Balances;
@@ -998,6 +973,7 @@ impl pallet_transaction_payment::Config for Runtime {
     type LengthToFee = ConstantMultiplier<Balance, TransactionByteFee>;
     type FeeMultiplierUpdate = EnergyFee;
     type OperationalFeeMultiplier = ConstU8<5>;
+    type WeightInfo = pallet_transaction_payment::weights::SubstrateWeight<Runtime>;
 }
 
 impl pallet_asset_rate::Config for Runtime {
@@ -1030,9 +1006,11 @@ impl pallet_assets::Config<PoolAssetsInstance> for Runtime {
     type ApprovalDeposit = ApprovalDeposit;
     type StringLimit = AssetsStringLimit;
     type Freezer = ();
+    type Holder = ();
     type Extra = ();
     type CallbackHandle = ();
     type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+    type ReserveData = ();
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = AssetsBenchmarkHelper;
 }
@@ -1274,7 +1252,9 @@ impl pallet_claiming::Config for Runtime {
     type WeightInfo = ();
 }
 
-#[derive(Decode, Encode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo)]
+#[derive(
+    Decode, DecodeWithMemTracking, Encode, Clone, PartialEq, Eq, Debug, scale_info::TypeInfo,
+)]
 pub struct KickstartClaimData {
     collection_id: u32,
     item_id: u32,
@@ -1474,6 +1454,7 @@ parameter_types! {
     PartialOrd,
     Encode,
     Decode,
+    DecodeWithMemTracking,
     RuntimeDebug,
     MaxEncodedLen,
     scale_info::TypeInfo,
@@ -1528,6 +1509,7 @@ impl pallet_proxy::Config for Runtime {
     type CallHasher = BlakeTwo256;
     type AnnouncementDepositBase = AnnouncementDepositBase;
     type AnnouncementDepositFactor = AnnouncementDepositFactor;
+    type BlockNumberProvider = System;
 }
 
 impl pallet_sudo::Config for Runtime {
@@ -2216,8 +2198,10 @@ pub type Block = generic::Block<Header, UncheckedExtrinsic>;
 pub type SignedBlock = generic::SignedBlock<Block>;
 /// BlockId type as expected by this runtime.
 pub type BlockId = generic::BlockId<Block>;
-/// The SignedExtension to the basic transaction logic.
-pub type SignedExtra = (
+/// The extensions to the basic transaction logic.
+// `CheckEnergyFee` is still a `SignedExtension`, which the wrapper adapts.
+#[allow(deprecated)]
+pub type TxExtension = (
     frame_system::CheckNonZeroSender<Runtime>,
     frame_system::CheckSpecVersion<Runtime>,
     frame_system::CheckTxVersion<Runtime>,
@@ -2226,16 +2210,18 @@ pub type SignedExtra = (
     frame_system::CheckNonce<Runtime>,
     frame_system::CheckWeight<Runtime>,
     pallet_transaction_payment::ChargeTransactionPayment<Runtime>,
-    pallet_energy_fee::CheckEnergyFee<Runtime>,
+    sp_runtime::traits::transaction_extension::AsTransactionExtension<
+        pallet_energy_fee::CheckEnergyFee<Runtime>,
+    >,
 );
 /// Unchecked extrinsic type as expected by this runtime.
 pub type UncheckedExtrinsic =
-    fp_self_contained::UncheckedExtrinsic<Address, RuntimeCall, Signature, SignedExtra>;
+    fp_self_contained::UncheckedExtrinsic<Address, RuntimeCall, Signature, TxExtension>;
 /// Extrinsic type that has already been checked.
 pub type CheckedExtrinsic =
-    fp_self_contained::CheckedExtrinsic<AccountId, RuntimeCall, SignedExtra, H160>;
+    fp_self_contained::CheckedExtrinsic<AccountId, RuntimeCall, TxExtension, H160>;
 /// The payload being signed in transactions.
-pub type SignedPayload = generic::SignedPayload<RuntimeCall, SignedExtra>;
+pub type SignedPayload = generic::SignedPayload<RuntimeCall, TxExtension>;
 
 /// All migrations that will run on the next runtime upgrade.
 ///
@@ -2395,7 +2381,7 @@ impl_runtime_apis! {
             VERSION
         }
 
-        fn execute_block(block: Block) {
+        fn execute_block(block: <Block as BlockT>::LazyBlock) {
             Executive::execute_block(block)
         }
 
@@ -2485,7 +2471,7 @@ impl_runtime_apis! {
         }
 
         fn check_inherents(
-            block: Block,
+            block: <Block as BlockT>::LazyBlock,
             data: sp_inherents::InherentData,
         ) -> sp_inherents::CheckInherentsResult {
             data.check_extrinsics(&block)
@@ -3119,7 +3105,7 @@ impl_runtime_apis! {
             Vec<frame_benchmarking::BenchmarkList>,
             Vec<frame_support::traits::StorageInfo>,
         ) {
-            use frame_benchmarking::{Benchmarking, BenchmarkList};
+            use frame_benchmarking::BenchmarkList;
             use frame_support::traits::StorageInfoTrait;
             use frame_system_benchmarking::Pallet as SystemBench;
 
@@ -3132,8 +3118,8 @@ impl_runtime_apis! {
 
         fn dispatch_benchmark(
             config: frame_benchmarking::BenchmarkConfig
-        ) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, sp_runtime::RuntimeString> {
-            use frame_benchmarking::{Benchmarking, BenchmarkBatch};
+        ) -> Result<Vec<frame_benchmarking::BenchmarkBatch>, alloc::string::String> {
+            use frame_benchmarking::BenchmarkBatch;
             use frame_support::traits::{TrackedStorageKey, WhitelistedStorageKeys};
             use frame_system_benchmarking::Pallet as SystemBench;
 
@@ -3474,7 +3460,7 @@ impl_runtime_apis! {
         }
 
         fn execute_block(
-            block: Block,
+            block: <Block as BlockT>::LazyBlock,
             state_root_check: bool,
             signature_check: bool,
             select: frame_try_runtime::TryStateSelect,

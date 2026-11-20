@@ -15,7 +15,10 @@ fn alith() -> AccountId {
 fn new_test_ext() -> sp_io::TestExternalities {
     sp_io::TestExternalities::new(
         RuntimeGenesisConfig {
-            balances: BalancesConfig { balances: vec![(alith(), 1_000_000 * vtrs::UNITS)] },
+            balances: BalancesConfig {
+                balances: vec![(alith(), 1_000_000 * vtrs::UNITS)],
+                ..Default::default()
+            },
             assets: AssetsConfig {
                 assets: vec![
                     (VNRG::get(), alith(), false, 1),
@@ -1251,6 +1254,7 @@ mod offences {
             RuntimeGenesisConfig {
                 balances: BalancesConfig {
                     balances: validators.clone().map(|v| (stash(v), STAKE)).collect(),
+                    ..Default::default()
                 },
                 reputation: ReputationConfig {
                     accounts: validators
@@ -1263,6 +1267,7 @@ mod offences {
                         .clone()
                         .map(|v| (controller(v), stash(v), session_keys(v)))
                         .collect(),
+                    ..Default::default()
                 },
                 energy_generation: EnergyGenerationConfig {
                     stakers: validators

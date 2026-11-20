@@ -29,7 +29,13 @@ pub type V0215 = (
 
 pub type V0216 = (coretime_migration::MigrateToCoretimeWithoutBroker,);
 
-pub type Unreleased = ();
+// The disabled validators get the highest offence severity, as `disable_index` gives them.
+pub type Unreleased = (
+    pallet_session::migrations::v1::MigrateV0ToV1<
+        Runtime,
+        pallet_session::migrations::v1::InitOffenceSeverity<Runtime>,
+    >,
+);
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {

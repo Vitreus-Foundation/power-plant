@@ -263,6 +263,7 @@ pub fn testnet_genesis(
         // Monetary
         balances: BalancesConfig {
             balances: endowed_accounts.iter().cloned().map(|k| (k, ENDOWMENT)).collect(),
+            ..Default::default()
         },
         claiming: Default::default(),
         kickstart: Default::default(),
@@ -299,6 +300,7 @@ pub fn testnet_genesis(
                 .map(|account| (VNRG::get(), account, INITIAL_ENERGY_BALANCE))
                 .collect(),
             next_asset_id: Default::default(),
+            reserves: Default::default(),
         },
         pool_assets: Default::default(),
         reputation: ReputationConfig {
@@ -336,6 +338,7 @@ pub fn testnet_genesis(
                     )
                 })
                 .collect::<Vec<_>>(),
+            non_authority_keys: Default::default(),
         },
         technical_committee: TechnicalCommitteeConfig {
             members: endowed_accounts.iter().cloned().skip(3).take(3).collect(),

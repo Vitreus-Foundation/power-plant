@@ -3,9 +3,9 @@ use crate::{
     AccountId, Balance, Balances, BlockNumber, BlockWeights, Bounties, Council, DemocracyExtension,
     EnergyAsset, LiquidEnergyAsset, MoreThanHalfCouncil, NativeAndAssets, NativeAsset,
     NativeOrAssetId, OriginCaller, Preimage, Runtime, RuntimeCall, RuntimeEvent, RuntimeHoldReason,
-    RuntimeOrigin, Scheduler, StaticEnergyAsset, TechnicalCommittee, Treasury, TreasuryExtension,
-    CENTS, DAYS, HOURS, MICRO_VTRS, MILLICENTS, MILLI_VTRS, MINUTES, MONTHS, NANO_VTRS, PICO_VTRS,
-    UNITS, VNRG,
+    RuntimeOrigin, Scheduler, StaticEnergyAsset, System, TechnicalCommittee, Treasury,
+    TreasuryExtension, CENTS, DAYS, HOURS, MICRO_VTRS, MILLICENTS, MILLI_VTRS, MINUTES, MONTHS,
+    NANO_VTRS, PICO_VTRS, UNITS, VNRG,
 };
 
 use frame_support::traits::fungible::HoldConsideration;
@@ -78,6 +78,9 @@ impl pallet_collective::Config<CouncilCollective> for Runtime {
     type DefaultVote = pallet_collective::PrimeDefaultVote;
     type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
     type SetMembersOrigin = EnsureRoot<AccountId>;
+    type DisapproveOrigin = EnsureRoot<AccountId>;
+    type KillOrigin = EnsureRoot<AccountId>;
+    type Consideration = ();
     type MaxProposalWeight = MaxProposalWeight;
 }
 
@@ -97,6 +100,7 @@ impl pallet_multisig::Config for Runtime {
     type DepositFactor = DepositFactor;
     type MaxSignatories = MaxSignatories;
     type WeightInfo = pallet_multisig::weights::SubstrateWeight<Runtime>;
+    type BlockNumberProvider = System;
 }
 
 parameter_types! {
@@ -156,6 +160,9 @@ impl pallet_collective::Config<TechnicalCollective> for Runtime {
     type MaxMembers = TechnicalMaxMembers;
     type DefaultVote = pallet_collective::PrimeDefaultVote;
     type SetMembersOrigin = EnsureRoot<AccountId>;
+    type DisapproveOrigin = EnsureRoot<AccountId>;
+    type KillOrigin = EnsureRoot<AccountId>;
+    type Consideration = ();
     type WeightInfo = pallet_collective::weights::SubstrateWeight<Runtime>;
 }
 
@@ -215,6 +222,7 @@ impl pallet_treasury::Config for Runtime {
     type Paymaster = PayFromAccount<Balances, TreasuryAccountId<Runtime>>;
     type BalanceConverter = UnityAssetBalanceConversion;
     type PayoutPeriod = PayoutSpendPeriod;
+    type BlockNumberProvider = System;
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = TreasuryBenchmarkHelper;
 }
@@ -282,6 +290,7 @@ impl pallet_treasury::Config<TechnicalCommitteeTreasury> for Runtime {
         pallet_dynamic_energy::DynamicEnergyConversion<Runtime, Equals<VNRG>>,
     >;
     type PayoutPeriod = PayoutSpendPeriod;
+    type BlockNumberProvider = System;
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = TreasuryBenchmarkHelper;
 }
