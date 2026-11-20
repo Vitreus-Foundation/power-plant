@@ -330,3 +330,35 @@ fn unpriced_energy_is_reported_as_failed() {
         assert_eq!(Balances::free_balance(treasury), native_before + native);
     });
 }
+
+#[test]
+fn unpriced_energy_at_empty_exchange_is_reported_as_failed() {
+    new_test_ext().execute_with(|| {
+        System::set_block_number(1);
+        let treasury = Treasury::account_id();
+        mint_treasury_energy(10, 20, 30);
+        ExchangeLiquidity::set(&0);
+        set_exchange(STATIC_ENERGY, |exchange| exchange.price = None);
+        let native_before = Balances::free_balance(treasury);
+
+        <TreasuryExtension as OnSessionChange>::on_new_session(1);
+
+        // The priced exchanges only have nothing to pay out, which is no failure.
+        System::assert_has_event(
+            Event::<Test>::EnergyExchangeFailed {
+                energy: None,
+                static_energy: Some(DispatchError::Unavailable),
+                liquid_energy: None,
+            }
+            .into(),
+        );
+        assert!(!System::events().iter().any(|record| matches!(
+            record.event,
+            RuntimeEvent::TreasuryExtension(Event::<Test>::EnergyExchanged { .. })
+        )));
+        assert_eq!(Assets::balance(ENERGY, treasury), ENERGY_MIN_BALANCE + 10);
+        assert_eq!(Assets::balance(STATIC_ENERGY, treasury), ENERGY_MIN_BALANCE + 20);
+        assert_eq!(Assets::balance(LIQUID_ENERGY, treasury), ENERGY_MIN_BALANCE + 30);
+        assert_eq!(Balances::free_balance(treasury), native_before);
+    });
+}

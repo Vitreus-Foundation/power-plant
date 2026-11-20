@@ -6042,9 +6042,17 @@ fn exposure_multiplier_works() {
             CooperatorExposureMultiplier::<Test>::insert(101, FixedU64::from_rational(10, 100));
             mock::start_active_era(2);
 
-            // Exposure increased
+            // Only the clipped exposure increased
             assert_eq!(
                 PowerPlant::eras_stakers(active_era(), 11),
+                Exposure {
+                    total: 1000 + 200,
+                    own: 1000,
+                    others: vec![IndividualExposure { who: 101, value: 200 }]
+                },
+            );
+            assert_eq!(
+                PowerPlant::eras_stakers_clipped(active_era(), 11),
                 Exposure {
                     total: 1200 + 220,
                     own: 1200,
@@ -6053,6 +6061,14 @@ fn exposure_multiplier_works() {
             );
             assert_eq!(
                 PowerPlant::eras_stakers(active_era(), 21),
+                Exposure {
+                    total: 1000 + 300,
+                    own: 1000,
+                    others: vec![IndividualExposure { who: 101, value: 300 }]
+                },
+            );
+            assert_eq!(
+                PowerPlant::eras_stakers_clipped(active_era(), 21),
                 Exposure {
                     total: 1000 + 330,
                     own: 1000,
@@ -6083,6 +6099,57 @@ fn exposure_multiplier_works() {
                 })
             );
         });
+}
+
+#[test]
+fn slash_ignores_exposure_multiplier() {
+    ExtBuilder::default().build_and_execute(|| {
+        ValidatorExposureMultiplier::<Test>::insert(11, FixedU64::from_rational(20, 100));
+        CooperatorExposureMultiplier::<Test>::insert(101, FixedU64::from_rational(10, 100));
+        mock::start_active_era(1);
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![1],
+            }],
+            &[Perbill::from_percent(10)],
+        );
+
+        // 10% of the 1000 bonded by 11 and of the 200 that 101 cooperates with, without the bonus.
+        assert_eq!(PowerPlant::ledger(10).unwrap().total, 900);
+        assert_eq!(PowerPlant::ledger(10).unwrap().active, 900);
+        assert_eq!(PowerPlant::ledger(100).unwrap().total, 480);
+        assert_eq!(PowerPlant::ledger(100).unwrap().active, 480);
+        assert_eq!(Balances::free_balance(11), 1000 - 100);
+        assert_eq!(Balances::free_balance(101), 2000 - 20);
+        assert!(matches!(
+            staking_events_since_last_call().as_slice(),
+            &[
+                ..,
+                Event::Slashed { staker: 11, amount: SlashEntity { stake: 100, .. } },
+                Event::Chilled { stash: 11 },
+                Event::Slashed { staker: 101, amount: SlashEntity { stake: 20, .. } },
+            ]
+        ));
+        // The reporter gets half of 10% of each slash: 5 from 11 and 1 from 101.
+        assert_eq!(Balances::free_balance(1), 10 + 5 + 1);
+    });
+}
+
+#[test]
+fn election_ignores_exposure_multiplier() {
+    ExtBuilder::default().set_stake(31, 1100).build_and_execute(|| {
+        // 31 bonds 1100, less than 11 and 21 have with their cooperator (1200 and 1300), but with
+        // the bonus it weighs 1320.
+        ValidatorExposureMultiplier::<Test>::insert(31, FixedU64::from_rational(20, 100));
+        mock::start_active_era(1);
+
+        assert_eq_uvec!(Session::validators(), [11, 21]);
+        // The bonus still weighs in rewards.
+        assert_eq!(PowerPlant::eras_stakers_clipped(active_era(), 31).total, 1320);
+        assert_eq!(PowerPlant::eras_total_stake(active_era()), 1200 + 1300 + 1320);
+    });
 }
 
 mod byzantine_threshold_disabling_strategy {

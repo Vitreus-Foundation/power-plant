@@ -27,7 +27,9 @@ pub type V0215 = (
     ClearManualBridgeFeeStorage,
 );
 
-pub type Unreleased = (coretime_migration::MigrateToCoretimeWithoutBroker,);
+pub type V0216 = (coretime_migration::MigrateToCoretimeWithoutBroker,);
+
+pub type Unreleased = ();
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {

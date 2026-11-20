@@ -234,10 +234,12 @@ pub mod pallet {
         #[pallet::constant]
         type CollaborativeValidatorReputationTier: Get<ReputationTier>;
 
-        /// The multiplier applied to a validator stake to calculate the effective exposure.
+        /// The multiplier applied to a validator stake to calculate the effective exposure in
+        /// [`ErasStakersClipped`].
         type ValidatorExposureMultiplier: ExposureMultiplier<Self::AccountId>;
 
-        /// The multiplier applied to a cooperator stake to calculate the effective exposure.
+        /// The multiplier applied to a cooperator stake to calculate the effective exposure in
+        /// [`ErasStakersClipped`].
         type CooperatorExposureMultiplier: ExposureMultiplier<Self::AccountId>;
 
         /// A conversion from account ID to NAC level.
@@ -398,6 +400,9 @@ pub mod pallet {
 
     /// Exposure of validator at era.
     ///
+    /// It holds the staked amounts without the exposure multipliers. Slashes take their fractions
+    /// of it, and validators are elected by its `total`.
+    ///
     /// This is keyed first by the era index to allow bulk deletion and then the stash account.
     ///
     /// Is it removed after `HISTORY_DEPTH` eras.
@@ -417,9 +422,10 @@ pub mod pallet {
 
     /// Clipped Exposure of validator at era.
     ///
-    /// This is similar to [`ErasStakers`] but number of cooperators exposed is reduced to the
+    /// This is [`ErasStakers`] with the exposure multipliers applied, and payouts share the
+    /// energy of the era in proportion to it. The number of cooperators exposed is reduced to the
     /// `T::MaxCooperatorRewardedPerValidator` biggest stakers.
-    /// (Note: the field `total` and `own` of the exposure remains unchanged).
+    /// (Note: the reduction leaves the fields `total` and `own` unchanged).
     /// This is used to limit the i/o cost for the cooperator payout.
     ///
     /// This is keyed fist by the era index to allow bulk deletion and then the stash account.
@@ -464,6 +470,9 @@ pub mod pallet {
         StorageMap<_, Twox64Concat, EraIndex, FixedU128>;
 
     /// The total amount staked for the last `HISTORY_DEPTH` eras.
+    ///
+    /// It is the sum of `total` in [`ErasStakersClipped`] over the era, so it includes the
+    /// exposure multipliers.
     /// If total hasn't been set or has been removed then 0 stake is returned.
     #[pallet::storage]
     #[pallet::getter(fn eras_total_stake)]

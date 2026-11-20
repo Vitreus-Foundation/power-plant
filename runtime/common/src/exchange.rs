@@ -11,8 +11,8 @@
 //! Exchanges implement [`Swap`], [`QuotePrice`] and [`MaxAmountOut`]. Pallets use the
 //! one-direction traits instead, with `EnergyAsset` bound to the fungible they hold, and don't see
 //! the exchange's paths or asset kinds. [`NativeEnergyExchange`] implements the one-direction
-//! traits on top of an exchange. `()` implements them as no exchange at all: it quotes nothing,
-//! can supply nothing and fails every swap with [`TokenError::Unsupported`].
+//! traits on top of an exchange. `()` implements them as no exchange at all: it can't price
+//! anything and fails every swap with [`TokenError::Unsupported`].
 
 use frame_support::traits::{
     fungible::ItemOf,
@@ -59,9 +59,10 @@ pub trait QuotePrice {
 pub trait MaxAmountOut: QuotePrice {
     /// Returns the maximum amount of `asset2` a swap from `asset1` can currently supply.
     ///
-    /// Zero if nothing can be supplied, including on an unsupported path, and
-    /// `Balance::max_value()` if there is no limit. Quoting or swapping for more fails.
-    fn max_amount_out(asset1: Self::AssetKind, asset2: Self::AssetKind) -> Self::Balance;
+    /// `None` if the swap cannot be priced, including on an unsupported path. Otherwise zero if
+    /// nothing can be supplied and `Balance::max_value()` if there is no limit. Quoting or swapping
+    /// for more fails.
+    fn max_amount_out(asset1: Self::AssetKind, asset2: Self::AssetKind) -> Option<Self::Balance>;
 }
 
 /// Trait providing methods to quote swap prices for exchanging native currency for energy.
@@ -96,9 +97,9 @@ pub trait QuotePriceIntoEnergy {
 
     /// Returns the maximum amount of energy a swap can currently supply.
     ///
-    /// Zero if nothing can be supplied, `Balance::max_value()` if there is no limit. Quoting or
-    /// swapping for more fails.
-    fn max_amount_out() -> Self::Balance;
+    /// `None` if the swap cannot be priced. Otherwise zero if nothing can be supplied and
+    /// `Balance::max_value()` if there is no limit. Quoting or swapping for more fails.
+    fn max_amount_out() -> Option<Self::Balance>;
 }
 
 /// Trait providing methods to quote swap prices for exchanging energy for native currency.
@@ -133,9 +134,9 @@ pub trait QuotePriceFromEnergy {
 
     /// Returns the maximum amount of native currency a swap can currently supply.
     ///
-    /// Zero if nothing can be supplied, `Balance::max_value()` if there is no limit. Quoting or
-    /// swapping for more fails.
-    fn max_amount_out() -> Self::Balance;
+    /// `None` if the swap cannot be priced. Otherwise zero if nothing can be supplied and
+    /// `Balance::max_value()` if there is no limit. Quoting or swapping for more fails.
+    fn max_amount_out() -> Option<Self::Balance>;
 }
 
 /// Trait for providing methods to swap native currency for energy.
@@ -263,7 +264,7 @@ where
         )
     }
 
-    fn max_amount_out() -> Self::Balance {
+    fn max_amount_out() -> Option<Self::Balance> {
         Exchange::max_amount_out(NativeAsset::get(), A::get().into())
     }
 }
@@ -304,7 +305,7 @@ where
         )
     }
 
-    fn max_amount_out() -> Self::Balance {
+    fn max_amount_out() -> Option<Self::Balance> {
         Exchange::max_amount_out(A::get().into(), NativeAsset::get())
     }
 }
@@ -423,8 +424,8 @@ impl QuotePriceIntoEnergy for () {
         None
     }
 
-    fn max_amount_out() -> Self::Balance {
-        0
+    fn max_amount_out() -> Option<Self::Balance> {
+        None
     }
 }
 
@@ -446,8 +447,8 @@ impl QuotePriceFromEnergy for () {
         None
     }
 
-    fn max_amount_out() -> Self::Balance {
-        0
+    fn max_amount_out() -> Option<Self::Balance> {
+        None
     }
 }
 
