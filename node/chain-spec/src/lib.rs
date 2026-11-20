@@ -492,7 +492,7 @@ fn properties() -> Properties {
 fn default_parachains_host_configuration(
 ) -> polkadot_runtime_parachains::configuration::HostConfiguration<polkadot_primitives::BlockNumber>
 {
-    use polkadot_primitives::{vstaging::SchedulerParams, MAX_CODE_SIZE, MAX_POV_SIZE};
+    use polkadot_primitives::{SchedulerParams, MAX_CODE_SIZE, MAX_POV_SIZE};
 
     polkadot_runtime_parachains::configuration::HostConfiguration {
         validation_upgrade_cooldown: 2u32,

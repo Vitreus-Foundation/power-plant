@@ -29,12 +29,14 @@ pub type V0215 = (
 
 pub type V0216 = (coretime_migration::MigrateToCoretimeWithoutBroker,);
 
-// The disabled validators get the highest offence severity, as `disable_index` gives them.
 pub type Unreleased = (
+    // The disabled validators get the highest offence severity, as `disable_index` gives them.
     pallet_session::migrations::v1::MigrateV0ToV1<
         Runtime,
         pallet_session::migrations::v1::InitOffenceSeverity<Runtime>,
     >,
+    parachains_scheduler::migration::MigrateV2ToV3<Runtime>,
+    parachains_shared::migration::MigrateToV1<Runtime>,
 );
 
 pub struct InitTechnicalCommitteeTreasury;
@@ -83,7 +85,7 @@ mod coretime_migration {
     use frame_support::traits::OnRuntimeUpgrade;
 
     type MigrateToCoretime =
-        coretime::migration::MigrateToCoretime<Runtime, (), GetLegacyLeaseImpl>;
+        coretime::migration::MigrateToCoretime<Runtime, (), GetLegacyLeaseImpl, 80>;
 
     /// `MigrateToCoretime` for a relay chain without a coretime chain.
     ///
@@ -169,6 +171,10 @@ mod coretime_migration {
             let (index, _) = <Slots as Leaser<BlockNumber>>::lease_period_index(now)?;
             // `LeaseOffset` is zero, so periods start at multiples of `LeasePeriod`.
             Some(index.saturating_add(lease.len() as u32).saturating_mul(LeasePeriod::get()))
+        }
+
+        fn get_all_parachains_with_leases() -> Vec<ParaId> {
+            parachains_paras::Parachains::<Runtime>::get()
         }
     }
 }

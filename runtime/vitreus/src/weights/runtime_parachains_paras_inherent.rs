@@ -331,4 +331,44 @@ impl<T: frame_system::Config> polkadot_runtime_parachains::paras_inherent::Weigh
 			.saturating_add(T::DbWeight::get().reads(28))
 			.saturating_add(T::DbWeight::get().writes(15))
 	}
+	/// Storage: `ParaInherent::Included` (r:1 w:1)
+	/// Proof: `ParaInherent::Included` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `System::ParentHash` (r:1 w:0)
+	/// Proof: `System::ParentHash` (`max_values`: Some(1), `max_size`: Some(32), added: 527, mode: `MaxEncodedLen`)
+	/// Storage: `ParasShared::AllowedRelayParents` (r:1 w:1)
+	/// Proof: `ParasShared::AllowedRelayParents` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `ParaScheduler::ClaimQueue` (r:1 w:0)
+	/// Proof: `ParaScheduler::ClaimQueue` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `ParasShared::CurrentSessionIndex` (r:1 w:0)
+	/// Proof: `ParasShared::CurrentSessionIndex` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `ParaScheduler::ValidatorGroups` (r:1 w:0)
+	/// Proof: `ParaScheduler::ValidatorGroups` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `ParasShared::ActiveValidatorKeys` (r:1 w:0)
+	/// Proof: `ParasShared::ActiveValidatorKeys` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Babe::AuthorVrfRandomness` (r:1 w:0)
+	/// Proof: `Babe::AuthorVrfRandomness` (`max_values`: Some(1), `max_size`: Some(33), added: 528, mode: `MaxEncodedLen`)
+	/// Storage: `ParaInherent::OnChainVotes` (r:1 w:1)
+	/// Proof: `ParaInherent::OnChainVotes` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `ParasDisputes::Frozen` (r:1 w:0)
+	/// Proof: `ParasDisputes::Frozen` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `ParaInclusion::V1` (r:1 w:0)
+	/// Proof: `ParaInclusion::V1` (`max_values`: None, `max_size`: None, mode: `Measured`)
+	/// Storage: `ParaScheduler::SessionStartBlock` (r:1 w:0)
+	/// Proof: `ParaScheduler::SessionStartBlock` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Initializer::BufferedSessionChanges` (r:1 w:0)
+	/// Proof: `Initializer::BufferedSessionChanges` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `ParasShared::ActiveValidatorIndices` (r:1 w:0)
+	/// Proof: `ParasShared::ActiveValidatorIndices` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	/// Storage: `Session::DisabledValidators` (r:1 w:0)
+	/// Proof: `Session::DisabledValidators` (`max_values`: Some(1), `max_size`: None, mode: `Measured`)
+	fn enter_empty() -> Weight {
+		// Proof Size summary in bytes:
+		//  Measured:  `37558`
+		//  Estimated: `41023`
+		// Minimum execution time: 204_765_000 picoseconds.
+		Weight::from_parts(218_574_000, 0)
+			.saturating_add(Weight::from_parts(0, 41023))
+			.saturating_add(T::DbWeight::get().reads(15))
+			.saturating_add(T::DbWeight::get().writes(3))
+	}
 }

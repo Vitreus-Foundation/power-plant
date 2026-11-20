@@ -16,28 +16,26 @@ use frame_support::{
 };
 use polkadot_primitives::{
     runtime_api, slashing, ApprovalVotingParams, CandidateCommitments, CandidateEvent,
-    CandidateHash, CommittedCandidateReceipt, CoreIndex, CoreState, DisputeState, ExecutorParams,
-    GroupRotationInfo, Id as ParaId, InboundDownwardMessage, InboundHrmpMessage, NodeFeatures,
-    OccupiedCoreAssumption, PersistedValidationData, PvfCheckStatement, ScrapedOnChainVotes,
-    SessionInfo, ValidationCode, ValidationCodeHash, ValidatorId, ValidatorIndex,
-    ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
+    CandidateHash, CommittedCandidateReceiptV2 as CommittedCandidateReceipt, CoreIndex, CoreState,
+    DisputeState, ExecutorParams, GroupRotationInfo, Id as ParaId, InboundDownwardMessage,
+    InboundHrmpMessage, NodeFeatures, OccupiedCoreAssumption, PersistedValidationData,
+    PvfCheckStatement, ScrapedOnChainVotes, SessionInfo, ValidationCode, ValidationCodeHash,
+    ValidatorId, ValidatorIndex, ValidatorSignature, PARACHAIN_KEY_TYPE_ID,
 };
 
 use polkadot_runtime_common::{auctions, paras_registrar, paras_sudo_wrapper, prod_or_fast, slots};
 
 use polkadot_runtime_parachains::{
-    assigner_coretime as parachains_assigner_coretime,
-    assigner_on_demand as parachains_assigner_on_demand, configuration as parachains_configuration,
+    assigner_coretime as parachains_assigner_coretime, configuration as parachains_configuration,
     configuration::ActiveConfigHrmpChannelSizeAndCapacityRatio,
     coretime, disputes as parachains_disputes,
     disputes::slashing as parachains_slashing,
     dmp as parachains_dmp, hrmp as parachains_hrmp, inclusion as parachains_inclusion,
     inclusion::{AggregateMessageOrigin, UmpQueueId},
-    initializer as parachains_initializer, origin as parachains_origin, paras as parachains_paras,
+    initializer as parachains_initializer, on_demand as parachains_assigner_on_demand,
+    origin as parachains_origin, paras as parachains_paras,
     paras_inherent as parachains_paras_inherent,
-    runtime_api_impl::{
-        v10 as parachains_runtime_api_impl, vstaging as vstaging_parachains_runtime_api_impl,
-    },
+    runtime_api_impl::v13 as parachains_runtime_api_impl,
     scheduler as parachains_scheduler, session_info as parachains_session_info,
     shared as parachains_shared,
 };
@@ -95,8 +93,8 @@ use frame_support::{
     traits::{
         fungible::ItemOf,
         fungibles::{Balanced, Credit},
-        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8, FindAuthor, Hooks,
-        KeyOwnerProofSystem,
+        AsEnsureOriginWithArg, ConstU128, ConstU32, ConstU64, ConstU8, ConstUint, FindAuthor,
+        Hooks, KeyOwnerProofSystem,
     },
     weights::{
         constants::WEIGHT_REF_TIME_PER_MILLIS, ConstantMultiplier, Weight, WeightMeter, WeightToFee,
@@ -685,6 +683,8 @@ impl pallet_mmr::Config for Runtime {
     type WeightInfo = ();
     type LeafData = pallet_beefy_mmr::Pallet<Runtime>;
     type BlockHashProvider = pallet_mmr::DefaultBlockHashProvider<Runtime>;
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = parachains_paras::benchmarking::mmr_setup::MmrSetup<Runtime>;
 }
 
 pub struct ParasProvider;
@@ -708,6 +708,7 @@ impl pallet_beefy_mmr::Config for Runtime {
     type BeefyAuthorityToMerkleLeaf = pallet_beefy_mmr::BeefyEcdsaToEthereum;
     type LeafExtra = H256;
     type BeefyDataProvider = ParasProvider;
+    type WeightInfo = ();
 }
 
 parameter_types! {
@@ -1823,6 +1824,12 @@ impl parachains_paras::Config for Runtime {
     type OnNewHead = Registrar;
     type WeightInfo = weights::runtime_parachains_paras::WeightInfo<Runtime>;
     type AssignCoretime = CoretimeAssignmentProvider;
+    type Fungible = EnergyAsset;
+    // `remove_upgrade_cooldown` burns this much VNRG from its caller for each block of cooldown
+    // left, so 1000 gVolt for a day. The burn bypasses `OnEnergyBurn`: neither dynamic energy nor
+    // the energy broker counts it.
+    type CooldownRemovalMultiplier = ConstUint<{ 1000 * 1_000_000_000 / DAYS as u128 }>;
+    type AuthorizeCurrentCodeOrigin = EnsureRoot<AccountId>;
 }
 
 parameter_types! {
@@ -1946,7 +1953,6 @@ impl Get<InteriorLocation> for BrokerPot {
 impl coretime::Config for Runtime {
     type RuntimeOrigin = RuntimeOrigin;
     type RuntimeEvent = RuntimeEvent;
-    type Currency = Balances;
     type BrokerId = BrokerId;
     type BrokerPotLocation = BrokerPot;
     type WeightInfo = weights::runtime_parachains_coretime::WeightInfo<Runtime>;
@@ -2118,7 +2124,7 @@ construct_runtime!(
         ParaInclusion: parachains_inclusion::{Pallet, Call, Storage, Event<T>} = 63,
         ParaInherent: parachains_paras_inherent::{Pallet, Call, Storage, Inherent} = 64,
         ParaScheduler: parachains_scheduler::{Pallet, Storage} = 65,
-        Paras: parachains_paras::{Pallet, Call, Storage, Event, Config<T>, ValidateUnsigned} = 66,
+        Paras: parachains_paras::{Pallet, Call, Storage, Event<T>, Config<T>, ValidateUnsigned} = 66,
         Initializer: parachains_initializer::{Pallet, Call, Storage} = 67,
         Dmp: parachains_dmp::{Pallet, Storage} = 68,
         Hrmp: parachains_hrmp::{Pallet, Call, Storage, Event<T>, Config<T>} = 70,
@@ -3303,7 +3309,7 @@ impl_runtime_apis! {
         }
 
         fn unapplied_slashes(
-        ) -> Vec<(SessionIndex, CandidateHash, slashing::PendingSlashes)> {
+        ) -> Vec<(SessionIndex, CandidateHash, slashing::LegacyPendingSlashes)> {
             parachains_runtime_api_impl::unapplied_slashes::<Runtime>()
         }
 
@@ -3332,10 +3338,12 @@ impl_runtime_apis! {
         }
 
         fn para_backing_state(para_id: ParaId) -> Option<polkadot_primitives::async_backing::BackingState> {
+            #[allow(deprecated)]
             parachains_runtime_api_impl::backing_state::<Runtime>(para_id)
         }
 
         fn async_backing_params() -> polkadot_primitives::AsyncBackingParams {
+            #[allow(deprecated)]
             parachains_runtime_api_impl::async_backing_params::<Runtime>()
         }
 
@@ -3352,11 +3360,11 @@ impl_runtime_apis! {
         }
 
         fn claim_queue() -> BTreeMap<CoreIndex, VecDeque<ParaId>> {
-            vstaging_parachains_runtime_api_impl::claim_queue::<Runtime>()
+            parachains_runtime_api_impl::claim_queue::<Runtime>()
         }
 
         fn candidates_pending_availability(para_id: ParaId) -> Vec<CommittedCandidateReceipt<Hash>> {
-            vstaging_parachains_runtime_api_impl::candidates_pending_availability::<Runtime>(para_id)
+            parachains_runtime_api_impl::candidates_pending_availability::<Runtime>(para_id)
         }
     }
 
@@ -3366,7 +3374,7 @@ impl_runtime_apis! {
         }
     }
 
-    #[api_version(4)]
+    #[api_version(6)]
     impl sp_consensus_beefy::BeefyApi<Block, BeefyId> for Runtime {
         fn beefy_genesis() -> Option<BlockNumber> {
             pallet_beefy::GenesisBlock::<Runtime>::get()
@@ -3392,6 +3400,31 @@ impl_runtime_apis! {
             )
         }
 
+        fn submit_report_fork_voting_unsigned_extrinsic(
+            equivocation_proof:
+                sp_consensus_beefy::ForkVotingProof<
+                    <Block as BlockT>::Header,
+                    BeefyId,
+                    sp_runtime::OpaqueValue
+                >,
+            key_owner_proof: sp_consensus_beefy::OpaqueKeyOwnershipProof,
+        ) -> Option<()> {
+            Beefy::submit_unsigned_fork_voting_report(
+                equivocation_proof.try_into()?,
+                key_owner_proof.decode()?,
+            )
+        }
+
+        fn submit_report_future_block_voting_unsigned_extrinsic(
+            equivocation_proof: sp_consensus_beefy::FutureBlockVotingProof<BlockNumber, BeefyId>,
+            key_owner_proof: sp_consensus_beefy::OpaqueKeyOwnershipProof,
+        ) -> Option<()> {
+            Beefy::submit_unsigned_future_block_voting_report(
+                equivocation_proof,
+                key_owner_proof.decode()?,
+            )
+        }
+
         fn generate_key_ownership_proof(
             _set_id: sp_consensus_beefy::ValidatorSetId,
             authority_id: BeefyId,
@@ -3404,14 +3437,14 @@ impl_runtime_apis! {
         }
     }
 
-    #[api_version(2)]
+    #[api_version(3)]
     impl sp_mmr_primitives::MmrApi<Block, Hash, BlockNumber> for Runtime {
         fn mmr_root() -> Result<Hash, sp_mmr_primitives::Error> {
             Ok(Mmr::mmr_root())
         }
 
         fn mmr_leaf_count() -> Result<sp_mmr_primitives::LeafIndex, sp_mmr_primitives::Error> {
-            Ok(Mmr::mmr_leaves())
+            Ok(pallet_mmr::NumberOfLeaves::<Runtime>::get())
         }
 
         fn generate_proof(
@@ -3429,6 +3462,13 @@ impl_runtime_apis! {
                     )
                 },
             )
+        }
+
+        fn generate_ancestry_proof(
+            prev_block_number: BlockNumber,
+            best_known_block_number: Option<BlockNumber>,
+        ) -> Result<sp_mmr_primitives::AncestryProof<Hash>, sp_mmr_primitives::Error> {
+            Mmr::generate_ancestry_proof(prev_block_number, best_known_block_number)
         }
 
         fn verify_proof(leaves: Vec<sp_mmr_primitives::EncodableOpaqueLeaf>, proof: sp_mmr_primitives::LeafProof<Hash>)
