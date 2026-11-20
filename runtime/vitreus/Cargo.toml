@@ -9,6 +9,7 @@ repository = { workspace = true }
 targets = ["x86_64-unknown-linux-gnu"]
 
 [dependencies]
+ethereum = { workspace = true }
 hex-literal = { workspace = true }
 log = { workspace = true }
 num_enum = { workspace = true }
@@ -142,7 +143,6 @@ vitreus-utility-runtime-api = { workspace = true }
 
 [dev-dependencies]
 energy-generation-runtime-api = { workspace = true, default-features = true }
-ethereum = { workspace = true, default-features = true }
 
 [build-dependencies]
 substrate-wasm-builder = { workspace = true, optional = true }
@@ -218,6 +218,7 @@ try-runtime = [
 ]
 fast-runtime = []
 std = [
+    "ethereum/std",
     "log/std",
     "num_enum/std",
     "parity-scale-codec/std",

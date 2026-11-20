@@ -63,7 +63,7 @@ use sp_runtime::{
     curve::PiecewiseLinear,
     generic, impl_opaque_keys,
     traits::{
-        BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, Extrinsic, ExtrinsicCall, Get,
+        BlakeTwo256, Block as BlockT, DispatchInfoOf, Dispatchable, ExtrinsicCall, Get,
         IdentifyAccount, IdentityLookup, NumberFor, OpaqueKeys, PostDispatchInfoOf,
         UniqueSaturatedInto, Verify,
     },
@@ -1735,20 +1735,18 @@ impl<T: fungible::Inspect<AccountId>> fungible::Inspect<AccountId> for CurrencyA
     }
 }
 
-parameter_types! {
-    pub SuicideQuickClearLimit: u32 = 0;
-}
-
 impl pallet_evm::Config for Runtime {
+    type AccountProvider = pallet_evm::FrameSystemAccountProvider<Self>;
     type FeeCalculator = FixedFeeCalculator;
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
     type WeightPerGas = WeightPerGas;
     type BlockHashMapping = pallet_ethereum::EthereumBlockHashMapping<Self>;
     type CallOrigin = EnsureAccountId20;
+    type CreateOriginFilter = ();
+    type CreateInnerOriginFilter = ();
     type WithdrawOrigin = EnsureAccountId20;
     type AddressMapping = IdentityAddressMapping;
     type Currency = CurrencyAdapter<EnergyAsset>;
-    type RuntimeEvent = RuntimeEvent;
     type PrecompilesType = VitreusPrecompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
     type ChainId = EVMChainId;
@@ -1758,9 +1756,20 @@ impl pallet_evm::Config for Runtime {
     type OnCreate = ();
     type FindAuthor = FindAuthorTruncated<Babe>;
     type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
-    type SuicideQuickClearLimit = SuicideQuickClearLimit;
+    // 0 turns off metering of storage growth: the gas of a transaction doesn't cover the storage
+    // it adds.
+    type GasLimitStorageGrowthRatio = ConstU64<0>;
     type Timestamp = Timestamp;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
+
+    // Cancun, not Frontier's default Osaka, whose calldata floor price (EIP-7623) changes gas
+    // estimates. Cancun's EIP-6780 lets SELFDESTRUCT remove only contracts created in the same
+    // transaction, and the runner clears a removed contract's storage in full, so the clearing
+    // stays within that transaction's gas.
+    fn config() -> &'static pallet_evm::EvmConfig {
+        static CONFIG: pallet_evm::EvmConfig = pallet_evm::EvmConfig::cancun();
+        &CONFIG
+    }
 }
 
 parameter_types! {
@@ -1768,8 +1777,7 @@ parameter_types! {
 }
 
 impl pallet_ethereum::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
-    type StateRoot = pallet_ethereum::IntermediateStateRoot<Self>;
+    type StateRoot = pallet_ethereum::IntermediateStateRoot<Self::Version>;
     type PostLogContent = PostBlockAndTxnHashes;
     type ExtraDataLength = ConstU32<30>;
 }
@@ -2174,7 +2182,7 @@ pub struct TransactionConverter;
 
 impl fp_rpc::ConvertTransaction<UncheckedExtrinsic> for TransactionConverter {
     fn convert_transaction(&self, transaction: pallet_ethereum::Transaction) -> UncheckedExtrinsic {
-        UncheckedExtrinsic::new_unsigned(
+        UncheckedExtrinsic::new_bare(
             pallet_ethereum::Call::<Runtime>::transact { transaction }.into(),
         )
     }
@@ -2185,7 +2193,7 @@ impl fp_rpc::ConvertTransaction<opaque::UncheckedExtrinsic> for TransactionConve
         &self,
         transaction: pallet_ethereum::Transaction,
     ) -> opaque::UncheckedExtrinsic {
-        let extrinsic = UncheckedExtrinsic::new_unsigned(
+        let extrinsic = UncheckedExtrinsic::new_bare(
             pallet_ethereum::Call::<Runtime>::transact { transaction }.into(),
         );
         let encoded = extrinsic.encode();
@@ -2531,9 +2539,7 @@ impl_runtime_apis! {
         }
 
         fn storage_at(address: H160, index: U256) -> H256 {
-            let mut tmp = [0u8; 32];
-            index.to_big_endian(&mut tmp);
-            pallet_evm::AccountStorages::<Runtime>::get(address, H256::from_slice(&tmp[..]))
+            pallet_evm::AccountStorages::<Runtime>::get(address, H256::from(index.to_big_endian()))
         }
 
         fn call(
@@ -2547,6 +2553,7 @@ impl_runtime_apis! {
             nonce: Option<U256>,
             estimate: bool,
             access_list: Option<Vec<(H160, Vec<H256>)>>,
+            authorization_list: Option<ethereum::AuthorizationList>,
         ) -> Result<pallet_evm::CallInfo, sp_runtime::DispatchError> {
             let config = if estimate {
                 let mut config = <Runtime as pallet_evm::Config>::config().clone();
@@ -2579,6 +2586,9 @@ impl_runtime_apis! {
             if access_list.is_some() {
                 estimated_transaction_len += access_list.encoded_size();
             }
+            if authorization_list.is_some() {
+                estimated_transaction_len += authorization_list.encoded_size();
+            }
 
             let gas_limit = gas_limit.min(u64::MAX.into()).low_u64();
             let without_base_extrinsic_weight = true;
@@ -2604,6 +2614,7 @@ impl_runtime_apis! {
                 max_priority_fee_per_gas,
                 nonce,
                 access_list.unwrap_or_default(),
+                authorization_list.unwrap_or_default(),
                 is_transactional,
                 validate,
                 weight_limit,
@@ -2622,6 +2633,7 @@ impl_runtime_apis! {
             nonce: Option<U256>,
             estimate: bool,
             access_list: Option<Vec<(H160, Vec<H256>)>>,
+            authorization_list: Option<ethereum::AuthorizationList>,
         ) -> Result<pallet_evm::CreateInfo, sp_runtime::DispatchError> {
             let config = if estimate {
                 let mut config = <Runtime as pallet_evm::Config>::config().clone();
@@ -2653,6 +2665,9 @@ impl_runtime_apis! {
             if access_list.is_some() {
                 estimated_transaction_len += access_list.encoded_size();
             }
+            if authorization_list.is_some() {
+                estimated_transaction_len += authorization_list.encoded_size();
+            }
 
             let gas_limit = if gas_limit > U256::from(u64::MAX) {
                 u64::MAX
@@ -2681,6 +2696,7 @@ impl_runtime_apis! {
                 max_priority_fee_per_gas,
                 nonce,
                 access_list.unwrap_or_default(),
+                authorization_list.unwrap_or_default(),
                 is_transactional,
                 validate,
                 weight_limit,
@@ -2750,7 +2766,7 @@ impl_runtime_apis! {
 
     impl fp_rpc::ConvertTransactionRuntimeApi<Block> for Runtime {
         fn convert_transaction(transaction: EthereumTransaction) -> <Block as BlockT>::Extrinsic {
-            UncheckedExtrinsic::new_unsigned(
+            UncheckedExtrinsic::new_bare(
                 pallet_ethereum::Call::<Runtime>::transact { transaction }.into(),
             )
         }
@@ -3077,6 +3093,7 @@ impl_runtime_apis! {
                         max_priority_fee_per_gas,
                         nonce,
                         access_list: access_list_converted,
+                        authorization_list: Vec::new(),
                     })
                 },
                 None => {
