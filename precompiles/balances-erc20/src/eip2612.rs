@@ -38,7 +38,8 @@ pub struct Eip2612<Runtime, Metadata, Instance = ()>(PhantomData<(Runtime, Metad
 
 impl<Runtime, Metadata, Instance> Eip2612<Runtime, Metadata, Instance>
 where
-    Runtime: pallet_balances::Config<Instance> + pallet_evm::Config,
+    Runtime: pallet_balances::Config<Instance>
+        + pallet_evm::Config<AccountProvider = pallet_evm::FrameSystemAccountProvider<Runtime>>,
     Runtime::RuntimeCall: Dispatchable<PostInfo = PostDispatchInfo> + GetDispatchInfo,
     Runtime::RuntimeCall: From<pallet_balances::Call<Runtime, Instance>>,
     <Runtime::RuntimeCall as Dispatchable>::RuntimeOrigin: From<Option<Runtime::AccountId>>,

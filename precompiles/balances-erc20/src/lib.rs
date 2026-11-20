@@ -58,6 +58,11 @@ pub const SELECTOR_LOG_DEPOSIT: [u8; 32] = keccak256!("Deposit(address,uint256)"
 /// Solidity selector of the Withdraw log, which is the Keccak of the Log signature.
 pub const SELECTOR_LOG_WITHDRAWAL: [u8; 32] = keccak256!("Withdrawal(address,uint256)");
 
+// The storage growth, in bytes, that a dispatched transfer reports to the EVM. Zero, because the
+// runtime doesn't meter storage growth: its `GasLimitStorageGrowthRatio` is 0. A transfer can
+// create the destination account, so the value has to change if the runtime starts metering.
+const TRANSFER_STORAGE_GROWTH: u64 = 0;
+
 /// Associates pallet Instance to a prefix used for the Approves storage.
 /// This trait is implemented for () and the 16 substrate Instance.
 pub trait InstanceToPrefix {
@@ -180,7 +185,8 @@ pub struct Erc20BalancesPrecompile<Runtime, Metadata: Erc20Metadata, Instance: '
 #[precompile_utils::precompile]
 impl<Runtime, Metadata, Instance> Erc20BalancesPrecompile<Runtime, Metadata, Instance>
 where
-    Runtime: pallet_balances::Config<Instance> + pallet_evm::Config,
+    Runtime: pallet_balances::Config<Instance>
+        + pallet_evm::Config<AccountProvider = pallet_evm::FrameSystemAccountProvider<Runtime>>,
     Runtime::RuntimeCall: Dispatchable<PostInfo = PostDispatchInfo> + GetDispatchInfo,
     Runtime::RuntimeCall: From<pallet_balances::Call<Runtime, Instance>>,
     <Runtime::RuntimeCall as Dispatchable>::RuntimeOrigin: From<Option<Runtime::AccountId>>,
@@ -287,6 +293,7 @@ where
                     dest: Runtime::Lookup::unlookup(to),
                     value,
                 },
+                TRANSFER_STORAGE_GROWTH,
             )?;
         }
 
@@ -352,6 +359,7 @@ where
                     dest: Runtime::Lookup::unlookup(to),
                     value,
                 },
+                TRANSFER_STORAGE_GROWTH,
             )?;
         }
 
@@ -413,6 +421,7 @@ where
                 dest: Runtime::Lookup::unlookup(caller),
                 value: amount,
             },
+            TRANSFER_STORAGE_GROWTH,
         )?;
 
         log2(

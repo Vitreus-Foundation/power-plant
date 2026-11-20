@@ -21,7 +21,7 @@ use super::*;
 use frame_support::{construct_runtime, parameter_types, traits::Everything, weights::Weight};
 use pallet_evm::{EnsureAddressNever, EnsureAddressRoot};
 use precompile_utils::{precompile_set::*, testing::MockAccount};
-use sp_core::{ConstU32, H256, U256};
+use sp_core::{ConstU64, H256, U256};
 use sp_runtime::{
     traits::{BlakeTwo256, IdentityLookup},
     BuildStorage,
@@ -66,6 +66,7 @@ impl frame_system::Config for Runtime {
     type PreInherents = ();
     type PostInherents = ();
     type PostTransactions = ();
+    type ExtensionsWeightInfo = ();
 }
 
 parameter_types! {
@@ -97,6 +98,7 @@ impl pallet_balances::Config for Runtime {
     type FreezeIdentifier = ();
     type MaxFreezes = ();
     type RuntimeFreezeReason = ();
+    type DoneSlashHandler = ();
 }
 
 pub type Precompiles<R> = PrecompileSetBuilder<
@@ -119,14 +121,16 @@ parameter_types! {
 }
 
 impl pallet_evm::Config for Runtime {
+    type AccountProvider = pallet_evm::FrameSystemAccountProvider<Self>;
     type FeeCalculator = ();
     type GasWeightMapping = pallet_evm::FixedGasWeightMapping<Self>;
     type WeightPerGas = WeightPerGas;
     type CallOrigin = EnsureAddressRoot<AccountId>;
+    type CreateOriginFilter = ();
+    type CreateInnerOriginFilter = ();
     type WithdrawOrigin = EnsureAddressNever<AccountId>;
     type AddressMapping = AccountId;
     type Currency = Balances;
-    type RuntimeEvent = RuntimeEvent;
     type Runner = pallet_evm::runner::stack::Runner<Self>;
     type PrecompilesType = Precompiles<Self>;
     type PrecompilesValue = PrecompilesValue;
@@ -137,7 +141,7 @@ impl pallet_evm::Config for Runtime {
     type FindAuthor = ();
     type OnCreate = ();
     type GasLimitPovSizeRatio = GasLimitPovSizeRatio;
-    type SuicideQuickClearLimit = ConstU32<0>;
+    type GasLimitStorageGrowthRatio = ConstU64<0>;
     type Timestamp = Timestamp;
     type WeightInfo = pallet_evm::weights::SubstrateWeight<Runtime>;
 }
@@ -200,7 +204,7 @@ impl ExtBuilder {
             .build_storage()
             .expect("Frame system builds valid default genesis config");
 
-        pallet_balances::GenesisConfig::<Runtime> { balances: self.balances }
+        pallet_balances::GenesisConfig::<Runtime> { balances: self.balances, ..Default::default() }
             .assimilate_storage(&mut t)
             .expect("Pallet balances storage can be assimilated");
 
