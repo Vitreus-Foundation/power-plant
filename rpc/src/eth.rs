@@ -10,7 +10,6 @@ use sc_client_api::{
 use sc_network::service::traits::NetworkService;
 use sc_network_sync::SyncingService;
 use sc_rpc::SubscriptionTaskExecutor;
-use sc_transaction_pool::{ChainApi, Pool};
 use sc_transaction_pool_api::TransactionPool;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder as BlockBuilderApi;
@@ -27,13 +26,11 @@ use fp_rpc::{ConvertTransaction, ConvertTransactionRuntimeApi, EthereumRuntimeRP
 use crate::consensus_data_providers::BabeConsensusDataProvider;
 
 /// Extra dependencies for Ethereum compatibility.
-pub struct EthDeps<B: BlockT, C, P, A: ChainApi, CT, CIDP> {
+pub struct EthDeps<B: BlockT, C, P, CT, CIDP> {
     /// The client instance to use.
     pub client: Arc<C>,
     /// Transaction pool instance.
     pub pool: Arc<P>,
-    /// Graph pool instance.
-    pub graph: Arc<Pool<A>>,
     /// Ethereum transaction converter.
     pub converter: Option<CT>,
     /// The Node authority flag
@@ -54,6 +51,8 @@ pub struct EthDeps<B: BlockT, C, P, A: ChainApi, CT, CIDP> {
     pub filter_pool: Option<FilterPool>,
     /// Maximum number of logs in a query.
     pub max_past_logs: u32,
+    /// Maximum block range for eth_getLogs.
+    pub max_block_range: u32,
     /// Fee history cache.
     pub fee_history_cache: FeeHistoryCache,
     /// Maximum fee history cache size.
@@ -67,12 +66,11 @@ pub struct EthDeps<B: BlockT, C, P, A: ChainApi, CT, CIDP> {
     pub pending_create_inherent_data_providers: CIDP,
 }
 
-impl<B: BlockT, C, P, A: ChainApi, CT: Clone, CIDP: Clone> Clone for EthDeps<B, C, P, A, CT, CIDP> {
+impl<B: BlockT, C, P, CT: Clone, CIDP: Clone> Clone for EthDeps<B, C, P, CT, CIDP> {
     fn clone(&self) -> Self {
         Self {
             client: self.client.clone(),
             pool: self.pool.clone(),
-            graph: self.graph.clone(),
             converter: self.converter.clone(),
             is_authority: self.is_authority,
             enable_dev_signer: self.enable_dev_signer,
@@ -83,6 +81,7 @@ impl<B: BlockT, C, P, A: ChainApi, CT: Clone, CIDP: Clone> Clone for EthDeps<B, 
             block_data_cache: self.block_data_cache.clone(),
             filter_pool: self.filter_pool.clone(),
             max_past_logs: self.max_past_logs,
+            max_block_range: self.max_block_range,
             fee_history_cache: self.fee_history_cache.clone(),
             fee_history_cache_limit: self.fee_history_cache_limit,
             execute_gas_limit_multiplier: self.execute_gas_limit_multiplier,
@@ -95,9 +94,9 @@ impl<B: BlockT, C, P, A: ChainApi, CT: Clone, CIDP: Clone> Clone for EthDeps<B, 
 }
 
 /// Instantiate Ethereum-compatible RPC extensions.
-pub fn create_eth<B, C, BE, P, A, CT, CIDP, EC>(
+pub fn create_eth<B, C, BE, P, CT, CIDP, EC>(
     mut io: RpcModule<()>,
-    deps: EthDeps<B, C, P, A, CT, CIDP>,
+    deps: EthDeps<B, C, P, CT, CIDP>,
     subscription_task_executor: SubscriptionTaskExecutor,
     pubsub_notification_sinks: Arc<
         fc_mapping_sync::EthereumBlockNotificationSinks<
@@ -112,8 +111,7 @@ where
     C: HeaderBackend<B> + HeaderMetadata<B, Error = BlockChainError>,
     C: BlockchainEvents<B> + AuxStore + UsageProvider<B> + StorageProvider<B, BE> + 'static,
     BE: Backend<B> + 'static,
-    P: TransactionPool<Block = B> + 'static,
-    A: ChainApi<Block = B> + 'static,
+    P: TransactionPool<Block = B, Hash = B::Hash> + 'static,
     CT: ConvertTransaction<<B as BlockT>::Extrinsic> + Send + Sync + 'static,
     CIDP: CreateInherentDataProviders<B, ()> + Send + 'static,
     EC: EthConfig<B, C>,
@@ -128,7 +126,6 @@ where
     let EthDeps {
         client,
         pool,
-        graph,
         converter,
         is_authority,
         enable_dev_signer,
@@ -139,6 +136,7 @@ where
         block_data_cache,
         filter_pool,
         max_past_logs,
+        max_block_range,
         fee_history_cache,
         fee_history_cache_limit,
         execute_gas_limit_multiplier,
@@ -152,10 +150,9 @@ where
     }
 
     io.merge(
-        Eth::<B, C, P, CT, BE, A, CIDP, EC>::new(
+        Eth::<B, C, P, CT, BE, CIDP, EC>::new(
             client.clone(),
             pool.clone(),
-            graph.clone(),
             converter,
             sync.clone(),
             signers,
@@ -179,10 +176,11 @@ where
             EthFilter::new(
                 client.clone(),
                 frontier_backend.clone(),
-                graph.clone(),
+                pool.clone(),
                 filter_pool,
                 500_usize, // max stored filters
                 max_past_logs,
+                max_block_range,
                 block_data_cache.clone(),
             )
             .into_rpc(),
@@ -191,7 +189,7 @@ where
 
     io.merge(
         EthPubSub::new(
-            pool,
+            pool.clone(),
             client.clone(),
             sync,
             subscription_task_executor,
@@ -214,7 +212,7 @@ where
     io.merge(Web3::new(client.clone()).into_rpc())?;
 
     #[cfg(feature = "txpool")]
-    io.merge(TxPool::new(client, graph).into_rpc())?;
+    io.merge(TxPool::new(client, pool).into_rpc())?;
 
     Ok(io)
 }

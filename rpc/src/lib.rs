@@ -8,7 +8,6 @@ use jsonrpsee::RpcModule;
 use sc_client_api::{backend::StorageProvider, client::BlockchainEvents, AuxStore, UsageProvider};
 use sc_rpc::SubscriptionTaskExecutor;
 use sc_service::TransactionPool;
-use sc_transaction_pool::ChainApi;
 use sp_api::{CallApiAt, ProvideRuntimeApi};
 use sp_block_builder::BlockBuilder;
 use sp_blockchain::{Error as BlockChainError, HeaderBackend, HeaderMetadata};
@@ -36,11 +35,11 @@ pub struct NodeDeps {
 }
 
 /// Extra dependencies.
-pub struct ExtraDeps<C, P, A: ChainApi, CT, CIDP> {
+pub struct ExtraDeps<C, P, CT, CIDP> {
     /// The client instance to use.
     pub client: Arc<C>,
     /// Ethereum-compatibility specific dependencies.
-    pub eth: EthDeps<Block, C, P, A, CT, CIDP>,
+    pub eth: EthDeps<Block, C, P, CT, CIDP>,
     /// Node specific dependencies.
     pub node: NodeDeps,
 }
@@ -58,9 +57,9 @@ where
 }
 
 /// Instantiate all RPC extensions.
-pub fn create_full<C, P, A, CT, CIDP, B>(
+pub fn create_full<C, P, CT, CIDP, B>(
     mut io: RpcModule<()>,
-    ExtraDeps { client, eth, node }: ExtraDeps<C, P, A, CT, CIDP>,
+    ExtraDeps { client, eth, node }: ExtraDeps<C, P, CT, CIDP>,
     subscription_task_executor: SubscriptionTaskExecutor,
     pubsub_notification_sinks: Arc<
         fc_mapping_sync::EthereumBlockNotificationSinks<
@@ -86,8 +85,7 @@ where
     C::Api: energy_generation_rpc::EnergyGenerationRuntimeApi<Block, AccountId>,
     C::Api: nfts_rpc::NftsRuntimeApi<Block, AccountId, CollectionId, ItemId>,
     C::Api: vitreus_utility_runtime_api::UtilityApi<Block>,
-    P: TransactionPool<Block = Block> + 'static,
-    A: ChainApi<Block = Block> + 'static,
+    P: TransactionPool<Block = Block, Hash = <Block as BlockT>::Hash> + 'static,
     CT: fp_rpc::ConvertTransaction<<Block as BlockT>::Extrinsic> + Send + Sync + 'static,
     CIDP: CreateInherentDataProviders<Block, ()> + Send + 'static,
     B: sc_client_api::Backend<Block> + Send + Sync + 'static,
@@ -105,7 +103,7 @@ where
     io.merge(Node::new(node.name).into_rpc())?;
 
     // Ethereum compatibility RPCs
-    let io = create_eth::<_, _, _, _, _, _, _, DefaultEthConfig<C, B>>(
+    let io = create_eth::<_, _, _, _, _, _, DefaultEthConfig<C, B>>(
         io,
         eth,
         subscription_task_executor,
@@ -122,7 +120,6 @@ pub fn create_basic<C, P, SC, B, AuthorityId>(
         pool,
         select_chain,
         chain_spec,
-        deny_unsafe,
         babe,
         grandpa,
         beefy,
@@ -154,7 +151,6 @@ where
     use sc_consensus_babe_rpc::{Babe, BabeApiServer};
     use sc_consensus_beefy_rpc::{Beefy, BeefyApiServer};
     use sc_consensus_grandpa_rpc::{Grandpa, GrandpaApiServer};
-    use sc_rpc_spec_v2::chain_spec::{ChainSpec, ChainSpecApiServer};
     use sc_sync_state_rpc::{SyncState, SyncStateApiServer};
     use substrate_frame_rpc_system::{System, SystemApiServer};
     use substrate_state_trie_migration_rpc::{StateMigration, StateMigrationApiServer};
@@ -169,13 +165,8 @@ where
         finality_provider,
     } = grandpa;
 
-    let chain_name = chain_spec.name().to_string();
-    let genesis_hash = client.hash(0).ok().flatten().expect("Genesis block exists; qed");
-    let properties = chain_spec.properties();
-
-    io.merge(ChainSpec::new(chain_name, genesis_hash, properties).into_rpc())?;
-    io.merge(StateMigration::new(client.clone(), backend.clone(), deny_unsafe).into_rpc())?;
-    io.merge(System::new(client.clone(), pool.clone(), deny_unsafe).into_rpc())?;
+    io.merge(StateMigration::new(client.clone(), backend.clone()).into_rpc())?;
+    io.merge(System::new(client.clone(), pool.clone()).into_rpc())?;
     io.merge(TransactionPayment::new(client.clone()).into_rpc())?;
     io.merge(
         Mmr::new(
@@ -187,8 +178,7 @@ where
         .into_rpc(),
     )?;
     io.merge(
-        Babe::new(client.clone(), babe_worker_handle.clone(), keystore, select_chain, deny_unsafe)
-            .into_rpc(),
+        Babe::new(client.clone(), babe_worker_handle.clone(), keystore, select_chain).into_rpc(),
     )?;
     io.merge(
         Grandpa::new(
