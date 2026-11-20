@@ -50,6 +50,7 @@ default = ["db", "cli", "full-node"]
 db = ["vitreus-service/db"]
 cli = [
 	"clap",
+	"frame-benchmarking-cli",
 	"sc-cli",
 	"sc-service",
 	"sc-tracing",

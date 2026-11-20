@@ -121,7 +121,10 @@ where
         let hwbench = (!cli.run.no_hardware_benchmarks)
             .then_some(config.database.path().map(|database_path| {
                 let _ = std::fs::create_dir_all(database_path);
-                sc_sysinfo::gather_hwbench(Some(database_path))
+                sc_sysinfo::gather_hwbench(
+                    Some(database_path),
+                    &frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE,
+                )
             }))
             .flatten();
 
@@ -133,7 +136,6 @@ where
                 is_parachain_node: vitreus_service::IsParachainNode::No,
                 enable_beefy,
                 force_authoring_backoff: cli.run.force_authoring_backoff,
-                jaeger_agent: None,
                 telemetry_worker_handle: None,
                 node_version,
                 secure_validator_mode,
@@ -148,6 +150,9 @@ where
                 execute_workers_max_num: cli.run.execute_workers_max_num,
                 prepare_workers_hard_max_num: cli.run.prepare_workers_hard_max_num,
                 prepare_workers_soft_max_num: cli.run.prepare_workers_soft_max_num,
+                keep_finalized_for: None,
+                invulnerable_ah_collators: Default::default(),
+                collator_protocol_hold_off: None,
             },
         )?;
 
@@ -292,16 +297,16 @@ pub fn run() -> Result<()> {
             Ok(runner.async_run(|mut config| {
                 let (client, backend, _, task_manager, _) =
                     vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
+                let task_handle = task_manager.spawn_handle();
                 let aux_revert = Box::new(|client, backend, blocks| {
-                    vitreus_service::revert_backend(client, backend, blocks, config).map_err(
-                        |err| {
+                    vitreus_service::revert_backend(client, backend, blocks, config, task_handle)
+                        .map_err(|err| {
                             match err {
                                 vitreus_service::Error::Blockchain(err) => err.into(),
                                 // Generic application-specific error.
                                 err => sc_cli::Error::Application(err.into()),
                             }
-                        },
-                    )
+                        })
                 });
                 Ok((
                     cmd.run(client, backend, Some(aux_revert)).map_err(Error::SubstrateCli),
@@ -339,7 +344,9 @@ pub fn run() -> Result<()> {
                         vitreus_service::new_chain_ops(&mut config, &cli.eth)?;
                     let db = backend.expose_db();
                     let storage = backend.expose_storage();
-                    cmd.run(config, client, db, storage).map_err(Error::SubstrateCli)
+                    let shared_trie_cache = backend.expose_shared_trie_cache();
+                    cmd.run(config, client, db, storage, shared_trie_cache)
+                        .map_err(Error::SubstrateCli)
                 }),
                 BenchmarkCmd::Overhead(cmd) => runner.sync_run(|mut config| {
                     let (client, _, _, _, _) =
@@ -348,8 +355,16 @@ pub fn run() -> Result<()> {
                     let header = client.header(client.info().genesis_hash).unwrap().unwrap();
                     let inherent_data = inherent_benchmark_data(header)
                         .map_err(|e| format!("generating inherent data: {:?}", e))?;
-                    cmd.run(config, client, inherent_data, Vec::new(), &ext_builder)
-                        .map_err(Error::SubstrateCli)
+                    // A relay chain block doesn't carry a storage proof, so it isn't recorded.
+                    cmd.run(
+                        config.chain_spec.name().into(),
+                        client,
+                        inherent_data,
+                        Vec::new(),
+                        &ext_builder,
+                        false,
+                    )
+                    .map_err(Error::SubstrateCli)
                 }),
                 BenchmarkCmd::Extrinsic(cmd) => runner.sync_run(|mut config| {
                     let (client, _, _, _, _) =

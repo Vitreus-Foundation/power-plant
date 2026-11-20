@@ -137,6 +137,7 @@ runtime-benchmarks = [
     "frame-benchmarking/runtime-benchmarks",
     "frame-system/runtime-benchmarks",
     "pallet-energy-fee/runtime-benchmarks",
+    "pallet-transaction-payment/runtime-benchmarks",
     "polkadot-primitives/runtime-benchmarks",
     "polkadot-service/runtime-benchmarks",
     "sc-service/runtime-benchmarks",
