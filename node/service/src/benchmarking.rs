@@ -129,7 +129,8 @@ pub fn create_benchmark_extrinsic(
 
     let era = Era::mortal(period, best_block as u64);
 
-    let extra: runtime::SignedExtra = (
+    #[allow(deprecated)]
+    let extra: runtime::TxExtension = (
         frame_system::CheckNonZeroSender::<runtime::Runtime>::new(),
         frame_system::CheckSpecVersion::<runtime::Runtime>::new(),
         frame_system::CheckTxVersion::<runtime::Runtime>::new(),
@@ -138,7 +139,7 @@ pub fn create_benchmark_extrinsic(
         frame_system::CheckNonce::<runtime::Runtime>::from(nonce),
         frame_system::CheckWeight::<runtime::Runtime>::new(),
         pallet_transaction_payment::ChargeTransactionPayment::<runtime::Runtime>::from(0),
-        pallet_energy_fee::CheckEnergyFee::<runtime::Runtime>::new(),
+        pallet_energy_fee::CheckEnergyFee::<runtime::Runtime>::new().into(),
     );
 
     let raw_payload = runtime::SignedPayload::from_raw(

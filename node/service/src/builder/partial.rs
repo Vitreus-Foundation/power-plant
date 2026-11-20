@@ -19,8 +19,8 @@
 #![cfg(feature = "full-node")]
 
 use crate::{
-	fake_runtime_api::RuntimeApi, grandpa_support, relay_chain_selection, Error, FullBackend,
-	FullClient, IdentifyVariant, GRANDPA_JUSTIFICATION_PERIOD,
+	eth::{open_frontier_backend, EthConfiguration, FrontierBackend, StorageOverride},
+	Error, FullBackend, FullClient, RuntimeApi, SelectRelayChain, GRANDPA_JUSTIFICATION_PERIOD,
 };
 use polkadot_primitives::Block;
 use sc_consensus_grandpa::FinalityProofProvider as GrandpaFinalityProofProvider;
@@ -33,7 +33,7 @@ use sp_consensus_babe::inherents::BabeCreateInherentDataProviders;
 use sp_consensus_beefy::ecdsa_crypto;
 use std::sync::Arc;
 
-type FullSelectChain = relay_chain_selection::SelectRelayChain<FullBackend>;
+type FullSelectChain = SelectRelayChain<FullBackend>;
 type FullGrandpaBlockImport<ChainSelection = FullSelectChain> =
 	sc_consensus_grandpa::GrandpaBlockImport<FullBackend, Block, FullClient, ChainSelection>;
 type FullBeefyBlockImport<InnerBlockImport, AuthorityId> =
@@ -75,6 +75,8 @@ pub(crate) type PolkadotPartialComponents<ChainSelection> = sc_service::PartialC
 		sc_consensus_grandpa::SharedVoterState,
 		sp_consensus_babe::SlotDuration,
 		Option<Telemetry>,
+		FrontierBackend<Block, FullClient>,
+		Arc<dyn StorageOverride<Block>>,
 	),
 >;
 
@@ -144,6 +146,7 @@ pub(crate) fn new_partial_basics(
 
 pub(crate) fn new_partial<ChainSelection>(
 	config: &mut Configuration,
+	eth_config: &EthConfiguration,
 	Basics { task_manager, backend, client, keystore_container, telemetry }: Basics,
 	select_chain: ChainSelection,
 ) -> Result<PolkadotPartialComponents<ChainSelection>, Error>
@@ -161,11 +164,7 @@ where
 		.build(),
 	);
 
-	let grandpa_hard_forks = if config.chain_spec.is_kusama() {
-		grandpa_support::kusama_hard_forks()
-	} else {
-		Vec::new()
-	};
+	let grandpa_hard_forks = Vec::new();
 
 	let (grandpa_block_import, grandpa_link) =
 		sc_consensus_grandpa::block_import_with_authority_set_hard_forks(
@@ -177,6 +176,8 @@ where
 			telemetry.as_ref().map(|x| x.handle()),
 		)?;
 	let justification_import = grandpa_block_import.clone();
+
+	let (frontier_backend, storage_override) = open_frontier_backend(&client, config, eth_config)?;
 
 	let (beefy_block_import, beefy_voter_links, beefy_rpc_links) =
 		sc_consensus_beefy::beefy_block_import_and_links(
@@ -261,7 +262,7 @@ where
 				backend: backend.clone(),
 			};
 
-			polkadot_rpc::create_full(deps).map_err(Into::into)
+			vitreus_rpc::create_basic(deps).map_err(Into::into)
 		}
 	};
 
@@ -279,6 +280,8 @@ where
 			rpc_setup,
 			slot_duration,
 			telemetry,
+			frontier_backend,
+			storage_override,
 		),
 	})
 }

@@ -23,12 +23,12 @@ use partial::PolkadotPartialComponents;
 pub(crate) use partial::{new_partial, new_partial_basics};
 
 use crate::{
-	grandpa_support, open_database,
+	eth::{self, EthConfiguration},
+	open_database,
 	overseer::{ExtendedOverseerGenArgs, OverseerGen, OverseerGenArgs},
-	parachains_db,
-	relay_chain_selection::SelectRelayChain,
-	workers, Chain, Error, FullBackend, FullClient, IdentifyVariant, IsParachainNode,
-	GRANDPA_JUSTIFICATION_PERIOD, KEEP_FINALIZED_FOR_LIVE_NETWORKS,
+	parachains_db, workers, Chain, Error, FullBackend, FullClient, IdentifyVariant,
+	IsParachainNode, IsParachainNodeHelper, SelectRelayChain, GRANDPA_JUSTIFICATION_PERIOD,
+	KEEP_FINALIZED_FOR_LIVE_NETWORKS,
 };
 use frame_benchmarking_cli::SUBSTRATE_REFERENCE_HARDWARE;
 use gum::info;
@@ -117,6 +117,7 @@ where
 	Network: sc_network::NetworkBackend<Block, <Block as BlockT>::Hash>,
 {
 	config: Configuration,
+	eth_config: EthConfiguration,
 	params: NewFullParams<OverseerGenerator>,
 	overseer_connector: OverseerConnector,
 	partial_components: PolkadotPartialComponents<SelectRelayChain<FullBackend>>,
@@ -131,6 +132,7 @@ where
 	/// Create new polkadot service builder.
 	pub fn new(
 		mut config: Configuration,
+		eth_config: EthConfiguration,
 		params: NewFullParams<OverseerGenerator>,
 	) -> Result<PolkadotServiceBuilder<OverseerGenerator, Network>, Error> {
 		let basics = new_partial_basics(&mut config, params.telemetry_worker_handle.clone())?;
@@ -156,7 +158,7 @@ where
 		};
 
 		let partial_components =
-			new_partial::<SelectRelayChain<_>>(&mut config, basics, select_chain)?;
+			new_partial::<SelectRelayChain<_>>(&mut config, &eth_config, basics, select_chain)?;
 
 		let net_config = sc_network::config::FullNetworkConfiguration::<_, _, Network>::new(
 			&config.network,
@@ -165,6 +167,7 @@ where
 
 		Ok(PolkadotServiceBuilder {
 			config,
+			eth_config,
 			params,
 			overseer_connector,
 			partial_components,
@@ -188,7 +191,8 @@ where
 	/// Build polkadot service.
 	pub fn build(self) -> Result<NewFull, Error> {
 		let Self {
-			config,
+			mut config,
+			eth_config,
 			params:
 				NewFullParams {
 					is_parachain_node,
@@ -221,7 +225,15 @@ where
 					import_queue,
 					transaction_pool,
 					other:
-						(rpc_extensions_builder, import_setup, rpc_setup, slot_duration, mut telemetry),
+						(
+							rpc_extensions_builder,
+							import_setup,
+							rpc_setup,
+							slot_duration,
+							mut telemetry,
+							frontier_backend,
+							storage_override,
+						),
 				},
 			mut net_config,
 		} = self;
@@ -232,25 +244,10 @@ where
 		let force_authoring = config.force_authoring;
 		let disable_grandpa = config.disable_grandpa;
 		let name = config.network.node_name.clone();
-		let backoff_authoring_blocks = if !force_authoring_backoff &&
-			(config.chain_spec.is_polkadot() || config.chain_spec.is_kusama())
-		{
-			// the block authoring backoff is disabled by default on production networks
+		let backoff_authoring_blocks = if !force_authoring_backoff {
 			None
 		} else {
-			let mut backoff = sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default();
-
-			if config.chain_spec.is_rococo() ||
-				config.chain_spec.is_versi() ||
-				config.chain_spec.is_dev()
-			{
-				// on testnets that are in flux (like rococo or versi), finality has stalled
-				// sometimes due to operational issues and it's annoying to slow down block
-				// production to 1 block per hour.
-				backoff.max_interval = 10;
-			}
-
-			Some(backoff)
+			Some(sc_consensus_slots::BackoffAuthoringOnFinalizedHeadLagging::default())
 		};
 		let shared_voter_state = rpc_setup;
 		let auth_disc_publish_non_global_ips = config.network.allow_non_globals_in_dht;
@@ -359,11 +356,7 @@ where
 			IncomingRequest::get_config_receiver::<_, Network>(&req_protocol_names);
 		net_config.add_request_response_protocol(cfg);
 
-		let grandpa_hard_forks = if config.chain_spec.is_kusama() {
-			grandpa_support::kusama_hard_forks()
-		} else {
-			Vec::new()
-		};
+		let grandpa_hard_forks = Vec::new();
 
 		let warp_sync = Arc::new(sc_consensus_grandpa::warp_proof::NetworkProvider::new(
 			backend.clone(),
@@ -394,9 +387,7 @@ where
 					secure_validator_mode,
 					prep_worker_path,
 					exec_worker_path,
-					// Default execution workers is 4 because we have 8 cores on the reference
-					// hardware, and this accounts for 50% of that cpu capacity.
-					pvf_execute_workers_max_num: execute_workers_max_num.unwrap_or(4),
+					pvf_execute_workers_max_num: execute_workers_max_num.unwrap_or(2),
 					pvf_prepare_workers_soft_max_num: prepare_workers_soft_max_num.unwrap_or(1),
 					pvf_prepare_workers_hard_max_num: prepare_workers_hard_max_num.unwrap_or(2),
 				})
@@ -491,6 +482,31 @@ where
 				.boxed(),
 			);
 		}
+
+		let frontier = eth::new_frontier_partial(&eth_config)?;
+		let frontier_backend = Arc::new(frontier_backend);
+		// Sinks for pubsub notifications.
+		// Everytime a new subscription is created, a new mpsc channel is added to the sink pool.
+		// The MappingSyncWorker sends through the channel on block import and the subscription emits a notification to the subscriber on receiving a message through this channel.
+		// This way we avoid race conditions when using native substrate block import notification stream.
+		let pubsub_notification_sinks = Arc::new(Default::default());
+		// for ethereum-compatibility rpc.
+		config.rpc.id_provider = Some(Box::new(fc_rpc::EthereumSubIdProvider));
+		let rpc_extensions_builder = eth::rpc_extensions_builder(
+			rpc_extensions_builder,
+			&config,
+			&eth_config,
+			client.clone(),
+			transaction_pool.clone(),
+			network.clone(),
+			sync_service.clone(),
+			&frontier,
+			frontier_backend.clone(),
+			storage_override.clone(),
+			Arc::clone(&pubsub_notification_sinks),
+			task_manager.spawn_handle(),
+			slot_duration,
+		);
 
 		let network_config = config.network.clone();
 		let rpc_handlers = sc_service::spawn_tasks(sc_service::SpawnTasksParams {
@@ -670,6 +686,19 @@ where
 			None
 		};
 
+		eth::spawn_frontier_tasks(
+			&task_manager,
+			client.clone(),
+			backend.clone(),
+			frontier_backend,
+			frontier.filter_pool,
+			storage_override,
+			frontier.fee_history_cache,
+			frontier.fee_history_cache_limit,
+			sync_service.clone(),
+			pubsub_notification_sinks,
+		);
+
 		if role.is_authority() {
 			let proposer = sc_basic_authorship::ProposerFactory::new(
 				task_manager.spawn_handle(),
@@ -683,6 +712,7 @@ where
 			let overseer_handle =
 				overseer_handle.as_ref().ok_or(Error::AuthoritiesRequireRealOverseer)?.clone();
 			let slot_duration = babe_link.config().slot_duration();
+			let target_gas_price = eth_config.target_gas_price;
 			let babe_config = sc_consensus_babe::BabeParams {
 				keystore: keystore_container.keystore(),
 				client: client.clone(),
@@ -711,7 +741,10 @@ where
 							slot_duration,
 						);
 
-						Ok((slot, timestamp, parachain))
+						let dynamic_fee =
+							fp_dynamic_fee::InherentDataProvider(sp_core::U256::from(target_gas_price));
+
+						Ok((slot, timestamp, parachain, dynamic_fee))
 					}
 				},
 				force_authoring,
@@ -870,7 +903,8 @@ pub fn new_full<
 	Network: sc_network::NetworkBackend<Block, <Block as BlockT>::Hash>,
 >(
 	config: Configuration,
+	eth_config: EthConfiguration,
 	params: NewFullParams<OverseerGenerator>,
 ) -> Result<NewFull, Error> {
-	PolkadotServiceBuilder::<OverseerGenerator, Network>::new(config, params)?.build()
+	PolkadotServiceBuilder::<OverseerGenerator, Network>::new(config, eth_config, params)?.build()
 }

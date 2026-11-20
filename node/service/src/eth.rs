@@ -1,6 +1,6 @@
 use std::{
     collections::BTreeMap,
-    path::PathBuf,
+    path::{Path, PathBuf},
     sync::{Arc, Mutex},
     time::Duration,
 };
@@ -9,16 +9,23 @@ use futures::{future, prelude::*};
 // Substrate
 use sc_client_api::BlockchainEvents;
 use sc_executor::HostFunctions;
+use sc_network::service::traits::NetworkService;
 use sc_network_sync::SyncingService;
-use sc_service::{error::Error as ServiceError, Configuration, TaskManager};
+use sc_service::{error::Error as ServiceError, Configuration, SpawnTaskHandle, TaskManager};
+use sc_transaction_pool::TransactionPoolHandle;
 use sp_api::ConstructRuntimeApi;
-use sp_core::H256;
+use sp_consensus_babe::SlotDuration;
+use sp_core::{H256, U256};
 use sp_runtime::traits::Block as BlockT;
 // Frontier
 pub use fc_consensus::FrontierBlockImport;
 use fc_rpc::EthTask;
 pub use fc_rpc_core::types::{FeeHistoryCache, FeeHistoryCacheLimit, FilterPool};
 pub use fc_storage::{StorageOverride, StorageOverrideHandler};
+
+use vitreus_power_plant_runtime::TransactionConverter;
+
+use crate::Block;
 
 /// Full backend.
 type FullBackend<B> = sc_service::TFullBackend<B>;
@@ -48,6 +55,10 @@ pub struct EthConfiguration {
     /// Maximum number of logs in a query.
     #[arg(long, default_value = "10000")]
     pub max_past_logs: u32,
+
+    /// Maximum number of blocks that eth_getLogs searches in one query. No limit by default.
+    #[arg(long, default_value_t = u32::MAX)]
+    pub max_block_range: u32,
 
     /// Maximum fee history cache size.
     #[arg(long, default_value = "2048")]
@@ -215,4 +226,143 @@ pub fn spawn_frontier_tasks<B, RA, HF>(
             fee_history_cache_limit,
         ),
     );
+}
+
+/// Opens the Frontier database in the format `eth_config` selects, and the storage override that
+/// reads Ethereum data from the runtime state.
+pub fn open_frontier_backend(
+    client: &Arc<crate::FullClient>,
+    config: &Configuration,
+    eth_config: &EthConfiguration,
+) -> Result<
+    (FrontierBackend<Block, crate::FullClient>, Arc<dyn StorageOverride<Block>>),
+    ServiceError,
+> {
+    let storage_override = Arc::new(StorageOverrideHandler::new(client.clone()));
+    let frontier_backend = match eth_config.frontier_backend_type {
+        BackendType::KeyValue => FrontierBackend::KeyValue(Arc::new(
+            fc_db::kv::Backend::open(Arc::clone(client), &config.database, &db_config_dir(config))
+                .map_err(ServiceError::Other)?,
+        )),
+        BackendType::Sql => {
+            let db_path = db_config_dir(config).join("sql");
+            std::fs::create_dir_all(&db_path).expect("failed creating sql db directory");
+            let backend = futures::executor::block_on(fc_db::sql::Backend::new(
+                fc_db::sql::BackendConfig::Sqlite(fc_db::sql::SqliteBackendConfig {
+                    path: Path::new("sqlite:///")
+                        .join(db_path)
+                        .join("frontier.db3")
+                        .to_str()
+                        .unwrap(),
+                    create_if_missing: true,
+                    thread_count: eth_config.frontier_sql_backend_thread_count,
+                    cache_size: eth_config.frontier_sql_backend_cache_size,
+                }),
+                eth_config.frontier_sql_backend_pool_size,
+                std::num::NonZeroU32::new(eth_config.frontier_sql_backend_num_ops_timeout),
+                storage_override.clone(),
+            ))
+            .unwrap_or_else(|err| panic!("failed creating sql backend: {:?}", err));
+            FrontierBackend::Sql(Arc::new(backend))
+        },
+    };
+
+    Ok((frontier_backend, storage_override))
+}
+
+/// Builds the node's RPC: the methods of `basic` plus our own and the Ethereum ones.
+pub fn rpc_extensions_builder(
+    basic: Box<
+        dyn Fn(
+            polkadot_rpc::SubscriptionTaskExecutor,
+        ) -> Result<polkadot_rpc::RpcExtension, ServiceError>,
+    >,
+    config: &Configuration,
+    eth_config: &EthConfiguration,
+    client: Arc<crate::FullClient>,
+    pool: Arc<TransactionPoolHandle<Block, crate::FullClient>>,
+    network: Arc<dyn NetworkService>,
+    sync_service: Arc<SyncingService<Block>>,
+    frontier: &FrontierPartialComponents,
+    frontier_backend: Arc<FrontierBackend<Block, crate::FullClient>>,
+    storage_override: Arc<dyn StorageOverride<Block>>,
+    pubsub_notification_sinks: Arc<
+        fc_mapping_sync::EthereumBlockNotificationSinks<
+            fc_mapping_sync::EthereumBlockNotification<Block>,
+        >,
+    >,
+    spawn_handle: SpawnTaskHandle,
+    slot_duration: SlotDuration,
+) -> impl Fn(polkadot_rpc::SubscriptionTaskExecutor) -> Result<polkadot_rpc::RpcExtension, ServiceError>
+{
+    let is_authority = config.role.is_authority();
+    let enable_dev_signer = eth_config.enable_dev_signer;
+    let max_past_logs = eth_config.max_past_logs;
+    let max_block_range = eth_config.max_block_range;
+    let execute_gas_limit_multiplier = eth_config.execute_gas_limit_multiplier;
+    let filter_pool = frontier.filter_pool.clone();
+    let fee_history_cache = frontier.fee_history_cache.clone();
+    let fee_history_cache_limit = frontier.fee_history_cache_limit;
+    let block_data_cache = Arc::new(fc_rpc::EthBlockDataCacheTask::new(
+        spawn_handle,
+        storage_override.clone(),
+        eth_config.eth_log_block_cache,
+        eth_config.eth_statuses_cache,
+        config.prometheus_registry().cloned(),
+    ));
+
+    let target_gas_price = eth_config.target_gas_price;
+    let pending_create_inherent_data_providers = move |_, ()| async move {
+        let current = sp_timestamp::InherentDataProvider::from_system_time();
+        let next_slot = current.timestamp().as_millis() + slot_duration.as_millis();
+        let timestamp = sp_timestamp::InherentDataProvider::new(next_slot.into());
+        let slot =
+            sp_consensus_babe::inherents::InherentDataProvider::from_timestamp_and_slot_duration(
+                *timestamp,
+                slot_duration,
+            );
+        let dynamic_fee = fp_dynamic_fee::InherentDataProvider(U256::from(target_gas_price));
+        Ok((slot, timestamp, dynamic_fee))
+    };
+
+    let node_name = config.network.node_name.clone();
+
+    move |subscription_executor: polkadot_rpc::SubscriptionTaskExecutor| {
+        let eth_deps = vitreus_rpc::EthDeps {
+            client: client.clone(),
+            pool: pool.clone(),
+            converter: Some(TransactionConverter),
+            is_authority,
+            enable_dev_signer,
+            network: network.clone(),
+            sync: sync_service.clone(),
+            frontier_backend: match &*frontier_backend {
+                fc_db::Backend::KeyValue(b) => b.clone(),
+                fc_db::Backend::Sql(b) => b.clone(),
+            },
+            storage_override: storage_override.clone(),
+            block_data_cache: block_data_cache.clone(),
+            filter_pool: filter_pool.clone(),
+            max_past_logs,
+            max_block_range,
+            fee_history_cache: fee_history_cache.clone(),
+            fee_history_cache_limit,
+            execute_gas_limit_multiplier,
+            forced_parent_hashes: None,
+            pending_create_inherent_data_providers,
+        };
+
+        let node_deps = vitreus_rpc::NodeDeps { name: node_name.clone() };
+
+        let deps =
+            vitreus_rpc::ExtraDeps { client: client.clone(), eth: eth_deps, node: node_deps };
+
+        vitreus_rpc::create_full(
+            basic(subscription_executor.clone())?,
+            deps,
+            subscription_executor,
+            pubsub_notification_sinks.clone(),
+        )
+        .map_err(Into::into)
+    }
 }
