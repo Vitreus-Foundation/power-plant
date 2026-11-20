@@ -29,7 +29,10 @@
 pub mod benchmarking;
 pub mod eth;
 
-#[allow(dead_code, clippy::doc_lazy_continuation, clippy::manual_inspect)]
+// The upstream `polkadot-service` module as it is, so syncing it means copying the upstream
+// files again.
+#[rustfmt::skip]
+#[allow(dead_code, clippy::all)]
 mod parachains_db;
 
 #[cfg(feature = "full-node")]
