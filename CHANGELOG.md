@@ -7,6 +7,25 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Added
+
+- Charge the new `if_else` and `dispatch_as_fallible` calls of `pallet-utility` by the calls inside them
+- Charge VNRG for the new `remove_upgrade_cooldown` of `paras`, 1000 gVolt per day of cooldown left, burned
+- Slash validators 50% for BEEFY fork voting and future block voting, new in stable2512
+- Slash validators 2% for approving an invalid parachain block, new in stable2512
+
+### Changed
+
+- Upgrade the runtime to Polkadot SDK stable2512 and Frontier stable2512
+- Move the EVM version from Shanghai to Cancun
+- Include the weight of transaction extensions in weight-based fees
+- Update runtime APIs to `EthereumRuntimeRPCApi` v6, `BeefyApi` v6, `XcmPaymentApi` v2, `DryRunApi` v2 and `MmrApi` v3
+- Update `pallet-vitreus-dex`, `pallet-launchpad` and `pallet-launch-treasury`, on testnet
+
+### Removed
+
+- Remove the solver marketplace from `pallet-vitreus-dex`, on testnet
+
 ## [216] - 2026-11-19
 
 ### Added
