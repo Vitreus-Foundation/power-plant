@@ -444,8 +444,30 @@ mod energy_fee {
             );
             assert_eq!(fee_of(&batch(vec![])), CallFee::Regular(flat));
 
+            // `if_else` dispatches its fallback when the main call fails, so it pays for both,
+            // as a batch does.
+            let if_else = RuntimeCall::Utility(pallet_utility::Call::if_else {
+                main: Box::new(transfer.clone()),
+                fallback: Box::new(remark.clone()),
+            });
+            assert_eq!(fee_of(&if_else), CallFee::Regular(flat + remark_fee));
+
             // A wrapped call pays what the call inside it pays. For a call charged by weight, that
             // is the fee passed in, which covers the wrapper as well.
+            let dispatch_as_fallible = |call| {
+                RuntimeCall::Utility(pallet_utility::Call::dispatch_as_fallible {
+                    as_origin: Box::new(OriginCaller::system(frame_system::RawOrigin::Signed(
+                        alith(),
+                    ))),
+                    call: Box::new(call),
+                })
+            };
+            assert_eq!(fee_of(&dispatch_as_fallible(transfer.clone())), CallFee::Regular(flat));
+            assert_eq!(fee_of(&dispatch_as_fallible(remark.clone())), CallFee::Regular(weight_fee));
+            assert_eq!(
+                fee_of(&dispatch_as_fallible(evm_call.clone())),
+                CallFee::Regular(EnergyFeeCustomFee::ethereum_fee())
+            );
             let as_derivative = |call| {
                 RuntimeCall::Utility(pallet_utility::Call::as_derivative {
                     index: 0,

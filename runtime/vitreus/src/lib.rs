@@ -1386,19 +1386,16 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             RuntimeCall::Utility(pallet_utility::Call::batch { calls })
             | RuntimeCall::Utility(pallet_utility::Call::batch_all { calls })
             | RuntimeCall::Utility(pallet_utility::Call::force_batch { calls }) => {
-                let resulting_fee = calls
-                    .iter()
-                    .map(|call| Self::dispatch_info_to_fee(call, None, None))
-                    .fold(Balance::zero(), |acc, call_fee| match call_fee {
-                        CallFee::Regular(fee) => acc.saturating_add(fee),
-                        CallFee::EVM(fee) => acc.saturating_add(fee),
-                    })
-                    .max(Self::custom_fee());
-                CallFee::Regular(resulting_fee)
+                fee_of_calls(calls)
+            },
+            // The fallback runs when the main call fails, so both are paid for.
+            RuntimeCall::Utility(pallet_utility::Call::if_else { main, fallback }) => {
+                fee_of_calls([main.as_ref(), fallback.as_ref()])
             },
             // The call inside runs from another origin, so the EVM fee of an EVM call inside is
             // charged to that origin's account, not to the signer.
             RuntimeCall::Utility(pallet_utility::Call::dispatch_as { call, .. })
+            | RuntimeCall::Utility(pallet_utility::Call::dispatch_as_fallible { call, .. })
             | RuntimeCall::Utility(pallet_utility::Call::as_derivative { call, .. }) => {
                 CallFee::Regular(
                     Self::dispatch_info_to_fee(call, None, calculated_fee).into_inner(),
@@ -1430,6 +1427,17 @@ impl CustomFee<RuntimeCall, DispatchInfoOf<RuntimeCall>, Balance, GetConstantEne
             }
         }
     }
+}
+
+/// What calls dispatched together pay: what each would pay on its own, and at least the custom
+/// fee.
+fn fee_of_calls<'a>(calls: impl IntoIterator<Item = &'a RuntimeCall>) -> CallFee<Balance> {
+    let fee = calls
+        .into_iter()
+        .map(|call| EnergyFee::dispatch_info_to_fee(call, None, None).into_inner())
+        .fold(Balance::zero(), Balance::saturating_add)
+        .max(EnergyFee::custom_fee());
+    CallFee::Regular(fee)
 }
 
 parameter_types! {
