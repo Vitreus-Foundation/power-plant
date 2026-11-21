@@ -77,7 +77,7 @@ pub(crate) struct SlashingSpan {
 
 impl SlashingSpan {
     fn contains_era(&self, era: EraIndex) -> bool {
-        self.start <= era && self.length.map_or(true, |l| self.start + l > era)
+        self.start <= era && self.length.is_none_or(|l| self.start + l > era)
     }
 }
 
@@ -298,7 +298,10 @@ impl<T: FullCodec + Clone + TypeInfo + Default + MaxEncodedLen> StorageEssential
     TypeInfo,
     MaxEncodedLen,
 )]
-pub struct SlashEntity<Stake: StorageEssentials + Copy> {
+pub struct SlashEntity<Stake>
+where
+    Stake: StorageEssentials + Copy,
+{
     pub reputation: ReputationPoint,
     pub stake: Stake,
 }

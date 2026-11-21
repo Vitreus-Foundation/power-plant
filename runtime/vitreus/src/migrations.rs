@@ -62,7 +62,7 @@ impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury 
 
             match res {
                 Ok(_) => {
-                    log::info!("Transfer {} tokens from Treasury to TechnicalTreasury", amount)
+                    log::info!("Transfer {amount} tokens from Treasury to TechnicalTreasury")
                 },
                 Err(_) => log::warn!("Failed to initialize TechnicalTreasury"),
             }

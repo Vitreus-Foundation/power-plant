@@ -17,6 +17,7 @@
 //! Vitreus CLI library.
 
 #![warn(missing_docs)]
+#![allow(clippy::result_large_err)]
 
 #[cfg(feature = "cli")]
 mod cli;

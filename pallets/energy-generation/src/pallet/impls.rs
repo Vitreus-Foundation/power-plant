@@ -1152,7 +1152,7 @@ where
                 if slash_defer_duration == 0 {
                     // Apply right away.
                     if let Err(e) = slashing::apply_slash::<T>(unapplied, slash_era) {
-                        frame_support::print(format!("failed to apply slash: {:?}", e).as_str());
+                        frame_support::print(format!("failed to apply slash: {e:?}").as_str());
                     }
                     {
                         let slash_cost = (6, 5);

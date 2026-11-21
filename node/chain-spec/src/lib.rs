@@ -423,7 +423,7 @@ pub mod devnet_keys {
         BeefyId,
     ) {
         (
-            get_account_id_from_seed::<ecdsa::Public>(&format!("{}//stash", s)),
+            get_account_id_from_seed::<ecdsa::Public>(&format!("{s}//stash")),
             get_account_id_from_seed::<ecdsa::Public>(s),
             derive_dev::<BabeId>(s),
             derive_dev::<GrandpaId>(s),
@@ -436,7 +436,7 @@ pub mod devnet_keys {
     }
     /// Generate a crypto pair.
     pub fn derive_dev<TPublic: Public>(seed: &str) -> <TPublic::Pair as Pair>::Public {
-        TPublic::Pair::from_string(&format!("//{}", seed), None)
+        TPublic::Pair::from_string(&format!("//{seed}"), None)
             .expect("static values are valid; qed")
             .public()
     }

@@ -197,7 +197,7 @@ impl Contains<Location> for OnlyParachains {
 pub struct EnergyForParachains;
 impl ContainsPair<Asset, Location> for EnergyForParachains {
     fn contains(asset: &Asset, location: &Location) -> bool {
-        log::trace!(target: "xcm::contains", "EnergyForParachains asset: {:?}, location: {:?}", asset, location);
+        log::trace!(target: "xcm::contains", "EnergyForParachains asset: {asset:?}, location: {location:?}");
 
         if !OnlyParachains::contains(location) {
             return false;

@@ -69,12 +69,7 @@ mod v1 {
                     }
                 }
 
-                log::info!(
-                    "Migrated {} out of {} VIP results for the year {}",
-                    migrated,
-                    total,
-                    year
-                );
+                log::info!("Migrated {migrated} out of {total} VIP results for the year {year}");
 
                 weight.saturating_accrue(T::DbWeight::get().reads_writes(1, migrated));
             }
@@ -90,12 +85,7 @@ mod v1 {
                     }
                 }
 
-                log::info!(
-                    "Migrated {} out of {} VIPP results for the year {}",
-                    migrated,
-                    total,
-                    year
-                );
+                log::info!("Migrated {migrated} out of {total} VIPP results for the year {year}");
 
                 weight.saturating_accrue(T::DbWeight::get().reads_writes(1, migrated));
             }

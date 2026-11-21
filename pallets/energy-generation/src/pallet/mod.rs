@@ -75,7 +75,10 @@ pub mod pallet {
 
     /// Possible operations on the configuration values of this pallet.
     #[derive(TypeInfo, Debug, Clone, Encode, Decode, DecodeWithMemTracking, PartialEq)]
-    pub enum ConfigOp<T: Default + Codec> {
+    pub enum ConfigOp<T>
+    where
+        T: Default + Codec,
+    {
         /// Don't change.
         Noop,
         /// Set the given value.

@@ -262,7 +262,7 @@ pub fn open_frontier_backend(
                 std::num::NonZeroU32::new(eth_config.frontier_sql_backend_num_ops_timeout),
                 storage_override.clone(),
             ))
-            .unwrap_or_else(|err| panic!("failed creating sql backend: {:?}", err));
+            .unwrap_or_else(|err| panic!("failed creating sql backend: {err:?}"));
             FrontierBackend::Sql(Arc::new(backend))
         },
     };

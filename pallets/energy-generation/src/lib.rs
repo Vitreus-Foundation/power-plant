@@ -596,7 +596,10 @@ impl<T: Config> Cooperations<T> {
     RuntimeDebug,
     TypeInfo,
 )]
-pub struct IndividualExposure<AccountId, Balance: HasCompact> {
+pub struct IndividualExposure<AccountId, Balance>
+where
+    Balance: HasCompact,
+{
     /// The stash account of the cooperator in question.
     pub who: AccountId,
     /// Amount of funds exposed.
@@ -617,7 +620,10 @@ pub struct IndividualExposure<AccountId, Balance: HasCompact> {
     RuntimeDebug,
     TypeInfo,
 )]
-pub struct Exposure<AccountId, Balance: HasCompact> {
+pub struct Exposure<AccountId, Balance>
+where
+    Balance: HasCompact,
+{
     /// The total balance backing this validator.
     #[codec(compact)]
     pub total: Balance,

@@ -878,7 +878,7 @@ pub(crate) fn on_offence_in_era(
             PowerPlant::eras_start_session_index(era).unwrap(),
         );
     } else {
-        panic!("cannot slash in era {}", era);
+        panic!("cannot slash in era {era}");
     }
 }
 

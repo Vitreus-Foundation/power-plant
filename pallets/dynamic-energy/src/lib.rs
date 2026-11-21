@@ -447,8 +447,7 @@ impl<T: Config> Pallet<T> {
             _ => {
                 log::warn!(
                     target: LOG_TARGET,
-                    "Invalid warehouse capacity multiplier: {:?}, x: {:?}",
-                    multiplier, x
+                    "Invalid warehouse capacity multiplier: {multiplier:?}, x: {x:?}"
                 );
                 FixedU128::one()
             },
@@ -467,9 +466,8 @@ impl<T: Config> Pallet<T> {
         let energy_burn =
             EnergyBurnOverride::<T>::get().unwrap_or_else(SessionEnergyBurn::<T>::get);
 
-        let new_rate = Self::calculate_generation_rate(energy_burn).inspect(
-            |rate| log::info!(target: LOG_TARGET, "Calculate generation rate: {:?}", rate),
-        );
+        let new_rate = Self::calculate_generation_rate(energy_burn)
+            .inspect(|rate| log::info!(target: LOG_TARGET, "Calculate generation rate: {rate:?}"));
 
         let old_rate = index.checked_sub(1).map(EnergyGeneration::<T>::get);
         let smooth_factor = GenerationRateSmoothFactor::<T>::get();
@@ -525,14 +523,13 @@ impl<T: Config> Pallet<T> {
             match Self::calculate_exchange_rate(energy_sale, total_stake, duration, apr, multiplier)
             {
                 Some(rate) => {
-                    log::info!(target: LOG_TARGET, "Calculate exchange rate: {}", rate);
+                    log::info!(target: LOG_TARGET, "Calculate exchange rate: {rate}");
                     Some(rate)
                 },
                 None => {
                     log::warn!(
                         target: LOG_TARGET,
-                        "Failed to calculate exchange rate: energy_sale: {:?}, total_stake: {:?}",
-                        energy_sale, total_stake
+                        "Failed to calculate exchange rate: energy_sale: {energy_sale:?}, total_stake: {total_stake:?}"
                     );
                     None
                 },
@@ -567,8 +564,7 @@ impl<T: Config> Pallet<T> {
             if rate.is_zero() {
                 log::warn!(
                     target: LOG_TARGET,
-                    "Exchange rate rounds down to zero: energy_sale: {:?}, total_stake: {:?}",
-                    energy_sale, total_stake
+                    "Exchange rate rounds down to zero: energy_sale: {energy_sale:?}, total_stake: {total_stake:?}"
                 );
                 return;
             }
@@ -602,8 +598,7 @@ impl<T: Config> Pallet<T> {
         if budget.is_zero() {
             log::warn!(
                 target: LOG_TARGET,
-                "Payout budget is zero: total_stake: {:?}, apr: {:?}, multiplier: {:?}",
-                total_stake, apr, multiplier
+                "Payout budget is zero: total_stake: {total_stake:?}, apr: {apr:?}, multiplier: {multiplier:?}"
             );
         }
 
@@ -735,12 +730,12 @@ impl<T: Config> EraEnergyRateCalculator<EnergyOf<T>> for Pallet<T> {
                 .defensive_proof("sessions are pruned only after their era is calculated; qed")
                 .unwrap_or_default();
 
-            log::trace!(target: LOG_TARGET, "Energy generated in session {:?}: {:?}", index, amount);
+            log::trace!(target: LOG_TARGET, "Energy generated in session {index:?}: {amount:?}");
 
             total.saturating_accrue(amount);
         }
 
-        log::trace!(target: LOG_TARGET, "Energy generated in era {:?}: {:?}", era, total);
+        log::trace!(target: LOG_TARGET, "Energy generated in era {era:?}: {total:?}");
 
         Some(total)
     }

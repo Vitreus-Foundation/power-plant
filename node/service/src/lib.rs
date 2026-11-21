@@ -20,6 +20,7 @@
     clippy::large_enum_variant,
     clippy::needless_borrow,
     clippy::needless_borrows_for_generic_args,
+    clippy::result_large_err,
     clippy::too_many_arguments,
     clippy::type_complexity,
     clippy::unnecessary_cast
@@ -261,8 +262,7 @@ pub fn revert_backend(
     let number = best_number - revertible;
     let hash = client.block_hash_from_id(&BlockId::Number(number))?.ok_or(
         sp_blockchain::Error::Backend(format!(
-            "Unexpected hash lookup failure for block number: {}",
-            number
+            "Unexpected hash lookup failure for block number: {number}"
         )),
     )?;
 
