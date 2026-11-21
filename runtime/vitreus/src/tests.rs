@@ -100,7 +100,9 @@ fn configured_base_extrinsic_weight_is_evm_compatible() {
 
 mod energy_fee {
     use super::*;
-    use ethereum::{LegacyTransaction, TransactionAction, TransactionSignature, TransactionV2};
+    use ethereum::{
+        legacy::TransactionSignature, LegacyTransaction, TransactionAction, TransactionV3,
+    };
     use fp_self_contained::SelfContainedCall;
     use frame_support::{dispatch::PostDispatchInfo, traits::Hooks};
     use pallet_evm::OnChargeEVMTransaction;
@@ -178,7 +180,7 @@ mod energy_fee {
                 "the EVM fee must be quotable in VTRS",
             );
 
-            let sample_tx = TransactionV2::Legacy(LegacyTransaction {
+            let sample_tx = TransactionV3::Legacy(LegacyTransaction {
                 nonce: Default::default(),
                 gas_price: 1.into(),
                 gas_limit: 100_000.into(),
@@ -356,6 +358,7 @@ mod energy_fee {
                 max_priority_fee_per_gas: None,
                 nonce: None,
                 access_list: vec![],
+                authorization_list: vec![],
             });
 
             assert_eq!(fee_of(&transfer), CallFee::Regular(flat));
@@ -1205,10 +1208,13 @@ mod offences {
     use super::*;
     use frame_support::assert_ok;
     use parachains_slashing::HandleReports;
-    use polkadot_primitives::slashing::{DisputesTimeSlot, SlashingOffenceKind};
-    use sp_core::{ecdsa, ed25519, sr25519, Pair};
+    use polkadot_primitives::{slashing::DisputesTimeSlot, DisputeOffenceKind};
+    use sp_consensus_beefy::{
+        ecdsa_crypto, known_payloads, Commitment, DoubleVotingProof, Payload, VoteMessage,
+    };
+    use sp_core::{ecdsa, ed25519, keccak_256, sr25519, Pair};
     use sp_runtime::{traits::Convert, Perbill};
-    use sp_staking::offence::{Offence, OffenceError, ReportOffence};
+    use sp_staking::offence::{Kind, Offence, OffenceError, ReportOffence};
 
     /// A validator as offences identify it: its stash and its exposure.
     type Offender = pallet_session::historical::IdentificationTuple<Runtime>;
@@ -1240,8 +1246,12 @@ mod offences {
             para_validator: sr25519_key.into(),
             para_assignment: sr25519_key.into(),
             authority_discovery: sr25519_key.into(),
-            beefy: ecdsa::Pair::from_string(&seed, None).unwrap().public().into(),
+            beefy: beefy_pair(validator).public().into(),
         }
+    }
+
+    fn beefy_pair(validator: u8) -> ecdsa::Pair {
+        ecdsa::Pair::from_string(&format!("//{validator}"), None).unwrap()
     }
 
     /// Runtime genesis with `VALIDATOR_COUNT` validators bonded and validating, at block 1.
@@ -1308,6 +1318,25 @@ mod offences {
         }
     }
 
+    /// Two votes that `validator` signs with its BEEFY key for different payloads in `round` of
+    /// set 0.
+    fn beefy_double_vote(
+        validator: u8,
+        round: BlockNumber,
+    ) -> DoubleVotingProof<BlockNumber, BeefyId, ecdsa_crypto::Signature> {
+        let pair = beefy_pair(validator);
+        let vote = |mmr_root: u8| {
+            let commitment = Commitment {
+                payload: Payload::from_single_entry(known_payloads::MMR_ROOT_ID, vec![mmr_root]),
+                block_number: round,
+                validator_set_id: 0,
+            };
+            let signature = pair.sign_prehashed(&keccak_256(&commitment.encode()));
+            VoteMessage { commitment, id: pair.public().into(), signature: signature.into() }
+        };
+        DoubleVotingProof { first: vote(1), second: vote(2) }
+    }
+
     /// Stashes of the validators that pallet-session has disabled.
     fn disabled_stashes() -> Vec<AccountId> {
         let validators = Session::validators();
@@ -1356,8 +1385,7 @@ mod offences {
         );
     }
 
-    /// Reports `offence` through `report` and checks that energy-generation got it at `fraction`
-    /// and that pallet-session disabled the offender.
+    /// Reports `offence` through `report` and checks it with [`assert_offender_disabled`].
     fn assert_offence_disables_offender<O>(
         report: impl FnOnce(O) -> Result<(), OffenceError>,
         offence: O,
@@ -1370,8 +1398,20 @@ mod offences {
 
         assert_ok!(report(offence));
 
+        assert_offender_disabled(offender, O::ID, timeslot, fraction);
+    }
+
+    /// Checks that pallet-offences recorded an offence of `kind` at `timeslot`, that
+    /// energy-generation got it from `offender` at `fraction` and that pallet-session disabled
+    /// the offender.
+    fn assert_offender_disabled(
+        offender: AccountId,
+        kind: Kind,
+        timeslot: Vec<u8>,
+        fraction: Perbill,
+    ) {
         assert_slash_reported(offender, fraction);
-        System::assert_has_event(pallet_offences::Event::Offence { kind: O::ID, timeslot }.into());
+        System::assert_has_event(pallet_offences::Event::Offence { kind, timeslot }.into());
         assert_eq!(disabled_stashes(), vec![offender]);
     }
 
@@ -1402,19 +1442,27 @@ mod offences {
         });
     }
 
+    // pallet-beefy builds its offence only from a checked proof, so this test reports a signed
+    // double vote through the pallet's own call.
     #[test]
     fn beefy_equivocation_disables_offender() {
         new_test_ext_with_validators().execute_with(|| {
-            assert_offence_disables_offender(
-                report_equivocation,
-                pallet_beefy::EquivocationOffence {
-                    time_slot: pallet_beefy::TimeSlot::<BlockNumber> { set_id: 0, round: 1 },
-                    session_index: 0,
-                    validator_set_count: VALIDATOR_COUNT.into(),
-                    offender: offender(1),
-                },
+            let round = 1;
+            let key: BeefyId = beefy_pair(1).public().into();
+            let key_owner_proof = Historical::prove((sp_consensus_beefy::KEY_TYPE, key)).unwrap();
+
+            assert_ok!(Beefy::report_double_voting_unsigned(
+                RuntimeOrigin::none(),
+                Box::new(beefy_double_vote(1, round)),
+                key_owner_proof,
+            ));
+
+            assert_offender_disabled(
+                stash(1),
+                <pallet_beefy::EquivocationOffence<Offender, BlockNumber> as Offence<_>>::ID,
+                pallet_beefy::TimeSlot::<BlockNumber> { set_id: 0, round }.encode(),
                 EQUIVOCATION_FRACTION,
-            )
+            );
         });
     }
 
@@ -1427,9 +1475,9 @@ mod offences {
                     validator_set_count: VALIDATOR_COUNT.into(),
                     time_slot: DisputesTimeSlot::new(0, CandidateHash(H256::repeat_byte(1))),
                     offenders: vec![offender(1)],
-                    // What the private `SlashingOffence::new` sets for `ForInvalid`.
+                    // What the private `SlashingOffence::new` sets for `ForInvalidBacked`.
                     slash_fraction: Perbill::one(),
-                    kind: SlashingOffenceKind::ForInvalid,
+                    kind: DisputeOffenceKind::ForInvalidBacked,
                 },
                 Perbill::one(),
             )
@@ -1478,8 +1526,8 @@ mod xcm_tests {
     use sp_runtime::{traits::Dispatchable, DispatchError};
     use xcm::latest::prelude::{
         AccountId32, AccountKey20, Asset, AssetId, ClearOrigin, ExecuteXcm, Fungible, GeneralIndex,
-        Here, Location, OriginKind, PalletInstance, Parachain, ReceiveTeleportedAsset, Transact,
-        Weight, WeightLimit, Xcm, XcmError,
+        Here, InstructionError, Location, OriginKind, PalletInstance, Parachain,
+        ReceiveTeleportedAsset, Transact, Weight, WeightLimit, Xcm, XcmError,
     };
     use xcm::{VersionedAssets, VersionedLocation, VersionedXcm};
     use xcm_executor::{traits::TransferType, XcmExecutor};
@@ -1608,7 +1656,10 @@ mod xcm_tests {
                 Weight::MAX,
             );
 
-            assert_eq!(outcome.ensure_complete(), Err(XcmError::UntrustedTeleportLocation));
+            assert_eq!(
+                outcome.ensure_complete(),
+                Err(InstructionError { index: 0, error: XcmError::UntrustedTeleportLocation })
+            );
         });
     }
 
@@ -1729,7 +1780,7 @@ mod xcm_tests {
             });
             let message = Xcm(vec![Transact {
                 origin_kind: OriginKind::SovereignAccount,
-                require_weight_at_most: Weight::from_parts(u64::MAX / 2, u64::MAX / 2),
+                fallback_max_weight: None,
                 call: call.encode().into(),
             }]);
             let mut hash = [0u8; 32];
@@ -1742,7 +1793,10 @@ mod xcm_tests {
                 Weight::MAX,
             );
 
-            assert_eq!(outcome.ensure_complete(), Err(XcmError::NoPermission));
+            assert_eq!(
+                outcome.ensure_complete(),
+                Err(InstructionError { index: 0, error: XcmError::NoPermission })
+            );
         });
     }
 }
