@@ -1,12 +1,90 @@
-//! VitreusDex / Launchpad / LaunchTreasury: testnet-only runtime wiring.
+//! VitreusDex with its base pallet and LP tokens, Launchpad and LaunchTreasury: testnet-only
+//! runtime wiring.
 
 use super::*;
 use pallet_launch_treasury::{TreasuryExchange, TreasuryStaking, TreasuryTerms};
 
+pub type DexPoolAssetsInstance = pallet_assets::Instance2;
+impl pallet_assets::Config<DexPoolAssetsInstance> for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Balance = Balance;
+    type RemoveItemsLimit = ConstU32<500>;
+    type AssetId = AssetId;
+    type AssetIdParameter = Compact<AssetId>;
+    type Currency = Balances;
+    // Only the base pallet creates LP tokens, and an LP account costs its provider no deposit.
+    type CreateOrigin = AsEnsureOriginWithArg<frame_support::traits::NeverEnsureOrigin<AccountId>>;
+    type ForceOrigin = EnsureRoot<AccountId>;
+    type AssetDeposit = ConstU128<0>;
+    type AssetAccountDeposit = ConstU128<0>;
+    type MetadataDepositBase = ConstU128<0>;
+    type MetadataDepositPerByte = ConstU128<0>;
+    type ApprovalDeposit = ApprovalDeposit;
+    type StringLimit = AssetsStringLimit;
+    type Freezer = DexPoolAssetsFreezer;
+    type Holder = ();
+    type Extra = ();
+    type CallbackHandle = ();
+    type WeightInfo = pallet_assets::weights::SubstrateWeight<Runtime>;
+    type ReserveData = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = AssetsBenchmarkHelper;
+}
+
+impl pallet_assets_freezer::Config<DexPoolAssetsInstance> for Runtime {
+    type RuntimeFreezeReason = RuntimeFreezeReason;
+    type RuntimeEvent = RuntimeEvent;
+}
+
 parameter_types! {
-    pub const DefaultBidWindowBlocks: BlockNumber = 10;
-    pub const DefaultSettlementWindowBlocks: BlockNumber = 5;
-    pub const DefaultSolverBondAmount: Balance = 1_000 * UNITS;
+    pub const DexAssetConversionPalletId: PalletId = PalletId(*b"vtrs/amm");
+    pub const DexAssetConversionLpFee: Permill = Permill::from_parts(3_000);
+    pub const DexAssetConversionMaxSwapFee: Permill = Permill::from_percent(1);
+    pub const DexAssetConversionLiquidityWithdrawalFee: Permill = Permill::zero();
+}
+
+pub type DexPoolIdToAccountId = pallet_asset_conversion::AccountIdConverter<
+    DexAssetConversionPalletId,
+    (NativeOrAssetId, NativeOrAssetId),
+>;
+
+pub type DexPoolLocator = pallet_asset_conversion::Chain<
+    pallet_asset_conversion::WithFirstAsset<
+        NativeAsset,
+        AccountId,
+        NativeOrAssetId,
+        DexPoolIdToAccountId,
+    >,
+    pallet_asset_conversion::Ascending<AccountId, NativeOrAssetId, DexPoolIdToAccountId>,
+>;
+
+impl pallet_asset_conversion::Config for Runtime {
+    type RuntimeEvent = RuntimeEvent;
+    type Balance = Balance;
+    type HigherPrecisionBalance = sp_core::U256;
+    type AssetKind = NativeOrAssetId;
+    type Assets = NativeAndAssets;
+    type PoolId = (NativeOrAssetId, NativeOrAssetId);
+    type PoolLocator = DexPoolLocator;
+    type PoolAssetId = AssetId;
+    type PoolAssets = DexPoolAssets;
+    // The DEX creates every pool with the fee of its tier, so no pool takes this one.
+    type LPFee = DexAssetConversionLpFee;
+    type AdminOrigin = pallet_vitreus_dex::EnsureDexAccount<Runtime>;
+    // The DEX's `integrity_test` requires a `MaxSwapFee` of at least 1 % and no setup or
+    // withdrawal fee.
+    type MaxSwapFee = DexAssetConversionMaxSwapFee;
+    type PoolSetupFee = ConstU128<0>;
+    type PoolSetupFeeAsset = NativeAsset;
+    type PoolSetupFeeTarget = ();
+    type LiquidityWithdrawalFee = DexAssetConversionLiquidityWithdrawalFee;
+    type MintMinLiquidity = ConstU128<{ pallet_vitreus_dex::MINIMUM_LIQUIDITY as u128 }>;
+    type MaxSwapPathLength = ConstU32<2>;
+    type PalletId = DexAssetConversionPalletId;
+    // Its calls are not in the runtime.
+    type WeightInfo = ();
+    #[cfg(feature = "runtime-benchmarks")]
+    type BenchmarkHelper = pallet_asset_conversion::NativeOrWithIdFactory<AssetId>;
 }
 
 /// Launchpad token ids. `create_pool` cannot touch this range.
@@ -26,7 +104,6 @@ impl frame_support::traits::Contains<NativeOrAssetId> for LaunchpadReservedAsset
 }
 
 impl pallet_vitreus_dex::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
     type ManageOrigin = EnsureRoot<AccountId>;
     type Balance = Balance;
     type HigherPrecisionBalance = sp_core::U256;
@@ -39,9 +116,8 @@ impl pallet_vitreus_dex::Config for Runtime {
     type DefaultProtocolFeeRecipient = xcm_config::TreasuryAccount;
     type CreatorFeeRecipient = LaunchpadCreators;
     type TreasurySink = LaunchTreasury;
-    type DefaultBidWindowBlocks = DefaultBidWindowBlocks;
-    type DefaultSettlementWindowBlocks = DefaultSettlementWindowBlocks;
-    type DefaultSolverBondAmount = DefaultSolverBondAmount;
+    type Base = pallet_vitreus_dex::AssetConversionAdapter<Runtime, DexPoolAssetsFreezer>;
+    type RuntimeFreezeReason = RuntimeFreezeReason;
     type WeightInfo = pallet_vitreus_dex::weights::SubstrateWeight<Runtime>;
     #[cfg(feature = "runtime-benchmarks")]
     type BenchmarkHelper = DexBenchmarkHelper;
@@ -112,8 +188,10 @@ parameter_types! {
     pub const LaunchpadAssetBase: AssetId = LAUNCHPAD_ASSET_ID_START;
     pub const LaunchpadMinGraduationTarget: Balance = 3 * UNITS;
     pub const LaunchpadMaxGraduationTarget: Balance = 3_000_000_000 * UNITS;
-    /// 2·ED + metadata deposits the escrow pays (base + per-byte × name + symbol).
-    pub const LaunchpadMinCreationFee: Balance = 2 * EXISTENTIAL_DEPOSIT + 100 + 2 * 50 * 2;
+    /// 2·ED, the metadata deposits the escrow pays (base + per-byte × name + symbol) and the
+    /// deposit for the launch token's account at its pool address.
+    pub const LaunchpadMinCreationFee: Balance =
+        2 * EXISTENTIAL_DEPOSIT + 100 + 2 * 50 * 2 + AssetAccountDeposit::get();
     pub const LaunchpadRescueDelay: BlockNumber = 7 * DAYS;
     /// Stored verbatim, never validated; the cap is the only bound on the write.
     pub const LaunchpadUriLimit: u32 = 256;
@@ -174,7 +252,6 @@ impl sp_runtime::traits::Convert<AssetId, NativeOrAssetId> for LaunchpadAssetKin
 }
 
 impl pallet_launchpad::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
     type LaunchManageOrigin = EnsureRoot<AccountId>;
     type AssetId = AssetId;
     type Currency = Balances;
@@ -335,7 +412,6 @@ impl TreasuryExchange<AccountId, Balance> for EnergyBrokerExchange {
 }
 
 impl pallet_launch_treasury::Config for Runtime {
-    type RuntimeEvent = RuntimeEvent;
     type TreasuryManageOrigin = EnsureRoot<AccountId>;
     type Staking = EnergyGenerationStaking;
     type Exchange = EnergyBrokerExchange;

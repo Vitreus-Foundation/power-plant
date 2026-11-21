@@ -2163,6 +2163,14 @@ construct_runtime!(
         Mmr: pallet_mmr = 201,
         MmrLeaf: pallet_beefy_mmr = 202,
 
+        // DEX and launchpad. The base pallet and the LP tokens come without their calls, so pools
+        // and LP tokens change only through `VitreusDex`.
+        #[cfg(feature = "testnet-runtime")]
+        DexPoolAssets: pallet_assets::<Instance2> exclude_parts { Call } = 207,
+        #[cfg(feature = "testnet-runtime")]
+        DexPoolAssetsFreezer: pallet_assets_freezer::<Instance2> = 208,
+        #[cfg(feature = "testnet-runtime")]
+        DexAssetConversion: pallet_asset_conversion exclude_parts { Call } = 209,
         #[cfg(feature = "testnet-runtime")]
         VitreusDex: pallet_vitreus_dex = 210,
         #[cfg(feature = "testnet-runtime")]

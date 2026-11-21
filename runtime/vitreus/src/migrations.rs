@@ -37,6 +37,15 @@ pub type Unreleased = (
     >,
     parachains_scheduler::migration::MigrateV2ToV3<Runtime>,
     parachains_shared::migration::MigrateToV1<Runtime>,
+    VitreusDexV7,
+);
+
+#[cfg(feature = "mainnet-runtime")]
+pub type VitreusDexV7 = ();
+#[cfg(feature = "testnet-runtime")]
+pub type VitreusDexV7 = (
+    pallet_vitreus_dex::migrations::v7::MigrateToV7<Runtime>,
+    pallet_vitreus_dex::migrations::EndowFeeEscrow<Runtime, xcm_config::TreasuryAccount>,
 );
 
 pub struct InitTechnicalCommitteeTreasury;

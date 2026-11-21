@@ -373,6 +373,7 @@ pub fn testnet_genesis(
         paras: Default::default(),
         xcm_pallet: Default::default(),
         beefy: Default::default(),
+        dex_pool_assets: Default::default(),
         vitreus_dex: Default::default(),
     }
 }

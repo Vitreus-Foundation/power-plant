@@ -16468,6 +16468,7 @@ dependencies = [
  "log",
  "nfts-runtime-api",
  "num_enum 0.6.1",
+ "pallet-asset-conversion",
  "pallet-asset-rate",
  "pallet-assets",
  "pallet-assets-freezer",
