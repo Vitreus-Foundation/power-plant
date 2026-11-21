@@ -2300,6 +2300,17 @@ impl fp_self_contained::SelfContainedCall for RuntimeCall {
     ) -> Option<TransactionValidity> {
         match self {
             RuntimeCall::Ethereum(call) => {
+                // The EVM runs Cancun, which has no EIP-7702, so the authorizations of such a
+                // transaction would be ignored.
+                if matches!(
+                    call,
+                    pallet_ethereum::Call::transact {
+                        transaction: pallet_ethereum::Transaction::EIP7702(_)
+                    }
+                ) {
+                    return Some(Err(InvalidTransaction::Call.into()));
+                }
+
                 let account_id =
                     <Runtime as pallet_evm::Config>::AddressMapping::into_account_id(*info);
 

@@ -101,7 +101,8 @@ fn configured_base_extrinsic_weight_is_evm_compatible() {
 mod energy_fee {
     use super::*;
     use ethereum::{
-        legacy::TransactionSignature, LegacyTransaction, TransactionAction, TransactionV3,
+        eip2930, legacy::TransactionSignature, AuthorizationListItem, EIP1559Transaction,
+        EIP7702Transaction, LegacyTransaction, TransactionAction, TransactionV3,
     };
     use fp_self_contained::SelfContainedCall;
     use frame_support::{dispatch::PostDispatchInfo, traits::Hooks};
@@ -227,6 +228,62 @@ mod energy_fee {
             assert_eq!(
                 runtime_call.validate_self_contained(&alith_h160, &dispatch_info, len),
                 Some(Err(InvalidTransaction::Payment.into()))
+            );
+        })
+    }
+
+    #[test]
+    fn eip7702_transaction_is_invalid() {
+        new_test_ext().execute_with(|| {
+            let chain_id = <Runtime as pallet_evm::Config>::ChainId::get();
+            let r = H256::from_low_u64_be(2);
+            let eip1559 = EIP1559Transaction {
+                chain_id,
+                nonce: Default::default(),
+                max_priority_fee_per_gas: Default::default(),
+                max_fee_per_gas: 1.into(),
+                gas_limit: 100_000.into(),
+                action: TransactionAction::Call(Default::default()),
+                value: Default::default(),
+                input: Default::default(),
+                access_list: Default::default(),
+                signature: eip2930::TransactionSignature::new(false, r, r).unwrap(),
+            };
+            // The same transaction with an authorization, so that only its type tells them apart.
+            let eip7702 = EIP7702Transaction {
+                chain_id,
+                nonce: eip1559.nonce,
+                max_priority_fee_per_gas: eip1559.max_priority_fee_per_gas,
+                max_fee_per_gas: eip1559.max_fee_per_gas,
+                gas_limit: eip1559.gas_limit,
+                destination: eip1559.action,
+                value: eip1559.value,
+                data: eip1559.input.clone(),
+                access_list: eip1559.access_list.clone(),
+                authorization_list: vec![AuthorizationListItem {
+                    chain_id,
+                    address: H160::repeat_byte(1),
+                    nonce: Default::default(),
+                    signature: eip2930::MalleableTransactionSignature {
+                        odd_y_parity: false,
+                        r,
+                        s: r,
+                    },
+                }],
+                signature: eip1559.signature.clone(),
+            };
+            let validate = |transaction| {
+                let call = RuntimeCall::Ethereum(pallet_ethereum::Call::new_call_variant_transact(
+                    transaction,
+                ));
+                let dispatch_info = call.get_dispatch_info();
+                call.validate_self_contained(&H160::from(alith().0), &dispatch_info, 0)
+            };
+
+            assert!(matches!(validate(TransactionV3::EIP1559(eip1559)), Some(Ok(..))));
+            assert_eq!(
+                validate(TransactionV3::EIP7702(eip7702)),
+                Some(Err(InvalidTransaction::Call.into()))
             );
         })
     }
