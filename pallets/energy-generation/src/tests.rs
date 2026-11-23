@@ -2001,6 +2001,58 @@ fn rebond_emits_right_value_in_event() {
 }
 
 #[test]
+fn update_total_stake_takes_active_first() {
+    let mut ledger = StakingLedger::<Test> {
+        stash: 11,
+        total: 1000,
+        active: 700,
+        unlocking: bounded_vec![UnlockChunk { value: 300, era: 3 }],
+        claimed_rewards: bounded_vec![],
+    };
+
+    ledger.update_total_stake(900);
+
+    assert_eq!(
+        ledger,
+        StakingLedger {
+            stash: 11,
+            total: 900,
+            active: 600,
+            unlocking: bounded_vec![UnlockChunk { value: 300, era: 3 }],
+            claimed_rewards: bounded_vec![],
+        }
+    );
+}
+
+#[test]
+fn update_total_stake_takes_latest_chunks_after_active() {
+    let mut ledger = StakingLedger::<Test> {
+        stash: 11,
+        total: 1000,
+        active: 400,
+        unlocking: bounded_vec![
+            UnlockChunk { value: 300, era: 3 },
+            UnlockChunk { value: 300, era: 4 },
+        ],
+        claimed_rewards: bounded_vec![],
+    };
+
+    // 400 from active, all of the chunk from era 4 and 100 from the chunk from era 3.
+    ledger.update_total_stake(200);
+
+    assert_eq!(
+        ledger,
+        StakingLedger {
+            stash: 11,
+            total: 200,
+            active: 0,
+            unlocking: bounded_vec![UnlockChunk { value: 200, era: 3 }],
+            claimed_rewards: bounded_vec![],
+        }
+    );
+}
+
+#[test]
 fn reward_to_stake_works() {
     ExtBuilder::default()
         .no_cooperate()
@@ -6332,6 +6384,106 @@ mod byzantine_threshold_disabling_strategy {
                 );
 
             assert_eq!(disable_offender, Some(OFFENDER_VALIDATOR_IDX));
+        });
+    }
+}
+
+mod hold_migration {
+    use super::*;
+    use crate::migrations::v17::{MigrateStakeToHold, STAKING_ID};
+    use frame_support::traits::{GetStorageVersion, OnRuntimeUpgrade};
+
+    type Migration = MigrateStakeToHold<Test, Balances>;
+
+    /// Puts every stake back under the lock and the pallet back to storage version 16, as before
+    /// the move to holds.
+    fn back_to_locks() {
+        for (_, ledger) in Ledger::<Test>::iter() {
+            let stake = asset::staked::<Test>(&ledger.stash);
+            assert_ok!(asset::kill_stake::<Test>(&ledger.stash));
+            Balances::set_lock(STAKING_ID, &ledger.stash, stake, WithdrawReasons::all());
+        }
+        StorageVersion::new(16).put::<PowerPlant>();
+    }
+
+    #[test]
+    fn stake_moves_from_lock_to_hold() {
+        ExtBuilder::default().build_and_execute(|| {
+            let ledgers: Vec<_> = Ledger::<Test>::iter().collect();
+            back_to_locks();
+
+            Migration::on_runtime_upgrade();
+
+            for (controller, ledger) in ledgers {
+                assert_eq!(PowerPlant::ledger(controller), Some(ledger.clone()));
+                assert_eq!(asset::staked::<Test>(&ledger.stash), ledger.total);
+                assert!(Balances::locks(ledger.stash).is_empty());
+            }
+            assert_eq!(PowerPlant::on_chain_storage_version(), 17);
+        });
+    }
+
+    #[test]
+    fn stake_without_free_existential_deposit_is_cut() {
+        ExtBuilder::default()
+            .existential_deposit(10)
+            .balance_factor(10)
+            .build_and_execute(|| {
+                back_to_locks();
+                // 11 bonded its whole balance, as the lock allowed.
+                let _ = Balances::make_free_balance_be(&11, 10000);
+
+                Migration::on_runtime_upgrade();
+
+                let ledger = PowerPlant::ledger(10).unwrap();
+                assert_eq!((ledger.total, ledger.active), (10000 - 10, 10000 - 10));
+                assert_eq!(asset::staked::<Test>(&11), 10000 - 10);
+                assert_eq!(Balances::free_balance(11), 10);
+            });
+    }
+
+    #[test]
+    fn stake_in_deposit_is_cut_from_chunk() {
+        ExtBuilder::default()
+            .existential_deposit(10)
+            .balance_factor(10)
+            .build_and_execute(|| {
+                bond(61, 60, 10000);
+                assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(60), 10000));
+                back_to_locks();
+                // 3000 of the 10000 under the lock are reserved for another pallet.
+                Balances::remove_lock(STAKING_ID, &61);
+                assert_ok!(Balances::reserve(&61, 3000));
+                Balances::set_lock(STAKING_ID, &61, 10000, WithdrawReasons::all());
+
+                Migration::on_runtime_upgrade();
+
+                // Active is 0, so the cut of 3000 comes out of the unlocking chunk.
+                let ledger = PowerPlant::ledger(60).unwrap();
+                assert_eq!((ledger.total, ledger.active), (7000, 0));
+                assert_eq!(
+                    ledger.unlocking.iter().map(|chunk| chunk.value).collect::<Vec<_>>(),
+                    [7000]
+                );
+                assert_eq!(asset::staked::<Test>(&61), 7000);
+                assert_eq!(Balances::reserved_balance(61), 7000 + 3000);
+                assert_eq!(Balances::free_balance(61), 10);
+                assert!(Balances::locks(61).is_empty());
+            });
+    }
+
+    #[test]
+    fn stake_cut_shrinks_cooperator_targets() {
+        ExtBuilder::default().build_and_execute(|| {
+            back_to_locks();
+            // 101 bonded its whole balance, 500, and cooperates with all of it.
+            let _ = Balances::make_free_balance_be(&101, 500);
+
+            Migration::on_runtime_upgrade();
+
+            assert_eq!(PowerPlant::ledger(100).map(|ledger| ledger.active), Some(500 - 1));
+            let targets = PowerPlant::cooperators(101).unwrap().targets.into_inner();
+            assert_eq!(targets, BTreeMap::from([(11, 199), (21, 299)]));
         });
     }
 }

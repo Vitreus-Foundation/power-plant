@@ -29,7 +29,8 @@ pub type V0215 = (
 
 pub type V0216 = (coretime_migration::MigrateToCoretimeWithoutBroker,);
 
-pub type Unreleased = ();
+pub type Unreleased =
+    (pallet_energy_generation::migrations::v17::MigrateStakeToHold<Runtime, Balances>,);
 
 pub struct InitTechnicalCommitteeTreasury;
 impl frame_support::traits::OnRuntimeUpgrade for InitTechnicalCommitteeTreasury {

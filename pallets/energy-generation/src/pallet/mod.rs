@@ -67,7 +67,7 @@ pub mod pallet {
     use super::*;
 
     /// The current storage version.
-    const STORAGE_VERSION: StorageVersion = StorageVersion::new(16);
+    const STORAGE_VERSION: StorageVersion = StorageVersion::new(17);
 
     #[pallet::pallet]
     #[pallet::storage_version(STORAGE_VERSION)]
@@ -1025,13 +1025,7 @@ pub mod pallet {
                     ledger.active = Zero::zero();
                 }
 
-                let min_active_bond = if Cooperators::<T>::contains_key(&ledger.stash) {
-                    MinCooperatorBond::<T>::get()
-                } else if Validators::<T>::contains_key(&ledger.stash) {
-                    Self::min_bond_for_validator(&ledger.stash)
-                } else {
-                    Zero::zero()
-                };
+                let min_active_bond = Self::min_active_bond(&ledger.stash);
 
                 // Make sure that the user maintains enough active bond for their role.
                 // If a user runs into this error, they should chill first.

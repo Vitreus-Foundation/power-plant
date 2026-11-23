@@ -176,6 +176,17 @@ impl<T: Config> Pallet<T> {
         }
     }
 
+    /// The active stake that `stash` needs to keep as a validator or a cooperator, zero for neither.
+    pub(crate) fn min_active_bond(stash: &T::AccountId) -> StakeOf<T> {
+        if Cooperators::<T>::contains_key(stash) {
+            MinCooperatorBond::<T>::get()
+        } else if Validators::<T>::contains_key(stash) {
+            Self::min_bond_for_validator(stash)
+        } else {
+            Zero::zero()
+        }
+    }
+
     /// Check if the account has enough reputation for collaborative staking.
     pub fn is_legit_for_collab(stash: &T::AccountId) -> bool {
         match pallet_reputation::AccountReputation::<T>::get(stash) {
