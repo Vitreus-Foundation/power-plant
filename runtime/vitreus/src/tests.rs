@@ -1198,6 +1198,95 @@ mod treasury {
     }
 }
 
+mod governance {
+    use super::*;
+    use frame_support::{
+        assert_noop, assert_ok,
+        traits::{CrateVersion, Currency, PalletInfoAccess, ReservableCurrency, StorePreimage},
+    };
+    use pallet_democracy::{AccountVote, Conviction, Vote, VoteThreshold};
+
+    fn voter() -> AccountId {
+        AccountId::from([7u8; 20])
+    }
+
+    /// Gives `voter()` VTRS on `free`, in the stake hold and in reserve, and returns its total
+    /// balance.
+    fn fund_voter() -> Balance {
+        let voter = voter();
+        Balances::set_balance(&voter, 1_000 * vtrs::UNITS);
+        assert_ok!(EnergyGeneration::bond(
+            RuntimeOrigin::signed(voter),
+            voter,
+            600 * vtrs::UNITS,
+            pallet_energy_generation::RewardDestination::Stash,
+        ));
+        assert_ok!(<Balances as ReservableCurrency<_>>::reserve(&voter, 100 * vtrs::UNITS));
+        <Balances as Currency<_>>::total_balance(&voter)
+    }
+
+    #[test]
+    fn democracy_vote_limit_is_total_balance() {
+        new_test_ext().execute_with(|| {
+            let total = fund_voter();
+            let proposal =
+                Preimage::bound(RuntimeCall::System(frame_system::Call::remark { remark: vec![] }))
+                    .unwrap();
+            let index = Democracy::internal_start_referendum(
+                proposal,
+                VoteThreshold::SuperMajorityApprove,
+                0,
+            );
+            let aye = |balance| AccountVote::Standard {
+                vote: Vote { aye: true, conviction: Conviction::None },
+                balance,
+            };
+
+            assert_noop!(
+                Democracy::vote(RuntimeOrigin::signed(voter()), index, aye(total + 1)),
+                pallet_democracy::Error::<Runtime>::InsufficientFunds
+            );
+            assert_ok!(Democracy::vote(RuntimeOrigin::signed(voter()), index, aye(total)));
+
+            let lock = Balances::locks(voter()).into_iter().find(|lock| lock.id == *b"democrac");
+            assert_eq!(lock.map(|lock| lock.amount), Some(total));
+        });
+    }
+
+    #[test]
+    fn council_vote_limit_is_total_balance() {
+        new_test_ext().execute_with(|| {
+            let total = fund_voter();
+            assert_ok!(Elections::submit_candidacy(RuntimeOrigin::signed(alith()), 0));
+
+            // `vote` caps the stake at the free balance that its currency reports.
+            assert_ok!(Elections::vote(RuntimeOrigin::signed(voter()), vec![alith()], total + 1));
+
+            assert_eq!(pallet_elections_phragmen::Voting::<Runtime>::get(voter()).stake, total);
+            let lock_id = <Runtime as pallet_elections_phragmen::Config>::PalletId::get();
+            let lock = Balances::locks(voter()).into_iter().find(|lock| lock.id == lock_id);
+            assert_eq!(lock.map(|lock| lock.amount), Some(total));
+        });
+    }
+
+    #[test]
+    fn voting_currency_matches_pallet_versions() {
+        // The versions that `VotingCurrency` was checked against. When a pallet changes, check how
+        // its new version uses the currency traits and update its version here.
+        assert_eq!(
+            Democracy::crate_version(),
+            CrateVersion::new(37, 0, 0),
+            "pallet-democracy changed: check how it uses the currency traits, see `VotingCurrency`",
+        );
+        assert_eq!(
+            Elections::crate_version(),
+            CrateVersion::new(38, 0, 0),
+            "pallet-elections-phragmen changed: check how it uses the currency traits, see \
+             `VotingCurrency`",
+        );
+    }
+}
+
 mod offences {
     use super::*;
     use frame_support::assert_ok;
