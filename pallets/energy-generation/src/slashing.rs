@@ -40,7 +40,11 @@ use crate::{
 };
 use frame_support::{
     ensure,
-    traits::{tokens::Imbalance, Currency, Defensive, OnUnbalanced},
+    traits::{
+        fungible::{self, Inspect as _},
+        tokens::Imbalance,
+        Defensive, OnUnbalanced,
+    },
 };
 use pallet_reputation::{Reputation, ReputationPoint, ReputationRecord, RANKS_PER_TIER};
 use parity_scale_codec::{Decode, Encode, FullCodec, MaxEncodedLen};
@@ -63,8 +67,7 @@ pub type SlashEntityOf<T> = SlashEntity<StakeOf<T>>;
 
 pub type AccountIdOf<T> = <T as frame_system::Config>::AccountId;
 
-pub type NegativeImbalanceOf<T> =
-    <<T as Config>::StakeCurrency as Currency<AccountIdOf<T>>>::NegativeImbalance;
+pub type NegativeImbalanceOf<T> = fungible::Credit<AccountIdOf<T>, <T as Config>::StakeCurrency>;
 
 // A range of start..end eras for a slashing span.
 #[derive(Encode, Decode, TypeInfo)]
@@ -785,7 +788,7 @@ pub fn do_slash<T: Config>(
         ledger.slash_stake(value.stake, T::StakeCurrency::minimum_balance(), slash_era);
 
     if !stake_value.is_zero() {
-        let (imbalance, missing) = T::StakeCurrency::slash(stash, stake_value);
+        let (imbalance, missing) = <Pallet<T>>::slash_hold(&mut ledger, stake_value);
         slashed_imbalance.subsume(imbalance);
 
         if !missing.is_zero() {
@@ -793,7 +796,7 @@ pub fn do_slash<T: Config>(
             *reward_payout = reward_payout.saturating_sub(missing);
         }
 
-        <Pallet<T>>::update_ledger(&controller, &ledger);
+        <Pallet<T>>::update_ledger(&controller, &ledger)?;
         <Pallet<T>>::adjust_cooperator_targets(stash, ledger.active);
     }
     value.stake = stake_value;
@@ -867,7 +870,13 @@ fn pay_reporters<T: Config>(
 
         // this cancels out the reporter reward imbalance internally, leading
         // to no change in total issuance.
-        T::StakeCurrency::resolve_creating(reporter, reporter_reward);
+        if let Err(reporter_reward) =
+            <T::StakeCurrency as fungible::Balanced<_>>::resolve(reporter, reporter_reward)
+        {
+            // The reporter can't receive it, for example the reward is below the existential
+            // deposit of a new account. It goes to `T::Slash` with the rest instead of burning.
+            value_slashed.subsume(reporter_reward);
+        }
     }
 
     value_slashed.subsume(stake_reward); // remainder of reward division remains.

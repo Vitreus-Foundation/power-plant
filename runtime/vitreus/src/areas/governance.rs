@@ -14,7 +14,9 @@ use frame_support::traits::tokens::{
     UnityAssetBalanceConversion, UnityOrOuterConversion,
 };
 use frame_support::traits::{
-    Currency, EitherOf, Equals, LinearStoragePrice, LockIdentifier, OnUnbalanced,
+    BalanceStatus, Currency, EitherOf, Equals, ExistenceRequirement, LinearStoragePrice,
+    LockIdentifier, LockableCurrency, OnUnbalanced, ReservableCurrency, SignedImbalance,
+    WithdrawReasons,
 };
 use frame_support::{parameter_types, traits::EitherOfDiverse, weights::Weight, PalletId};
 use frame_system::{EnsureRoot, EnsureWithSuccess};
@@ -22,7 +24,7 @@ use pallet_treasury::NegativeImbalanceOf;
 use polkadot_runtime_common::prod_or_fast;
 use sp_core::ConstU32;
 use sp_runtime::traits::{AccountIdConversion, IdentityLookup};
-use sp_runtime::{Perbill, Permill};
+use sp_runtime::{DispatchError, DispatchResult, Perbill, Permill};
 use static_assertions::const_assert;
 
 pub const fn deposit(items: u32, bytes: u32) -> Balance {
@@ -121,7 +123,7 @@ const_assert!(DesiredMembers::get() <= CouncilMaxMembers::get());
 impl pallet_elections_phragmen::Config for Runtime {
     type RuntimeEvent = RuntimeEvent;
     type PalletId = ElectionsPhragmenPalletId;
-    type Currency = Balances;
+    type Currency = VotingCurrency;
     type ChangeMembers = Council;
     type InitializeMembers = ();
     type CurrencyToVote = sp_staking::currency_to_vote::U128CurrencyToVote;
@@ -438,5 +440,187 @@ impl pallet_democracy_extension::Config for Runtime {
         pallet_collective::EnsureProportionAtLeast<AccountId, TechnicalCollective, 2, 3>,
         frame_system::EnsureRoot<AccountId>,
     >;
-    type Currency = Balances;
+    type Currency = VotingCurrency;
+}
+
+/// [`Balances`] that reports the total balance as the free balance.
+///
+/// Democracy and elections cap a vote at the voter's free balance. Through this wrapper they cap it
+/// at the total balance, so VTRS that the voter has staked or reserved count too. Everything else
+/// goes to [`Balances`] unchanged.
+///
+/// Democracy reads the free balance in `try_vote` and `try_delegate`, to cap votes. Elections reads
+/// it in `vote`, to cap votes, and in its genesis build, to check the stake of members.
+///
+/// # Warning
+///
+/// When either pallet is upgraded, check how its new version uses the currency traits. A new read
+/// of the free balance would see the total balance too.
+pub struct VotingCurrency;
+
+impl Currency<AccountId> for VotingCurrency {
+    type Balance = Balance;
+    type PositiveImbalance = <Balances as Currency<AccountId>>::PositiveImbalance;
+    type NegativeImbalance = <Balances as Currency<AccountId>>::NegativeImbalance;
+
+    fn total_balance(who: &AccountId) -> Balance {
+        Balances::total_balance(who)
+    }
+
+    fn can_slash(who: &AccountId, value: Balance) -> bool {
+        Balances::can_slash(who, value)
+    }
+
+    fn total_issuance() -> Balance {
+        Balances::total_issuance()
+    }
+
+    fn active_issuance() -> Balance {
+        Balances::active_issuance()
+    }
+
+    fn deactivate(amount: Balance) {
+        Balances::deactivate(amount)
+    }
+
+    fn reactivate(amount: Balance) {
+        Balances::reactivate(amount)
+    }
+
+    fn minimum_balance() -> Balance {
+        Balances::minimum_balance()
+    }
+
+    fn burn(amount: Balance) -> Self::PositiveImbalance {
+        <Balances as Currency<AccountId>>::burn(amount)
+    }
+
+    fn issue(amount: Balance) -> Self::NegativeImbalance {
+        Balances::issue(amount)
+    }
+
+    fn pair(amount: Balance) -> (Self::PositiveImbalance, Self::NegativeImbalance) {
+        Balances::pair(amount)
+    }
+
+    fn free_balance(who: &AccountId) -> Balance {
+        Balances::total_balance(who)
+    }
+
+    fn ensure_can_withdraw(
+        who: &AccountId,
+        amount: Balance,
+        reasons: WithdrawReasons,
+        new_balance: Balance,
+    ) -> DispatchResult {
+        Balances::ensure_can_withdraw(who, amount, reasons, new_balance)
+    }
+
+    fn transfer(
+        source: &AccountId,
+        dest: &AccountId,
+        value: Balance,
+        existence_requirement: ExistenceRequirement,
+    ) -> DispatchResult {
+        <Balances as Currency<AccountId>>::transfer(source, dest, value, existence_requirement)
+    }
+
+    fn slash(who: &AccountId, value: Balance) -> (Self::NegativeImbalance, Balance) {
+        Balances::slash(who, value)
+    }
+
+    fn deposit_into_existing(
+        who: &AccountId,
+        value: Balance,
+    ) -> Result<Self::PositiveImbalance, DispatchError> {
+        Balances::deposit_into_existing(who, value)
+    }
+
+    fn resolve_into_existing(
+        who: &AccountId,
+        value: Self::NegativeImbalance,
+    ) -> Result<(), Self::NegativeImbalance> {
+        Balances::resolve_into_existing(who, value)
+    }
+
+    fn deposit_creating(who: &AccountId, value: Balance) -> Self::PositiveImbalance {
+        Balances::deposit_creating(who, value)
+    }
+
+    fn resolve_creating(who: &AccountId, value: Self::NegativeImbalance) {
+        Balances::resolve_creating(who, value)
+    }
+
+    fn withdraw(
+        who: &AccountId,
+        value: Balance,
+        reasons: WithdrawReasons,
+        liveness: ExistenceRequirement,
+    ) -> Result<Self::NegativeImbalance, DispatchError> {
+        Balances::withdraw(who, value, reasons, liveness)
+    }
+
+    fn settle(
+        who: &AccountId,
+        value: Self::PositiveImbalance,
+        reasons: WithdrawReasons,
+        liveness: ExistenceRequirement,
+    ) -> Result<(), Self::PositiveImbalance> {
+        Balances::settle(who, value, reasons, liveness)
+    }
+
+    fn make_free_balance_be(
+        who: &AccountId,
+        balance: Balance,
+    ) -> SignedImbalance<Balance, Self::PositiveImbalance> {
+        Balances::make_free_balance_be(who, balance)
+    }
+}
+
+impl ReservableCurrency<AccountId> for VotingCurrency {
+    fn can_reserve(who: &AccountId, value: Balance) -> bool {
+        Balances::can_reserve(who, value)
+    }
+
+    fn slash_reserved(who: &AccountId, value: Balance) -> (Self::NegativeImbalance, Balance) {
+        Balances::slash_reserved(who, value)
+    }
+
+    fn reserved_balance(who: &AccountId) -> Balance {
+        Balances::reserved_balance(who)
+    }
+
+    fn reserve(who: &AccountId, value: Balance) -> DispatchResult {
+        Balances::reserve(who, value)
+    }
+
+    fn unreserve(who: &AccountId, value: Balance) -> Balance {
+        Balances::unreserve(who, value)
+    }
+
+    fn repatriate_reserved(
+        slashed: &AccountId,
+        beneficiary: &AccountId,
+        value: Balance,
+        status: BalanceStatus,
+    ) -> Result<Balance, DispatchError> {
+        Balances::repatriate_reserved(slashed, beneficiary, value, status)
+    }
+}
+
+impl LockableCurrency<AccountId> for VotingCurrency {
+    type Moment = <Balances as LockableCurrency<AccountId>>::Moment;
+    type MaxLocks = <Balances as LockableCurrency<AccountId>>::MaxLocks;
+
+    fn set_lock(id: LockIdentifier, who: &AccountId, amount: Balance, reasons: WithdrawReasons) {
+        Balances::set_lock(id, who, amount, reasons)
+    }
+
+    fn extend_lock(id: LockIdentifier, who: &AccountId, amount: Balance, reasons: WithdrawReasons) {
+        Balances::extend_lock(id, who, amount, reasons)
+    }
+
+    fn remove_lock(id: LockIdentifier, who: &AccountId) {
+        Balances::remove_lock(id, who)
+    }
 }

@@ -27,7 +27,13 @@ use rand_chacha::{
 };
 use sp_io::hashing::blake2_256;
 
-use frame_support::{pallet_prelude::*, traits::Currency};
+use frame_support::{
+    pallet_prelude::*,
+    traits::{
+        fungible::{Inspect, Mutate},
+        Currency,
+    },
+};
 use sp_runtime::{traits::StaticLookup, Perbill};
 use sp_std::prelude::*;
 
@@ -64,7 +70,10 @@ pub fn create_funded_user_with_balance<T: Config>(
     balance: StakeOf<T>,
 ) -> T::AccountId {
     let user = account(string, n, SEED);
-    let _ = T::StakeCurrency::make_free_balance_be(&user, balance);
+    // The existential deposit stays free when the user bonds, so the user can bond `balance` in
+    // full.
+    let ed = T::StakeCurrency::minimum_balance();
+    let _ = T::StakeCurrency::set_balance(&user, balance.saturating_add(ed));
     user
 }
 
