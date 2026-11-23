@@ -847,12 +847,13 @@ impl pallet_energy_generation::Config for Runtime {
     // fill after the burn and opens the next payout quota.
     type SessionChangeListeners = (TreasuryExtension, EnergyBroker, DynamicEnergy);
     type Reward = ();
-    type RewardRemainder = Treasury;
+    type RewardRemainder = ResolveTo<pallet_treasury::TreasuryAccountId<Runtime>, Balances>;
     type RuntimeEvent = RuntimeEvent;
+    type RuntimeHoldReason = RuntimeHoldReason;
     type SessionInterface = Self;
     type SessionsPerEra = SessionsPerEra;
     type DisablingStrategy = pallet_energy_generation::UpToLimitDisablingStrategy;
-    type Slash = Treasury;
+    type Slash = ResolveTo<pallet_treasury::TreasuryAccountId<Runtime>, Balances>;
     type SlashDeferDuration = SlashDeferDuration;
     type StakeBalance = Balance;
     type StakeCurrency = Balances;

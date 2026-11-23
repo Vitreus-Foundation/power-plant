@@ -9,7 +9,9 @@ use frame_support::{
     assert_noop, assert_ok, assert_storage_noop,
     dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
     pallet_prelude::*,
-    traits::{fungible::InspectHold, Currency, Get, ReservableCurrency},
+    traits::{
+        fungible::InspectHold, Currency, Get, LockableCurrency, ReservableCurrency, WithdrawReasons,
+    },
     weights::Weight,
 };
 use mock::*;
@@ -84,14 +86,14 @@ fn set_staking_configs_works() {
 #[test]
 fn force_unstake_works() {
     ExtBuilder::default().build_and_execute(|| {
-        // Account 11 is stashed and locked, and account 10 is the controller
+        // Account 11 is stashed and bonded, and account 10 is the controller
         assert_eq!(PowerPlant::bonded(11), Some(10));
         // Adds 2 slashing spans
         add_slash(&11);
         // Cant transfer
         assert_noop!(
             Balances::transfer_allow_death(RuntimeOrigin::signed(11), 1, 10),
-            TokenError::Frozen,
+            TokenError::FundsUnavailable,
         );
         // Force unstake requires root.
         assert_noop!(PowerPlant::force_unstake(RuntimeOrigin::signed(11), 11, 2), BadOrigin);
@@ -104,6 +106,7 @@ fn force_unstake_works() {
         assert_ok!(PowerPlant::force_unstake(RuntimeOrigin::root(), 11, 2));
         // No longer bonded.
         assert_eq!(PowerPlant::bonded(11), None);
+        assert_eq!(asset::staked::<Test>(&11), 0);
         // Transfer works.
         assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 1, 10));
     });
@@ -112,7 +115,7 @@ fn force_unstake_works() {
 #[test]
 fn kill_stash_works() {
     ExtBuilder::default().build_and_execute(|| {
-        // Account 11 is stashed and locked, and account 10 is the controller
+        // Account 11 is stashed and bonded, and account 10 is the controller
         assert_eq!(PowerPlant::bonded(11), Some(10));
         // Adds 2 slashing spans
         add_slash(&11);
@@ -458,7 +461,7 @@ fn staking_should_work() {
             })
         );
         // e.g. it cannot reserve more than 500 that it has free from the total 2000
-        assert_noop!(Balances::reserve(&3, 501), BalancesError::<Test, _>::LiquidityRestrictions);
+        assert_noop!(Balances::reserve(&3, 501), BalancesError::<Test, _>::InsufficientBalance);
         assert_ok!(Balances::reserve(&3, 409));
     });
 }
@@ -594,7 +597,7 @@ fn cooperating_and_rewards_should_work() {
             // give the man some money
             let initial_balance = 1000;
             for i in [1, 2, 3, 4, 5, 10, 11, 20, 21].iter() {
-                let _ = Balances::make_free_balance_be(i, initial_balance);
+                set_stakeable_balance(i, initial_balance);
                 // TODO: fix it
                 // ReputationPallet::add_not_exists(i);
             }
@@ -764,11 +767,11 @@ fn cooperators_also_get_slashed_pro_rata() {
             let cooperator_stake = PowerPlant::ledger(100).unwrap().active;
             let cooperator_reputation =
                 ReputationPallet::reputation(101).unwrap().reputation.points();
-            let cooperator_balance = balances(&101).0;
+            let cooperator_balance = stakeable_balance(&101);
             let validator_stake = PowerPlant::ledger(10).unwrap().active;
             let validator_reputation =
                 ReputationPallet::reputation(11).unwrap().reputation.points();
-            let validator_balance = balances(&11).0;
+            let validator_balance = stakeable_balance(&11);
 
             assert!(*cooperator_reputation > 0);
             assert!(*validator_reputation > 0);
@@ -795,8 +798,8 @@ fn cooperators_also_get_slashed_pro_rata() {
             assert!(cooperator_stake_slash > 0);
 
             // as well the balance
-            assert_eq!(balances(&101).0, cooperator_balance - cooperator_stake_slash);
-            assert_eq!(balances(&11).0, validator_balance - validator_stake_slash);
+            assert_eq!(stakeable_balance(&101), cooperator_balance - cooperator_stake_slash);
+            assert_eq!(stakeable_balance(&11), validator_balance - validator_stake_slash);
 
             // reputation must have been decreased
             let slashed_validator_reputation =
@@ -1207,13 +1210,55 @@ fn bond_puts_stake_on_hold() {
 }
 
 #[test]
+fn bond_keeps_existential_deposit_free() {
+    ExtBuilder::default().build_and_execute(|| {
+        let (stash, ctrl, balance) = (61, 60, 1000);
+        let ed = ExistentialDeposit::get();
+        let _ = Balances::make_free_balance_be(&stash, balance);
+
+        assert_ok!(PowerPlant::bond(
+            RuntimeOrigin::signed(stash),
+            ctrl,
+            balance,
+            RewardDestination::Controller
+        ));
+
+        let stake = balance - ed;
+        assert_eq!(Balances::balance_on_hold(&HoldReason::Staking.into(), &stash), stake);
+        assert_eq!(Balances::free_balance(stash), ed);
+        assert_eq!(PowerPlant::ledger(ctrl).map(|l| (l.total, l.active)), Some((stake, stake)));
+        assert_eq!(*staking_events().last().unwrap(), Event::Bonded { stash, amount: stake });
+    });
+}
+
+#[test]
+fn locked_balance_can_be_staked() {
+    ExtBuilder::default().build_and_execute(|| {
+        let (stash, ctrl, stake) = (61, 60, 1000);
+        let _ = Balances::make_free_balance_be(&stash, stake + ExistentialDeposit::get());
+        // A lock on the whole stake, such as a vote lock.
+        Balances::set_lock(*b"somelock", &stash, stake, WithdrawReasons::all());
+
+        assert_ok!(PowerPlant::bond(
+            RuntimeOrigin::signed(stash),
+            ctrl,
+            stake,
+            RewardDestination::Controller
+        ));
+
+        assert_eq!(asset::staked::<Test>(&stash), stake);
+        assert_eq!(Balances::locks(stash)[0].amount, stake);
+    });
+}
+
+#[test]
 fn cannot_transfer_staked_balance() {
     // Tests that a stash account cannot transfer funds
     ExtBuilder::default().no_cooperate().build_and_execute(|| {
         // Confirm account 11 is stashed
         assert_eq!(PowerPlant::bonded(11), Some(10));
-        // Confirm account 11 has some free balance
-        assert_eq!(Balances::free_balance(11), 1000);
+        // Confirm account 11 has some stakeable balance
+        assert_eq!(stakeable_balance(&11), 1000);
         // Confirm account 11 (via controller 10) is totally staked
         assert_eq!(PowerPlant::eras_stakers(active_era(), 11).total, 1000);
         // Confirm account 11 cannot transfer as a result
@@ -1223,7 +1268,7 @@ fn cannot_transfer_staked_balance() {
         );
 
         // Give account 11 extra free balance
-        let _ = Balances::make_free_balance_be(&11, 10000);
+        set_stakeable_balance(&11, 10000);
         // Confirm that account 11 can now transfer some balance
         assert_ok!(Balances::transfer_allow_death(RuntimeOrigin::signed(11), 20, 1));
     });
@@ -1233,12 +1278,12 @@ fn cannot_transfer_staked_balance() {
 fn cannot_transfer_staked_balance_2() {
     // Tests that a stash account cannot transfer funds
     // Same test as above but with 20, and more accurate.
-    // 21 has 2000 free balance but 1000 at stake
+    // 21 has 2000 stakeable balance but 1000 at stake
     ExtBuilder::default().no_cooperate().build_and_execute(|| {
         // Confirm account 21 is stashed
         assert_eq!(PowerPlant::bonded(21), Some(20));
-        // Confirm account 21 has some free balance
-        assert_eq!(Balances::free_balance(21), 2000);
+        // Confirm account 21 has some stakeable balance
+        assert_eq!(stakeable_balance(&21), 2000);
         // Confirm account 21 (via controller 20) is totally staked
         assert_eq!(PowerPlant::eras_stakers(active_era(), 21).total, 1000);
         // Confirm account 21 can transfer at most 1000
@@ -1256,15 +1301,16 @@ fn cannot_reserve_staked_balance() {
     ExtBuilder::default().build_and_execute(|| {
         // Confirm account 11 is stashed
         assert_eq!(PowerPlant::bonded(11), Some(10));
-        // Confirm account 11 has some free balance
-        assert_eq!(Balances::free_balance(11), 1000);
+        // Confirm account 11 has some stakeable balance
+        assert_eq!(stakeable_balance(&11), 1000);
         // Confirm account 11 (via controller 10) is totally staked
         assert_eq!(PowerPlant::eras_stakers(active_era(), 11).own, 1000);
         // Confirm account 11 cannot reserve as a result
-        assert_noop!(Balances::reserve(&11, 1), BalancesError::<Test, _>::LiquidityRestrictions);
+        assert_noop!(Balances::reserve(&11, 2), BalancesError::<Test, _>::InsufficientBalance);
+        assert_noop!(Balances::reserve(&11, 1), DispatchError::ConsumerRemaining);
 
         // Give account 11 extra free balance
-        let _ = Balances::make_free_balance_be(&11, 10000);
+        set_stakeable_balance(&11, 10000);
         // Confirm account 11 can now reserve balance
         assert_ok!(Balances::reserve(&11, 1));
     });
@@ -1279,7 +1325,7 @@ fn reward_destination_works() {
         // Check the balance of the validator account
         assert_eq!(Balances::free_balance(10), 1);
         // Check the balance of the stash account
-        assert_eq!(Balances::free_balance(11), 1000);
+        assert_eq!(stakeable_balance(&11), 1000);
         // Check how much is at stake
         assert_eq!(
             PowerPlant::ledger(10),
@@ -1424,7 +1470,7 @@ fn bond_extra_works() {
         );
 
         // Give account 11 some large free balance greater than total
-        let _ = Balances::make_free_balance_be(&11, 1000000);
+        set_stakeable_balance(&11, 1000000);
 
         // Call the bond_extra function from controller, add only 100
         assert_ok!(PowerPlant::bond_extra(RuntimeOrigin::signed(11), 100));
@@ -1985,6 +2031,7 @@ fn reward_to_stake_works() {
                     claimed_rewards: bounded_vec![],
                 },
             );
+            assert_ok!(asset::update_stake::<Test>(&21, 69));
 
             mock::start_active_era(1);
 
@@ -2021,7 +2068,7 @@ fn reap_stash_works() {
         .build_and_execute(|| {
             // given
             assert_eq!(Balances::free_balance(10), 10);
-            assert_eq!(Balances::free_balance(11), 10 * 1000);
+            assert_eq!(stakeable_balance(&11), 10 * 1000);
             assert_eq!(PowerPlant::bonded(11), Some(10));
 
             assert!(<Ledger<Test>>::contains_key(10));
@@ -2057,6 +2104,7 @@ fn reap_stash_works() {
             assert_ok!(PowerPlant::reap_stash(RuntimeOrigin::signed(20), 11, 0));
 
             // then
+            assert_eq!(asset::staked::<Test>(&11), 0);
             assert!(!<Ledger<Test>>::contains_key(10));
             assert!(!<Bonded<Test>>::contains_key(11));
             assert!(!<Validators<Test>>::contains_key(11));
@@ -2199,7 +2247,7 @@ fn bond_with_no_staked_value() {
                 5,
                 RewardDestination::Controller
             ));
-            assert_eq!(Balances::locks(1)[0].amount, 5);
+            assert_eq!(asset::staked::<Test>(&1), 5);
 
             // unbonding even 1 will cause all to be unbonded.
             assert_ok!(PowerPlant::unbond(RuntimeOrigin::signed(2), 1));
@@ -2220,14 +2268,14 @@ fn bond_with_no_staked_value() {
             // not yet removed.
             assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
             assert!(PowerPlant::ledger(2).is_some());
-            assert_eq!(Balances::locks(1)[0].amount, 5);
+            assert_eq!(asset::staked::<Test>(&1), 5);
 
             mock::start_active_era(3);
 
             // poof. Account 1 is removed from the staking system.
             assert_ok!(PowerPlant::withdraw_unbonded(RuntimeOrigin::signed(2), 0));
             assert!(PowerPlant::ledger(2).is_none());
-            assert_eq!(Balances::locks(1).len(), 0);
+            assert_eq!(asset::staked::<Test>(&1), 0);
         });
 }
 
@@ -2570,7 +2618,32 @@ fn slashing_performed_according_exposure() {
         );
 
         // The stash account should be slashed for 250 (50% of 500).
-        assert_eq!(Balances::free_balance(11), 1000 - 250);
+        assert_eq!(stakeable_balance(&11), 1000 - 250);
+    });
+}
+
+#[test]
+fn slash_takes_stake_from_hold() {
+    ExtBuilder::default().build_and_execute(|| {
+        mock::start_active_era(1);
+        let (free_11, free_101) = (Balances::free_balance(11), Balances::free_balance(101));
+
+        on_offence_now(
+            &[OffenceDetails {
+                offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                reporters: vec![],
+            }],
+            &[Perbill::from_percent(10)],
+        );
+
+        // 10% of the 1000 bonded by 11 and of the 200 that 101 cooperates with.
+        assert_eq!(asset::staked::<Test>(&11), 1000 - 100);
+        assert_eq!(asset::staked::<Test>(&101), 500 - 20);
+        assert_eq!(PowerPlant::ledger(10).map(|l| l.total), Some(1000 - 100));
+        assert_eq!(PowerPlant::ledger(100).map(|l| l.total), Some(500 - 20));
+        assert_eq!(Balances::free_balance(11), free_11);
+        assert_eq!(Balances::free_balance(101), free_101);
+        assert_eq!(SlashUnbalanced::get(), 100 + 20);
     });
 }
 
@@ -2693,6 +2766,31 @@ fn reporters_receive_their_slice() {
 }
 
 #[test]
+fn unpaid_reporter_reward_goes_to_slash() {
+    ExtBuilder::default()
+        .existential_deposit(10)
+        .balance_factor(10)
+        .build_and_execute(|| {
+            mock::start_active_era(1);
+            // An account without funds: a reward below the existential deposit can't create it.
+            let reporter = 3_000;
+
+            on_offence_now(
+                &[OffenceDetails {
+                    offender: (11, PowerPlant::eras_stakers(active_era(), 11)),
+                    reporters: vec![reporter],
+                }],
+                &[Perbill::from_percent(1)],
+            );
+
+            // 1% of the 10000 bonded by 11 and of the 200 that 101 cooperates with. Half of 10% of
+            // it, 5, would go to the reporter.
+            assert_eq!(Balances::total_balance(&reporter), 0);
+            assert_eq!(SlashUnbalanced::get(), 100 + 2);
+        });
+}
+
+#[test]
 fn subsequent_reports_in_same_span_pay_out_less() {
     // This test verifies that the reporters of the offence receive their slice from the slashed
     // amount, but less and less if they submit multiple reports in one span.
@@ -2786,8 +2884,8 @@ fn invulnerables_are_always_elected() {
 fn invulnerables_are_not_slashed() {
     // For invulnerable validators no slashing is performed.
     ExtBuilder::default().invulnerables(vec![11]).build_and_execute(|| {
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(21), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&21), 2000);
 
         let initial_reputation_11 = *ReputationPallet::reputation(11).unwrap().reputation.points();
         let exposure_21 = PowerPlant::eras_stakers(active_era(), 21);
@@ -2809,7 +2907,7 @@ fn invulnerables_are_not_slashed() {
             .map(|o| {
                 (
                     *ReputationPallet::reputation(o.who).unwrap().reputation.points(),
-                    Balances::free_balance(o.who),
+                    stakeable_balance(&o.who),
                 )
             })
             .unzip();
@@ -2833,7 +2931,7 @@ fn invulnerables_are_not_slashed() {
             *ReputationPallet::reputation(11).unwrap().reputation.points(),
             initial_reputation_11
         );
-        assert_eq!(Balances::free_balance(11), 1000);
+        assert_eq!(stakeable_balance(&11), 1000);
 
         let slash_21 = SlashEntity::max_slash_amount(&initial_reputation_21.into(), 0)
             .reputation
@@ -2847,7 +2945,7 @@ fn invulnerables_are_not_slashed() {
             1
         );
         // 2000 - (0.2 * initial_balance)
-        assert_eq!(Balances::free_balance(21), 2000 - (2 * initial_balance_21 / 10));
+        assert_eq!(stakeable_balance(&21), 2000 - (2 * initial_balance_21 / 10));
 
         let slash_prop = Perbill::from_rational(affter_slash_reputation_21, initial_reputation_21);
 
@@ -2862,10 +2960,7 @@ fn invulnerables_are_not_slashed() {
                 *ReputationPallet::reputation(other.who).unwrap().reputation.points(),
                 slash_prop * initial_reputation
             );
-            assert_eq!(
-                Balances::free_balance(other.who),
-                initial_balance - (2 * other.value / 10),
-            );
+            assert_eq!(stakeable_balance(&other.who), initial_balance - (2 * other.value / 10),);
         }
     });
 }
@@ -2874,7 +2969,7 @@ fn invulnerables_are_not_slashed() {
 fn dont_slash_if_fraction_is_zero() {
     // Don't slash if the fraction is zero.
     ExtBuilder::default().build_and_execute(|| {
-        assert_eq!(Balances::free_balance(11), 1000);
+        assert_eq!(stakeable_balance(&11), 1000);
         let initial_reptutation_11 = ReputationPallet::reputation(11).unwrap().reputation.points();
         let initial_reptutation_21 = ReputationPallet::reputation(21).unwrap().reputation.points();
 
@@ -2892,7 +2987,7 @@ fn dont_slash_if_fraction_is_zero() {
             &[Perbill::from_percent(0), Perbill::from_percent(0)],
         );
 
-        assert_eq!(Balances::free_balance(11), 1000);
+        assert_eq!(stakeable_balance(&11), 1000);
         // The validator hasn't been slashed. The new era is not forced.
         assert_eq!(
             ReputationPallet::reputation(11).unwrap().reputation.points(),
@@ -2973,7 +3068,7 @@ fn garbage_collection_after_slashing() {
         .existential_deposit(2)
         .balance_factor(2)
         .build_and_execute(|| {
-            assert_eq!(Balances::free_balance(11), 2000);
+            assert_eq!(stakeable_balance(&11), 2000);
             let initial_reputation_11 =
                 *ReputationPallet::reputation(11).unwrap().reputation.points();
 
@@ -2991,7 +3086,7 @@ fn garbage_collection_after_slashing() {
                     .deref()
                     / 10;
 
-            assert_eq!(Balances::free_balance(11), 2000 - 200);
+            assert_eq!(stakeable_balance(&11), 2000 - 200);
             assert_eq_error_rate!(
                 *ReputationPallet::reputation(11).unwrap().reputation.points(),
                 initial_reputation_11 - slash_11,
@@ -3072,7 +3167,7 @@ fn garbage_collection_on_window_pruning() {
         assert!(initial_reputation_11 > 0);
         let initial_reputation_101 = initial_reputation_11;
 
-        assert_eq!(Balances::free_balance(11), 1000);
+        assert_eq!(stakeable_balance(&11), 1000);
 
         let now = active_era();
 
@@ -3085,7 +3180,7 @@ fn garbage_collection_on_window_pruning() {
         ));
 
         let exposure = PowerPlant::eras_stakers(now, 11);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&101), 2000);
         let cooperated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
         on_offence_now(
@@ -3116,8 +3211,8 @@ fn garbage_collection_on_window_pruning() {
             1
         );
 
-        assert_eq!(Balances::free_balance(11), 900);
-        assert_eq!(Balances::free_balance(101), 2000 - (cooperated_value / 10));
+        assert_eq!(stakeable_balance(&11), 900);
+        assert_eq!(stakeable_balance(&101), 2000 - (cooperated_value / 10));
 
         assert!(ValidatorSlashInEra::<Test>::get(now, 11).is_some());
         assert!(CooperatorSlashInEra::<Test>::get(now, 101).is_some());
@@ -3142,7 +3237,7 @@ fn slashes_are_summed_across_spans() {
         mock::start_active_era(2);
         mock::start_active_era(3);
 
-        assert_eq!(Balances::free_balance(21), 2000);
+        assert_eq!(stakeable_balance(&21), 2000);
         assert_eq!(PowerPlant::slashable_balance_of(&21), 1000);
 
         let initial_reputation_21 = *ReputationPallet::reputation(21).unwrap().reputation.points();
@@ -3177,7 +3272,7 @@ fn slashes_are_summed_across_spans() {
             initial_reputation_21 - reputation_slash_21,
             2
         );
-        assert_eq!(Balances::free_balance(21), 1900);
+        assert_eq!(stakeable_balance(&21), 1900);
 
         // 21 has been force-chilled. re-signal intent to validate.
         PowerPlant::validate(RuntimeOrigin::signed(20), Default::default()).unwrap();
@@ -3213,7 +3308,7 @@ fn slashes_are_summed_across_spans() {
             reputation_after_slash - reputation_slash_21 + reputation_per_era(),
             2
         );
-        assert_eq!(Balances::free_balance(21), 1810);
+        assert_eq!(stakeable_balance(&21), 1810);
     });
 }
 
@@ -3234,10 +3329,10 @@ fn deferred_slashes_are_deferred() {
                 initial_reputation_101.into()
             ));
 
-            assert_eq!(Balances::free_balance(11), 1000);
+            assert_eq!(stakeable_balance(&11), 1000);
 
             let exposure = PowerPlant::eras_stakers(active_era(), 11);
-            assert_eq!(Balances::free_balance(101), 2000);
+            assert_eq!(stakeable_balance(&101), 2000);
             let cooperated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
             System::reset_events();
@@ -3274,8 +3369,8 @@ fn deferred_slashes_are_deferred() {
                 initial_reputation_101
             );
 
-            assert_eq!(Balances::free_balance(11), 1000);
-            assert_eq!(Balances::free_balance(101), 2000);
+            assert_eq!(stakeable_balance(&11), 1000);
+            assert_eq!(stakeable_balance(&101), 2000);
 
             mock::start_active_era(2);
 
@@ -3288,8 +3383,8 @@ fn deferred_slashes_are_deferred() {
                 initial_reputation_101 + reputation_per_era()
             );
 
-            assert_eq!(Balances::free_balance(11), 1000);
-            assert_eq!(Balances::free_balance(101), 2000);
+            assert_eq!(stakeable_balance(&11), 1000);
+            assert_eq!(stakeable_balance(&101), 2000);
 
             mock::start_active_era(3);
 
@@ -3302,8 +3397,8 @@ fn deferred_slashes_are_deferred() {
                 initial_reputation_101 + reputation_per_era() * 2
             );
 
-            assert_eq!(Balances::free_balance(11), 1000);
-            assert_eq!(Balances::free_balance(101), 2000);
+            assert_eq!(stakeable_balance(&11), 1000);
+            assert_eq!(stakeable_balance(&101), 2000);
 
             // at the start of era 4, slashes from era 1 are processed,
             // after being deferred for at least 2 full eras.
@@ -3322,8 +3417,8 @@ fn deferred_slashes_are_deferred() {
                 1
             );
 
-            assert_eq!(Balances::free_balance(11), 900);
-            assert_eq!(Balances::free_balance(101), 2000 - (cooperated_value / 10));
+            assert_eq!(stakeable_balance(&11), 900);
+            assert_eq!(stakeable_balance(&101), 2000 - (cooperated_value / 10));
 
             assert!(matches!(
                 staking_events_since_last_call().as_slice(),
@@ -3461,8 +3556,8 @@ fn staker_cannot_bail_deferred_slash() {
             initial_reputation_101.into()
         ));
 
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&101), 2000);
 
         let exposure = PowerPlant::eras_stakers(active_era(), 11);
         let cooperated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
@@ -3501,8 +3596,8 @@ fn staker_cannot_bail_deferred_slash() {
             initial_reputation_101
         );
 
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&101), 2000);
 
         assert_eq!(
             Ledger::<Test>::get(100).unwrap(),
@@ -3526,8 +3621,8 @@ fn staker_cannot_bail_deferred_slash() {
             initial_reputation_101 + reputation_per_era()
         );
 
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&101), 2000);
 
         assert_eq!(PowerPlant::current_era().unwrap(), 2);
         assert_eq!(active_era(), 2);
@@ -3543,8 +3638,8 @@ fn staker_cannot_bail_deferred_slash() {
             initial_reputation_101 + reputation_per_era() * 2
         );
 
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&101), 2000);
 
         assert_eq!(PowerPlant::current_era().unwrap(), 3);
         assert_eq!(active_era(), 3);
@@ -3577,8 +3672,8 @@ fn staker_cannot_bail_deferred_slash() {
             1
         );
 
-        assert_eq!(Balances::free_balance(11), 900);
-        assert_eq!(Balances::free_balance(101), 2000 - (cooperated_value / 10));
+        assert_eq!(stakeable_balance(&11), 900);
+        assert_eq!(stakeable_balance(&101), 2000 - (cooperated_value / 10));
 
         // and the leftover of the funds can now be unbonded.
     })
@@ -3597,10 +3692,10 @@ fn remove_deferred() {
             initial_reputation_101.into()
         ));
 
-        assert_eq!(Balances::free_balance(11), 1000);
+        assert_eq!(stakeable_balance(&11), 1000);
 
         let exposure = PowerPlant::eras_stakers(active_era(), 11);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&101), 2000);
         let cooperated_value = exposure.others.iter().find(|o| o.who == 101).unwrap().value;
 
         // deferred to start of era 4.
@@ -3618,8 +3713,8 @@ fn remove_deferred() {
             initial_reputation_101
         );
 
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&101), 2000);
 
         mock::start_active_era(2);
 
@@ -3649,8 +3744,8 @@ fn remove_deferred() {
             initial_reputation_101 + reputation_per_era()
         );
 
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&101), 2000);
 
         mock::start_active_era(3);
 
@@ -3663,8 +3758,8 @@ fn remove_deferred() {
             initial_reputation_101 + reputation_per_era() * 2
         );
 
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&101), 2000);
 
         // at the start of era 4, slashes from era 1 are processed,
         // after being deferred for at least 2 full eras.
@@ -3696,8 +3791,8 @@ fn remove_deferred() {
         let actual_slash = total_slash - initial_slash;
 
         // 5% slash (15 - 10) processed now.
-        assert_eq!(Balances::free_balance(11), 950);
-        assert_eq!(Balances::free_balance(101), 2000 - actual_slash);
+        assert_eq!(stakeable_balance(&11), 950);
+        assert_eq!(stakeable_balance(&101), 2000 - actual_slash);
     })
 }
 
@@ -3714,8 +3809,8 @@ fn remove_multi_deferred() {
             initial_reputation_101.into()
         ));
 
-        assert_eq!(Balances::free_balance(11), 1000);
-        assert_eq!(Balances::free_balance(101), 2000);
+        assert_eq!(stakeable_balance(&11), 1000);
+        assert_eq!(stakeable_balance(&101), 2000);
 
         let exposure = PowerPlant::eras_stakers(active_era(), 11);
 
@@ -3807,8 +3902,8 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
             assert_eq!(exposure_21.total, 1000 + 300);
 
             // pre-slash balance
-            assert_eq!(Balances::free_balance(11), 1000);
-            assert_eq!(Balances::free_balance(101), 2000);
+            assert_eq!(stakeable_balance(&11), 1000);
+            assert_eq!(stakeable_balance(&101), 2000);
 
             // 100 has approval for 11 as of now
             assert!(PowerPlant::cooperators(101).unwrap().targets.contains_key(&11));
@@ -3837,8 +3932,8 @@ fn slash_kicks_validators_not_cooperators_and_disables_cooperator_for_kicked_val
 
             // post-slash balance
             let cooperator_slash_amount_11 = 200 / 10;
-            assert_eq!(Balances::free_balance(11), 900);
-            assert_eq!(Balances::free_balance(101), 2000 - cooperator_slash_amount_11);
+            assert_eq!(stakeable_balance(&11), 900);
+            assert_eq!(stakeable_balance(&101), 2000 - cooperator_slash_amount_11);
 
             let slash_11 = SlashEntity::max_slash_amount(&initial_reputation_11.into(), 0)
                 .reputation
@@ -4174,10 +4269,10 @@ fn zero_slash_keeps_cooperators() {
         .build_and_execute(|| {
             mock::start_active_era(1);
 
-            assert_eq!(Balances::free_balance(11), 1000);
+            assert_eq!(stakeable_balance(&11), 1000);
 
             let exposure = PowerPlant::eras_stakers(active_era(), 11);
-            assert_eq!(Balances::free_balance(101), 2000);
+            assert_eq!(stakeable_balance(&101), 2000);
 
             on_offence_now(
                 &[OffenceDetails { offender: (11, exposure.clone()), reporters: vec![] }],
@@ -6144,8 +6239,8 @@ fn slash_ignores_exposure_multiplier() {
         assert_eq!(PowerPlant::ledger(10).unwrap().active, 900);
         assert_eq!(PowerPlant::ledger(100).unwrap().total, 480);
         assert_eq!(PowerPlant::ledger(100).unwrap().active, 480);
-        assert_eq!(Balances::free_balance(11), 1000 - 100);
-        assert_eq!(Balances::free_balance(101), 2000 - 20);
+        assert_eq!(stakeable_balance(&11), 1000 - 100);
+        assert_eq!(stakeable_balance(&101), 2000 - 20);
         assert!(matches!(
             staking_events_since_last_call().as_slice(),
             &[

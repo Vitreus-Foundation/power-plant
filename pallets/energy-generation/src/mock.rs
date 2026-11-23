@@ -222,6 +222,7 @@ parameter_types! {
 
 parameter_types! {
     pub static RewardRemainderUnbalanced: u128 = 0;
+    pub static SlashUnbalanced: u128 = 0;
 }
 
 pub struct RewardRemainderMock;
@@ -229,6 +230,17 @@ pub struct RewardRemainderMock;
 impl OnUnbalanced<StakeNegativeImbalanceOf<Test>> for RewardRemainderMock {
     fn on_nonzero_unbalanced(amount: StakeNegativeImbalanceOf<Test>) {
         RewardRemainderUnbalanced::mutate(|v| {
+            *v += amount.peek();
+        });
+        drop(amount);
+    }
+}
+
+pub struct SlashMock;
+
+impl OnUnbalanced<StakeNegativeImbalanceOf<Test>> for SlashMock {
+    fn on_nonzero_unbalanced(amount: StakeNegativeImbalanceOf<Test>) {
+        SlashUnbalanced::mutate(|v| {
             *v += amount.peek();
         });
         drop(amount);
@@ -356,9 +368,10 @@ impl pallet_energy_generation::Config for Test {
     type Reward = MockReward;
     type RewardRemainder = RewardRemainderMock;
     type RuntimeEvent = RuntimeEvent;
+    type RuntimeHoldReason = RuntimeHoldReason;
     type SessionInterface = Self;
     type SessionsPerEra = SessionsPerEra;
-    type Slash = ();
+    type Slash = SlashMock;
     type SlashDeferDuration = SlashDeferDuration;
     type StakeBalance = <Self as pallet_balances::Config>::Balance;
     type StakeCurrency = Balances;
@@ -572,17 +585,17 @@ impl ExtBuilder {
                 (30, self.balance_factor),
                 (40, self.balance_factor),
                 (50, self.balance_factor),
-                // stashes
-                (11, self.balance_factor * 1000),
-                (21, self.balance_factor * 2000),
-                (31, self.balance_factor * 2000),
-                (41, self.balance_factor * 2000),
-                (51, self.balance_factor * 2000),
-                (201, self.balance_factor * 2000),
-                (202, self.balance_factor * 2000),
+                // stashes, with the existential deposit on top: it stays free when they bond
+                (11, self.balance_factor * 1000 + ExistentialDeposit::get()),
+                (21, self.balance_factor * 2000 + ExistentialDeposit::get()),
+                (31, self.balance_factor * 2000 + ExistentialDeposit::get()),
+                (41, self.balance_factor * 2000 + ExistentialDeposit::get()),
+                (51, self.balance_factor * 2000 + ExistentialDeposit::get()),
+                (201, self.balance_factor * 2000 + ExistentialDeposit::get()),
+                (202, self.balance_factor * 2000 + ExistentialDeposit::get()),
                 // optional cooperator
                 (100, self.balance_factor * 2000),
-                (101, self.balance_factor * 2000),
+                (101, self.balance_factor * 2000 + ExistentialDeposit::get()),
                 // aux accounts
                 (60, self.balance_factor),
                 (61, self.balance_factor * 2000),
@@ -713,7 +726,8 @@ pub(crate) fn current_era() -> EraIndex {
 }
 
 pub(crate) fn bond(stash: AccountId, ctrl: AccountId, val: Balance) {
-    let _ = Balances::make_free_balance_be(&stash, val);
+    // The existential deposit stays free, so the stash gets it on top of `val`.
+    let _ = Balances::make_free_balance_be(&stash, val + ExistentialDeposit::get());
     let _ = Balances::make_free_balance_be(&ctrl, val);
     assert_ok!(PowerPlant::bond(
         RuntimeOrigin::signed(stash),
@@ -731,6 +745,27 @@ pub(crate) fn bond_cooperator(
 ) {
     bond(stash, ctrl, val);
     assert_ok!(PowerPlant::cooperate(RuntimeOrigin::signed(ctrl), target));
+}
+
+/// The balance of `who` that is staked or can be staked.
+pub(crate) fn stakeable_balance(who: &AccountId) -> Balance {
+    asset::free_to_stake::<Test>(who) + asset::staked::<Test>(who)
+}
+
+/// Sets the balance that `who` has staked or can stake to `value`, keeping the existential
+/// deposit free.
+///
+/// A `value` below the current stake shrinks the hold without touching the ledger.
+pub(crate) fn set_stakeable_balance(who: &AccountId, value: Balance) {
+    let ed = ExistentialDeposit::get();
+    let staked = asset::staked::<Test>(who);
+    if value > staked {
+        let _ = Balances::make_free_balance_be(who, value - staked + ed);
+    } else {
+        assert_ok!(asset::update_stake::<Test>(who, value));
+        let _ = Balances::make_free_balance_be(who, ed);
+    }
+    assert_eq!(stakeable_balance(who), value);
 }
 
 /// Progress to the given block, triggering session and era changes as we progress.
@@ -957,10 +992,6 @@ pub(crate) fn staking_events_since_last_call() -> Vec<crate::Event<Test>> {
     let seen = StakingEventsIndex::get();
     StakingEventsIndex::set(all.len());
     all.into_iter().skip(seen).collect()
-}
-
-pub(crate) fn balances(who: &AccountId) -> (Balance, Balance) {
-    (Balances::free_balance(who), Balances::reserved_balance(who))
 }
 
 pub(crate) fn controller_stash_reputation_tier(controller: &AccountId) -> Option<ReputationTier> {

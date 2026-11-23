@@ -4,12 +4,14 @@ use core::cmp::Ordering;
 
 use frame_support::traits::Imbalance;
 use frame_support::{
+    defensive,
     dispatch::WithPostDispatchInfo,
     pallet_prelude::*,
     storage::bounded_btree_set::BoundedBTreeSet,
     traits::{
+        fungible::Inspect as _,
         tokens::{fungibles::Balanced, Precision},
-        Currency, DefensiveResult, Get, LockableCurrency, OnUnbalanced, WithdrawReasons,
+        DefensiveResult, Get, OnUnbalanced,
     },
     weights::Weight,
     BoundedBTreeMap,
@@ -32,12 +34,12 @@ use vitreus_runtime_common::{EraEnergyRateCalculator, EraSessionLookup, OnSessio
 
 use crate::slashing::NegativeImbalanceOf;
 use crate::{
-    log, slashing, weights::WeightInfo, ActiveEraInfo, Cooperations, EnergyDebtOf, EnergyOf,
+    asset, log, slashing, weights::WeightInfo, ActiveEraInfo, Cooperations, EnergyDebtOf, EnergyOf,
     Exposure, ExposureOf, Forcing, IndividualExposure, OnVipMembershipHandler, RewardDestination,
     SessionInterface, StakeOf, StakingLedger, ValidatorPrefs,
 };
 
-use super::{pallet::*, STAKING_ID};
+use super::pallet::*;
 
 impl<T: Config> Pallet<T> {
     /// The total balance that can be slashed from a stash account as of right now.
@@ -104,11 +106,11 @@ impl<T: Config> Pallet<T> {
             ledger_info.slash_stake(tax, T::StakeCurrency::minimum_balance(), slash_era);
 
         if !stake_value.is_zero() {
-            let (imbalance, _) = T::StakeCurrency::slash(account, stake_value);
+            let (imbalance, _) = Self::slash_hold(&mut ledger_info, stake_value);
             slashed_imbalance.subsume(imbalance);
             T::Slash::on_unbalanced(slashed_imbalance);
 
-            <Pallet<T>>::update_ledger(account, &ledger_info);
+            <Pallet<T>>::update_ledger(account, &ledger_info)?;
         }
 
         Ok(())
@@ -226,13 +228,12 @@ impl<T: Config> Pallet<T> {
                 // portion to fall below existential deposit + will have no more unlocking chunks
                 // left. We can now safely remove all staking-related information.
                 Self::kill_stash(&stash, num_slashing_spans)?;
-                // Remove the lock.
-                T::StakeCurrency::remove_lock(STAKING_ID, &stash);
+                asset::kill_stake::<T>(&stash)?;
 
                 T::ThisWeightInfo::withdraw_unbonded_kill(num_slashing_spans)
             } else {
                 // This was the consequence of a partial unbond. just update the ledger and move on.
-                Self::update_ledger(controller, &ledger);
+                Self::update_ledger(controller, &ledger)?;
 
                 // This is only an update, so we use less overall weight.
                 T::ThisWeightInfo::withdraw_unbonded_update(num_slashing_spans)
@@ -411,11 +412,40 @@ impl<T: Config> Pallet<T> {
 
     /// Update the ledger for a controller.
     ///
-    /// This will also update the stash lock.
-    pub(crate) fn update_ledger(controller: &T::AccountId, ledger: &StakingLedger<T>) {
-        T::StakeCurrency::set_lock(STAKING_ID, &ledger.stash, ledger.total, WithdrawReasons::all());
+    /// This will also set the stake held for the stash to `ledger.total`.
+    pub(crate) fn update_ledger(
+        controller: &T::AccountId,
+        ledger: &StakingLedger<T>,
+    ) -> DispatchResult {
+        asset::update_stake::<T>(&ledger.stash, ledger.total)?;
         <Ledger<T>>::insert(controller, ledger);
         T::OnVipMembershipHandler::update_active_stake(controller);
+        Ok(())
+    }
+
+    /// Slash `value` from the stake held for `ledger.stash`.
+    ///
+    /// `ledger` must already be reduced by `value`. Returns the slashed funds and the part of
+    /// `value` that the hold didn't cover.
+    pub(crate) fn slash_hold(
+        ledger: &mut StakingLedger<T>,
+        value: StakeOf<T>,
+    ) -> (NegativeImbalanceOf<T>, StakeOf<T>) {
+        let (imbalance, missing) = asset::slash::<T>(&ledger.stash, value);
+
+        // `update_ledger` keeps the hold equal to `ledger.total`, so only a bug can make them
+        // differ. The hold is what can still be slashed: a smaller hold cuts the ledger, and
+        // `update_ledger` releases the excess of a larger one.
+        let staked = asset::staked::<T>(&ledger.stash);
+        if staked != ledger.total {
+            defensive!("the stake hold differs from the ledger total");
+            if staked < ledger.total {
+                ledger.update_total_stake(staked);
+                Self::adjust_cooperator_targets(&ledger.stash, ledger.active);
+            }
+        }
+
+        (imbalance, missing)
     }
 
     /// Adjust the targets of a cooperator to ensure their total stake does not exceed `active_stake`.
@@ -1317,6 +1347,10 @@ impl<T: Config> Pallet<T> {
         let real_total: StakeOf<T> =
             ledger.unlocking.iter().fold(ledger.active, |a, c| a + c.value);
         ensure!(real_total == ledger.total, "ledger.total corrupt");
+        ensure!(
+            asset::staked::<T>(&ledger.stash) == ledger.total,
+            "stake hold differs from ledger.total"
+        );
 
         if !(ledger.active >= T::StakeCurrency::minimum_balance() || ledger.active.is_zero()) {
             log!(warn, "ledger.active less than ED: {:?}, {:?}", ctrl, ledger)

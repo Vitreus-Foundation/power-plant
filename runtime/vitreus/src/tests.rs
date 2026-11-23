@@ -1250,7 +1250,11 @@ mod offences {
         let mut ext = sp_io::TestExternalities::new(
             RuntimeGenesisConfig {
                 balances: BalancesConfig {
-                    balances: validators.clone().map(|v| (stash(v), STAKE)).collect(),
+                    // The existential deposit stays free when a stash bonds.
+                    balances: validators
+                        .clone()
+                        .map(|v| (stash(v), STAKE + ExistentialDeposit::get()))
+                        .collect(),
                 },
                 reputation: ReputationConfig {
                     accounts: validators

@@ -288,7 +288,7 @@ impl pallet_balances::Config for Test {
     type Balance = Balance;
     type AccountStore = System;
     type ReserveIdentifier = [u8; 8];
-    type RuntimeHoldReason = ();
+    type RuntimeHoldReason = RuntimeHoldReason;
     type FreezeIdentifier = ();
     type MaxLocks = ();
     type MaxReserves = ();
@@ -408,6 +408,7 @@ impl pallet_energy_generation::Config for Test {
     type MaxCooperations = MaxCooperations;
     type HistoryDepth = HistoryDepth;
     type RewardRemainder = RewardRemainderMock;
+    type RuntimeHoldReason = RuntimeHoldReason;
     type RuntimeEvent = RuntimeEvent;
     type Slash = ();
     type Reward = MockReward;
@@ -613,7 +614,8 @@ impl ExtBuilder {
                 (3, 300 * self.balance_factor),
                 (4, 400 * self.balance_factor),
                 // controllers
-                (10, self.balance_factor * 1000),
+                // 10 bonds all of this, and the existential deposit stays free
+                (10, self.balance_factor * 1000 + ExistentialDeposit::get()),
                 (20, self.balance_factor * 2000),
                 (30, self.balance_factor * 2000),
                 (40, self.balance_factor * 2000),

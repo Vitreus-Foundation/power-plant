@@ -153,8 +153,8 @@ fn exit_a_vip_as_validator_free_tax_period() {
         assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(10)));
         assert_eq!(Privileges::vip_members(10), None);
         assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 1000);
-        assert_eq!(System::account(10).data.frozen, 1000);
-        assert_eq!(System::account(10).data.free, 1000);
+        assert_eq!(System::account(10).data.reserved, 1000);
+        assert_eq!(System::account(10).data.free, ExistentialDeposit::get());
     })
 }
 
@@ -171,8 +171,8 @@ fn exit_a_vip_as_cooperator_free_tax_period() {
         assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(100)));
         assert_eq!(Privileges::vip_members(100), None);
         assert_eq!(EnergyGeneration::ledger(100).unwrap().active, 500);
-        assert_eq!(System::account(100).data.frozen, 500);
-        assert_eq!(System::account(100).data.free, 2000);
+        assert_eq!(System::account(100).data.reserved, 500);
+        assert_eq!(System::account(100).data.free, 2000 - 500);
     })
 }
 
@@ -190,8 +190,8 @@ fn exit_a_vip_as_validator_non_free_tax_period() {
         assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(10)));
         assert_eq!(Privileges::vip_members(10), None);
         assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 1000 - 1000 / 4);
-        assert_eq!(System::account(10).data.frozen, 1000 - 1000 / 4);
-        assert_eq!(System::account(10).data.free, 1000 - 1000 / 4);
+        assert_eq!(System::account(10).data.reserved, 1000 - 1000 / 4);
+        assert_eq!(System::account(10).data.free, ExistentialDeposit::get());
         assert!(EnergyGeneration::is_user_validator(&10));
     })
 }
@@ -210,8 +210,8 @@ fn exit_a_vip_as_validator_non_free_tax_period_and_kick() {
         assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(20)));
         assert_eq!(Privileges::vip_members(20), None);
         assert_eq!(EnergyGeneration::ledger(20).unwrap().active, 500 - 500 / 4);
-        assert_eq!(System::account(20).data.frozen, 500 - 500 / 4);
-        assert_eq!(System::account(20).data.free, 2000 - 500 / 4);
+        assert_eq!(System::account(20).data.reserved, 500 - 500 / 4);
+        assert_eq!(System::account(20).data.free, 2000 - 500);
         assert!(EnergyGeneration::is_user_validator(&20));
     })
 }
@@ -230,8 +230,8 @@ fn exit_a_vip_as_cooperator_non_free_tax_period() {
         assert_ok!(Privileges::exit_vip(RuntimeOrigin::signed(100)));
         assert_eq!(Privileges::vip_members(100), None);
         assert_eq!(EnergyGeneration::ledger(100).unwrap().active, 375);
-        assert_eq!(System::account(100).data.frozen, 375);
-        assert_eq!(System::account(100).data.free, 1875);
+        assert_eq!(System::account(100).data.reserved, 375);
+        assert_eq!(System::account(100).data.free, 2000 - 500);
     })
 }
 
@@ -369,8 +369,8 @@ fn test_upgrade_active_stake_throw_bond_extra() {
         let mut vip_points = EnergyGeneration::ledger(30).unwrap().active / 50;
         assert_eq!(Privileges::vip_members(30).unwrap().points, vip_points);
         assert_eq!(EnergyGeneration::ledger(30).unwrap().active, 500);
-        assert_eq!(System::account(30).data.frozen, 500);
-        assert_eq!(System::account(30).data.free, 2000);
+        assert_eq!(System::account(30).data.reserved, 500);
+        assert_eq!(System::account(30).data.free, 2000 - 500);
 
         assert_ok!(EnergyGeneration::bond_extra(RuntimeOrigin::signed(30), 1000));
 
@@ -385,8 +385,8 @@ fn test_upgrade_active_stake_throw_bond_extra() {
         assert_eq!(Privileges::vipp_members(30), None);
 
         assert_eq!(EnergyGeneration::ledger(30).unwrap().active, 1500);
-        assert_eq!(System::account(30).data.frozen, 1500);
-        assert_eq!(System::account(30).data.free, 2000);
+        assert_eq!(System::account(30).data.reserved, 1500);
+        assert_eq!(System::account(30).data.free, 2000 - 1500);
 
         assert_ok!(Privileges::update_time(
             RuntimeOrigin::root(),
@@ -399,8 +399,8 @@ fn test_upgrade_active_stake_throw_bond_extra() {
         assert_eq!(Privileges::vipp_members(30), None);
 
         assert_eq!(EnergyGeneration::ledger(30).unwrap().active, 1500);
-        assert_eq!(System::account(30).data.frozen, 1500);
-        assert_eq!(System::account(30).data.free, 2000);
+        assert_eq!(System::account(30).data.reserved, 1500);
+        assert_eq!(System::account(30).data.free, 2000 - 1500);
     })
 }
 
@@ -426,8 +426,8 @@ fn test_upgrade_active_stake_throw_unbond() {
         let mut vip_points = EnergyGeneration::ledger(10).unwrap().active / 50;
         assert_eq!(Privileges::vip_members(10).unwrap().points, vip_points);
         assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 1000);
-        assert_eq!(System::account(10).data.frozen, 1000);
-        assert_eq!(System::account(10).data.free, 1000);
+        assert_eq!(System::account(10).data.reserved, 1000);
+        assert_eq!(System::account(10).data.free, ExistentialDeposit::get());
 
         assert_ok!(EnergyGeneration::unbond(RuntimeOrigin::signed(10), 100));
         assert_eq!(
@@ -446,8 +446,8 @@ fn test_upgrade_active_stake_throw_unbond() {
         assert_eq!(Privileges::vipp_members(10), None);
 
         assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 900);
-        assert_eq!(System::account(10).data.frozen, 1000);
-        assert_eq!(System::account(10).data.free, 1000);
+        assert_eq!(System::account(10).data.reserved, 1000);
+        assert_eq!(System::account(10).data.free, ExistentialDeposit::get());
 
         assert_ok!(Privileges::update_time(
             RuntimeOrigin::root(),
@@ -460,8 +460,8 @@ fn test_upgrade_active_stake_throw_unbond() {
         assert_eq!(Privileges::vipp_members(10), None);
 
         assert_eq!(EnergyGeneration::ledger(10).unwrap().active, 900);
-        assert_eq!(System::account(10).data.frozen, 1000);
-        assert_eq!(System::account(10).data.free, 1000);
+        assert_eq!(System::account(10).data.reserved, 1000);
+        assert_eq!(System::account(10).data.free, ExistentialDeposit::get());
     })
 }
 

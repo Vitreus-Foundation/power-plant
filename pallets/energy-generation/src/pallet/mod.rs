@@ -22,8 +22,9 @@ use frame_support::{
     storage::bounded_btree_map::BoundedBTreeMap,
     storage::bounded_btree_set::BoundedBTreeSet,
     traits::{
-        Currency, DefensiveResult, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get,
-        Imbalance, LockIdentifier, LockableCurrency, OnUnbalanced, TryCollect, UnixTime,
+        fungible::{self, Inspect as _},
+        DefensiveResult, DefensiveSaturating, EnsureOrigin, EstimateNextNewSession, Get, Imbalance,
+        OnUnbalanced, TryCollect, UnixTime,
     },
     weights::Weight,
 };
@@ -31,7 +32,7 @@ use frame_system::{ensure_root, ensure_signed, pallet_prelude::*};
 use pallet_reputation::{ReputationPoint, ReputationRecord, ReputationTier};
 use parity_scale_codec::Codec;
 use sp_runtime::{
-    traits::{AtLeast32BitUnsigned, CheckedSub, Convert, SaturatedConversion, StaticLookup, Zero},
+    traits::{AtLeast32BitUnsigned, Convert, SaturatedConversion, StaticLookup, Zero},
     ArithmeticError, FixedU128, Perbill, Percent, Saturating,
 };
 use sp_staking::{EraIndex, SessionIndex};
@@ -41,16 +42,15 @@ use sp_std::prelude::*;
 mod impls;
 
 use crate::{
-    slashing, slashing::NegativeImbalanceOf, weights::WeightInfo, AccountIdLookupOf, ActiveEraInfo,
-    Cooperations, DisablingStrategy, EnergyDebtOf, Exposure, Forcing, RewardDestination,
-    SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakingLedger, UnappliedSlash,
-    UnlockChunk, ValidatorPrefs,
+    asset, slashing, slashing::NegativeImbalanceOf, weights::WeightInfo, AccountIdLookupOf,
+    ActiveEraInfo, Cooperations, DisablingStrategy, EnergyDebtOf, Exposure, Forcing,
+    RewardDestination, SessionInterface, StakeNegativeImbalanceOf, StakeOf, StakingLedger,
+    UnappliedSlash, UnlockChunk, ValidatorPrefs,
 };
 
 #[cfg(feature = "try-runtime")]
 use sp_runtime::TryRuntimeError;
 
-const STAKING_ID: LockIdentifier = *b"staking ";
 // The speculative number of spans are used as an input of the weight annotation of
 // [`Call::unbond`], as the post dipatch weight may depend on the number of slashing span on the
 // account which is not provided as an input. The value set should be conservative but sensible.
@@ -92,11 +92,10 @@ pub mod pallet {
         + pallet_reputation::Config
     {
         /// The staking currency.
-        type StakeCurrency: LockableCurrency<
-            Self::AccountId,
-            Moment = BlockNumberFor<Self>,
-            Balance = Self::StakeBalance,
-        >;
+        type StakeCurrency: fungible::Inspect<Self::AccountId, Balance = Self::StakeBalance>
+            + fungible::Mutate<Self::AccountId>
+            + fungible::MutateHold<Self::AccountId, Reason = <Self as Config>::RuntimeHoldReason>
+            + fungible::BalancedHold<Self::AccountId>;
 
         /// Just the `StakeCurrency::Balance` type; we have this item to allow us to constrain it to
         /// `From<u64>`.
@@ -107,7 +106,8 @@ pub mod pallet {
             + From<u64>
             + From<<Self as pallet_balances::Config>::Balance>
             + Into<<Self as pallet_assets::Config>::Balance>
-            + StorageEssentials;
+            + StorageEssentials
+            + frame_support::traits::tokens::Balance;
 
         /// Energy asset ID.
         type EnergyAssetId: Get<Self::AssetId>;
@@ -154,6 +154,9 @@ pub mod pallet {
 
         /// The overarching event type.
         type RuntimeEvent: From<Event<Self>> + IsType<<Self as frame_system::Config>::RuntimeEvent>;
+
+        /// The overarching hold reason.
+        type RuntimeHoldReason: From<HoldReason>;
 
         /// Handler for the unbalanced reduction when slashing a staker.
         type Slash: OnUnbalanced<StakeNegativeImbalanceOf<Self>>;
@@ -284,7 +287,7 @@ pub mod pallet {
     #[pallet::unbounded]
     pub type Invulnerables<T: Config> = StorageValue<_, Vec<T::AccountId>, ValueQuery>;
 
-    /// Map from all locked "stash" accounts to the controller account.
+    /// Map from all bonded "stash" accounts to the controller account.
     ///
     /// TWOX-NOTE: SAFE since `AccountId` is a secure hash.
     #[pallet::storage]
@@ -659,7 +662,7 @@ pub mod pallet {
                     status
                 );
                 assert!(
-                    T::StakeCurrency::free_balance(stash) >= balance,
+                    asset::free_to_stake::<T>(stash) >= balance,
                     "Stash does not have enough balance to bond."
                 );
                 frame_support::assert_ok!(<Pallet<T>>::bond(
@@ -843,10 +846,12 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Take the origin account as a stash and lock up `value` of its balance. `controller` will
-        /// be the account that controls it.
+        /// Take the origin account as a stash and put `value` of its balance on hold. `controller`
+        /// will be the account that controls it.
         ///
-        /// `value` must be more than the `minimum_balance` specified by `T::StakeCurrency`.
+        /// `value` must be more than the `minimum_balance` specified by `T::StakeCurrency`. The
+        /// stash keeps the existential deposit free, so at most the rest of its free balance is
+        /// bonded.
         ///
         /// The dispatch origin for this call must be _Signed_ by the stash account.
         ///
@@ -894,8 +899,7 @@ pub mod pallet {
             let history_depth = T::HistoryDepth::get();
             let last_reward_era = current_era.saturating_sub(history_depth);
 
-            let stash_balance = T::StakeCurrency::free_balance(&stash);
-            let value = value.min(stash_balance);
+            let value = value.min(asset::free_to_stake::<T>(&stash));
             Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
             let item = StakingLedger {
                 stash,
@@ -909,8 +913,7 @@ pub mod pallet {
                     // satisfied.
                     .defensive_map_err(|_| Error::<T>::BoundNotMet)?,
             };
-            Self::update_ledger(&controller, &item);
-            Ok(())
+            Self::update_ledger(&controller, &item)
         }
 
         /// Add some extra amount that have appeared in the stash `free_balance` into the balance up
@@ -938,23 +941,20 @@ pub mod pallet {
             let controller = Self::bonded(&stash).ok_or(Error::<T>::NotStash)?;
             let mut ledger = Self::ledger(&controller).ok_or(Error::<T>::NotController)?;
 
-            let stash_balance = T::StakeCurrency::free_balance(&stash);
-            if let Some(extra) = stash_balance.checked_sub(&ledger.total) {
-                let extra = extra.min(max_additional);
-                ledger.total += extra;
-                ledger.active += extra;
-                // Last check: the new active amount of ledger must be more than ED.
-                ensure!(
-                    ledger.active >= T::StakeCurrency::minimum_balance(),
-                    Error::<T>::InsufficientBond
-                );
+            let extra = asset::free_to_stake::<T>(&stash).min(max_additional);
+            ledger.total += extra;
+            ledger.active += extra;
+            // Last check: the new active amount of ledger must be more than ED.
+            ensure!(
+                ledger.active >= T::StakeCurrency::minimum_balance(),
+                Error::<T>::InsufficientBond
+            );
 
-                // NOTE: ledger must be updated prior to calling `Self::weight_of`.
-                Self::update_ledger(&controller, &ledger);
-                T::OnVipMembershipHandler::update_active_stake(&stash);
+            // NOTE: ledger must be updated prior to calling `Self::weight_of`.
+            Self::update_ledger(&controller, &ledger)?;
+            T::OnVipMembershipHandler::update_active_stake(&stash);
 
-                Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
-            }
+            Self::deposit_event(Event::<T>::Bonded { stash, amount: extra });
             Ok(())
         }
 
@@ -1054,14 +1054,14 @@ pub mod pallet {
 
                 if !slashed_stake.is_zero() {
                     let mut slashed_imbalance = NegativeImbalanceOf::<T>::zero();
-                    let (imbalance, _) = T::StakeCurrency::slash(&ledger.stash, slashed_stake);
+                    ledger.total -= slashed_stake;
+                    let (imbalance, _) = Self::slash_hold(&mut ledger, slashed_stake);
                     slashed_imbalance.subsume(imbalance);
                     T::Slash::on_unbalanced(slashed_imbalance);
-                    ledger.total -= slashed_stake;
                 }
 
                 // NOTE: ledger must be updated prior to calling `Self::weight_of`.
-                Self::update_ledger(&controller, &ledger);
+                Self::update_ledger(&controller, &ledger)?;
                 Self::adjust_cooperator_targets(&ledger.stash, ledger.active);
 
                 Self::deposit_event(Event::<T>::Unbonded { stash: ledger.stash, amount: value });
@@ -1486,10 +1486,7 @@ pub mod pallet {
 
             // Remove all staking-related information.
             Self::kill_stash(&stash, num_slashing_spans)?;
-
-            // Remove the lock.
-            T::StakeCurrency::remove_lock(STAKING_ID, &stash);
-            Ok(())
+            asset::kill_stake::<T>(&stash)
         }
 
         /// Force there to be a new era at the end of sessions indefinitely.
@@ -1594,7 +1591,7 @@ pub mod pallet {
                 amount: rebonded_value,
             });
 
-            Self::update_ledger(&controller, &ledger);
+            Self::update_ledger(&controller, &ledger)?;
 
             let removed_chunks = 1u32 // for the case where the last iterated chunk is not removed
                 .saturating_add(initial_unlocking)
@@ -1632,7 +1629,7 @@ pub mod pallet {
             ensure!(reapable, Error::<T>::FundedTarget);
 
             Self::kill_stash(&stash, num_slashing_spans)?;
-            T::StakeCurrency::remove_lock(STAKING_ID, &stash);
+            asset::kill_stake::<T>(&stash)?;
 
             Ok(Pays::No.into())
         }

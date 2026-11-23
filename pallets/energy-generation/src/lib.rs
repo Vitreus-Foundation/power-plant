@@ -134,6 +134,7 @@ pub(crate) mod mock;
 #[cfg(test)]
 mod tests;
 
+pub(crate) mod asset;
 pub mod inflation;
 pub mod migrations;
 pub mod slashing;
@@ -143,7 +144,7 @@ mod pallet;
 
 use frame_support::{
     defensive,
-    traits::{tokens::fungibles::Debt, Currency, Defensive, Get},
+    traits::{fungible, tokens::fungibles::Debt, Defensive, DefensiveSaturating, Get},
     BoundedVec, CloneNoBound, EqNoBound, PartialEqNoBound, RuntimeDebugNoBound,
 };
 use pallet_reputation::Reputation;
@@ -188,9 +189,8 @@ pub type StakeOf<T> = <T as Config>::StakeBalance;
 pub type EnergyOf<T> = <T as pallet_assets::Config>::Balance;
 
 /// Negative imbalance of stake.
-pub type StakeNegativeImbalanceOf<T> = <<T as Config>::StakeCurrency as Currency<
-    <T as frame_system::Config>::AccountId,
->>::NegativeImbalance;
+pub type StakeNegativeImbalanceOf<T> =
+    fungible::Credit<<T as frame_system::Config>::AccountId, <T as Config>::StakeCurrency>;
 /// The energy `Debt`.
 pub type EnergyDebtOf<T> =
     Debt<<T as frame_system::Config>::AccountId, pallet_assets::pallet::Pallet<T>>;
@@ -300,7 +300,7 @@ pub struct UnlockChunk<Balance: HasCompact + MaxEncodedLen> {
 )]
 #[scale_info(skip_type_params(T))]
 pub struct StakingLedger<T: Config> {
-    /// The stash account whose balance is actually locked and at stake.
+    /// The stash account whose balance is actually held and at stake.
     pub stash: T::AccountId,
     /// The total amount of the stash's balance that we are currently accounting for.
     /// It's just `active` plus all the `unlocking` balances.
@@ -386,6 +386,28 @@ impl<T: Config> StakingLedger<T> {
         }
 
         (self, unlocking_balance)
+    }
+
+    /// Reduces `total` to `new_total`.
+    ///
+    /// The excess comes out of `active` first and then out of the `unlocking` chunks, the latest
+    /// first.
+    pub(crate) fn update_total_stake(&mut self, new_total: StakeOf<T>) {
+        // Takes up to `excess` out of `amount`, reducing both.
+        let take_out_of = |amount: &mut StakeOf<T>, excess: &mut StakeOf<T>| {
+            let taken = (*excess).min(*amount);
+            amount.saturating_reduce(taken);
+            excess.saturating_reduce(taken);
+        };
+
+        let mut excess = self.total.defensive_saturating_sub(new_total);
+        self.total.saturating_reduce(excess);
+
+        take_out_of(&mut self.active, &mut excess);
+        for chunk in self.unlocking.iter_mut().rev() {
+            take_out_of(&mut chunk.value, &mut excess);
+        }
+        self.unlocking.retain(|chunk| !chunk.value.is_zero());
     }
 
     /// Slash the staker for a given amount of balance.
