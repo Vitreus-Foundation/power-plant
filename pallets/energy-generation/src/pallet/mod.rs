@@ -846,8 +846,9 @@ pub mod pallet {
 
     #[pallet::call]
     impl<T: Config> Pallet<T> {
-        /// Take the origin account as a stash and put `value` of its balance on hold. `controller`
-        /// will be the account that controls it.
+        /// Take the origin account as a stash and put `value` of its balance on hold.
+        ///
+        /// `controller` will be the account that controls it.
         ///
         /// The stash keeps the existential deposit free, so at most the rest of its free balance is
         /// bonded. The bonded amount must be at least the `minimum_balance` specified by

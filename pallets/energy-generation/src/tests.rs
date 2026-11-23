@@ -2023,58 +2023,6 @@ fn rebond_emits_right_value_in_event() {
 }
 
 #[test]
-fn update_total_stake_takes_active_first() {
-    let mut ledger = StakingLedger::<Test> {
-        stash: 11,
-        total: 1000,
-        active: 700,
-        unlocking: bounded_vec![UnlockChunk { value: 300, era: 3 }],
-        claimed_rewards: bounded_vec![],
-    };
-
-    ledger.update_total_stake(900);
-
-    assert_eq!(
-        ledger,
-        StakingLedger {
-            stash: 11,
-            total: 900,
-            active: 600,
-            unlocking: bounded_vec![UnlockChunk { value: 300, era: 3 }],
-            claimed_rewards: bounded_vec![],
-        }
-    );
-}
-
-#[test]
-fn update_total_stake_takes_latest_chunks_after_active() {
-    let mut ledger = StakingLedger::<Test> {
-        stash: 11,
-        total: 1000,
-        active: 400,
-        unlocking: bounded_vec![
-            UnlockChunk { value: 300, era: 3 },
-            UnlockChunk { value: 300, era: 4 },
-        ],
-        claimed_rewards: bounded_vec![],
-    };
-
-    // 400 from active, all of the chunk from era 4 and 100 from the chunk from era 3.
-    ledger.update_total_stake(200);
-
-    assert_eq!(
-        ledger,
-        StakingLedger {
-            stash: 11,
-            total: 200,
-            active: 0,
-            unlocking: bounded_vec![UnlockChunk { value: 200, era: 3 }],
-            claimed_rewards: bounded_vec![],
-        }
-    );
-}
-
-#[test]
 fn reward_to_stake_works() {
     ExtBuilder::default()
         .no_cooperate()
@@ -3034,7 +2982,7 @@ fn invulnerables_are_not_slashed() {
                 *ReputationPallet::reputation(other.who).unwrap().reputation.points(),
                 slash_prop * initial_reputation
             );
-            assert_eq!(stakeable_balance(&other.who), initial_balance - (2 * other.value / 10),);
+            assert_eq!(stakeable_balance(&other.who), initial_balance - (2 * other.value / 10));
         }
     });
 }
@@ -5908,6 +5856,58 @@ fn proportional_ledger_slash_works() {
     assert_eq!(
         LedgerSlashPerEra::get().1,
         BTreeMap::from([(4, 0), (5, value_slashed), (6, 0), (7, 32)])
+    );
+}
+
+#[test]
+fn update_total_stake_takes_active_first() {
+    let mut ledger = StakingLedger::<Test> {
+        stash: 11,
+        total: 1000,
+        active: 700,
+        unlocking: bounded_vec![UnlockChunk { value: 300, era: 3 }],
+        claimed_rewards: bounded_vec![],
+    };
+
+    ledger.update_total_stake(900);
+
+    assert_eq!(
+        ledger,
+        StakingLedger {
+            stash: 11,
+            total: 900,
+            active: 600,
+            unlocking: bounded_vec![UnlockChunk { value: 300, era: 3 }],
+            claimed_rewards: bounded_vec![],
+        }
+    );
+}
+
+#[test]
+fn update_total_stake_takes_latest_chunks_after_active() {
+    let mut ledger = StakingLedger::<Test> {
+        stash: 11,
+        total: 1000,
+        active: 400,
+        unlocking: bounded_vec![
+            UnlockChunk { value: 300, era: 3 },
+            UnlockChunk { value: 300, era: 4 },
+        ],
+        claimed_rewards: bounded_vec![],
+    };
+
+    // 400 from active, all of the chunk from era 4 and 100 from the chunk from era 3.
+    ledger.update_total_stake(200);
+
+    assert_eq!(
+        ledger,
+        StakingLedger {
+            stash: 11,
+            total: 200,
+            active: 0,
+            unlocking: bounded_vec![UnlockChunk { value: 200, era: 3 }],
+            claimed_rewards: bounded_vec![],
+        }
     );
 }
 

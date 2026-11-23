@@ -755,16 +755,11 @@ pub(crate) fn stakeable_balance(who: &AccountId) -> Balance {
 /// Sets the balance that `who` has staked or can stake to `value`, keeping the existential
 /// deposit free.
 ///
-/// A `value` below the current stake shrinks the hold without touching the ledger.
+/// `value` can't be below the stake, since lowering the hold here would bypass the ledger.
 pub(crate) fn set_stakeable_balance(who: &AccountId, value: Balance) {
-    let ed = ExistentialDeposit::get();
     let staked = asset::staked::<Test>(who);
-    if value > staked {
-        let _ = Balances::make_free_balance_be(who, value - staked + ed);
-    } else {
-        assert_ok!(asset::update_stake::<Test>(who, value));
-        let _ = Balances::make_free_balance_be(who, ed);
-    }
+    assert!(value >= staked);
+    let _ = Balances::make_free_balance_be(who, value - staked + ExistentialDeposit::get());
     assert_eq!(stakeable_balance(who), value);
 }
 
