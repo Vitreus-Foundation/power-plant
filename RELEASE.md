@@ -31,3 +31,18 @@ into `main` requires `Release check`.
   relay nodes embedded in collators included, in a PR that says which node versions provide it.
 - An urgent fix goes into `main` like any other change, and a release PR follows right away.
   The release takes everything merged since the last one, so keep `main` ready to release.
+
+## Node releases
+
+A node release is a PR that bumps `version` in `[workspace.package]` of Cargo.toml, the version
+that only the node crates inherit. On merge, CI builds the image with the `testnet-native`
+feature, one image for every network, and checks that its binaries start and that the node
+reports that version and commit. Then it pushes `vitreusfoundation/power-plant:X.Y.Z` and
+`:latest` to Docker Hub and, last, tags the commit `node-vX.Y.Z`.
+
+- If a release run fails, run Node release on `main` by hand. It builds the commit that set the
+  version, not the latest one. Merging other PRs doesn't publish it.
+- A version with a tag is never published again, and the `node-v*` tags can't be deleted or
+  moved.
+- Publishing needs the `docker-hub` environment, open only to `main`, with the Docker Hub token in
+  the secret `DOCKERHUB_TOKEN` and its Docker ID in the variable `DOCKERHUB_USERNAME`.

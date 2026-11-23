@@ -7,7 +7,7 @@ import argparse
 import tomllib
 from urllib.parse import urlsplit
 
-from changelog import fail, git
+from workflow import fail, git
 
 MANIFEST = "Cargo.toml"
 LOCK = "Cargo.lock"

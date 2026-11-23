@@ -12,11 +12,10 @@ import json
 import os
 import re
 import shutil
-import subprocess
 import tomllib
 
 import changelog
-from changelog import fail
+from workflow import fail, git, is_release_run, last_commit, set_outputs, tag_exists
 
 # The build recipe apart from the network feature. srtool images are tagged <rust>-<srtool>, and
 # srtool ignores rust-toolchain.toml, so the Rust part is read from there. PACKAGE and
@@ -42,44 +41,18 @@ HEADINGS = {"mainnet": "⚡ Mainnet", "testnet": "🧪 Testnet"}
 def srtool_tag(commit=None):
     """Return the srtool image tag for rust-toolchain.toml in `commit`, or in the checkout."""
     if commit:
-        toolchain = changelog.git("show", f"{commit}:rust-toolchain.toml")
+        toolchain = git("show", f"{commit}:rust-toolchain.toml")
     else:
         with open("rust-toolchain.toml") as f:
             toolchain = f.read()
     return f"{tomllib.loads(toolchain)['toolchain']['channel']}-{SRTOOL_VERSION}"
 
 
-def set_outputs(values):
-    """Print `key=value` lines and append them to $GITHUB_OUTPUT when running in Actions."""
-    lines = "".join(f"{key}={value}\n" for key, value in values.items())
-    print(lines, end="")
-    if "GITHUB_OUTPUT" in os.environ:
-        with open(os.environ["GITHUB_OUTPUT"], "a") as f:
-            f.write(lines)
-
-
-def tag_exists(version):
-    """Whether origin has the release tag of `version`.
-
-    The remote is asked directly: actions/checkout fetches no tags, and a local tag may be stale.
-    With --exit-code, git exits with 2 when it reached the remote and found no such tag; any
-    other failure means the answer is unknown, so it fails the run instead of guessing.
-    """
-    ref = f"refs/tags/{TAG.format(version)}"
-    result = subprocess.run(
-        ["git", "ls-remote", "--exit-code", "--tags", "origin", ref], capture_output=True, text=True
-    )
-    if result.returncode not in (0, 2):
-        fail(f"git ls-remote origin {ref} failed: {result.stderr.strip()}")
-    return result.returncode == 0
-
-
 def released_section(version):
     """Return the [version] section as it was released, from its tag, or None without a tag."""
-    if not tag_exists(version):
+    if not tag_exists(TAG.format(version)):
         return None
     # Fetch into FETCH_HEAD without creating a local tag, and keep a shallow clone shallow.
-    git = changelog.git
     depth = ["--depth=1"] if git("rev-parse", "--is-shallow-repository").strip() == "true" else []
     git("fetch", "--quiet", *depth, "origin", f"refs/tags/{TAG.format(version)}")
     return changelog.section(git("show", f"FETCH_HEAD:{changelog.CHANGELOG}"), version)
@@ -90,11 +63,9 @@ def release_commit(version):
 
     The release is built from it, not from the commit that started the run. The two differ when
     a release run failed and main moved on: neither a retry nor the next push that changes
-    CHANGELOG.md may ship what was merged since as part of [version]. With --first-parent, a
-    merge commit counts as adding what its branch added, e.g. GitHub's merge commit for a PR.
+    CHANGELOG.md may ship what was merged since as part of [version].
     """
-    log = ["log", "-1", "--first-parent", "--format=%H", "-S", f"## [{version}] - "]
-    commit = changelog.git(*log, "--", changelog.CHANGELOG).strip()
+    commit = last_commit(changelog.CHANGELOG, "-S", f"## [{version}] - ")
     if not commit:
         fail(f"no commit adds the [{version}] header to {changelog.CHANGELOG}")
     return commit
@@ -105,9 +76,8 @@ def should_release():
 
     The version is the first numbered section of CHANGELOG.md, right below [Unreleased]. Without
     tag runtime-vN it gets released, after the same checks as `changelog.py check`, from the
-    commit that cut it. Only two runs do that: the one on that commit itself, i.e. the release
-    PR's merge or its dry run, and a manual one. A later push or PR only gets a warning, so a
-    failed release is finished on purpose, never as a side effect of merging something else.
+    commit that cut it, in a run that `is_release_run` allows: the release PR's merge or its dry
+    run, or a manual one. Any other run only gets a warning.
     The version below it must be released already: if its release run failed and nobody
     finished it, its changes would ship in N's wasm but in no release's notes. With the tag it
     was released before, and its section must not have changed since: a different section
@@ -121,15 +91,14 @@ def should_release():
         if tagged is None:
             changelog.check(None)
             previous = versions[2] if len(versions) > 2 else ""
-            if previous and not tag_exists(previous):
+            if previous and not tag_exists(TAG.format(previous)):
                 fail(
                     f"[{previous}] isn't released yet (no {TAG.format(previous)}), so [{version}] "
                     f"would ship its changes without their notes: release {previous} first, or "
                     f"merge the [{previous}] section into [{version}]"
                 )
             commit = release_commit(version)
-            manual = os.environ.get("GITHUB_EVENT_NAME") == "workflow_dispatch"
-            if manual or commit == changelog.git("rev-parse", "HEAD").strip():
+            if is_release_run(commit):
                 release = 1
             else:
                 print(

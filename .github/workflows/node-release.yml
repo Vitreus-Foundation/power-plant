@@ -1,0 +1,99 @@
+name: Node release
+
+# Builds the node image and publishes vitreusfoundation/power-plant:X.Y.Z and :latest once
+# [workspace.package] in Cargo.toml gets a version X.Y.Z without tag node-vX.Y.Z. See RELEASE.md.
+on:
+  push:
+    branches: [main]
+    paths: [Cargo.toml]
+  # By hand on main: finishes a release whose run failed.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # All runs share one group, so a run decides whether to release only after the run before it
+  # is done, and then sees its tag. The group keeps one pending run and replaces it with a newer
+  # one: a release replaced that way gets a warning from the newer run, and a manual run
+  # finishes it.
+  group: node-release
+  cancel-in-progress: false
+
+env:
+  IMAGE: vitreusfoundation/power-plant
+
+jobs:
+  prepare:
+    name: Prepare
+    # A manual run is possible on any branch, but a release only comes from main.
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      should-release: ${{ steps.should-release.outputs.should-release }}
+      version: ${{ steps.should-release.outputs.version }}
+      tag: ${{ steps.should-release.outputs.tag }}
+      commit: ${{ steps.should-release.outputs.commit }}
+
+    steps:
+      # The whole history, to find the commit that set the version.
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - id: should-release
+        run: python3 .github/scripts/node_release.py should-release
+
+  publish:
+    name: Publish
+    needs: prepare
+    if: needs.prepare.outputs.should-release == '1'
+    runs-on: ubuntu-24.04
+    # The build inside Docker has no cache.
+    timeout-minutes: 180
+    environment: docker-hub
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.prepare.outputs.commit }}
+
+      - name: Build the image
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: docker build --build-arg BUILD_FEATURES=testnet-native --tag "$IMAGE:$VERSION" .
+
+      - name: Check the image
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+          COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: >-
+          python3 .github/scripts/node_release.py check-image
+          "$IMAGE:$VERSION" "$VERSION" "$COMMIT"
+
+      - name: Log in to Docker Hub
+        env:
+          DOCKERHUB_USERNAME: ${{ vars.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: echo "$DOCKERHUB_TOKEN" | docker login -u "$DOCKERHUB_USERNAME" --password-stdin
+
+      - name: Push the image
+        env:
+          VERSION: ${{ needs.prepare.outputs.version }}
+        run: |
+          docker push "$IMAGE:$VERSION"
+          docker tag "$IMAGE:$VERSION" "$IMAGE:latest"
+          docker push "$IMAGE:latest"
+
+      # The tag goes last, so a failed run leaves none, and a manual run can finish the release.
+      # Tags pushed with GITHUB_TOKEN trigger no other workflows.
+      - name: Tag ${{ needs.prepare.outputs.tag }}
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          COMMIT: ${{ needs.prepare.outputs.commit }}
+        run: |
+          git tag "$TAG" "$COMMIT"
+          git push origin "$TAG"
