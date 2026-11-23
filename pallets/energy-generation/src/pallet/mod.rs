@@ -849,9 +849,9 @@ pub mod pallet {
         /// Take the origin account as a stash and put `value` of its balance on hold. `controller`
         /// will be the account that controls it.
         ///
-        /// `value` must be more than the `minimum_balance` specified by `T::StakeCurrency`. The
-        /// stash keeps the existential deposit free, so at most the rest of its free balance is
-        /// bonded.
+        /// The stash keeps the existential deposit free, so at most the rest of its free balance is
+        /// bonded. The bonded amount must be at least the `minimum_balance` specified by
+        /// `T::StakeCurrency`.
         ///
         /// The dispatch origin for this call must be _Signed_ by the stash account.
         ///
@@ -883,6 +883,7 @@ pub mod pallet {
                 return Err(Error::<T>::AlreadyPaired.into());
             }
 
+            let value = value.min(asset::free_to_stake::<T>(&stash));
             // Reject a bond which is considered to be _dust_.
             if value < T::StakeCurrency::minimum_balance() {
                 return Err(Error::<T>::InsufficientBond.into());
@@ -899,7 +900,6 @@ pub mod pallet {
             let history_depth = T::HistoryDepth::get();
             let last_reward_era = current_era.saturating_sub(history_depth);
 
-            let value = value.min(asset::free_to_stake::<T>(&stash));
             Self::deposit_event(Event::<T>::Bonded { stash: stash.clone(), amount: value });
             let item = StakingLedger {
                 stash,

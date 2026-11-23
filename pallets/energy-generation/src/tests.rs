@@ -1232,6 +1232,28 @@ fn bond_keeps_existential_deposit_free() {
 }
 
 #[test]
+fn dust_bond_is_rejected() {
+    ExtBuilder::default()
+        .existential_deposit(10)
+        .balance_factor(10)
+        .build_and_execute(|| {
+            let (stash, ctrl) = (61, 60);
+            // With the existential deposit kept free, only 5 of the 15 can be bonded.
+            let _ = Balances::make_free_balance_be(&stash, 15);
+
+            assert_noop!(
+                PowerPlant::bond(
+                    RuntimeOrigin::signed(stash),
+                    ctrl,
+                    10,
+                    RewardDestination::Controller
+                ),
+                Error::<Test>::InsufficientBond,
+            );
+        });
+}
+
+#[test]
 fn locked_balance_can_be_staked() {
     ExtBuilder::default().build_and_execute(|| {
         let (stash, ctrl, stake) = (61, 60, 1000);
