@@ -12,6 +12,14 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # All runs share one group, so a run decides whether to release only after the run before it
+  # is done, and then sees its tag. The group keeps one pending run and replaces it with a newer
+  # one: a release replaced that way gets a warning from the newer run, and a manual run
+  # finishes it.
+  group: node-release
+  cancel-in-progress: false
+
 env:
   IMAGE: vitreusfoundation/power-plant
 
@@ -47,11 +55,6 @@ jobs:
     environment: docker-hub
     permissions:
       contents: write
-    # Two releases never publish at once. Only this job holds the group, so the runs that release
-    # nothing can't push a pending release out of it.
-    concurrency:
-      group: node-release
-      cancel-in-progress: false
 
     steps:
       - uses: actions/checkout@v7

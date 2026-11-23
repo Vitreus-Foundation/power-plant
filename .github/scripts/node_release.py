@@ -9,7 +9,6 @@ The node's version is `version` in [workspace.package] of Cargo.toml. Release ta
 on the `origin` remote.
 """
 import argparse
-import re
 import subprocess
 import tomllib
 
@@ -27,9 +26,10 @@ WORKERS = ["./target/release/polkadot-prepare-worker", "./target/release/polkado
 
 def release_commit(version):
     """Return the commit that set the node version to `version`: the release is built from it."""
-    # Only [workspace.package] has the version at the start of a line: dependencies give theirs
-    # inside braces, and the node's own package takes the workspace one.
-    commit = last_commit(MANIFEST, "-G", rf'^version = "{re.escape(version)}"$')
+    # -S counts the occurrences, so a later edit of the line that keeps the value, such as a
+    # comment after it, doesn't count. The newline in front skips the dependencies, which give
+    # their version inside braces; the node's own package takes the workspace one.
+    commit = last_commit(MANIFEST, "-S", f'\nversion = "{version}"')
     if not commit:
         fail(f"no commit sets version {version} in {MANIFEST}")
     return commit
