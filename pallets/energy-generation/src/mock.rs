@@ -133,7 +133,7 @@ impl pallet_balances::Config for Test {
     type AccountStore = System;
     type FreezeIdentifier = ();
     type MaxFreezes = ();
-    type RuntimeHoldReason = ();
+    type RuntimeHoldReason = RuntimeHoldReason;
 }
 
 impl pallet_reputation::Config for Test {

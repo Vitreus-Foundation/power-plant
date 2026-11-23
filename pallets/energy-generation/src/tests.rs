@@ -9,7 +9,7 @@ use frame_support::{
     assert_noop, assert_ok, assert_storage_noop,
     dispatch::{extract_actual_weight, GetDispatchInfo, WithPostDispatchInfo},
     pallet_prelude::*,
-    traits::{Currency, Get, ReservableCurrency},
+    traits::{fungible::InspectHold, Currency, Get, ReservableCurrency},
     weights::Weight,
 };
 use mock::*;
@@ -1180,6 +1180,29 @@ fn listeners_see_same_era_while_election_fails() {
                 NewSession { session: 9, active_era: Some(2), era_start: Some(9) },
             ]
         );
+    });
+}
+
+#[test]
+fn bond_puts_stake_on_hold() {
+    ExtBuilder::default().build_and_execute(|| {
+        let (stash, ctrl, stake) = (61, 60, 1000);
+        let ed = ExistentialDeposit::get();
+        let _ = Balances::make_free_balance_be(&stash, stake + ed);
+
+        assert_ok!(PowerPlant::bond(
+            RuntimeOrigin::signed(stash),
+            ctrl,
+            stake,
+            RewardDestination::Controller
+        ));
+
+        assert_eq!(Balances::balance_on_hold(&HoldReason::Staking.into(), &stash), stake);
+        assert_eq!(Balances::reserved_balance(stash), stake);
+        assert_eq!(Balances::free_balance(stash), ed);
+        assert!(Balances::locks(stash).is_empty());
+        assert_eq!(PowerPlant::ledger(ctrl).map(|l| (l.total, l.active)), Some((stake, stake)));
+        assert_eq!(*staking_events().last().unwrap(), Event::Bonded { stash, amount: stake });
     });
 }
 

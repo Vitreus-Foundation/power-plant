@@ -255,6 +255,14 @@ pub mod pallet {
         type ThisWeightInfo: WeightInfo;
     }
 
+    /// A reason for placing a hold on funds.
+    #[pallet::composite_enum]
+    pub enum HoldReason {
+        /// Funds on stake by a cooperator or a validator.
+        #[codec(index = 0)]
+        Staking,
+    }
+
     /// The ideal number of active validators.
     #[pallet::storage]
     #[pallet::getter(fn validator_count)]
