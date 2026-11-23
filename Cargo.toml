@@ -105,6 +105,8 @@ resolver = "2"
 authors = ["Vitreus Foundation"]
 edition = "2021"
 repository = "https://bitbucket.org/vitreus/vitreus-power-plant"
+# The node's version, which only the node crates inherit. A PR that bumps it releases the node
+# on merge, see RELEASE.md.
 version = "1.1.1"
 
 # The polkadot-sdk release tag that Cargo.lock stays on. Every SDK entry below uses the same source
