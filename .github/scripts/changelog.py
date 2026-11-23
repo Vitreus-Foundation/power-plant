@@ -6,12 +6,13 @@
 
 In CI, --base is HEAD^1: the first parent of GitHub's merge commit for the PR, which is the
 base branch. Locally, pass the fork point instead: --base "$(git merge-base origin/main HEAD)".
-release.py and dependencies.py build on this module.
+release.py builds on this module.
 """
 import argparse
 import re
-import subprocess
 import sys
+
+from workflow import fail, git
 
 CHANGELOG = "CHANGELOG.md"
 RUNTIME = "runtime/vitreus/src/lib.rs"
@@ -20,18 +21,6 @@ UNRELEASED = "## [Unreleased]"
 RELEASE = re.compile(r"## \[([0-9]+)\] - [0-9]{4}-[0-9]{2}-[0-9]{2}")
 # Subsections allowed under a version, the same set as in polkadot-fellows/runtimes.
 SUBSECTIONS = {"Added", "Changed", "Fixed", "Removed"}
-
-
-def fail(message):
-    print(f"::error::{message}")
-    sys.exit(1)
-
-
-def git(*args):
-    result = subprocess.run(["git", *args], capture_output=True, text=True)
-    if result.returncode != 0:
-        fail(f"git {' '.join(args)} failed: {result.stderr.strip()}")
-    return result.stdout
 
 
 def spec_version(source):
