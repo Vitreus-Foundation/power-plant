@@ -7,6 +7,15 @@ Versions are the runtime's `spec_version`, not [Semantic Versioning](https://sem
 
 ## [Unreleased]
 
+### Changed
+
+- Move the `pallet-energy-generation` stake from locked to reserved balance, leaving the existential deposit free
+- Let voters in `pallet-democracy` and `pallet-elections-phragmen` vote with their total balance, not only the free one
+
+### Fixed
+
+- Make `pallet-energy-generation` send unpaid offence reporter rewards to the Treasury instead of burning them
+
 ## [216] - 2026-11-19
 
 ### Added
