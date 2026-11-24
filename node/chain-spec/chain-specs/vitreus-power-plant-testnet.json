@@ -1,9 +1,7 @@
 {
-  "name": "Testnet",
+  "name": "Vitreus Testnet",
   "id": "testnet",
-  "chainType": {
-    "Custom": "Testnet"
-  },
+  "chainType": "Live",
   "bootNodes": [
     "/ip4/45.77.100.209/tcp/30333/p2p/12D3KooWHzt6QtAs3oXCjdYCNNcK1ZGYScQxPubfZ8YTXt6zm6k3"
   ],
