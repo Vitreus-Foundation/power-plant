@@ -75,30 +75,8 @@ fast-runtime = [
     "vitreus-service/fast-runtime",
 ]
 
+# Members are the root package and every crate it reaches through path dependencies.
 [workspace]
-members = [
-    "cli",
-    "node/chain-spec",
-    "node/service",
-    "rpc",
-    "rpc/node-rpc-server",
-    "pallets/claiming",
-    "pallets/energy-fee",
-    "pallets/energy-fee/runtime-api",
-    "pallets/energy-fee/rpc",
-    "pallets/energy-generation",
-    "pallets/energy-generation/runtime-api",
-    "pallets/energy-generation/rpc",
-    "pallets/faucet",
-    "pallets/nac-managing",
-    "pallets/privileges",
-    "pallets/reputation",
-    "pallets/simple-vesting",
-    "pallets/treasury-extension",
-    "runtime/common",
-    "runtime/vitreus",
-    "runtime/vitreus/runtime-api",
-]
 resolver = "2"
 
 [workspace.package]
