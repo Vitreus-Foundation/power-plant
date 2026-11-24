@@ -1,9 +1,7 @@
 {
-  "name": "Stagenet",
+  "name": "Vitreus Stagenet",
   "id": "stagenet",
-  "chainType": {
-    "Custom": "Stagenet"
-  },
+  "chainType": "Live",
   "bootNodes": [
     "/ip4/45.77.147.229/tcp/30333/p2p/12D3KooWConBK7xN5BJycV2ZiupKHH6x8MfzPr3E2mJrVoYAk3XP"
   ],
