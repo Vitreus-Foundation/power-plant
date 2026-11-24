@@ -49,12 +49,13 @@ check() {
     export RUST_LOG=try-runtime::cli=info,remote-ext=info,runtime=debug
     local snap=target/try-runtime/$network.snap
     mkdir -p "${snap%/*}"
-    # Only the download talks to the node, so only it is retried: a failed check never is. It takes
-    # the last finalized block and logs its hash. Archive nodes keep the state of every block, so
-    # `create-snapshot --at <hash>` gets the same state again.
+    # Only the download talks to the node, so only it is retried: a failed check never is. A
+    # stalled download would hang until the job's timeout, so each attempt is cut off after ten
+    # minutes. The download takes the last finalized block and logs its hash. Archive nodes keep
+    # the state of every block, so `create-snapshot --at <hash>` gets the same state again.
     local attempt
     for attempt in 1 2 3 4 5; do
-        try-runtime create-snapshot --uri "$uri" -- "$snap" && break
+        timeout 10m try-runtime create-snapshot --uri "$uri" -- "$snap" && break
         if [ "$attempt" -eq 5 ]; then return 1; fi
         sleep 10
     done
